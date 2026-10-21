@@ -238,6 +238,23 @@ onBeforeUnmount(() => {
     pararLoader();
 });
 
+// Perguntas MK Place (2026-10-20): perguntas dos anúncios que a Manuela não
+// respondeu (ou que alguém assumiu) acendem um alerta no topo. Começa pelo
+// número da página e confere de minuto em minuto sem recarregar a tela.
+const perguntasHumano = ref(page.props.sidebarBadges?.perguntasMkplace ?? 0);
+watch(() => page.props.sidebarBadges?.perguntasMkplace, (n) => { if (n !== undefined) perguntasHumano.value = n; });
+let timerPerguntas = null;
+onMounted(() => {
+    if (!can('pedidos.view')) return;
+    timerPerguntas = setInterval(async () => {
+        try {
+            const r = await fetch('/admin/perguntas-marketplace/pendentes', { headers: { Accept: 'application/json' } });
+            if (r.ok) perguntasHumano.value = (await r.json()).total ?? 0;
+        } catch { /* sem rede: tenta no próximo minuto */ }
+    }, 60000);
+});
+onBeforeUnmount(() => clearInterval(timerPerguntas));
+
 // Pedido do Lira 2026-10-12: com a página rolada, o topo fixo fica
 // translúcido e fumê (o conteúdo aparece borrado por baixo). No alto da
 // página volta ao normal. Estilo em .admin-topo-fume (app.css).
@@ -443,6 +460,19 @@ watch(
                     -->
 
                     <div class="ml-auto flex items-center gap-1">
+                        <!-- Alerta de atendimento humano (Perguntas MK Place). -->
+                        <Link v-if="perguntasHumano > 0" href="/admin/perguntas-marketplace?filtro=humano"
+                            class="mr-1 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-300 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-500/40"
+                            :title="`${perguntasHumano} pergunta(s) de marketplace esperando atendimento humano`">
+                            <span class="relative flex h-2 w-2">
+                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"></span>
+                                <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                            </span>
+                            <i class="fas fa-circle-question"></i>
+                            <span class="hidden sm:inline">{{ perguntasHumano === 1 ? '1 pergunta pra você' : `${perguntasHumano} perguntas pra você` }}</span>
+                            <span class="sm:hidden">{{ perguntasHumano }}</span>
+                        </Link>
+
                         <!-- Dark mode toggle -->
                         <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
                             title="Alternar tema" :aria-label="isDark ? 'Usar tema claro' : 'Usar tema escuro'" @click="toggleDarkMode">

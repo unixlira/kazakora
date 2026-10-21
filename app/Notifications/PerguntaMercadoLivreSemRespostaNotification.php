@@ -30,6 +30,7 @@ class PerguntaMercadoLivreSemRespostaNotification extends Notification
             'body' => mb_substr($this->pergunta, 0, 300),
             'question_id' => $this->questionId,
             'nivel' => 'aviso',
+            'link' => '/admin/perguntas-marketplace?filtro=humano',
         ];
     }
 }

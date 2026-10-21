@@ -9,6 +9,7 @@ use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Notifications\PerguntaMercadoLivreSemRespostaNotification;
 use App\Services\MercadoLivre\MercadoLivreClient;
+use App\Services\MercadoLivre\Services\RespostaPerguntaService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,8 +21,10 @@ use Throwable;
 
 /**
  * A Manuela escreve o rascunho da resposta a partir do anúncio (título,
- * atributos, descrição). Só rascunho: falar com cliente exige OK do Lira, e
- * quando a informação não está no anúncio ela marca [HUMANO] em vez de chutar.
+ * atributos, descrição). Quando a informação não está no anúncio ela marca
+ * [HUMANO] em vez de chutar. Envio ao comprador só com "Manuela responde
+ * sozinha" ligado em Perguntas MK Place (desligado por padrão) e se ninguém
+ * assumiu a pergunta; senão o rascunho espera o atendente.
  */
 class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
 {
@@ -38,7 +41,7 @@ class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
     {
         $pergunta = MercadoLivrePergunta::find($this->perguntaId);
 
-        if (! $pergunta || $pergunta->rascunho_em !== null) {
+        if (! $pergunta || $pergunta->rascunho_em !== null || $pergunta->humano_assumiu_em !== null) {
             return;
         }
 
@@ -91,6 +94,32 @@ class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
         ]);
 
         if ($pergunta->precisa_humano) {
+            $this->avisar($pergunta);
+
+            return;
+        }
+
+        $this->enviarSeAutomatico($pergunta);
+    }
+
+    /** Manuela responde sozinha: só se ligado e se ninguém assumiu enquanto ela escrevia. */
+    private function enviarSeAutomatico(MercadoLivrePergunta $pergunta): void
+    {
+        if (! MercadoLivrePergunta::manuelaRespondeSozinha()) {
+            return;
+        }
+
+        $pergunta->refresh();
+
+        if ($pergunta->humano_assumiu_em !== null || ! $pergunta->aberta() || blank($pergunta->resposta_rascunho)) {
+            return;
+        }
+
+        try {
+            app(RespostaPerguntaService::class)->enviar($pergunta, (string) $pergunta->resposta_rascunho, MercadoLivrePergunta::POR_MANUELA);
+        } catch (Throwable) {
+            // Envio recusado: fica para o atendente, com o erro na tela.
+            $pergunta->update(['precisa_humano' => true]);
             $this->avisar($pergunta);
         }
     }

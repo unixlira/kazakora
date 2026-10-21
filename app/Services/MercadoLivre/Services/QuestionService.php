@@ -45,6 +45,14 @@ class QuestionService
             ],
         );
 
+        // Respondida fora do admin (direto no ML): registra de onde veio.
+        if ($pergunta->respondida_em !== null && $pergunta->respondida_por === null) {
+            $pergunta->update([
+                'respondida_por' => MercadoLivrePergunta::POR_ML,
+                'resposta_enviada' => $pergunta->resposta_enviada ?? ($dados['answer']['text'] ?? null),
+            ]);
+        }
+
         if ($pergunta->status === 'UNANSWERED' && $pergunta->rascunho_em === null && filled($pergunta->pergunta)) {
             RascunharRespostaPerguntaMercadoLivre::dispatch($pergunta->id);
         }

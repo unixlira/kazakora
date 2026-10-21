@@ -29,6 +29,9 @@ export const STATUS_META = {
     WITH_ISSUES: ['Com problema', 'bg-red-500/15 text-red-700 dark:text-red-300'],
     DISAPPROVED: ['Reprovado', 'bg-red-500/15 text-red-700 dark:text-red-300'],
     ARCHIVED: ['Arquivado', 'bg-slate-500/15 text-slate-500'],
+    DELETED: ['Excluído', 'bg-slate-500/15 text-slate-500'],
+    PREAPPROVED: ['Pré-aprovado', 'bg-sky-500/15 text-sky-700 dark:text-sky-300'],
+    PENDING_BILLING_INFO: ['Falta pagamento', 'bg-red-500/15 text-red-700 dark:text-red-300'],
 };
 
 export const statusMeta = (s) => STATUS_META[s] ?? [s || '-', 'bg-slate-500/15 text-slate-600 dark:text-slate-300'];

@@ -14,6 +14,9 @@ const props = defineProps({
     config: { type: Object, required: true },
     periodo: { type: String, default: 'maximum' },
     periodos: { type: Object, default: () => ({}) },
+    // Filtro de status (pedido do Lira 2026-10-21): chave => rótulo, abre em "Ativos".
+    status: { type: String, default: 'ativos' },
+    statusFiltros: { type: Object, default: () => ({}) },
     // Prop adiada: estrutura e métricas lidas ao vivo da Meta.
     espelho: { type: Object, default: null },
     // Modal de editar anúncio no espelho (2026-10-19).
@@ -43,13 +46,18 @@ const sincronizar = () => router.post('/admin/publicidade/meta-ads/campanhas/sin
 });
 
 const carregando = ref(false);
-const trocarPeriodo = (periodo) => router.get('/admin/publicidade/meta-ads/campanhas', periodo === 'maximum' ? {} : { periodo }, {
-    only: ['espelho', 'periodo'],
+const filtrar = ({ periodo = props.periodo, status = props.status }) => router.get('/admin/publicidade/meta-ads/campanhas', {
+    ...(periodo === 'maximum' ? {} : { periodo }),
+    ...(status === 'ativos' ? {} : { status }),
+}, {
+    only: ['espelho', 'periodo', 'status'],
     preserveScroll: true,
     preserveState: true,
     onStart: () => { carregando.value = true; },
     onFinish: () => { carregando.value = false; },
 });
+const trocarPeriodo = (periodo) => filtrar({ periodo });
+const trocarStatus = (status) => filtrar({ status });
 
 const { can } = usePermissions();
 
@@ -148,15 +156,26 @@ const columns = [
                         <template v-else>Conferindo o status na Meta…</template>
                     </p>
                 </div>
-                <label class="flex items-center gap-2 text-sm">
-                    <span class="text-slate-500">Período</span>
-                    <select :value="props.periodo" :disabled="carregando"
-                        class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
-                        @change="trocarPeriodo($event.target.value)">
-                        <option v-for="(rotulo, chave) in props.periodos" :key="chave" :value="chave">{{ rotulo }}</option>
-                    </select>
+                <div class="flex flex-wrap items-center gap-3">
+                    <label class="flex items-center gap-2 text-sm">
+                        <span class="text-slate-500">Período</span>
+                        <select :value="props.periodo" :disabled="carregando"
+                            class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                            @change="trocarPeriodo($event.target.value)">
+                            <option v-for="(rotulo, chave) in props.periodos" :key="chave" :value="chave">{{ rotulo }}</option>
+                        </select>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <span class="text-slate-500">Status</span>
+                        <select :value="props.status" :disabled="carregando"
+                            title="Status como está na Meta agora"
+                            class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                            @change="trocarStatus($event.target.value)">
+                            <option v-for="(rotulo, chave) in props.statusFiltros" :key="chave" :value="chave">{{ rotulo }}</option>
+                        </select>
+                    </label>
                     <i v-if="carregando" class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i>
-                </label>
+                </div>
             </div>
             <Deferred data="espelho">
                 <template #fallback>
@@ -169,7 +188,15 @@ const columns = [
                 </p>
                 <DiagnosticoMeta v-if="!props.espelho?.erro" :diagnostico="props.espelho?.diagnostico" :periodos="props.periodos"
                     :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
-                <EspelhoMeta v-if="!props.espelho?.erro" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="props.espelho?.diagnostico" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
+                <p v-if="!props.espelho?.erro && !(props.espelho?.campanhas ?? []).length"
+                    class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 text-sm text-slate-500" role="status">
+                    Nada com o status "{{ props.statusFiltros[props.status] ?? props.status }}" na Meta neste período.
+                    <template v-if="props.status === 'excluidos'"> A Meta só devolve o que foi excluído e teve gasto no período escolhido.</template>
+                </p>
+                <p v-else-if="props.status === 'excluidos'" class="mb-2 text-xs text-slate-500">
+                    A Meta só devolve o que foi excluído e teve gasto no período escolhido.
+                </p>
+                <EspelhoMeta v-if="!props.espelho?.erro && (props.espelho?.campanhas ?? []).length" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="props.espelho?.diagnostico" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
                     :produtos="props.produtos" :chamadas="props.chamadas" :class="{ 'opacity-60': carregando }" @mudou="recarregar" />
             </Deferred>
         </section>

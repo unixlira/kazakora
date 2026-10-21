@@ -993,7 +993,7 @@ class MetaAdsCampanhasTest extends TestCase
             };
         });
 
-        $this->actingAs($this->admin())->get(self::BASE)
+        $this->actingAs($this->admin())->get(self::BASE.'?status=todos')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/MetaAds/Index', false)

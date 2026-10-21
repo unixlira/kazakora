@@ -387,6 +387,10 @@ class ProductController extends Controller
             'model' => ['nullable', 'string', 'max:100'],
             'color' => ['nullable', 'string', 'max:100'],
             'variation' => ['nullable', 'string', 'max:100'],
+            // Modelos ligados (2026-10-21): anúncios separados com o mesmo
+            // grupo aparecem como opções de "Modelo" na página uns dos outros.
+            'grupo_modelos' => ['nullable', 'string', 'max:100'],
+            'rotulo_modelo' => ['nullable', 'string', 'max:100'],
             'price' => ['required', 'numeric', 'min:0'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
@@ -406,6 +410,12 @@ class ProductController extends Controller
         }
 
         $dados = $request->validate($rules);
+
+        // Grupo de modelos normalizado ("Caixa Sanfonada" = "caixa-sanfonada"),
+        // para um espaço ou maiúscula a mais não separar os anúncios.
+        if (array_key_exists('grupo_modelos', $dados)) {
+            $dados['grupo_modelos'] = filled($dados['grupo_modelos']) ? (Str::slug($dados['grupo_modelos']) ?: null) : null;
+        }
 
         // Desconto Site é em % OU em R$: com o % preenchido, o valor sai.
         if (filled($dados['discount_percentage'] ?? null)) {

@@ -246,6 +246,41 @@ const resumo = computed(() => {
             <InputError :message="form.errors.variation" />
         </div>
 
+        <!-- Modelos ligados (2026-10-21): anúncios separados que aparecem como
+             "Modelo" na página uns dos outros, sem virar variação. Só na edição. -->
+        <div v-if="form.grupo_modelos !== undefined" class="rounded-lg border border-gray-200 p-4">
+            <p class="text-sm font-semibold">Modelos ligados</p>
+            <p class="text-xs text-gray-500">Anúncios separados com o mesmo grupo mostram um seletor "Modelo" na página, cada um com a sua foto principal. Só aparece com 2 ou mais anúncios ativos no grupo.</p>
+            <div class="mt-2 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="grupo_modelos" class="block text-sm font-medium">Grupo de modelos</label>
+                    <input
+                        id="grupo_modelos"
+                        v-model="form.grupo_modelos"
+                        type="text"
+                        placeholder="Ex: caixa-sanfonada"
+                        aria-describedby="grupo_modelos-hint"
+                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                    >
+                    <p id="grupo_modelos-hint" class="mt-1 text-xs text-gray-400">Mesmo texto em todos os anúncios do grupo. Vazio = sem seletor.</p>
+                    <InputError :message="form.errors.grupo_modelos" />
+                </div>
+                <div>
+                    <label for="rotulo_modelo" class="block text-sm font-medium">Nome do modelo</label>
+                    <input
+                        id="rotulo_modelo"
+                        v-model="form.rotulo_modelo"
+                        type="text"
+                        placeholder="Ex: 85 peças"
+                        aria-describedby="rotulo_modelo-hint"
+                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                    >
+                    <p id="rotulo_modelo-hint" class="mt-1 text-xs text-gray-400">Texto da opção no seletor. Vazio = nome do anúncio.</p>
+                    <InputError :message="form.errors.rotulo_modelo" />
+                </div>
+            </div>
+        </div>
+
         <div v-if="form.sku !== undefined">
             <label for="sku" class="block text-sm font-medium">SKU</label>
 

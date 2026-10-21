@@ -9,6 +9,7 @@ use App\Services\MercadoLivre\Services\ClaimService;
 use App\Services\MercadoLivre\Services\MessageService;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
+use App\Services\MercadoLivre\Services\QuestionService;
 use App\Services\MercadoLivre\Services\ShipmentService;
 use App\Services\MercadoLivre\Webhooks\WebhookHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,8 +81,28 @@ class WebhookTest extends TestCase
         $shipments = Mockery::mock(ShipmentService::class);
         $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims, Mockery::mock(QuestionService::class));
         $handler->handle(['topic' => 'orders'], $log->id);
+
+        $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
+    }
+
+    public function test_webhook_handler_dispatches_questions_topic_to_question_service(): void
+    {
+        $log = ChannelWebhookLog::create(['channel' => 'mercado_livre', 'event_type' => 'questions', 'status' => ChannelWebhookLog::STATUS_RECEIVED]);
+
+        $questions = Mockery::mock(QuestionService::class);
+        $questions->shouldReceive('processWebhook')->once()->with(['topic' => 'questions', 'resource' => '/questions/1']);
+
+        $handler = new WebhookHandler(
+            Mockery::mock(OrderService::class),
+            Mockery::mock(ProductService::class),
+            Mockery::mock(MessageService::class),
+            Mockery::mock(ShipmentService::class),
+            Mockery::mock(ClaimService::class),
+            $questions,
+        );
+        $handler->handle(['topic' => 'questions', 'resource' => '/questions/1'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
     }
@@ -97,7 +118,7 @@ class WebhookTest extends TestCase
         $claims = Mockery::mock(ClaimService::class);
         $claims->shouldReceive('processWebhook')->once()->with(['topic' => 'post_purchase']);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims, Mockery::mock(QuestionService::class));
         $handler->handle(['topic' => 'post_purchase'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
@@ -116,7 +137,7 @@ class WebhookTest extends TestCase
         $shipments = Mockery::mock(ShipmentService::class);
         $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims, Mockery::mock(QuestionService::class));
         $handler->handle(['topic' => 'prices'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
@@ -132,7 +153,7 @@ class WebhookTest extends TestCase
         $shipments = Mockery::mock(ShipmentService::class);
         $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims, Mockery::mock(QuestionService::class));
         $handler->handle(['topic' => 'unknown_topic'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_IGNORED, $log->fresh()->status);
@@ -150,7 +171,7 @@ class WebhookTest extends TestCase
         $shipments = Mockery::mock(ShipmentService::class);
         $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims, Mockery::mock(QuestionService::class));
 
         $this->expectException(RuntimeException::class);
 

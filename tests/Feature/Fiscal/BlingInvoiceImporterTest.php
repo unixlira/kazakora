@@ -6,10 +6,17 @@ use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Notifications\FiscalAlertNotification;
 use App\Services\Bling\BlingInvoiceImporter;
+use App\Services\NFe\NFeCertificateService;
+use App\Services\NFe\NFeWebserviceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
+use NFePHP\Common\Certificate;
 use Tests\TestCase;
 
 /**
@@ -198,6 +205,133 @@ class BlingInvoiceImporterTest extends TestCase
             'order_id' => $order->id,
             'status' => \App\Modules\Checkout\Models\OrderFulfillmentEvent::STATUS_FAILED,
         ]);
+    }
+
+    /**
+     * Pedido + nota do Bling numa situação qualquer, com chave, e a SEFAZ
+     * respondendo $cStat na consulta pela chave.
+     */
+    private function fakeNotaComChave(int $situacao, string $digestDoBling, string $cStat, string $digestAutorizado = 'DIGEST-AUTORIZADO='): void
+    {
+        $xmlBling = '<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">'
+            .'<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe versao="4.00" Id="NFe'.self::CHAVE.'"><ide><dhEmi>2026-10-21T12:05:11-03:00</dhEmi></ide></infNFe>'
+            .'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><Reference><DigestValue>'.$digestDoBling.'</DigestValue></Reference></SignedInfo></Signature>'
+            .'</NFe></nfeProc>';
+
+        Http::fake([
+            '*/pedidos/vendas/26759086886' => Http::response(['data' => [
+                'id' => 26759086886, 'numeroLoja' => '585846882986263720', 'notaFiscal' => ['id' => 55501],
+            ]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [[
+                'id' => 26759086886, 'numeroLoja' => '585846882986263720',
+            ]]]),
+            '*/nfe/55501/enviar' => Http::response(['data' => []]),
+            '*/nfe/55501' => Http::response(['data' => [
+                'id' => 55501, 'numero' => '000556', 'serie' => 3, 'situacao' => $situacao,
+                'chaveAcesso' => self::CHAVE, 'valorNota' => 100.0, 'dataEmissao' => '2026-10-21 12:05:11',
+                'xml' => 'https://bling.test/xml/55501', 'itens' => [],
+            ]]),
+            'bling.test/xml/*' => Http::response($xmlBling),
+        ]);
+
+        $protocolo = in_array($cStat, ['100', '150'], true)
+            ? '<protNFe versao="4.00"><infProt><tpAmb>1</tpAmb><chNFe>'.self::CHAVE.'</chNFe><dhRecbto>2026-10-21T11:59:32-03:00</dhRecbto>'
+                .'<nProt>135264477322743</nProt><digVal>'.$digestAutorizado.'</digVal><cStat>'.$cStat.'</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe>'
+            : '';
+        $resposta = '<retConsSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><tpAmb>1</tpAmb><cStat>'.($protocolo ? '100' : $cStat).'</cStat>'
+            .'<xMotivo>retorno</xMotivo><chNFe>'.self::CHAVE.'</chNFe>'.$protocolo.'</retConsSitNFe>';
+
+        $certificado = Mockery::mock(NFeCertificateService::class);
+        $certificado->shouldReceive('load')->andReturn(Mockery::mock(Certificate::class));
+        $this->app->instance(NFeCertificateService::class, $certificado);
+
+        $sefaz = Mockery::mock(NFeWebserviceService::class);
+        $sefaz->shouldReceive('consultarChave')->with(self::CHAVE, Mockery::any())->andReturn($resposta);
+        $this->app->instance(NFeWebserviceService::class, $sefaz);
+    }
+
+    /**
+     * BUG REAL 2026-10-21 (#3325): a SEFAZ autorizou, o Bling ficou sem o
+     * retorno e parou na situação 0. Quando o XML dele é o autorizado, o
+     * protocolo da consulta completa o nfeProc e a nota vira autorizada aqui.
+     */
+    public function test_note_stuck_in_bling_situation_zero_is_recovered_from_sefaz(): void
+    {
+        $this->fakeNotaComChave(0, 'DIGEST-AUTORIZADO=', '100');
+
+        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($this->makeOrder());
+
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $invoice->status);
+        $this->assertSame('135264477322743', $invoice->protocolo_autorizacao);
+        $this->assertSame('2026-10-21 11:59:32', $invoice->autorizada_em->format('Y-m-d H:i:s'));
+        $xml = Storage::disk('local')->get($invoice->xml_path);
+        $this->assertStringContainsString('<protNFe', $xml);
+        $this->assertStringContainsString('<nProt>135264477322743</nProt>', $xml);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+    }
+
+    /**
+     * Os 10 casos reais de out/2026: o XML que o Bling guardou foi regerado
+     * DEPOIS da autorização (outro DigestValue). Ele não é o documento
+     * fiscal: fica pendente com o protocolo anotado e avisa, uma vez só.
+     */
+    public function test_regenerated_bling_xml_is_not_saved_as_the_authorized_note(): void
+    {
+        $this->fakeNotaComChave(0, 'DIGEST-REGERADO=', '100');
+        User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Notification::fake();
+
+        $order = $this->makeOrder();
+        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($order);
+        Cache::flush();
+        app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+        $this->assertSame(Invoice::STATUS_PENDING, $invoice->status);
+        $this->assertNull($invoice->xml_path);
+        $this->assertSame('135264477322743', $invoice->protocolo_autorizacao);
+        $this->assertStringContainsString('não reenviar', $invoice->motivo_rejeicao);
+        $this->assertSame('135264477322743', $order->fresh()->invoice->protocolo_autorizacao, 'A varredura seguinte não apaga o protocolo.');
+        Notification::assertSentTimes(FiscalAlertNotification::class, 1);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+    }
+
+    /**
+     * A causa: a nota ia ao /enviar de novo enquanto o Bling ainda estava em
+     * 1 sem o retorno da 1ª autorização. Nota já autorizada na SEFAZ não é
+     * enviada outra vez.
+     */
+    public function test_pending_note_already_authorized_at_sefaz_is_not_sent_again(): void
+    {
+        config(['services.bling.auto_send_nfe' => true]);
+        $this->fakeNotaComChave(1, 'DIGEST-REGERADO=', '100');
+
+        app(BlingInvoiceImporter::class)->syncForOrder($this->makeOrder());
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+    }
+
+    public function test_pending_note_not_yet_at_sefaz_is_sent_once(): void
+    {
+        config(['services.bling.auto_send_nfe' => true]);
+        $this->fakeNotaComChave(1, 'DIGEST-AUTORIZADO=', '217');
+
+        app(BlingInvoiceImporter::class)->syncForOrder($this->makeOrder());
+
+        $this->assertCount(1, Http::recorded(fn ($request) => str_contains($request->url(), '/enviar')));
+    }
+
+    /** Outro processo com a trava da mesma nota: este não envia. */
+    public function test_note_being_sent_by_another_process_is_not_sent_twice(): void
+    {
+        config(['services.bling.auto_send_nfe' => true]);
+        $this->fakeNotaComChave(1, 'DIGEST-AUTORIZADO=', '217');
+        $trava = Cache::lock('bling.invoice.enviar.55501', 180);
+        $trava->get();
+
+        app(BlingInvoiceImporter::class)->syncForOrder($this->makeOrder());
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+        $trava->release();
     }
 
     /** Falha do Bling não pode derrubar o fluxo — o importador roda dentro do webhook. */

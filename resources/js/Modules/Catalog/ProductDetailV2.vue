@@ -718,7 +718,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
-                                <img class="selo-garantia" src="/images/selo-satisfacao-garantida.png" alt="Satisfação 100% garantida" loading="lazy">
+                                <img class="selo-garantia" src="/images/selo-satisfacao-premium.png" alt="Satisfação 100% garantida" loading="lazy">
                                 <p>
                                     Se o produto chegar com defeito, você tem 30 dias após o recebimento para pedir a troca ou o reembolso.
                                     Mudou de ideia? São 7 dias para devolver, sem nenhum risco para você.

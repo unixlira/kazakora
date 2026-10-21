@@ -1,8 +1,8 @@
 <script setup>
 // "O que fazer agora" (pedido do Lira 2026-10-21; textos do Jonathan). As
 // regras rodam no servidor (MetaAdsDiagnostico) sobre o espelho da Meta.
-// Só leitura: nenhum botão aplica nada; "Editar" abre o modal que já existe
-// e "Abrir no Gerenciador" leva para a Meta.
+// "Editar" abre o modal que já existe, "Abrir no Gerenciador" leva para a
+// Meta e "Pausar criativo" abre a confirmação da tabela (nada sem clique).
 import { Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { formatarNumero, formatarReais, PRIORIDADES } from './metaAds';
@@ -19,7 +19,7 @@ const props = defineProps({
     podeEditar: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['ver', 'editar', 'ultimos7']);
+const emit = defineEmits(['ver', 'editar', 'pausar', 'ultimos7']);
 
 const idTitulo = `diagnostico-titulo-${Math.random().toString(36).slice(2, 8)}`;
 const todas = ref(false);
@@ -112,6 +112,12 @@ const tipoRotulo = { anuncio: 'Anúncio', conjunto: 'Conjunto' };
                                 class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                                 @click="emit('editar', cartao.alvo)">
                                 <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
+                            </button>
+                            <!-- Pausar criativo (Lira 2026-10-21): o servidor confere se o anúncio ainda está ativo. -->
+                            <button v-if="!compacto && podeEditar && cartao.pausar" type="button"
+                                class="inline-flex items-center gap-1 rounded-md border border-amber-400 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                                @click="emit('pausar', cartao.alvo)">
+                                <i class="fas fa-pause text-[10px]" aria-hidden="true"></i> Pausar criativo
                             </button>
                         </div>
                     </div>

@@ -168,7 +168,7 @@ const columns = [
                     Não deu para ler a Meta agora: {{ props.espelho.erro }}
                 </p>
                 <DiagnosticoMeta v-if="!props.espelho?.erro" :diagnostico="props.espelho?.diagnostico" :periodos="props.periodos"
-                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
+                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @pausar="(alvo) => tabela?.pausar(alvo.id)" @ultimos7="trocarPeriodo('last_7d')" />
                 <EspelhoMeta v-if="!props.espelho?.erro" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="props.espelho?.diagnostico" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
                     :produtos="props.produtos" :chamadas="props.chamadas" :class="{ 'opacity-60': carregando }" @mudou="recarregar" />
             </Deferred>

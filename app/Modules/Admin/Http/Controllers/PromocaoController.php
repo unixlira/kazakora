@@ -33,6 +33,9 @@ use Inertia\Response;
  * Tela inicial (2026-10-21): as duas lado a lado, cada uma com a chave
  * "mostrar na página do produto", a imagem do quadro (pronta, enviada ou a
  * de Entregáveis) e os produtos onde aparece (tabela promocao_produto).
+ *
+ * Texto do quadro (2026-10-21): condições ("pedidos pagos até...") e o botão
+ * para a página da promoção também ficam no card, junto do resto do quadro.
  */
 class PromocaoController extends Controller
 {
@@ -134,6 +137,35 @@ class PromocaoController extends Controller
         return back()->with('success', "{$promocao->nome}: {$mensagem}");
     }
 
+    /** Condições e botão do quadro (o botão leva a /promocoes/{slug}). */
+    public function quadro(Request $request, string $slug): RedirectResponse
+    {
+        $promocao = Promocao::query()->where('slug', $slug)->firstOrFail();
+        $dados = $request->validate([
+            'condicoes' => ['nullable', 'string', 'max:500'],
+            'botao_ativo' => ['boolean'],
+            'botao_texto' => ['nullable', 'string', 'max:60'],
+        ], [
+            'condicoes.max' => 'As condições podem ter no máximo 500 caracteres.',
+            'botao_texto.max' => 'O texto do botão pode ter no máximo 60 caracteres.',
+        ]);
+
+        $condicoes = trim(str_replace(["\r\n", "\r"], "\n", (string) ($dados['condicoes'] ?? '')));
+        $texto = trim((string) ($dados['botao_texto'] ?? ''));
+
+        $promocao->update([
+            'condicoes' => $condicoes !== '' ? $condicoes : null,
+            'botao_ativo' => $request->boolean('botao_ativo'),
+            'botao_texto' => $texto !== '' && $texto !== Promocao::BOTAO_PADRAO ? $texto : null,
+        ]);
+
+        $aviso = $promocao->botao_ativo && ! $promocao->noAr()
+            ? ' O botão só aparece quando a página da promoção estiver no ar.'
+            : '';
+
+        return back()->with('success', "{$promocao->nome}: texto do quadro salvo.{$aviso}");
+    }
+
     /** Imagem do quadro: pronta do repositório, enviada agora ou '' (a de Entregáveis). */
     public function imagem(Request $request, string $slug): RedirectResponse
     {
@@ -204,7 +236,7 @@ class PromocaoController extends Controller
         if ($slug === Promocao::AIRFRYER) {
             $ativos = Sorteio::query()->where('ativo', true)->orderBy('id')->get();
             $padrao = $ativos->first()?->imagem_url ?? asset(PromocoesDoProduto::PRONTAS[$slug][0]['caminho']);
-            $entregaveis = ['itens' => $ativos->pluck('titulo')->values(), 'link' => '/admin/entregaveis/sorteios'];
+            $entregaveis = ['itens' => $ativos->pluck('titulo')->values(), 'link' => '/admin/entregaveis/sorteios', 'texto_sorteio' => $ativos->first()?->paragrafo_1];
         } else {
             $ativos = LivroDigital::query()->where('ativo', true)->orderBy('id')->get();
             $padrao = asset(PromocoesDoProduto::QUADRO_LIVROS_PADRAO);
@@ -215,6 +247,14 @@ class PromocaoController extends Controller
             'slug' => $slug,
             'nome' => $promocao->nome,
             'ativa' => $promocao->ativa,
+            'no_ar' => $promocao->noAr(),
+            'inicio' => $promocao->inicio?->format('d/m/Y H:i'),
+            'fim' => $promocao->fim?->format('d/m/Y H:i'),
+            'fim_data' => $promocao->fim?->format('d/m/Y'),
+            'condicoes' => $promocao->condicoes,
+            'botao_ativo' => $promocao->botao_ativo,
+            'botao_texto' => $promocao->botao_texto,
+            'botao_padrao' => Promocao::BOTAO_PADRAO,
             'na_pagina_produto' => $promocao->na_pagina_produto,
             'todos_produtos' => $promocao->todos_produtos,
             'imagem' => $promocao->imagem,

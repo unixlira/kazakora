@@ -1,10 +1,10 @@
 <script setup>
 // Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da
-// Promoção PDFs. Mesma tela para as duas, só muda o slug.
+// Promoção PDFs. Mesma tela para todas (também as criadas na lista), só muda o slug.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     promocao: { type: Object, required: true },
@@ -35,6 +35,9 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
 
     <AdminLayout>
         <div class="mb-6 max-w-2xl">
+            <Link href="/admin/promocoes" class="mb-2 inline-block text-sm text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Promoções
+            </Link>
             <h1 class="mb-1 text-2xl font-bold">{{ promocao.nome }}</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Título e descrição que o cliente vê na

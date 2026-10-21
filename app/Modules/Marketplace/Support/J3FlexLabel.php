@@ -62,6 +62,20 @@ class J3FlexLabel
                 }
 
                 $existente = $this->j3->pedidoPorEnvio($shipment->external_shipment_id);
+
+                // A J3 já importa sozinha toda venda Flex do Mercado Livre
+                // (origin Integration, shippingIntegrationId = id do envio),
+                // mas não dá pra saber quando: a data que ela grava é a da
+                // venda. Criar pelo POST quando ela ainda não importou abria
+                // a chance de dois pedidos (e duas cobranças) pro mesmo
+                // envio — conferido em 2026-10-21. Venda do ML só usa o
+                // pedido que a J3 já tem; sem ele, etiqueta do ML.
+                if (! $existente && $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
+                    Log::info('j3.flex.ainda_nao_importado', ['shipment_id' => $shipment->id, 'envio' => $shipment->external_shipment_id]);
+
+                    return null;
+                }
+
                 $resposta = $existente ?: $this->j3->criarPedido($this->montarPedido($order, $shipment));
 
                 $tracking = $resposta['trackingNumber'] ?? null;

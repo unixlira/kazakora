@@ -10,6 +10,7 @@ use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\J3FlexLabel;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -41,7 +42,7 @@ class J3FlexLabelTest extends TestCase
         ]);
     }
 
-    public function test_flex_inside_the_j3_area_prints_the_j3_label(): void
+    public function test_flex_already_imported_by_j3_prints_the_j3_label(): void
     {
         $shipment = $this->makeShipment();
         $this->mockDriver();
@@ -50,14 +51,13 @@ class J3FlexLabelTest extends TestCase
         Http::fake([
             self::API.'/api/auth/changeKey*' => Http::response(['accessToken' => 'jwt', 'expiresIn' => '24h', 'tokenType' => 'Bearer']),
             self::API.'/api/regions/coverage/04567000' => Http::response(['inCoverage' => true]),
-            self::API.'/api/orders/shipping-integration/*' => Http::response([], 404),
-            self::API.'/api/orders' => Http::response([
-                'success' => true,
-                'logisticType' => 'flex',
+            self::API.'/api/orders/shipping-integration/47981054232' => Http::response([
+                'origin' => 'Integration',
+                'ecommerce' => 'MercadoLivre',
                 'orderCode' => 'ORD-1',
                 'trackingNumber' => 'J32612345678',
                 'stampUrl' => 'https://arquivos.j3/etiqueta.pdf',
-            ], 201),
+            ]),
             'https://arquivos.j3/etiqueta.pdf' => Http::response($j3Pdf),
         ]);
 
@@ -72,21 +72,61 @@ class J3FlexLabelTest extends TestCase
             'step' => 'label_generated',
             'message' => 'Etiqueta da J3 emitida (rastreio J32612345678)',
         ]);
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), '/shipping-integration/') && $request->hasHeader('Authorization', 'Bearer jwt'));
+        Http::assertNotSent(fn (Request $request) => $request->url() === self::API.'/api/orders');
+    }
 
-        Http::assertSent(function (Request $request) {
-            if ($request->url() !== self::API.'/api/orders') {
-                return false;
-            }
+    /** Venda do ML que a J3 ainda não importou: nunca cria pelo POST (seria pedido duplicado). */
+    public function test_flex_not_yet_imported_by_j3_never_creates_an_order(): void
+    {
+        $shipment = $this->makeShipment();
+        $mlPdf = $this->mockDriver();
 
-            $pacote = $request['order']['packages'][0];
+        Http::fake([
+            self::API.'/api/auth/changeKey*' => Http::response(['accessToken' => 'jwt']),
+            self::API.'/api/regions/coverage/*' => Http::response(['inCoverage' => true]),
+            self::API.'/api/orders/shipping-integration/*' => Http::response([], 404),
+            self::API.'/api/orders' => Http::response(['success' => true, 'trackingNumber' => 'NAO-PODIA'], 201),
+        ]);
 
-            return $request->hasHeader('Authorization', 'Bearer jwt')
-                && $request['ecommerce'] === 'MercadoLivre'
-                && $request['order']['shippingIntegrationId'] === '47981054232'
-                && $request['order']['shippingAddress']['addressZipCode'] === '04567-000'
-                && $pacote['weightInGrams'] === 900
-                && $pacote['itemValueInCents'] === 12990;
-        });
+        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()));
+
+        $fresh = $shipment->fresh();
+        $this->assertNull($fresh->j3_tracking_number);
+        $this->assertSame($mlPdf, Storage::disk('local')->get($fresh->label_path));
+        Http::assertNotSent(fn (Request $request) => $request->url() === self::API.'/api/orders');
+    }
+
+    /** Como a J3 guarda hoje as vendas do ML: sem rastreio nem etiqueta dela. */
+    public function test_flex_imported_without_a_j3_label_keeps_the_mercado_livre_label(): void
+    {
+        $shipment = $this->makeShipment();
+        $mlPdf = $this->mockDriver();
+
+        Http::fake([
+            self::API.'/api/auth/changeKey*' => Http::response(['accessToken' => 'jwt']),
+            self::API.'/api/regions/coverage/*' => Http::response(['inCoverage' => true]),
+            self::API.'/api/orders/shipping-integration/*' => Http::response(['origin' => 'Integration', 'ecommerce' => 'MercadoLivre', 'status' => 'Pending']),
+        ]);
+
+        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()));
+
+        $this->assertNull($shipment->fresh()->j3_tracking_number);
+        $this->assertSame($mlPdf, Storage::disk('local')->get($shipment->fresh()->label_path));
+        Http::assertNotSent(fn (Request $request) => $request->url() === self::API.'/api/orders');
+    }
+
+    public function test_the_order_payload_matches_the_j3_api(): void
+    {
+        $shipment = $this->makeShipment();
+        $pedido = app(J3FlexLabel::class)->montarPedido($shipment->order, $shipment);
+        $pacote = $pedido['order']['packages'][0];
+
+        $this->assertSame('MercadoLivre', $pedido['ecommerce']);
+        $this->assertSame('47981054232', $pedido['order']['shippingIntegrationId']);
+        $this->assertSame('04567-000', $pedido['order']['shippingAddress']['addressZipCode']);
+        $this->assertSame(900, $pacote['weightInGrams']);
+        $this->assertSame(12990, $pacote['itemValueInCents']);
     }
 
     public function test_flex_outside_the_j3_area_keeps_the_mercado_livre_label(): void
@@ -115,8 +155,7 @@ class J3FlexLabelTest extends TestCase
         Http::fake([
             self::API.'/api/auth/changeKey*' => Http::response(['accessToken' => 'jwt']),
             self::API.'/api/regions/coverage/*' => Http::response(['inCoverage' => true]),
-            self::API.'/api/orders/shipping-integration/*' => Http::response([], 404),
-            self::API.'/api/orders' => Http::response(['success' => false, 'error' => 'CEP não está na área de cobertura'], 422),
+            self::API.'/api/orders/shipping-integration/*' => Http::response(['message' => 'Bad Gateway'], 502),
         ]);
 
         $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()));

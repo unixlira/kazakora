@@ -13,6 +13,8 @@ const props = defineProps({
 const { can } = usePermissions();
 
 const form = useForm({
+    titulo: props.promocao.titulo ?? '',
+    descricao: props.promocao.descricao ?? '',
     ativa: props.promocao.ativa,
     inicio: props.promocao.inicio ?? '',
     fim: props.promocao.fim ?? '',
@@ -35,11 +37,26 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
         <div class="mb-6 max-w-2xl">
             <h1 class="mb-1 text-2xl font-bold">{{ promocao.nome }}</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
-                Defina se a promoção está ativa, o período, o valor mínimo do pedido e as chaves/regras próprias dela.
+                Título e descrição que o cliente vê na
+                <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-primary hover:underline">página da promoção</a>,
+                se ela está ativa, o período, o valor mínimo do pedido e as chaves/regras próprias dela.
             </p>
         </div>
 
         <form class="max-w-3xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" @submit.prevent="salvar">
+            <div class="mb-4">
+                <label for="pr-titulo" class="mb-1 block text-sm font-medium">Título</label>
+                <input id="pr-titulo" v-model="form.titulo" type="text" maxlength="255" :class="campo">
+                <InputError :message="form.errors.titulo" />
+            </div>
+
+            <div class="mb-4">
+                <label for="pr-descricao" class="mb-1 block text-sm font-medium">Descrição</label>
+                <textarea id="pr-descricao" v-model="form.descricao" rows="8" maxlength="10000" :class="[campo, 'resize-y leading-relaxed']"></textarea>
+                <p class="mt-1 text-xs text-slate-500">Enter quebra a linha. Uma linha em branco começa um parágrafo novo. A página mostra igual ao que está aqui.</p>
+                <InputError :message="form.errors.descricao" />
+            </div>
+
             <label class="mb-4 flex items-center gap-2 text-sm font-medium">
                 <input v-model="form.ativa" type="checkbox" :disabled="!can('cadastros.edit')"> Promoção ativa
             </label>

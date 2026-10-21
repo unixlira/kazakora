@@ -11,7 +11,8 @@ use Inertia\Response;
 
 /**
  * Vender › Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs.
- * Cada uma tem ativa/inativa, período, valor mínimo do pedido, observações e
+ * Cada uma tem título e descrição (página pública /promocoes/{slug}),
+ * ativa/inativa, período, valor mínimo do pedido, observações e
  * chaves/regras livres que o Lira define.
  */
 class PromocaoController extends Controller
@@ -24,6 +25,8 @@ class PromocaoController extends Controller
             'promocao' => [
                 'slug' => $promocao->slug,
                 'nome' => $promocao->nome,
+                'titulo' => $promocao->titulo,
+                'descricao' => $promocao->descricao,
                 'ativa' => $promocao->ativa,
                 'inicio' => $promocao->inicio?->format('Y-m-d\TH:i'),
                 'fim' => $promocao->fim?->format('Y-m-d\TH:i'),
@@ -41,6 +44,8 @@ class PromocaoController extends Controller
         $promocao = Promocao::query()->where('slug', $slug)->firstOrFail();
 
         $dados = $request->validate([
+            'titulo' => ['nullable', 'string', 'max:255'],
+            'descricao' => ['nullable', 'string', 'max:10000'],
             'ativa' => ['boolean'],
             'inicio' => ['nullable', 'date'],
             'fim' => ['nullable', 'date', 'after_or_equal:inicio'],
@@ -60,7 +65,12 @@ class PromocaoController extends Controller
             $regras[$regra['chave']] = $regra['valor'] ?? '';
         }
 
+        // Quebra de linha do navegador (\r\n) vira \n: o texto fica igual ao digitado.
+        $descricao = trim(str_replace(["\r\n", "\r"], "\n", (string) ($dados['descricao'] ?? '')));
+
         $promocao->update([
+            'titulo' => ($dados['titulo'] ?? '') !== '' ? $dados['titulo'] : null,
+            'descricao' => $descricao !== '' ? $descricao : null,
             'ativa' => $request->boolean('ativa'),
             'inicio' => $dados['inicio'] ?? null,
             'fim' => $dados['fim'] ?? null,

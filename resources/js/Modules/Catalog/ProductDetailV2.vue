@@ -1152,7 +1152,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .livros-lista { display: flex; flex-direction: column; gap: 6px; font-size: 14px !important; color: var(--ink); }
 .pd2 .livros-lista i { color: var(--green); }
 .pd2 .livros-oferta .livros-gratis { margin: 0; color: var(--ink); }
-.pd2 .livros-gratis b { color: var(--green); font-weight: 700; }
+.pd2 .livros-gratis b { color: var(--green); font-weight: 700; white-space: nowrap; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }

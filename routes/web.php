@@ -813,8 +813,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('mensagens-site', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'excluirSelecionadas'])->name('mensagens-site.excluir-selecionadas');
         Route::delete('mensagens-site/{mensagem}', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'excluir'])->whereNumber('mensagem')->name('mensagens-site.excluir');
         Route::post('mensagens-site/restaurar', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'restaurar'])->name('mensagens-site.restaurar');
+        // Perguntas dos anúncios do ML com o rascunho da Manuela (pedido 2026-10-20).
+        Route::get('perguntas-mercado-livre', [\App\Modules\Admin\Http\Controllers\PerguntasMercadoLivreController::class, 'index'])->name('perguntas-ml.listar');
+        Route::post('perguntas-mercado-livre/{pergunta}/enviar', [\App\Modules\Admin\Http\Controllers\PerguntasMercadoLivreController::class, 'enviar'])->whereNumber('pergunta')->middleware('throttle:20,1')->name('perguntas-ml.enviar');
         // Suporte > Chamados (pedido 2026-10-11).
-        Route::get('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'index'])->name('suporte.chamados');
+        Route::get('suporte',[\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'index'])->name('suporte.chamados');
         Route::post('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'criar'])->name('suporte.criar');
         Route::get('suporte/{chamado}/mensagens', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'mensagens'])->whereNumber('chamado')->name('suporte.mensagens');
         Route::post('suporte/{chamado}/mensagens', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'enviar'])->whereNumber('chamado')->name('suporte.enviar');

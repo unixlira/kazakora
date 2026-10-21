@@ -387,6 +387,7 @@ const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - av
 const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
 
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
+const ehVideo = (midia) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(midia?.image_url ?? '');
 const fotoAberta = ref(null);
 const abrirFoto = (imagens, indice) => { fotoAberta.value = { imagens, indice }; };
 const fecharFoto = () => { fotoAberta.value = null; };
@@ -737,8 +738,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-if="review.comment">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
-                                    :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <img :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
+                                    <video v-if="ehVideo(image)" :src="image.image_url + '#t=0.1'" muted playsinline preload="metadata"></video>
+                                    <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
                             </div>
                         </div>
@@ -756,7 +759,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div v-if="fotoAberta" class="aval-lightbox" role="dialog" aria-modal="true" aria-label="Foto da avaliação" @click.self="fecharFoto">
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
-                        <img :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
+                        <video v-if="ehVideo(fotoAberta.imagens[fotoAberta.indice])" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" autoplay controls playsinline></video>
+                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>
@@ -1064,14 +1068,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
-.pd2 .foto-btn { padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
+.pd2 .foto-btn { position: relative; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.pd2 .play-video { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.pd2 .play-video i { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; padding-left: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 .pd2 .aval-mais { margin-top: 18px; text-align: center; }
 .pd2 .aval-mais .btn-sec { display: inline-flex; width: auto; min-width: 260px; padding: 0 22px; }
 .pd2 .aval-mais span { opacity: .7; font-weight: 400; }
 @media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
 .aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
-.aval-lightbox img { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
+.aval-lightbox img, .aval-lightbox video { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
 .aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }
 .aval-lightbox button:hover { background: rgba(255,255,255,.28); }
 .aval-lightbox .lb-fechar { top: 14px; right: 14px; }

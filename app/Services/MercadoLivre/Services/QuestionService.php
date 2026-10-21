@@ -53,8 +53,33 @@ class QuestionService
             ]);
         }
 
+        $this->preencherComprador($pergunta);
+
         if ($pergunta->status === 'UNANSWERED' && $pergunta->rascunho_em === null && filled($pergunta->pergunta)) {
             RascunharRespostaPerguntaMercadoLivre::dispatch($pergunta->id);
+        }
+    }
+
+    /**
+     * Nome de quem perguntou para a lista do admin: o apelido público do
+     * comprador no ML. Falha aqui não pode travar a pergunta.
+     */
+    public function preencherComprador(MercadoLivrePergunta $pergunta): void
+    {
+        if (filled($pergunta->comprador_nome) || ! $pergunta->comprador_id) {
+            return;
+        }
+
+        try {
+            $nome = trim((string) ($this->client->get("users/{$pergunta->comprador_id}")['nickname'] ?? ''));
+        } catch (\Throwable $e) {
+            Log::channel(config('mercadolivre.log_channel'))->info('mercadolivre.questions.comprador_sem_nome', ['id' => $pergunta->id, 'erro' => $e->getMessage()]);
+
+            return;
+        }
+
+        if ($nome !== '') {
+            $pergunta->update(['comprador_nome' => mb_substr($nome, 0, 120)]);
         }
     }
 }

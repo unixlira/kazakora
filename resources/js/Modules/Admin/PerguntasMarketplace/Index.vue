@@ -57,6 +57,22 @@ const abrir = async (p) => {
     }
 };
 
+// Avatar do cliente: iniciais do nome (o marketplace não entrega foto) numa cor
+// fixa por cliente, para reconhecer quem volta a perguntar.
+const CORES_AVATAR = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-teal-500', 'bg-indigo-500', 'bg-orange-500'];
+const iniciais = (p) => {
+    const nome = (p.comprador || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim();
+    if (!nome) return '?';
+    const partes = nome.split(/[ ._-]+/).filter(Boolean);
+    return (partes.length > 1 ? partes[0][0] + partes[1][0] : nome.slice(0, 2)).toUpperCase();
+};
+const corAvatar = (p) => {
+    const chave = p.comprador || String(p.id);
+    let h = 0;
+    for (const c of chave) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return p.comprador ? CORES_AVATAR[h % CORES_AVATAR.length] : 'bg-slate-400';
+};
+
 const estado = (p) => {
     if (!p.aberta) return { rotulo: 'Respondida', ponto: 'bg-emerald-500' };
     if (p.assumida_por) return { rotulo: `Com ${p.assumida_por}`, ponto: 'bg-violet-500' };
@@ -186,25 +202,34 @@ onUnmounted(() => clearInterval(timer));
                 <aside class="overflow-hidden rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
                     <p class="border-b border-[var(--surface-border)] px-4 py-2 text-xs font-semibold text-slate-500">{{ perguntas.length }} {{ perguntas.length === 1 ? 'pergunta' : 'perguntas' }}</p>
                     <ul class="max-h-[60vh] divide-y divide-[var(--surface-border)] overflow-y-auto overscroll-contain lg:max-h-[calc(100vh-300px)]">
+                        <!-- Cada cliente: avatar com o ícone do marketplace, nome e, embaixo,
+                             o produto (clicar no produto abre a pergunta no painel do marketplace). -->
                         <li v-for="p in perguntas" :key="p.id">
-                            <button type="button" class="flex w-full gap-3 px-4 py-3 text-left transition-colors"
+                            <div role="button" tabindex="0" class="flex w-full cursor-pointer gap-3 px-4 py-3 text-left transition-colors"
                                 :class="p.id === selecionadaId ? 'bg-primary/10' : 'hover:bg-[var(--surface-muted)]'"
                                 :aria-current="p.id === selecionadaId ? 'true' : undefined"
-                                @click="abrir(p)">
-                                <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm" :class="canalPergunta(p.canal).fundo" :title="canalPergunta(p.canal).nome">
-                                    <i :class="canalPergunta(p.canal).icone"></i>
+                                @click="abrir(p)" @keydown.enter.prevent="abrir(p)" @keydown.space.prevent="abrir(p)">
+                                <span class="relative mt-0.5 h-10 w-10 shrink-0">
+                                    <span class="inline-flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white" :class="corAvatar(p)">{{ iniciais(p) }}</span>
+                                    <span class="absolute -bottom-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] ring-2 ring-[var(--surface)]" :class="canalPergunta(p.canal).fundo" :title="canalPergunta(p.canal).nome">
+                                        <i :class="canalPergunta(p.canal).icone"></i>
+                                    </span>
                                 </span>
                                 <span class="min-w-0 flex-1">
-                                    <span class="flex items-center gap-2 text-[11px] text-slate-400">
-                                        <span class="truncate font-semibold text-slate-600 dark:text-slate-300">{{ p.produto || p.item_id }}</span>
-                                        <span class="ml-auto shrink-0">{{ dataHora(p.perguntada_em) }}</span>
+                                    <span class="flex items-center gap-2">
+                                        <span class="truncate text-sm font-semibold" :class="p.comprador ? '' : 'text-slate-500'">{{ p.comprador || `Cliente ${canalPergunta(p.canal).nome}` }}</span>
+                                        <span class="ml-auto shrink-0 text-[11px] text-slate-400">{{ dataHora(p.perguntada_em) }}</span>
                                     </span>
+                                    <a v-if="p.link_pergunta" :href="p.link_pergunta" target="_blank" rel="noopener"
+                                        class="block truncate text-[11px] font-medium text-primary hover:underline"
+                                        :title="`Abrir a pergunta no ${canalPergunta(p.canal).nome}`" @click.stop>{{ p.produto || p.item_id }} <i class="fas fa-arrow-up-right-from-square ml-0.5 text-[9px]"></i></a>
+                                    <span v-else class="block truncate text-[11px] text-slate-500">{{ p.produto || p.item_id }}</span>
                                     <span class="mt-0.5 line-clamp-2 text-sm" :class="p.aberta ? 'font-medium' : 'text-slate-500'">{{ p.pergunta }}</span>
                                     <span class="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
                                         <span class="h-2 w-2 rounded-full" :class="estado(p).ponto"></span>{{ estado(p).rotulo }}
                                     </span>
                                 </span>
-                            </button>
+                            </div>
                         </li>
                     </ul>
                 </aside>
@@ -225,7 +250,10 @@ onUnmounted(() => clearInterval(timer));
                         </header>
 
                         <div class="mt-4 rounded-xl bg-[var(--surface-muted)] p-4">
-                            <p class="text-xs font-semibold text-slate-500"><i class="fas fa-user mr-1.5"></i>Pergunta do comprador</p>
+                            <p class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                                <span><i class="fas fa-user mr-1.5"></i>Pergunta de {{ selecionada.comprador || 'cliente sem nome' }}</span>
+                                <a v-if="selecionada.link_pergunta" :href="selecionada.link_pergunta" target="_blank" rel="noopener" class="ml-auto font-semibold text-primary hover:underline">Responder no {{ canalPergunta(selecionada.canal).nome }} <i class="fas fa-arrow-up-right-from-square ml-0.5 text-[10px]"></i></a>
+                            </p>
                             <p class="mt-1 whitespace-pre-line text-[15px] font-medium">{{ selecionada.pergunta }}</p>
                         </div>
 

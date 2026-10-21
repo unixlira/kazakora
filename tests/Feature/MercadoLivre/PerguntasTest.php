@@ -24,12 +24,14 @@ class PerguntasTest extends TestCase
             'id' => 555, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'text' => 'Tem garantia?',
             'from' => ['id' => 9], 'date_created' => '2026-10-20T17:31:00.000-03:00', 'answer' => null,
         ]);
+        $client->shouldReceive('get')->once()->with('users/9')->andReturn(['id' => 9, 'nickname' => 'JOAO.SILVA']);
 
         (new QuestionService($client))->processWebhook(['topic' => 'questions', 'resource' => '/questions/555']);
 
         $p = MercadoLivrePergunta::where('question_id', 555)->firstOrFail();
         $this->assertSame('UNANSWERED', $p->status);
         $this->assertSame('Tem garantia?', $p->pergunta);
+        $this->assertSame('JOAO.SILVA', $p->comprador_nome);
         Queue::assertPushed(RascunharRespostaPerguntaMercadoLivre::class);
     }
 
@@ -190,6 +192,12 @@ class PerguntasTest extends TestCase
         $this->actingAs($admin)->get('/admin/perguntas-marketplace?canal=shopee')
             ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('perguntas', 1)
                 ->where('perguntas.0.canal', 'shopee')->where('perguntas.0.pode_enviar', false));
+
+        // Nome do cliente e link direto para responder no painel do marketplace.
+        MercadoLivrePergunta::where('canal', 'mercado_livre')->update(['comprador_nome' => 'JOAO.SILVA']);
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace?canal=mercado_livre')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('perguntas.0.comprador', 'JOAO.SILVA')
+                ->where('perguntas.0.link_pergunta', 'https://www.mercadolivre.com.br/perguntas/vendedor'));
 
         $ml = Mockery::mock(MercadoLivreClient::class);
         $ml->shouldNotReceive('postOnce');

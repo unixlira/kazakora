@@ -327,7 +327,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                             <span>
                                 {{ ratingAvg > 0 ? ratingAvg.toFixed(1) : 'Sem avaliações' }}
-                                <span v-if="reviewsCount">({{ reviewsCount }} avaliação{{ reviewsCount === 1 ? '' : 'ões' }})</span>
+                                <span v-if="reviewsCount">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</span>
                             </span>
                         </div>
                     </div>

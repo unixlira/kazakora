@@ -162,4 +162,71 @@ class PromocoesNaPaginaDoProdutoTest extends TestCase
         $this->delete("/admin/promocoes/pdfs/produtos/{$ligacao->id}")->assertNotFound();
         $this->assertTrue($ligacao->fresh()->ativo);
     }
+
+    public function test_migration_leva_o_texto_do_sorteio_para_as_condicoes_da_airfryer(): void
+    {
+        $this->assertSame('Pedidos realizados e pagos até 20/10/2026 participam automaticamente.', $this->promocao('airfryer')->condicoes);
+        $this->assertNull($this->promocao('pdfs')->condicoes);
+        $this->assertFalse($this->promocao('airfryer')->botao_ativo);
+
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page
+            ->where('quadrosPromocao.airfryer.condicoes', 'Pedidos realizados e pagos até 20/10/2026 participam automaticamente.')
+            ->where('quadrosPromocao.airfryer.botao', null)
+            ->where('quadrosPromocao.pdfs.condicoes', null));
+    }
+
+    public function test_condicoes_e_botao_salvos_no_card_aparecem_no_quadro_com_a_promocao_no_ar(): void
+    {
+        $this->actingAs($this->admin)->patch('/admin/promocoes/pdfs/quadro', [
+            'condicoes' => "Pedidos pagos até 31/10/2026.\r\nEnvio do PDF por e-mail.",
+            'botao_ativo' => true,
+            'botao_texto' => '',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $pdfs = $this->promocao('pdfs');
+        $this->assertSame("Pedidos pagos até 31/10/2026.\nEnvio do PDF por e-mail.", $pdfs->condicoes);
+        $this->assertNull($pdfs->botao_texto);
+
+        // Página da promoção inativa: o botão não aparece (o cliente cairia num 404).
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page
+            ->where('quadrosPromocao.pdfs.condicoes', "Pedidos pagos até 31/10/2026.\nEnvio do PDF por e-mail.")
+            ->where('quadrosPromocao.pdfs.botao', null));
+
+        $pdfs->update(['ativa' => true]);
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page
+            ->where('quadrosPromocao.pdfs.botao', ['texto' => Promocao::BOTAO_PADRAO, 'url' => '/promocoes/pdfs']));
+
+        $this->patch('/admin/promocoes/pdfs/quadro', ['condicoes' => '', 'botao_ativo' => true, 'botao_texto' => 'Ver regulamento'])
+            ->assertSessionHasNoErrors();
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page
+            ->where('quadrosPromocao.pdfs.condicoes', null)
+            ->where('quadrosPromocao.pdfs.botao.texto', 'Ver regulamento'));
+
+        // A página pública também mostra as condições.
+        $this->promocao('airfryer')->update(['ativa' => true]);
+        $this->get('/promocoes/airfryer')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocao.condicoes', 'Pedidos realizados e pagos até 20/10/2026 participam automaticamente.'));
+    }
+
+    public function test_botao_some_fora_do_periodo_mesmo_com_a_pagina_em_cache(): void
+    {
+        $this->promocao('airfryer')->update(['ativa' => true, 'botao_ativo' => true, 'fim' => now()->addHour()]);
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page->where('quadrosPromocao.airfryer.botao.url', '/promocoes/airfryer'));
+
+        $this->travel(2)->hours();
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page->where('quadrosPromocao.airfryer.botao', null));
+    }
+
+    public function test_card_mostra_texto_do_quadro_e_recusa_texto_longo(): void
+    {
+        $this->actingAs($this->admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocoes.0.condicoes', 'Pedidos realizados e pagos até 20/10/2026 participam automaticamente.')
+            ->where('promocoes.0.botao_ativo', false)
+            ->where('promocoes.0.botao_padrao', Promocao::BOTAO_PADRAO)
+            ->where('promocoes.0.no_ar', false));
+
+        $this->patch('/admin/promocoes/airfryer/quadro', ['condicoes' => str_repeat('a', 501), 'botao_texto' => str_repeat('b', 61)])
+            ->assertSessionHasErrors(['condicoes', 'botao_texto']);
+        $this->patch('/admin/promocoes/black/quadro', ['condicoes' => 'x'])->assertNotFound();
+    }
 }

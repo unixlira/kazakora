@@ -36,6 +36,8 @@ const props = defineProps({
     livrosDigitais: { type: Array, default: () => [] },
     // Imagem dos tablets do grupo de livros (admin); null = padrão (dor nas costas).
     livrosQuadro: { type: String, default: null },
+    // Condições e botão de cada quadro, definidos em Promoções (2026-10-21): { airfryer: {condicoes, botao}, pdfs: {...} }.
+    quadrosPromocao: { type: Object, default: () => ({}) },
 });
 
 const page = usePage();
@@ -719,8 +721,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
                             <div class="promo-texto">
                                 <h2>{{ sorteio.titulo }}</h2>
-                                <p :class="{ 'sem-margem': !sorteio.paragrafo_2 }">{{ sorteio.paragrafo_1 }}</p>
-                                <p v-if="sorteio.paragrafo_2" class="sem-margem">{{ sorteio.paragrafo_2 }}</p>
+                                <!-- Condições da Promoção Airfryer (admin › Promoções) no lugar do texto do sorteio. -->
+                                <p v-if="quadrosPromocao.airfryer?.condicoes" class="promo-condicoes" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ quadrosPromocao.airfryer.condicoes }}</p>
+                                <template v-else>
+                                    <p :class="{ 'sem-margem': !sorteio.paragrafo_2 && !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_1 }}</p>
+                                    <p v-if="sorteio.paragrafo_2" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_2 }}</p>
+                                </template>
+                                <Link v-if="quadrosPromocao.airfryer?.botao" :href="quadrosPromocao.airfryer.botao.url" class="promo-botao">
+                                    {{ quadrosPromocao.airfryer.botao.texto }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                </Link>
                             </div>
                             <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
                         </section>
@@ -745,6 +754,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
                                 </p>
                                 <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
+                                <p v-if="quadrosPromocao.pdfs?.condicoes" class="promo-condicoes livros-condicoes">{{ quadrosPromocao.pdfs.condicoes }}</p>
+                                <Link v-if="quadrosPromocao.pdfs?.botao" :href="quadrosPromocao.pdfs.botao.url" class="promo-botao livros-botao">
+                                    {{ quadrosPromocao.pdfs.botao.texto }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                </Link>
                             </div>
                         </section>
 
@@ -1124,6 +1137,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo-texto { flex: 1 1 auto; }
 .pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
 .pd2 .promo-sorteio { width: 190px; }
+.pd2 .promo-condicoes { white-space: pre-line; }
+.pd2 .livros-oferta .livros-condicoes { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.pd2 .promo-botao { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px 18px; border-radius: 999px; background: var(--green); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; }
+.pd2 .promo-botao:hover { background: var(--green-edge); color: #fff; }
+.pd2 .promo-botao:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.pd2 .livros-botao { margin-top: 14px; }
 .pd2 .promo-livros { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; align-items: center; }
 .pd2 .promo-livros h2 { margin-bottom: 18px; }
 .pd2 .livros-img { display: block; width: 100%; height: auto; }

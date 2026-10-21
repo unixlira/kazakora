@@ -378,6 +378,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Nova promoção pela lista (2026-10-21): o menu abre direto a lista, que cria outras além de Airfryer e PDFs.
     Route::post('promocoes', [PromocaoController::class, 'store'])->middleware('permission:cadastros.edit')->name('promocoes.armazenar');
     Route::patch('promocoes/{slug}/pagina-produto', [PromocaoController::class, 'paginaProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.pagina-produto');
+    Route::patch('promocoes/{slug}/quadro', [PromocaoController::class, 'quadro'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.quadro');
     Route::post('promocoes/{slug}/imagem', [PromocaoController::class, 'imagem'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.imagem');
     Route::post('promocoes/{slug}/produtos', [PromocaoController::class, 'adicionarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.produtos.adicionar');
     Route::patch('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'alternarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.alternar');

@@ -8,11 +8,13 @@ import InputError from '@/Shared/Components/InputError.vue';
 import BuscaProduto from '@/Modules/Admin/Entregaveis/BuscaProduto.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     sorteios: { type: Array, default: () => [] },
+    // Condições da Promoção Airfryer: com elas, o quadro mostra este texto no lugar dos parágrafos.
+    condicoesPromocao: { type: String, default: null },
 });
 
 const { can } = usePermissions();
@@ -85,6 +87,11 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
             <h1 class="mb-1 text-2xl font-bold">Sorteios</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Banner de sorteio na página do produto: foto do prêmio, título e dois parágrafos. Escolha o produto (ou todos) e ative ou desative quando quiser.
+            </p>
+            <p v-if="condicoesPromocao" class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <i class="fas fa-circle-info mr-1" aria-hidden="true"></i>
+                O quadro está mostrando as condições da Promoção Airfryer ("{{ condicoesPromocao }}") no lugar dos parágrafos daqui.
+                Para mudar o texto, o botão ou a imagem, use <Link href="/admin/promocoes" class="font-semibold underline">Promoções</Link>.
             </p>
         </div>
 

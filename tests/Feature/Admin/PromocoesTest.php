@@ -232,6 +232,8 @@ class PromocoesTest extends TestCase
         $p = Promocao::query()->where('slug', 'airfryer')->first();
         $p->update(['ativa' => true, 'titulo' => 'Antes']);
         $this->get('/promocoes/airfryer')->assertOk();
+        // Só as colunas: o cache da produção não desserializa objetos.
+        $this->assertIsArray(\Illuminate\Support\Facades\Cache::get('promocao:v2:airfryer'));
 
         // Na segunda visita não vai ao banco atrás da promoção.
         \Illuminate\Support\Facades\DB::enableQueryLog();

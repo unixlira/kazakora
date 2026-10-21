@@ -5,6 +5,7 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\SituacaoDoPagamento;
 use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -96,6 +97,17 @@ class ExpireAbandonedOrdersMercadoPagoTest extends TestCase
         Http::assertSent(fn (HttpRequest $request) => $request->method() === 'PUT' && $request['status'] === 'cancelled');
         $this->assertSame(Payment::STATUS_CANCELED, $payment->fresh()->status);
         $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(SituacaoDoPagamento::MOTIVO_PIX_EXPIRADO, $order->fresh()->motivo_cancelamento);
+        $this->assertNotNull($order->fresh()->cancelado_em);
+
+        // Tela do pedido no admin mostra o motivo de relance (2026-10-20).
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('detalhe.situacao_pagamento.codigo', 'pix_expirado')
+                ->where('detalhe.situacao_pagamento.selo', 'Pix expirado, não pago')
+                ->where('detalhe.situacao_pagamento.titulo', 'Pix gerado e não pago: pedido cancelado porque o prazo expirou.'));
     }
 
     public function test_pix_pago_no_ultimo_segundo_confirma_mesmo_tentando_cancelar(): void

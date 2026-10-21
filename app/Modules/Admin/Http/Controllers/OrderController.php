@@ -11,6 +11,7 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
+use App\Modules\Checkout\Support\SituacaoDoPagamento;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -752,6 +753,9 @@ class OrderController extends Controller
                 'desconto_total' => (float) $order->discount_amount,
                 'total' => (float) $order->total,
             ],
+            // Resumo para bater o olho: pago, aguardando ou Pix gerado e não
+            // pago que cancelou por prazo vencido (2026-10-20).
+            'situacao_pagamento' => SituacaoDoPagamento::doPedido($order),
             'pagamentos' => $order->payments->sortBy('id')->map(fn ($pagamento) => [
                 'id' => $pagamento->id,
                 'provedor' => $pagamento->provider,

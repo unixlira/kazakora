@@ -383,6 +383,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::delete('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'removerProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.remover');
     Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.view')->name('promocoes.exibir');
     Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
+    // Excluir promoção (2026-10-21): só as criadas pela lista; Airfryer e PDFs controlam os quadros da página do produto.
+    Route::delete('promocoes/{slug}', [PromocaoController::class, 'destroy'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.edit')->name('promocoes.excluir');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

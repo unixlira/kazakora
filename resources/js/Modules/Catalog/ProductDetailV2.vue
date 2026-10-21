@@ -728,10 +728,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
-                                <img class="selo-garantia" src="/images/selo-satisfacao-7-dias.png?v=2" alt="Satisfação garantida: 7 dias ou seu dinheiro de volta" loading="lazy">
+                                <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.png" alt="Garantia de 100% de satisfação" loading="lazy">
                                 <p>
-                                    Se o produto chegar com defeito, você tem 30 dias após o recebimento para pedir a troca ou o reembolso.
-                                    Mudou de ideia? São 7 dias para devolver, sem nenhum risco para você.
+                                    Confiamos tanto no produto que você tem 30 dias para testar sem nenhum risco para você.
                                 </p>
                             </div>
                         </section>

@@ -52,4 +52,38 @@ class BannerMobileOtimizadoTest extends TestCase
         $this->assertNull(BannerMobileOptimizer::otimizar($caminho));
         Storage::disk('public')->assertExists($caminho);
     }
+
+    public function test_computador_ganha_webp_ao_lado_sem_apagar_o_original(): void
+    {
+        if (! function_exists('imagewebp')) {
+            $this->markTestSkipped('GD sem WebP neste ambiente.');
+        }
+        Storage::fake('public');
+        $caminho = UploadedFile::fake()->image('pc.png', 2000, 700)->store('banners', 'public');
+
+        $webp = BannerMobileOptimizer::otimizar($caminho, 'public', BannerMobileOptimizer::LARGURAS_PC, manterOriginal: true);
+
+        Storage::disk('public')->assertExists($caminho);
+        $this->assertSame(BannerMobileOptimizer::webpAoLado($caminho), $webp);
+        $this->assertSame(2000, getimagesize(Storage::disk('public')->path($webp))[0]);
+        Storage::disk('public')->assertExists(BannerMobileOptimizer::variante($webp, 1280));
+        Storage::disk('public')->assertExists(BannerMobileOptimizer::variante($webp, 1920));
+
+        $srcset = BannerMobileOptimizer::srcset($caminho, larguras: BannerMobileOptimizer::LARGURAS_PC);
+        $this->assertStringContainsString('-1280w.webp 1280w', $srcset);
+        $this->assertStringContainsString('.webp 2000w', $srcset);
+
+        BannerMobileOptimizer::apagar($caminho);
+        Storage::disk('public')->assertMissing($caminho);
+        Storage::disk('public')->assertMissing($webp);
+        Storage::disk('public')->assertMissing(BannerMobileOptimizer::variante($webp, 1280));
+    }
+
+    public function test_sem_webp_ao_lado_o_srcset_fica_vazio(): void
+    {
+        Storage::fake('public');
+        $caminho = UploadedFile::fake()->create('pc.png', 10, 'image/png')->store('banners', 'public');
+
+        $this->assertNull(BannerMobileOptimizer::srcset($caminho, larguras: BannerMobileOptimizer::LARGURAS_PC));
+    }
 }

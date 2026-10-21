@@ -339,7 +339,16 @@ class Product extends Model
             // de toda vitrine à toa (velocidade, pedido 2026-10-10).
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(2)])
-            ->withAvg('reviews', 'rating');
+            // Média do produto E das variações (pedido 2026-10-20): a avaliação
+            // importada fica na variação vendida, e o withAvg só via a do pai,
+            // então anúncio com variação ficava sem estrela no card. Mesma
+            // regra da nota da página do produto (CatalogController::show).
+            ->addSelect(['reviews_avg_rating' => Review::query()
+                ->selectRaw('avg(reviews.rating)')
+                ->join('products as grupo_avaliado', 'grupo_avaliado.id', '=', 'reviews.product_id')
+                ->whereNull('grupo_avaliado.deleted_at')
+                ->where(fn ($grupo) => $grupo->whereColumn('grupo_avaliado.id', 'products.id')
+                    ->orWhereColumn('grupo_avaliado.parent_product_id', 'products.id'))]);
     }
 
     public function images(): HasMany

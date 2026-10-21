@@ -71,6 +71,7 @@ use App\Modules\Admin\Http\Controllers\OfertaRelampagoController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
+use App\Modules\Admin\Http\Controllers\ValidacaoCriativosController;
 use App\Modules\Admin\Http\Controllers\VideosEmbalagemController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
@@ -704,6 +705,19 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('download-videos', [VideoDownloadController::class, 'store'])
         ->middleware(['permission:operacional.create', 'throttle:5,1'])
         ->name('download-videos.store');
+
+    // Marketing › Validação de criativos (2026-10-21): vídeos de anúncio
+    // guardados no servidor até o Lira aprovar. Envio em partes de 8 MB.
+    Route::prefix('validacao-criativos')->name('validacao-criativos.')->group(function () {
+        Route::get('/', [ValidacaoCriativosController::class, 'index'])->name('listar')->middleware('permission:cadastros.view');
+        Route::post('parte', [ValidacaoCriativosController::class, 'enviarParte'])->name('parte')->middleware(['permission:cadastros.create', 'throttle:600,1']);
+        Route::post('/', [ValidacaoCriativosController::class, 'store'])->name('armazenar')->middleware(['permission:cadastros.create', 'throttle:30,1']);
+        Route::patch('{criativo}', [ValidacaoCriativosController::class, 'update'])->whereNumber('criativo')->name('atualizar')->middleware('permission:cadastros.edit');
+        Route::patch('{criativo}/avaliar', [ValidacaoCriativosController::class, 'avaliar'])->whereNumber('criativo')->name('avaliar')->middleware('permission:cadastros.edit');
+        Route::delete('{criativo}', [ValidacaoCriativosController::class, 'destroy'])->whereNumber('criativo')->name('excluir')->middleware('permission:cadastros.delete');
+        Route::patch('{criativo}/restaurar', [ValidacaoCriativosController::class, 'restaurar'])->whereNumber('criativo')->withTrashed()->name('restaurar')->middleware('permission:cadastros.delete');
+        Route::get('{criativo}/arquivo', [ValidacaoCriativosController::class, 'arquivo'])->whereNumber('criativo')->withTrashed()->name('arquivo')->middleware('permission:cadastros.view');
+    });
 
     Route::resource('pedidos-de-compra', PurchaseOrderController::class)->except(['edit', 'update'])
         ->parameters(['pedidos-de-compra' => 'purchase_order'])

@@ -129,6 +129,8 @@ export const sidebarSections = [
             { label: 'Disparos de WhatsApp', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', cor: 'ciano', permission: 'configuracoes.integracoes' },
             { label: 'Oportunidades em PDF', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', cor: 'vermelho', permission: 'relatorios.view' },
             { label: 'Baixar vídeos', href: '/admin/download-videos', icon: 'fas fa-download', cor: 'azul', permission: 'operacional.create' },
+            // Validação de criativos (2026-10-21): vídeos de anúncio esperando o Lira aprovar.
+            { label: 'Validação de criativos', href: '/admin/validacao-criativos', icon: 'fas fa-clapperboard', cor: 'violeta', permission: 'cadastros.view', badgeKey: 'criativosAguardando' },
         ],
     },
     {

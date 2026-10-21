@@ -120,6 +120,8 @@ class HandleInertiaRequests extends Middleware
                     'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
                     // Perguntas dos marketplaces esperando uma pessoa (Perguntas MK Place).
                     'perguntasMkplace' => rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->aguardandoHumano()->count(), 0, false),
+                    // Criativos de anúncio esperando o Lira (Marketing › Validação de criativos).
+                    'criativosAguardando' => rescue(fn () => \App\Modules\Admin\Models\CriativoValidacao::query()->where('status', \App\Modules\Admin\Models\CriativoValidacao::AGUARDANDO)->count(), 0, false),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

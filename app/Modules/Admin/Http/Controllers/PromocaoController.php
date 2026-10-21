@@ -26,6 +26,10 @@ use Inertia\Response;
  * O menu abre direto esta lista (2026-10-21), que também cria promoções
  * novas (só texto, período e regras, sem quadro na página do produto).
  *
+ * Texto e regras (2026-10-21): tela de cada promoção com o texto (título e
+ * descrição com parágrafos) e as regras de negócio (período, pedido mínimo,
+ * itens mínimos, limite por cliente, primeira compra, cupom e chaves livres).
+ *
  * Tela inicial (2026-10-21): as duas lado a lado, cada uma com a chave
  * "mostrar na página do produto", a imagem do quadro (pronta, enviada ou a
  * de Entregáveis) e os produtos onde aparece (tabela promocao_produto).
@@ -223,6 +227,10 @@ class PromocaoController extends Controller
                 'inicio' => $promocao->inicio?->format('Y-m-d\TH:i'),
                 'fim' => $promocao->fim?->format('Y-m-d\TH:i'),
                 'valor_minimo' => $promocao->valor_minimo,
+                'itens_minimos' => $promocao->itens_minimos,
+                'limite_por_cliente' => $promocao->limite_por_cliente,
+                'primeira_compra' => $promocao->primeira_compra,
+                'acumula_cupom' => $promocao->acumula_cupom,
                 'observacoes' => $promocao->observacoes,
                 'regras' => collect($promocao->regras ?? [])
                     ->map(fn ($valor, $chave) => ['chave' => (string) $chave, 'valor' => (string) $valor])
@@ -242,12 +250,18 @@ class PromocaoController extends Controller
             'inicio' => ['nullable', 'date'],
             'fim' => ['nullable', 'date', 'after_or_equal:inicio'],
             'valor_minimo' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'itens_minimos' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'limite_por_cliente' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'primeira_compra' => ['boolean'],
+            'acumula_cupom' => ['boolean'],
             'observacoes' => ['nullable', 'string', 'max:2000'],
             'regras' => ['nullable', 'array', 'max:50'],
             'regras.*.chave' => ['required', 'string', 'max:60', 'regex:/^[A-Za-z0-9_.-]+$/'],
             'regras.*.valor' => ['nullable', 'string', 'max:500'],
         ], [
             'fim.after_or_equal' => 'O fim precisa ser depois do início.',
+            'itens_minimos.min' => 'Itens mínimos começa em 1 (vazio = sem mínimo).',
+            'limite_por_cliente.min' => 'O limite começa em 1 (vazio = sem limite).',
             'regras.*.chave.required' => 'Toda regra precisa de uma chave.',
             'regras.*.chave.regex' => 'A chave usa só letras, números, ponto, hífen e _.',
         ]);
@@ -267,6 +281,11 @@ class PromocaoController extends Controller
             'inicio' => $dados['inicio'] ?? null,
             'fim' => $dados['fim'] ?? null,
             'valor_minimo' => $dados['valor_minimo'] ?? null,
+            'itens_minimos' => $dados['itens_minimos'] ?? null,
+            'limite_por_cliente' => $dados['limite_por_cliente'] ?? null,
+            'primeira_compra' => $request->boolean('primeira_compra'),
+            // Sem o campo (formulário antigo) continua acumulando, como antes.
+            'acumula_cupom' => $request->boolean('acumula_cupom', true),
             'observacoes' => ($dados['observacoes'] ?? '') !== '' ? $dados['observacoes'] : null,
             'regras' => $regras ?: null,
         ]);

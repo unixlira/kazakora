@@ -174,7 +174,8 @@ class AnuncioConteudoService
             (string) config('services.gemini.chat_model'),
             [['role' => 'user', 'parts' => [['text' => $prompt]]]],
             'Você é redator de e-commerce brasileiro. Responde SOMENTE com um JSON válido, sem markdown e sem comentários.',
-            1500,
+            // Folga para o raciocínio do modelo: com 1500 a resposta vinha cortada.
+            4000,
             GeminiUsageLog::PURPOSE_AD_CONTENT,
         );
 
@@ -231,13 +232,18 @@ class AnuncioConteudoService
             return null;
         }
 
+        // Emoji é obrigatório no CTA: o que vier sem ganha um padrão.
+        $comEmoji = fn (string $valor, string $emoji, bool $noFim = true) => preg_match('/\p{Extended_Pictographic}/u', $valor)
+            ? $valor : ($noFim ? "{$valor} {$emoji}" : "{$emoji} {$valor}");
+        $botao = $texto($cta['botao'] ?? null, 40);
+
         return [
-            'titulo' => $titulo,
-            'texto' => $corpo,
+            'titulo' => $comEmoji($titulo, '✨'),
+            'texto' => $comEmoji($corpo, '💛'),
             'garantias' => collect(is_array($cta['garantias'] ?? null) ? $cta['garantias'] : [])
-                ->map(fn ($g) => $texto($g, 90))->filter()->take(4)->values()->all(),
-            // Botão vazio ou comprido demais vira o padrão, com emoji.
-            'botao' => ($botao = $texto($cta['botao'] ?? null, 40)) !== '' && mb_strlen($botao) <= 36 ? $botao : '🛒 Quero o meu agora',
+                ->map(fn ($g) => $texto($g, 90))->filter()->map(fn ($g) => $comEmoji($g, '✅', false))->take(4)->values()->all(),
+            // Botão vazio ou comprido demais vira o padrão.
+            'botao' => $botao !== '' && mb_strlen($botao) <= 36 ? $comEmoji($botao, '🛒', false) : '🛒 Quero o meu agora',
         ];
     }
 

@@ -34,6 +34,7 @@ class LivroDigitalController extends Controller
                 'nome_arquivo' => $livro->nome_arquivo,
                 'tamanho' => $livro->tamanho,
                 'capa_url' => $livro->capa_url,
+                'imagem_quadro_url' => $livro->imagem_quadro_url,
                 'ativo' => $livro->ativo,
                 'todos_produtos' => $livro->todos_produtos,
                 'produtos' => $livro->produtos->map(fn (Product $produto) => self::resumo($produto))->values(),
@@ -75,6 +76,7 @@ class LivroDigitalController extends Controller
             'nome_arquivo' => $pdf->getClientOriginalName(),
             'tamanho' => $pdf->getSize(),
             'capa' => $request->hasFile('capa') ? $request->file('capa')->store('livros-digitais', 'public') : null,
+            'imagem_quadro' => $request->hasFile('imagem_quadro') ? $request->file('imagem_quadro')->store('livros-digitais/quadros', 'public') : null,
             'ativo' => $request->boolean('ativo', true),
             'todos_produtos' => $request->boolean('todos_produtos', true),
         ]);
@@ -110,6 +112,14 @@ class LivroDigitalController extends Controller
             $campos['capa'] = null;
         }
 
+        if ($request->hasFile('imagem_quadro')) {
+            $livro->imagem_quadro && Storage::disk('public')->delete($livro->imagem_quadro);
+            $campos['imagem_quadro'] = $request->file('imagem_quadro')->store('livros-digitais/quadros', 'public');
+        } elseif ($request->boolean('remover_imagem_quadro') && $livro->imagem_quadro) {
+            Storage::disk('public')->delete($livro->imagem_quadro);
+            $campos['imagem_quadro'] = null;
+        }
+
         $livro->update($campos);
         $livro->produtos()->sync($livro->todos_produtos ? [] : $dados['produtos']);
 
@@ -135,6 +145,7 @@ class LivroDigitalController extends Controller
     {
         Storage::disk('local')->delete($livro->arquivo);
         $livro->capa && Storage::disk('public')->delete($livro->capa);
+        $livro->imagem_quadro && Storage::disk('public')->delete($livro->imagem_quadro);
         $livro->delete();
 
         return back()->with('success', 'Livro digital excluído.');
@@ -147,6 +158,7 @@ class LivroDigitalController extends Controller
             'titulo' => ['required', 'string', 'max:255'],
             'pdf' => [$novo ? 'required' : 'nullable', 'file', 'mimes:pdf', 'max:51200'],
             'capa' => ['nullable', 'image', 'max:5120'],
+            'imagem_quadro' => ['nullable', 'image', 'max:5120'],
             'todos_produtos' => ['nullable', 'boolean'],
             'produtos' => [$request->boolean('todos_produtos', $novo) ? 'nullable' : 'required', 'array'],
             'produtos.*' => ['integer', 'exists:products,id'],
@@ -157,6 +169,8 @@ class LivroDigitalController extends Controller
             'pdf.max' => 'O PDF pode ter no máximo 50 MB.',
             'capa.image' => 'A capa precisa ser uma imagem (JPG, PNG ou WebP).',
             'capa.max' => 'A capa pode ter no máximo 5 MB.',
+            'imagem_quadro.image' => 'A imagem do quadro precisa ser uma imagem (JPG, PNG ou WebP).',
+            'imagem_quadro.max' => 'A imagem do quadro pode ter no máximo 5 MB.',
             'produtos.required' => 'Escolha pelo menos um produto ou marque "Todos os produtos".',
         ]);
 

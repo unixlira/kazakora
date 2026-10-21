@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property string $nome_arquivo
  * @property int $tamanho
  * @property ?string $capa
+ * @property ?string $imagem_quadro
  * @property bool $ativo
  * @property bool $todos_produtos
  */
@@ -29,7 +30,7 @@ class LivroDigital extends Model
 
     protected $table = 'livros_digitais';
 
-    protected $fillable = ['titulo', 'arquivo', 'nome_arquivo', 'tamanho', 'capa', 'ativo', 'todos_produtos'];
+    protected $fillable = ['titulo', 'arquivo', 'nome_arquivo', 'tamanho', 'capa', 'imagem_quadro', 'ativo', 'todos_produtos'];
 
     protected function casts(): array
     {
@@ -50,15 +51,36 @@ class LivroDigital extends Model
         return $this->capa ? asset('storage/'.$this->capa) : null;
     }
 
-    /** Ativos que aparecem na página do produto (variação vale o pai). */
+    /** Imagem dos tablets no quadro da página do produto (disco `public`). */
+    public function getImagemQuadroUrlAttribute(): ?string
+    {
+        return $this->imagem_quadro ? asset('storage/'.$this->imagem_quadro) : null;
+    }
+
+    /**
+     * Ativos que aparecem na página do produto (variação vale o pai). Se o
+     * produto tem livros próprios (escolhidos para ele), mostra SÓ esses; os
+     * de "todos os produtos" ficam para quem não tem nenhum (Lira,
+     * 2026-10-21: guias de ferramentas não se misturam com os de costas).
+     */
     public static function doProduto(Product $produto): Collection
     {
         $ids = array_unique([$produto->id, $produto->parent_product_id ?? $produto->id]);
 
+        $especificos = self::query()
+            ->where('ativo', true)
+            ->where('todos_produtos', false)
+            ->whereHas('produtos', fn (Builder $p) => $p->whereIn('products.id', $ids))
+            ->orderBy('id')
+            ->get();
+
+        if ($especificos->isNotEmpty()) {
+            return $especificos;
+        }
+
         return self::query()
             ->where('ativo', true)
-            ->where(fn (Builder $q) => $q->where('todos_produtos', true)
-                ->orWhereHas('produtos', fn (Builder $p) => $p->whereIn('products.id', $ids)))
+            ->where('todos_produtos', true)
             ->orderBy('id')
             ->get();
     }

@@ -506,8 +506,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <hr class="divisor">
 
                             <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço de
-                                 venda (final_price, igual ao card) em destaque, selo do Pix, 12x e
-                                 "R$ X de desconto". O Pix desconta no checkout; aqui só o selo (pedido 2026-10-20). -->
+                                 venda (final_price, igual ao card) em destaque, 12x, "R$ X de desconto"
+                                 e, por último, o selo azul do Pix. O Pix desconta no checkout; aqui só o selo (pedido 2026-10-20). -->
                             <div class="preco">
                                 <span class="rot">{{ aPartirDe ? 'A partir de:' : 'Preço:' }}</span>
                                 <div class="valores">
@@ -516,9 +516,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <span v-if="percentualTotal > 0" class="selo">⇣ {{ percentualTotal }}%</span>
                                     </div>
                                     <div class="por">{{ formatPrice(precoPor) }}</div>
-                                    <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
                                     <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
+                                    <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
                                 </div>
                             </div>
 

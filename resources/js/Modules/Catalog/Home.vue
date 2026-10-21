@@ -55,6 +55,16 @@ const props = defineProps({
 });
 
 const page = usePage();
+
+// Desempenho (pedido 2026-10-21, PageSpeed): na 1ª carga do site, as seções
+// abaixo de "Ofertas do Dia" (fora da 1ª tela) montam numa tarefa seguinte,
+// para o topo aparecer antes. Voltando para a home pelo site, monta tudo junto
+// (a rolagem é restaurada na hora).
+const vitrineCompleta = ref(typeof document === 'undefined' || document.readyState === 'complete');
+onMounted(() => {
+    if (!vitrineCompleta.value) requestAnimationFrame(() => setTimeout(() => { vitrineCompleta.value = true; }, 0));
+});
+
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const isFavorite = (productId) => props.favoriteIds.includes(productId);
@@ -241,17 +251,19 @@ onBeforeUnmount(() => observador?.disconnect());
                 </template>
             </SecaoProdutos>
 
-            <MaisBuscadosSlider :produtos="vitrine.maisBuscados" />
+            <template v-if="vitrineCompleta">
+                <MaisBuscadosSlider :produtos="vitrine.maisBuscados" />
 
-            <SecaoProdutos titulo="Utilidades para casa" :produtos="vitrine.utilidades"
-                :link="vitrine.utilidadesLink ? `/?categoria=${vitrine.utilidadesLink}#produtos` : null"
-                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+                <SecaoProdutos titulo="Utilidades para casa" :produtos="vitrine.utilidades"
+                    :link="vitrine.utilidadesLink ? `/?categoria=${vitrine.utilidadesLink}#produtos` : null"
+                    :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
 
-            <SecaoProdutos titulo="Últimas novidades" :produtos="vitrine.novidades" link="/?todos=1#produtos"
-                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+                <SecaoProdutos titulo="Últimas novidades" :produtos="vitrine.novidades" link="/?todos=1#produtos"
+                    :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
 
-            <SecaoProdutos titulo="Você também pode gostar" :produtos="vitrine.gostar"
-                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+                <SecaoProdutos titulo="Você também pode gostar" :produtos="vitrine.gostar"
+                    :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+            </template>
         </template>
 
         <!-- Lista (busca, aba ou departamento) com filtros e rolagem infinita -->

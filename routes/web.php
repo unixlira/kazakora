@@ -65,6 +65,7 @@ use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
+use App\Modules\Admin\Http\Controllers\PromocaoController;
 use App\Modules\Admin\Http\Controllers\SorteioController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
@@ -367,6 +368,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::put('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'update'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.atualizar');
     Route::patch('entregaveis/sorteios/{sorteio}/ativo', [SorteioController::class, 'alternar'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.alternar');
     Route::delete('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'destroy'])->whereNumber('sorteio')->middleware('permission:cadastros.delete')->name('entregaveis.sorteios.excluir');
+
+    // Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da Promoção PDFs.
+    Route::redirect('promocoes', '/admin/promocoes/airfryer');
+    Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.view')->name('promocoes.exibir');
+    Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

@@ -84,6 +84,10 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
 
     <AdminLayout>
         <div class="mb-6 max-w-2xl">
+            <!-- Fora do menu desde 2026-10-21: abre pelo card em Vender › Promoções. -->
+            <Link href="/admin/promocoes" class="mb-2 inline-block text-sm text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Promoções
+            </Link>
             <h1 class="mb-1 text-2xl font-bold">Sorteios</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Banner de sorteio na página do produto: foto do prêmio, título e dois parágrafos. Escolha o produto (ou todos) e ative ou desative quando quiser.

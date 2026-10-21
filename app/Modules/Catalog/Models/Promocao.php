@@ -32,12 +32,20 @@ use Illuminate\Support\Facades\Cache;
  * `botao_ativo` põe no quadro o botão para /promocoes/{slug}, que só aparece
  * com a promoção no ar (senão o cliente cairia num 404).
  *
+ * Texto do quadro (2026-10-21): `quadro_titulo` e `quadro_texto` trocam o
+ * título e os parágrafos do quadro (no Airfryer, os do sorteio cadastrado);
+ * `quadro_destaque` troca o "Adquirindo hoje: 100% GRÁTIS" dos livros.
+ * Vazio = o texto de sempre.
+ *
  * @property int $id
  * @property string $slug
  * @property string $nome
  * @property ?string $titulo
  * @property ?string $descricao
  * @property ?string $condicoes
+ * @property ?string $quadro_titulo
+ * @property ?string $quadro_texto
+ * @property ?string $quadro_destaque
  * @property bool $ativa
  * @property ?Carbon $inicio
  * @property ?Carbon $fim
@@ -68,7 +76,7 @@ class Promocao extends Model
 
     private const CACHE_TTL = 21600; // 6 h; salvar a promoção é que limpa de verdade.
 
-    protected $fillable = ['slug', 'nome', 'titulo', 'descricao', 'condicoes', 'ativa', 'na_pagina_produto', 'todos_produtos', 'imagem', 'botao_ativo', 'botao_texto', 'inicio', 'fim', 'valor_minimo', 'itens_minimos', 'limite_por_cliente', 'primeira_compra', 'acumula_cupom', 'regras', 'observacoes'];
+    protected $fillable = ['slug', 'nome', 'titulo', 'descricao', 'condicoes', 'quadro_titulo', 'quadro_texto', 'quadro_destaque', 'ativa', 'na_pagina_produto', 'todos_produtos', 'imagem', 'botao_ativo', 'botao_texto', 'inicio', 'fim', 'valor_minimo', 'itens_minimos', 'limite_por_cliente', 'primeira_compra', 'acumula_cupom', 'regras', 'observacoes'];
 
     protected function casts(): array
     {
@@ -172,7 +180,23 @@ class Promocao extends Model
      */
     public function paragrafos(): array
     {
-        $texto = str_replace(["\r\n", "\r"], "\n", (string) $this->descricao);
+        return self::separarParagrafos($this->descricao);
+    }
+
+    /**
+     * Parágrafos do texto do quadro (mesma regra da descrição).
+     *
+     * @return list<string>
+     */
+    public function paragrafosDoQuadro(): array
+    {
+        return self::separarParagrafos($this->quadro_texto);
+    }
+
+    /** @return list<string> */
+    private static function separarParagrafos(?string $texto): array
+    {
+        $texto = str_replace(["\r\n", "\r"], "\n", (string) $texto);
 
         return array_values(array_filter(
             array_map(fn (string $p) => trim($p, "\n "), preg_split('/\n[ \t]*\n/', $texto)),

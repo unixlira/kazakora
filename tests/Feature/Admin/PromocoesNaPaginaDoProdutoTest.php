@@ -229,4 +229,39 @@ class PromocoesNaPaginaDoProdutoTest extends TestCase
             ->assertSessionHasErrors(['condicoes', 'botao_texto']);
         $this->patch('/admin/promocoes/black/quadro', ['condicoes' => 'x'])->assertNotFound();
     }
+
+    public function test_titulo_texto_e_destaque_do_quadro_trocam_o_texto_de_sempre(): void
+    {
+        $this->actingAs($this->admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocoes.0.quadro_titulo', null)
+            ->where('promocoes.0.entregaveis.titulo_padrao', Sorteio::query()->where('ativo', true)->orderBy('id')->value('titulo')));
+
+        $this->patch('/admin/promocoes/airfryer/quadro', [
+            'quadro_titulo' => 'Concorra a uma AirFryer',
+            'quadro_texto' => "Comprou, concorreu.\r\n\r\nSorteio pela Loteria Federal.",
+            'quadro_destaque' => 'Não vale no sorteio',
+            'condicoes' => '',
+        ])->assertSessionHasNoErrors();
+        $this->patch('/admin/promocoes/pdfs/quadro', [
+            'quadro_titulo' => 'Leve os guias de presente',
+            'quadro_texto' => '',
+            'quadro_destaque' => 'Hoje: 100% grátis',
+        ])->assertSessionHasNoErrors();
+
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page
+            ->where('quadrosPromocao.airfryer.titulo', 'Concorra a uma AirFryer')
+            ->where('quadrosPromocao.airfryer.texto', ['Comprou, concorreu.', 'Sorteio pela Loteria Federal.'])
+            ->where('quadrosPromocao.airfryer.destaque', null)
+            ->where('quadrosPromocao.pdfs.titulo', 'Leve os guias de presente')
+            ->where('quadrosPromocao.pdfs.texto', [])
+            ->where('quadrosPromocao.pdfs.destaque', 'Hoje: 100% grátis'));
+
+        // Apagar volta o texto de sempre.
+        $this->patch('/admin/promocoes/pdfs/quadro', ['quadro_titulo' => '  ', 'quadro_destaque' => ''])->assertSessionHasNoErrors();
+        $this->assertNull($this->promocao('pdfs')->quadro_titulo);
+        $this->pagina($this->produto)->assertInertia(fn ($page) => $page->where('quadrosPromocao.pdfs.titulo', null));
+
+        $this->patch('/admin/promocoes/pdfs/quadro', ['quadro_titulo' => str_repeat('a', 256), 'quadro_texto' => str_repeat('b', 2001), 'quadro_destaque' => str_repeat('c', 121)])
+            ->assertSessionHasErrors(['quadro_titulo', 'quadro_texto', 'quadro_destaque']);
+    }
 }

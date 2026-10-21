@@ -442,7 +442,15 @@ class CatalogController extends Controller
                 $irmas->put($product->id, $fotoDaVariacao($product->images));
 
                 foreach ($irmas->sortKeys() as $irmaId => $imagem) {
-                    if ($irmaId === $pai->id || ! $imagem || collect($galeria)->contains('url', $imagem->url)) {
+                    if ($irmaId === $pai->id || ! $imagem) {
+                        continue;
+                    }
+                    // Foto já na galeria: só aponta a variação para ela, para
+                    // escolher a variação ainda trocar a foto principal.
+                    $naGaleria = collect($galeria)->search(fn ($item) => $item['url'] === $imagem->url);
+                    if ($naGaleria !== false) {
+                        $galeria[$naGaleria]['variant_id'] ??= $irmaId;
+
                         continue;
                     }
                     $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'media_url' => $imagem->media_url, 'variant_id' => $irmaId];

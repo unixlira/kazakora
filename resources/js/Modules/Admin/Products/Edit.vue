@@ -215,7 +215,7 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                         submit-label="Salvar alterações" @submit="submit" />
                 </div>
 
-                <VariationsManager v-else-if="activeTab === 'variacoes'" :product="product" :variations="variations"
+                <VariationsManager v-else-if="activeTab === 'variacoes'" :product="product" :variations="variations" :images="images"
                     :linkable-orphans="linkableOrphans" />
 
                 <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />

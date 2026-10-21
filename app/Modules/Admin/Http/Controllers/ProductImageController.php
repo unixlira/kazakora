@@ -73,6 +73,32 @@ class ProductImageController extends Controller
         return back()->with('success', 'Ordem das fotos salva.');
     }
 
+    /**
+     * Foto da variação (pedido 2026-10-20): o Lira escolhe na aba Variações
+     * qual foto do produto aparece quando o cliente escolhe essa variação.
+     * Só uma por produto; `image_id` vazio volta para a escolha automática
+     * (a principal).
+     */
+    public function variacao(Request $request, Product $product): RedirectResponse
+    {
+        $imageId = $request->validate([
+            'image_id' => ['nullable', 'integer'],
+        ])['image_id'] ?? null;
+
+        abort_if($imageId && ! $product->images()->whereKey($imageId)->exists(), 422, 'Essa foto não é deste produto. Recarregue a página.');
+
+        DB::transaction(function () use ($product, $imageId) {
+            $product->images()->where('is_variant', true)->update(['is_variant' => false]);
+            if ($imageId) {
+                $product->images()->whereKey($imageId)->update(['is_variant' => true]);
+            }
+        });
+
+        return back()->with('success', $imageId
+            ? "Foto da variação de \"{$product->name}\" salva."
+            : "\"{$product->name}\" voltou para a foto automática (a principal).");
+    }
+
     public function destroy(Product $product, ProductImage $image): RedirectResponse
     {
         abort_if($image->product_id !== $product->id, 404);

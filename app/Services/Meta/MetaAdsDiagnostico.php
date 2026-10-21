@@ -112,7 +112,7 @@ class MetaAdsDiagnostico
             if ($m['impressoes'] >= $this->l['impressoes_para_ctr'] && $m['ctr_link'] !== null && $m['ctr_link'] < $this->l['ctr_link_min']) {
                 $cartoes[] = $novo('R3', self::ATENCAO, 'Pouca gente clica: CTR de '.$this->dec($m['ctr_link']).'%',
                     [$this->numero($m['impressoes']).' impressões', $this->numero((int) $m['cliques_link']).' cliques no link', 'CTR '.$this->dec($m['ctr_link']).'%'],
-                    'Troque a imagem ou os 3 primeiros segundos do vídeo. Mostre o produto em uso e o preço logo de cara.');
+                    'Troque a imagem ou os 3 primeiros segundos do vídeo, ou teste um carrossel com o produto em uso. Mostre o preço logo de cara.');
             }
 
             // R4: clique caro.

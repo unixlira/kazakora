@@ -116,3 +116,28 @@ export const ctaDoAnuncio = (cta) => {
         vazio: false,
     };
 };
+
+// Status ao vivo (pedido do Lira 2026-10-21) ---------------------------------
+
+/**
+ * Status da campanha montada no KazaKora como o Lira lê: antes de ir para a
+ * Meta é "Aguardando", durante o envio é "Publicando" e, depois, o que a
+ * Meta diz agora (effective_status). => [rótulo, cores, dica]
+ */
+export const statusDaCampanhaLocal = (status, statusMetaAgora, rotuloLocal, ultimoErro) => {
+    if (status === 'rascunho') return ['Aguardando', STATUS_ESTILOS.rascunho, 'Ainda não foi para a Meta'];
+    if (status === 'enviando') return ['Publicando', STATUS_ESTILOS.enviando, 'Enviando para a Meta agora'];
+    if (status === 'erro') return ['Erro no envio', STATUS_ESTILOS.erro, ultimoErro ?? undefined];
+    const daMeta = {
+        ACTIVE: ['Ativa', STATUS_ESTILOS.ativa],
+        PAUSED: ['Pausada', STATUS_ESTILOS.enviada_pausada],
+        IN_PROCESS: ['Em análise', STATUS_ESTILOS.enviando],
+        PENDING_REVIEW: ['Em análise', STATUS_ESTILOS.enviando],
+        WITH_ISSUES: ['Com problema', STATUS_ESTILOS.erro],
+        DISAPPROVED: ['Reprovada', STATUS_ESTILOS.erro],
+        ARCHIVED: ['Arquivada', STATUS_ESTILOS.rascunho],
+        DELETED: ['Excluída na Meta', STATUS_ESTILOS.rascunho],
+    }[statusMetaAgora];
+    if (daMeta) return [...daMeta, 'Status agora na Meta'];
+    return [rotuloLocal ?? status, STATUS_ESTILOS[status] ?? '', ultimoErro ?? undefined];
+};

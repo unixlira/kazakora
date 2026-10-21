@@ -7,13 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
-use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
-use App\Modules\Catalog\Models\Sorteio;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
@@ -468,7 +467,9 @@ class CatalogController extends Controller
             ? (int) $request->query('v')
             : self::PRODUCT_PAGE_VERSION;
 
-        $livrosDigitais = LivroDigital::doProduto($product);
+        // Quadros do sorteio e dos livros (Entregáveis) com a chave, a imagem
+        // e os produtos de Vender › Promoções (2026-10-21), em cache.
+        $promocoes = PromocoesDoProduto::paraPagina($product);
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
@@ -501,24 +502,11 @@ class CatalogController extends Controller
             'hasReviewed' => $user
                 ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
-            // Entregáveis (pedido 2026-10-20): sorteios e livros digitais
-            // ativos para este produto, cadastrados no admin. O PDF não vai
-            // para a página, só título e capa.
-            'sorteios' => Sorteio::doProduto($product)->map(fn (Sorteio $sorteio) => [
-                'id' => $sorteio->id,
-                'titulo' => $sorteio->titulo,
-                'paragrafo_1' => $sorteio->paragrafo_1,
-                'paragrafo_2' => $sorteio->paragrafo_2,
-                'imagem_url' => $sorteio->imagem_url,
-            ])->values(),
-            'livrosDigitais' => $livrosDigitais->map(fn (LivroDigital $livro) => [
-                'id' => $livro->id,
-                'titulo' => $livro->titulo,
-                'capa_url' => $livro->capa_url,
-            ])->values(),
-            // Imagem dos tablets do quadro: a do primeiro livro mostrado que
-            // tiver uma; null = a página usa a padrão (dor nas costas).
-            'livrosQuadro' => $livrosDigitais->first(fn (LivroDigital $livro) => $livro->imagem_quadro)?->imagem_quadro_url,
+            // Entregáveis: sorteios, livros digitais (sem o PDF) e a imagem
+            // dos tablets do quadro dos livros (null = padrão das costas).
+            'sorteios' => $promocoes['sorteios'],
+            'livrosDigitais' => $promocoes['livrosDigitais'],
+            'livrosQuadro' => $promocoes['livrosQuadro'],
             'relatedProducts' => $relatedProducts->values(),
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')

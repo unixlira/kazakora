@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Models\Setting;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Order;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,12 @@ class LivroDigital extends Model
             'ativo' => 'boolean',
             'todos_produtos' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => PromocoesDoProduto::limparCache());
+        static::deleted(fn () => PromocoesDoProduto::limparCache());
     }
 
     public function produtos(): BelongsToMany

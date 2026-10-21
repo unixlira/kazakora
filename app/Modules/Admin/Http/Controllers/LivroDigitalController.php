@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -84,6 +85,8 @@ class LivroDigitalController extends Controller
             'todos_produtos' => $request->boolean('todos_produtos', true),
         ]);
         $livro->produtos()->sync($livro->todos_produtos ? [] : $dados['produtos']);
+        // A troca de produtos (pivot) não dispara o saved do model.
+        PromocoesDoProduto::limparCache();
 
         return redirect()->route('admin.entregaveis.livros.listar')->with('success', 'Livro digital cadastrado.');
     }
@@ -125,6 +128,8 @@ class LivroDigitalController extends Controller
 
         $livro->update($campos);
         $livro->produtos()->sync($livro->todos_produtos ? [] : $dados['produtos']);
+        // A troca de produtos (pivot) não dispara o saved do model.
+        PromocoesDoProduto::limparCache();
 
         return redirect()->route('admin.entregaveis.livros.listar')->with('success', 'Livro digital atualizado.');
     }

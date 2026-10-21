@@ -48,6 +48,8 @@ class ChannelShipment extends Model
         'channel',
         'external_shipment_id',
         'tracking_code',
+        'j3_tracking_number',
+        'j3_order_code',
         'shipping_method',
         'status',
         'label_path',

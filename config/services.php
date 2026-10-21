@@ -122,6 +122,21 @@ return [
     ],
 
     /**
+     * J3 Flex (MAGMA4 TMS): etiqueta própria da transportadora nas vendas
+     * Flex dentro da área dela — ver J3FlexLabel. Desligada por padrão:
+     * só liga com J3_ENABLED=true e a chave gerada no painel da J3
+     * (Integrações > Token). J3_SELLER_CNPJ só é preciso se a conta da J3
+     * tiver mais de uma loja.
+     */
+    'j3' => [
+        'enabled' => (bool) env('J3_ENABLED', false),
+        'api_key' => env('J3_API_KEY'),
+        'base_url' => env('J3_BASE_URL', 'https://api.j3tms.com.br'),
+        'seller_cnpj' => env('J3_SELLER_CNPJ'),
+        'timeout' => (int) env('J3_TIMEOUT', 20),
+    ],
+
+    /**
      * Pra onde vão os alertas que não podem esperar alguém abrir uma tela
      * (hoje: venda que o canal tem e não entrou no sistema).
      *

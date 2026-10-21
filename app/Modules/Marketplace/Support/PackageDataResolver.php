@@ -48,9 +48,13 @@ class PackageDataResolver
      * $consultarCanais=false só olha o cadastro local — usado pra conferir
      * uma pré-postagem já gerada sem sair chamando API de canal.
      *
+     * $sempreComMedidas=true exige e devolve as medidas também no envelope:
+     * a J3 (Flex) pede peso E medidas de todo pacote. Os mínimos de caixa
+     * dos Correios não entram nesse caso.
+     *
      * @return array{format: string, weight_grams: int, height: ?float, width: ?float, length: ?float, items: list<array{product_id: int, sku: ?string, quantidade: int, peso_unitario_g: int}>}
      */
-    public function forOrder(Order $order, bool $consultarCanais = true): array
+    public function forOrder(Order $order, bool $consultarCanais = true, bool $sempreComMedidas = false): array
     {
         $order->loadMissing('items.product.fiscalData');
 
@@ -67,6 +71,7 @@ class PackageDataResolver
         });
 
         $caixa = $itens->contains(fn ($i) => $this->formato($i['produto']) === ProductFiscalData::EMBALAGEM_CAIXA);
+        $medir = $caixa || $sempreComMedidas;
         $snapshot = [];
 
         $pesoKg = 0.0;
@@ -75,7 +80,7 @@ class PackageDataResolver
         $comprimento = 0.0;
 
         foreach ($itens as $i) {
-            $dados = $this->completar($i['produto'], $caixa, $consultarCanais);
+            $dados = $this->completar($i['produto'], $medir, $consultarCanais);
 
             $pesoKg += $dados['peso_bruto'] * $i['quantidade'];
             $snapshot[] = [
@@ -88,7 +93,7 @@ class PackageDataResolver
             // Caixa única pro pedido inteiro: empilha o comprimento e fica
             // com a maior altura/largura — mesma aproximação do
             // AmazonDriver::resolvePackageMeasurements().
-            if ($caixa) {
+            if ($medir) {
                 $altura = max($altura, $dados['altura_cm']);
                 $largura = max($largura, $dados['largura_cm']);
                 $comprimento += $dados['profundidade_cm'] * $i['quantidade'];
@@ -106,9 +111,9 @@ class PackageDataResolver
         return [
             'format' => $caixa ? CorreiosPrePostagemService::FORMATO_CAIXA : CorreiosPrePostagemService::FORMATO_ENVELOPE,
             'weight_grams' => $pesoGramas,
-            'height' => $caixa ? round(max($altura, self::CAIXA_MINIMA['altura']), 1) : null,
-            'width' => $caixa ? round(max($largura, self::CAIXA_MINIMA['largura']), 1) : null,
-            'length' => $caixa ? round(max($comprimento, self::CAIXA_MINIMA['comprimento']), 1) : null,
+            'height' => $caixa ? round(max($altura, self::CAIXA_MINIMA['altura']), 1) : ($medir ? round($altura, 1) : null),
+            'width' => $caixa ? round(max($largura, self::CAIXA_MINIMA['largura']), 1) : ($medir ? round($largura, 1) : null),
+            'length' => $caixa ? round(max($comprimento, self::CAIXA_MINIMA['comprimento']), 1) : ($medir ? round($comprimento, 1) : null),
             'items' => $snapshot,
         ];
     }

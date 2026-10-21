@@ -2,6 +2,7 @@
 
 namespace App\Services\Meta;
 
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
@@ -12,6 +13,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -996,6 +998,195 @@ class MetaAdsService
 
         return $conta === '' ? null
             : 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='.urlencode($conta).'&selected_ad_ids='.urlencode($adId);
+    }
+
+    // Sincronizar com a Meta (pedido do Lira 2026-10-20) --------------------
+
+    /**
+     * Traz da Meta para o banco o que foi mudado direto no Gerenciador:
+     * nome da campanha, do conjunto e do anúncio, orçamento diário, status
+     * (ativa/pausada), criativo em uso e o texto e o LINK DE DESTINO de cada
+     * anúncio (a Caixa Sanfonada e a Parafusadeira tiveram o link corrigido
+     * lá e o banco seguia com o antigo). Só LÊ a Meta; nada é enviado.
+     *
+     * Atualiza só o que já existe no KazaKora (casado pelos ids meta_*).
+     * Campanha sendo enviada, conjunto subindo e anúncio com troca de
+     * arquivo pendente ficam de fora, para não brigar com o envio. O link
+     * comum a todos os anúncios da campanha vira o link padrão dela (e o
+     * produto, quando o link é de um produto da loja); o anúncio só guarda
+     * link próprio quando é diferente do padrão.
+     *
+     * @return array{campanhas: int, conjuntos: int, anuncios: int, links: int, pulados: int, fora_da_meta: int}
+     *
+     * @throws MetaAdsException
+     */
+    public function sincronizar(): array
+    {
+        $resumo = ['campanhas' => 0, 'conjuntos' => 0, 'anuncios' => 0, 'links' => 0, 'pulados' => 0, 'fora_da_meta' => 0];
+
+        $locais = MetaAdsCampanha::query()
+            ->whereNotNull('meta_campaign_id')
+            ->with(['conjuntos', 'videos'])
+            ->get();
+        if ($locais->isEmpty()) {
+            return $resumo;
+        }
+
+        $filtro = ['filtering' => json_encode([[
+            'field' => 'campaign.id', 'operator' => 'IN', 'value' => $locais->pluck('meta_campaign_id')->map(fn ($id) => (string) $id)->values()->all(),
+        ]])];
+        $campanhas = collect($this->getPaginado($this->conta().'/campaigns', $filtro + ['fields' => 'id,name,status,effective_status,daily_budget', 'limit' => 100]))
+            ->keyBy(fn ($c) => (string) $c['id']);
+        $conjuntos = collect($this->getPaginado($this->conta().'/adsets', $filtro + ['fields' => 'id,name,campaign_id,daily_budget', 'limit' => 200]))
+            ->keyBy(fn ($s) => (string) $s['id']);
+        $anuncios = collect($this->getPaginado($this->conta().'/ads', $filtro + [
+            'fields' => 'id,name,adset_id,effective_status,creative{id,object_story_spec,asset_feed_spec}',
+            'limit' => 200,
+        ]))->keyBy(fn ($a) => (string) $a['id']);
+
+        $produtos = [];
+        $produtoDoLink = function (?string $link) use (&$produtos): ?int {
+            $slug = preg_match('#^https?://(www\.)?kazakora\.com/produtos/([^/?\#]+)#', (string) $link, $m) ? $m[2] : null;
+
+            return $slug === null ? null
+                : ($produtos[$slug] ??= Product::query()->where('slug', $slug)->value('id'));
+        };
+
+        foreach ($locais as $campanha) {
+            $naMeta = $campanhas->get((string) $campanha->meta_campaign_id);
+            if (! $naMeta) {
+                $resumo['fora_da_meta']++;
+
+                continue;
+            }
+            if ($campanha->status === MetaAdsCampanha::STATUS_ENVIANDO) {
+                $resumo['pulados']++;
+
+                continue;
+            }
+
+            DB::transaction(function () use ($campanha, $naMeta, $conjuntos, $anuncios, $produtoDoLink, &$resumo) {
+                // Anúncios que dá para sincronizar, com o criativo lido da Meta.
+                $pares = $campanha->videos
+                    ->filter(fn (MetaAdsVideo $v) => $v->estaNaMeta())
+                    ->map(fn (MetaAdsVideo $v) => [$v, $anuncios->get((string) $v->meta_ad_id)]);
+                $resumo['fora_da_meta'] += $pares->filter(fn ($p) => $p[1] === null)->count();
+                $pares = $pares->filter(fn ($p) => $p[1] !== null);
+                $resumo['pulados'] += $pares->filter(fn ($p) => $p[0]->temEdicaoPendente())->count();
+                $pares = $pares->reject(fn ($p) => $p[0]->temEdicaoPendente());
+                $textos = $pares->mapWithKeys(fn ($p) => [$p[0]->id => self::textoDoCriativo($p[1]['creative'] ?? [])]);
+
+                // Campanha: nome, orçamento, status e o link padrão.
+                $mudou = ['nome' => (string) $naMeta['name']];
+                $diario = $this->centavosEmReais($naMeta['daily_budget'] ?? null);
+                if ($diario !== null && $campanha->orcamentoDaCampanha()) {
+                    $mudou['orcamento_diario'] = $diario;
+                }
+                if (in_array($campanha->status, [MetaAdsCampanha::STATUS_ATIVA, MetaAdsCampanha::STATUS_ENVIADA_PAUSADA], true)) {
+                    $mudou['status'] = match ($naMeta['status'] ?? null) {
+                        'ACTIVE' => MetaAdsCampanha::STATUS_ATIVA,
+                        'PAUSED' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
+                        default => $campanha->status,
+                    };
+                }
+                $links = $textos->pluck('link')->filter()->unique();
+                if ($links->count() === 1 && $links->first() !== $campanha->link_destino) {
+                    $mudou['link_destino'] = $links->first();
+                    $mudou['produto_id'] = $produtoDoLink($links->first()) ?? $campanha->produto_id;
+                    $resumo['links']++;
+                }
+                if ($this->gravarSeMudou($campanha, $mudou)) {
+                    $resumo['campanhas']++;
+                }
+
+                // Conjuntos: na Meta o nome é "campanha | conjunto"; aqui fica só o do conjunto.
+                foreach ($campanha->conjuntos as $conjunto) {
+                    $set = $conjuntos->get((string) $conjunto->meta_adset_id);
+                    if (! $set || $conjunto->enviando) {
+                        continue;
+                    }
+                    $prefixo = $campanha->nome.' | ';
+                    $nome = (string) $set['name'];
+                    $mudou = ['nome' => mb_substr(str_starts_with($nome, $prefixo) ? mb_substr($nome, mb_strlen($prefixo)) : $nome, 0, 120)];
+                    $diario = $this->centavosEmReais($set['daily_budget'] ?? null);
+                    if ($diario !== null && ! $campanha->orcamentoDaCampanha()) {
+                        $mudou['orcamento_diario'] = $diario;
+                    }
+                    if ($this->gravarSeMudou($conjunto, $mudou)) {
+                        $resumo['conjuntos']++;
+                    }
+                }
+                if (! $campanha->orcamentoDaCampanha()) {
+                    $this->gravarSeMudou($campanha, ['orcamento_diario' => round((float) $campanha->conjuntos()->sum('orcamento_diario'), 2)]);
+                }
+
+                // Anúncios: nome, criativo e o que está nele (vazio = padrão da campanha).
+                foreach ($pares as [$video, $ad]) {
+                    $texto = $textos[$video->id];
+                    $mudou = [];
+                    if ((string) $ad['name'] !== $this->nomeDoAnuncio($campanha, $video)) {
+                        $mudou['nome'] = mb_substr((string) $ad['name'], 0, 255);
+                    }
+                    if (filled($ad['creative']['id'] ?? null)) {
+                        $mudou['meta_creative_id'] = (string) $ad['creative']['id'];
+                    }
+                    $atual = $video->criativo($campanha);
+                    foreach (['link' => 'link_destino', 'texto' => 'texto_principal', 'titulo' => 'titulo', 'descricao' => 'descricao', 'chamada' => 'chamada'] as $chave => $coluna) {
+                        if (filled($texto[$chave]) && $texto[$chave] !== $atual[$chave]) {
+                            $mudou[$coluna] = $texto[$chave];
+                        }
+                    }
+                    if (isset($mudou['link_destino'])) {
+                        $mudou['produto_id'] = $produtoDoLink($mudou['link_destino']) ?? $video->produto_id;
+                        $resumo['links']++;
+                    }
+                    if ($this->gravarSeMudou($video, $mudou)) {
+                        $resumo['anuncios']++;
+                    }
+                }
+            });
+        }
+
+        $this->esquecerEspelho();
+
+        return $resumo;
+    }
+
+    /**
+     * Link, texto, título, descrição e botão do criativo como a Meta guarda:
+     * no video_data/link_data ou, com várias opções, no asset_feed_spec (a
+     * primeira de cada é a principal).
+     *
+     * @param  array<string, mixed>  $criativo
+     * @return array{link: ?string, texto: ?string, titulo: ?string, descricao: ?string, chamada: ?string}
+     */
+    public static function textoDoCriativo(array $criativo): array
+    {
+        $spec = $criativo['object_story_spec'] ?? [];
+        $dados = $spec['video_data'] ?? $spec['link_data'] ?? [];
+        $feed = $criativo['asset_feed_spec'] ?? [];
+        $primeiro = fn (string $chave) => $feed[$chave][0]['text'] ?? null;
+        $limpo = fn ($valor) => is_string($valor) && trim($valor) !== '' ? trim($valor) : null;
+
+        return [
+            'link' => $limpo($dados['call_to_action']['value']['link'] ?? $dados['link'] ?? $feed['link_urls'][0]['website_url'] ?? null),
+            'texto' => $limpo($dados['message'] ?? $primeiro('bodies')),
+            'titulo' => $limpo($dados['title'] ?? $dados['name'] ?? $primeiro('titles')),
+            'descricao' => $limpo($dados['link_description'] ?? $dados['description'] ?? $primeiro('descriptions')),
+            'chamada' => $limpo($dados['call_to_action']['type'] ?? $feed['call_to_action_types'][0] ?? null),
+        ];
+    }
+
+    /** Grava só os campos que mudaram; devolve se algo mudou. */
+    private function gravarSeMudou(MetaAdsCampanha|MetaAdsConjunto|MetaAdsVideo $modelo, array $campos): bool
+    {
+        $modelo->forceFill($campos);
+        if (! $modelo->isDirty()) {
+            return false;
+        }
+        $modelo->save();
+
+        return true;
     }
 
     // Payloads ---------------------------------------------------------------

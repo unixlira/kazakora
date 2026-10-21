@@ -1,11 +1,12 @@
 <script setup>
-// Vender › Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs
+// Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs
 // lado a lado. Cada card tem a chave "mostrar na página do produto", a imagem
 // do quadro (a de Entregáveis, uma pronta ou enviada, com tamanho e formato)
 // e os produtos onde aparece, cada um com a sua chave. Texto, período e
 // regras continuam na tela de cada promoção.
-// O menu Promoções abre direto esta lista (2026-10-21): embaixo ficam as
-// promoções criadas aqui, que têm só texto, período e regras.
+// Tela principal Promoções (Lira, 2026-10-21): link direto no menu, fora de
+// Vender, com "Adicionar Promoção" no topo. Embaixo, um card para cada
+// promoção criada aqui, que tem só texto, período e regras.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
@@ -170,7 +171,7 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
             </div>
             <button v-if="podeEditar && !criando" type="button"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis" @click="abrirNova">
-                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Nova promoção
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Adicionar Promoção
             </button>
         </div>
 
@@ -356,29 +357,42 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
         <!-- Promoções criadas pela lista: só texto, período e regras -->
         <section class="mt-8">
             <h2 class="mb-3 text-lg font-semibold">Outras promoções</h2>
-            <ul v-if="outras.length" class="divide-y divide-[var(--surface-border)] rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                <li v-for="promocao in outras" :key="promocao.slug" class="flex flex-wrap items-center gap-3 px-4 py-3">
-                    <i class="fas fa-tags text-primary" aria-hidden="true"></i>
-                    <div class="min-w-0 flex-1">
-                        <div class="truncate font-medium">{{ promocao.nome }}</div>
-                        <div class="text-xs text-slate-500">
+            <div v-if="outras.length" class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                <section v-for="promocao in outras" :key="promocao.slug"
+                    class="flex flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <header class="flex items-start justify-between gap-3">
+                        <h3 class="flex min-w-0 items-center gap-2 text-lg font-semibold">
+                            <i class="fas fa-tags text-primary" aria-hidden="true"></i>
+                            <span class="truncate">{{ promocao.nome }}</span>
+                        </h3>
+                        <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
+                    </header>
+                    <p v-if="promocao.titulo" class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ promocao.titulo }}</p>
+                    <dl class="mb-4 mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-slate-500">Período</dt>
+                        <dd>
                             <template v-if="promocao.inicio || promocao.fim">
                                 {{ promocao.inicio ? `de ${promocao.inicio}` : '' }} {{ promocao.fim ? `até ${promocao.fim}` : '' }}
                             </template>
                             <template v-else>Sem período definido</template>
-                        </div>
-                    </div>
-                    <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
-                    <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-sm text-slate-500 hover:text-primary hover:underline">
-                        <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Página
-                    </a>
-                    <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-sm text-primary hover:underline">
-                        <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
-                    </Link>
-                </li>
-            </ul>
+                        </dd>
+                        <dt class="text-slate-500">Pedido mínimo</dt>
+                        <dd>{{ promocao.valor_minimo ? `R$ ${Number(promocao.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem mínimo' }}</dd>
+                        <dt class="text-slate-500">Regras</dt>
+                        <dd>{{ promocao.regras === 0 ? 'Nenhuma' : promocao.regras === 1 ? '1 regra' : `${promocao.regras} regras` }}</dd>
+                    </dl>
+                    <footer class="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-3 text-sm">
+                        <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-slate-500 hover:text-primary hover:underline">
+                            <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Página
+                        </a>
+                        <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
+                            <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                        </Link>
+                    </footer>
+                </section>
+            </div>
             <p v-else class="rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-sm text-slate-500">
-                Nenhuma outra promoção ainda. Use "Nova promoção" para criar.
+                Nenhuma outra promoção ainda. Use "Adicionar Promoção" para criar.
             </p>
         </section>
     </AdminLayout>

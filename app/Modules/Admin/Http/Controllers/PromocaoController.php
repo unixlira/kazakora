@@ -54,10 +54,13 @@ class PromocaoController extends Controller
             ->map(fn (Promocao $promocao) => [
                 'slug' => $promocao->slug,
                 'nome' => $promocao->nome,
+                'titulo' => $promocao->titulo,
                 'ativa' => $promocao->ativa,
                 'no_ar' => $promocao->noAr(),
                 'inicio' => $promocao->inicio?->format('d/m/Y H:i'),
                 'fim' => $promocao->fim?->format('d/m/Y H:i'),
+                'valor_minimo' => $promocao->valor_minimo,
+                'regras' => count($promocao->regras ?? []),
             ]);
 
         return Inertia::render('Admin/Promocoes/Index', [

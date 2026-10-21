@@ -49,7 +49,9 @@ class PromocoesTest extends TestCase
         $this->actingAs($admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
             ->where('promocoes.0.slug', 'airfryer')
             ->has('outras', 3)
-            ->where('outras.2.slug', 'promocao-black-friday'));
+            ->where('outras.2.slug', 'promocao-black-friday')
+            ->where('outras.2.regras', 0)
+            ->where('outras.2.valor_minimo', null));
         $this->actingAs($admin)->get('/admin/promocoes/promocao-black-friday')->assertOk();
         $this->actingAs($admin)->put('/admin/promocoes/promocao-black-friday', ['titulo' => 'Black Friday', 'ativa' => true])
             ->assertSessionHasNoErrors();

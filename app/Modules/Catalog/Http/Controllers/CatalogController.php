@@ -7,11 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
+use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Models\Sorteio;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
@@ -500,6 +502,21 @@ class CatalogController extends Controller
             'hasReviewed' => $user
                 ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
+            // Entregáveis (pedido 2026-10-20): sorteios e livros digitais
+            // ativos para este produto, cadastrados no admin. O PDF não vai
+            // para a página, só título e capa.
+            'sorteios' => Sorteio::doProduto($product)->map(fn (Sorteio $sorteio) => [
+                'id' => $sorteio->id,
+                'titulo' => $sorteio->titulo,
+                'paragrafo_1' => $sorteio->paragrafo_1,
+                'paragrafo_2' => $sorteio->paragrafo_2,
+                'imagem_url' => $sorteio->imagem_url,
+            ])->values(),
+            'livrosDigitais' => LivroDigital::doProduto($product)->map(fn (LivroDigital $livro) => [
+                'id' => $livro->id,
+                'titulo' => $livro->titulo,
+                'capa_url' => $livro->capa_url,
+            ])->values(),
             'relatedProducts' => $relatedProducts->values(),
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')

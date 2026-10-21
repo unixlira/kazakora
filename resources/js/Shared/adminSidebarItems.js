@@ -132,6 +132,15 @@ export const sidebarSections = [
         ],
     },
     {
+        // Entregáveis (pedido do Lira 2026-10-20): livros digitais e sorteios
+        // que aparecem na página do produto, ligados e desligados por produto.
+        heading: 'Entregáveis',
+        items: [
+            { label: 'Livros Digitais', href: '/admin/entregaveis/livros-digitais', icon: 'fas fa-book-open', cor: 'indigo', permission: 'cadastros.view' },
+            { label: 'Sorteios', href: '/admin/entregaveis/sorteios', icon: 'fas fa-gift', cor: 'rosa', permission: 'cadastros.view' },
+        ],
+    },
+    {
         // Publicidade (pedido do Lira em 2026-10-12): junta o que é de ADS,
         // que antes ficava espalhado entre Financeiro e Marketing.
         heading: 'Publicidade',

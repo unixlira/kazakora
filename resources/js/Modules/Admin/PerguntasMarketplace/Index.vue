@@ -1,0 +1,191 @@
+<script setup>
+// Atendimento > Perguntas MK Place (pedido do Lira 2026-10-20): perguntas dos
+// anúncios dos marketplaces. A Manuela atende primeiro (rascunho, ou envio
+// sozinha se ligado); o que ela não sabe fica em "Pra você", com alerta no
+// topo do admin. O atendente pode assumir qualquer pergunta, editar e enviar.
+import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { Head, router } from '@inertiajs/vue3';
+import { onMounted, onUnmounted, reactive, ref } from 'vue';
+import { notifyError, notifySuccess } from '@/Shared/notify';
+
+const props = defineProps({
+    perguntas: { type: Array, required: true },
+    filtro: { type: String, default: 'humano' },
+    busca: { type: String, default: '' },
+    contagem: { type: Object, default: () => ({}) },
+    autoResposta: { type: Boolean, default: false },
+    podeConfigurar: { type: Boolean, default: false },
+});
+
+const FILTROS = [
+    ['humano', 'Pra você'],
+    ['rascunho', 'Rascunho da Manuela'],
+    ['abertas', 'Sem resposta'],
+    ['respondidas', 'Respondidas'],
+    ['todas', 'Todas'],
+];
+const CANAL = { mercado_livre: { nome: 'Mercado Livre', cor: 'bg-yellow-300 text-slate-900' } };
+const POR = { manuela: 'Manuela', humano: 'Atendente', ml: 'Direto no Mercado Livre' };
+const LIMITE = 2000;
+
+const termo = ref(props.busca);
+const recarregar = () => router.reload({ only: ['perguntas', 'contagem', 'autoResposta', 'sidebarBadges'], preserveScroll: true });
+const filtrar = (filtro) => router.get('/admin/perguntas-marketplace', { filtro, busca: termo.value || undefined }, { preserveState: true, preserveScroll: true, only: ['perguntas', 'filtro', 'busca', 'contagem'] });
+
+const dataHora = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }) : '');
+
+const xsrf = () => decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.split('=')[1] ?? '');
+const chamar = async (url, corpo = {}) => {
+    const r = await fetch(url, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(corpo),
+    });
+    const dados = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(dados.message || 'Não foi possível concluir.');
+    return dados;
+};
+
+// Texto que o atendente está editando, por pergunta (começa no rascunho da Manuela).
+const textos = reactive({});
+const texto = (p) => (textos[p.id] ?? p.rascunho ?? '');
+const ocupado = ref(null);
+
+const executar = async (p, fn, sucesso) => {
+    ocupado.value = p.id;
+    try {
+        await fn();
+        notifySuccess(sucesso);
+        delete textos[p.id];
+        recarregar();
+    } catch (e) {
+        notifyError(e.message);
+    } finally {
+        ocupado.value = null;
+    }
+};
+
+const enviar = (p) => {
+    const msg = texto(p).trim();
+    if (!msg) return notifyError('Escreva a resposta antes de enviar.');
+    // Resposta no Mercado Livre é pública e não pode ser editada nem apagada.
+    if (!confirm(`Publicar esta resposta no anúncio? Ela fica pública e não dá para editar depois.\n\n${msg}`)) return;
+    executar(p, () => chamar(`/admin/perguntas-marketplace/${p.id}/enviar`, { texto: msg }), 'Resposta publicada no Mercado Livre.');
+};
+const assumir = (p) => executar(p, () => chamar(`/admin/perguntas-marketplace/${p.id}/assumir`), 'Você assumiu a pergunta. A Manuela não envia nada nela.');
+const devolver = (p) => executar(p, () => chamar(`/admin/perguntas-marketplace/${p.id}/devolver`), 'Devolvida para a Manuela. O rascunho novo chega em instantes.');
+
+const auto = ref(props.autoResposta);
+const alternarAuto = async () => {
+    const ligar = !auto.value;
+    if (ligar && !confirm('Ligar "Manuela responde sozinha"? As respostas que ela souber pela ficha do anúncio vão direto para o comprador, sem revisão. O que ela não souber continua vindo para você.')) return;
+    try {
+        auto.value = (await chamar('/admin/perguntas-marketplace/auto-resposta', { ligado: ligar })).ligado;
+        notifySuccess(auto.value ? 'A Manuela agora responde sozinha.' : 'A Manuela só deixa rascunho. Você revisa e envia.');
+    } catch (e) {
+        notifyError(e.message);
+    }
+};
+
+let timer = null;
+onMounted(() => { timer = setInterval(recarregar, 30000); });
+onUnmounted(() => clearInterval(timer));
+</script>
+
+<template>
+    <Head title="Perguntas MK Place" />
+
+    <AdminLayout>
+        <div class="min-w-0 space-y-4">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h1 class="flex items-center gap-2 font-display text-2xl font-semibold"><i class="fas fa-circle-question text-amber-500"></i> Perguntas MK Place</h1>
+                    <p class="text-sm text-slate-500">Perguntas dos anúncios nos marketplaces. A Manuela atende primeiro; o que ela não souber fica em "Pra você".</p>
+                </div>
+                <div class="flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-2 shadow-sm">
+                    <div class="text-sm">
+                        <p class="font-semibold">Manuela responde sozinha</p>
+                        <p class="text-xs text-slate-500">{{ auto ? 'Ligado: o que está na ficha vai direto ao comprador.' : 'Desligado: ela deixa rascunho e você envia.' }}</p>
+                    </div>
+                    <button type="button" role="switch" :aria-checked="auto" :disabled="!podeConfigurar"
+                        :title="podeConfigurar ? '' : 'Só o administrador muda essa opção'"
+                        class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        :class="auto ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'" @click="alternarAuto">
+                        <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform" :class="auto ? 'translate-x-5' : 'translate-x-0.5'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <button v-for="[k, rotulo] in FILTROS" :key="k" type="button"
+                    class="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold"
+                    :class="filtro === k ? (k === 'humano' ? 'bg-amber-500 text-white' : 'bg-primary text-white') : 'bg-[var(--surface-muted)] text-slate-600 dark:text-slate-300'"
+                    @click="filtrar(k)">
+                    {{ rotulo }} <span class="opacity-75">{{ contagem[k] ?? 0 }}</span>
+                </button>
+                <form class="relative ml-auto w-full sm:w-72" @submit.prevent="filtrar(filtro)">
+                    <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                    <input v-model="termo" type="search" placeholder="Buscar pergunta ou código do anúncio" class="w-full rounded-full border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-8 pr-3 text-sm">
+                </form>
+            </div>
+
+            <p v-if="!perguntas.length" class="rounded-2xl border border-dashed border-[var(--surface-border)] p-10 text-center text-sm text-slate-500">
+                {{ filtro === 'humano' ? 'Nenhuma pergunta esperando você.' : 'Nenhuma pergunta aqui.' }}
+            </p>
+
+            <article v-for="p in perguntas" :key="p.id"
+                class="rounded-2xl border bg-[var(--surface)] p-4 shadow-sm"
+                :class="p.aberta && (p.precisa_humano || p.assumida_por) ? 'border-amber-300 dark:border-amber-500/50' : 'border-[var(--surface-border)]'">
+                <header class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="rounded-full px-2 py-0.5 font-bold" :class="CANAL[p.canal]?.cor">{{ CANAL[p.canal]?.nome }}</span>
+                    <a :href="p.link" target="_blank" rel="noopener" class="truncate font-semibold text-primary hover:underline">{{ p.produto || p.item_id }}</a>
+                    <span class="text-slate-400">{{ p.item_id }}</span>
+                    <span class="ml-auto text-slate-400">{{ dataHora(p.perguntada_em) }}</span>
+                </header>
+
+                <p class="mt-3 text-[15px] font-medium"><i class="fas fa-user mr-1.5 text-slate-400"></i>{{ p.pergunta }}</p>
+
+                <!-- Aberta: estado do atendimento + resposta editável -->
+                <template v-if="p.aberta">
+                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span v-if="p.assumida_por" class="rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"><i class="fas fa-user-tie mr-1"></i>Com {{ p.assumida_por }}</span>
+                        <span v-else-if="p.precisa_humano" class="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"><i class="fas fa-triangle-exclamation mr-1"></i>A Manuela não soube responder</span>
+                        <span v-else-if="p.rascunho" class="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"><i class="fas fa-robot mr-1"></i>Rascunho da Manuela</span>
+                        <span v-else class="rounded-full bg-slate-200 px-2 py-0.5 font-semibold text-slate-600 dark:bg-slate-500/15 dark:text-slate-300"><i class="fas fa-circle-notch mr-1 animate-spin"></i>Manuela escrevendo</span>
+                    </div>
+
+                    <p v-if="p.erro_envio" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">Último envio falhou: {{ p.erro_envio }}</p>
+
+                    <textarea :value="texto(p)" rows="3" :maxlength="LIMITE"
+                        class="mt-3 w-full rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3 text-sm"
+                        placeholder="Escreva a resposta. Sem telefone, e-mail, link ou contato fora do Mercado Livre."
+                        @input="textos[p.id] = $event.target.value"></textarea>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-slate-400">{{ texto(p).length }}/{{ LIMITE }}</span>
+                        <div class="ml-auto flex flex-wrap gap-2">
+                            <button v-if="!p.assumida_por" type="button" :disabled="ocupado === p.id"
+                                class="rounded-lg border border-violet-300 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300 dark:hover:bg-violet-500/10"
+                                @click="assumir(p)"><i class="fas fa-hand mr-1"></i>Assumir</button>
+                            <button type="button" :disabled="ocupado === p.id"
+                                class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-[var(--surface-muted)] disabled:opacity-50 dark:text-slate-300"
+                                @click="devolver(p)"><i class="fas fa-robot mr-1"></i>Devolver para a Manuela</button>
+                            <button type="button" :disabled="ocupado === p.id || !texto(p).trim()"
+                                class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:brightness-95 disabled:opacity-50"
+                                @click="enviar(p)">
+                                <i class="fas mr-1" :class="ocupado === p.id ? 'fa-circle-notch animate-spin' : 'fa-paper-plane'"></i>Enviar resposta
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Respondida -->
+                <div v-else class="mt-3 rounded-xl bg-emerald-50 p-3 text-sm dark:bg-emerald-500/10">
+                    <p class="text-slate-700 dark:text-slate-200">{{ p.resposta || 'Respondida no Mercado Livre.' }}</p>
+                    <p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                        <i class="fas fa-check mr-1"></i>{{ POR[p.respondida_por] ?? 'Respondida' }}<template v-if="p.respondida_por_nome"> ({{ p.respondida_por_nome }})</template> · {{ dataHora(p.respondida_em) }}
+                    </p>
+                </div>
+            </article>
+        </div>
+    </AdminLayout>
+</template>

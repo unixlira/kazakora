@@ -37,8 +37,15 @@ export const sidebarSections = [
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', cor: 'rosa', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', cor: 'ambar', permission: 'cadastros.view' },
-            // Promoções (pedido do Lira 2026-10-21): link direto para a lista
-            // (Airfryer, PDFs e as que ele criar), sem submenu.
+        ],
+    },
+    {
+        // Promoções (Lira, 2026-10-21): tela principal com link direto, fora
+        // de Vender e sem submenu. Lá ficam os cards (Airfryer, PDFs e as que
+        // ele criar) e o botão "Adicionar Promoção".
+        heading: 'Promoções',
+        direto: true,
+        items: [
             { label: 'Promoções', href: '/admin/promocoes', icon: 'fas fa-tags', cor: 'rosa', permission: 'cadastros.view' },
         ],
     },

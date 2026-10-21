@@ -85,3 +85,34 @@ export const enviarArquivo = (url, campo, arquivo, aoProgredir, extras = {}) => 
     xhr.onerror = () => reject(new Error('A conexão caiu durante o envio. Tente de novo.'));
     xhr.send(dados);
 });
+
+// "O que fazer agora" (2026-10-21): prioridade => [rótulo, selo, faixa à esquerda].
+export const PRIORIDADES = {
+    urgente: ['Urgente', 'bg-red-500/15 text-red-700 dark:text-red-300', 'bg-red-500'],
+    atencao: ['Atenção', 'bg-amber-500/15 text-amber-800 dark:text-amber-300', 'bg-amber-500'],
+    oportunidade: ['Oportunidade', 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', 'bg-emerald-500'],
+    aviso: ['Aviso', 'bg-primary/15 text-primary', 'bg-primary'],
+};
+
+/**
+ * Coluna "Botão (CTA)": { texto, dica, mono, alerta, vazio } a partir do
+ * cta do espelho (null = sem dado; codigos vazio = sem botão).
+ */
+export const ctaDoAnuncio = (cta) => {
+    if (!cta) return { texto: '-', dica: 'Sem dado do botão', mono: false, alerta: false, vazio: true };
+    const rotulo = (c) => cta.rotulos?.[c] ?? c;
+    const alerta = Boolean(cta.desalinhado);
+    if (cta.sem_botao) return { texto: 'Sem botão', dica: cta.codigos.join(', ') || 'NO_BUTTON', mono: false, alerta, vazio: true };
+    if (cta.codigos.length > 1) {
+        return { texto: `Vários (${cta.codigos.length})`, dica: cta.codigos.map((c) => `${rotulo(c)} (${c})`).join(', '), mono: false, alerta, vazio: false };
+    }
+    const codigo = cta.codigos[0];
+    const conhecido = Boolean(cta.rotulos?.[codigo]);
+    return {
+        texto: conhecido ? `${rotulo(codigo)}${cta.dinamico ? ' · dinâmico' : ''}` : codigo,
+        dica: codigo,
+        mono: !conhecido,
+        alerta,
+        vazio: false,
+    };
+};

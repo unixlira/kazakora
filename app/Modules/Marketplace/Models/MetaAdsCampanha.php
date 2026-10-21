@@ -96,6 +96,34 @@ class MetaAdsCampanha extends Model
         'CONTACT_US' => 'Fale conosco',
     ];
 
+    /**
+     * Rótulo de todo botão que pode aparecer num anúncio da conta (coluna
+     * "Botão (CTA)" do espelho, 2026-10-21). CHAMADAS acima continua sendo
+     * só o que a tela deixa escolher ao criar anúncio.
+     */
+    public const ROTULOS_CHAMADA = self::CHAMADAS + [
+        'SEND_MESSAGE' => 'Enviar mensagem',
+        'MESSAGE_PAGE' => 'Enviar mensagem',
+        'WHATSAPP_MESSAGE' => 'Enviar mensagem no WhatsApp',
+        'SIGN_UP' => 'Cadastre-se',
+        'SUBSCRIBE' => 'Assinar',
+        'NO_BUTTON' => 'Sem botão',
+        'GET_QUOTE' => 'Pedir orçamento',
+        'CALL_NOW' => 'Ligar agora',
+        'WATCH_MORE' => 'Assistir mais',
+        'DOWNLOAD' => 'Baixar',
+        // Usado em anúncios de jul/2026 da conta.
+        'SEE_DETAILS' => 'Ver detalhes',
+    ];
+
+    /** Grupo do botão, para comparar com o objetivo da campanha (regra R5). */
+    public const GRUPOS_CHAMADA = [
+        'SHOP_NOW' => 'compra', 'BUY_NOW' => 'compra', 'ORDER_NOW' => 'compra', 'GET_OFFER' => 'compra',
+        'LEARN_MORE' => 'pouca_intencao', 'SEE_MORE' => 'pouca_intencao', 'SEE_DETAILS' => 'pouca_intencao', 'NO_BUTTON' => 'pouca_intencao',
+        'SEND_MESSAGE' => 'conversa', 'WHATSAPP_MESSAGE' => 'conversa', 'CONTACT_US' => 'conversa', 'MESSAGE_PAGE' => 'conversa',
+        'SIGN_UP' => 'cadastro', 'SUBSCRIBE' => 'cadastro',
+    ];
+
     protected $fillable = [
         'nome',
         'objetivo',

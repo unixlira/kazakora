@@ -147,7 +147,8 @@ onUnmounted(() => {
                     v-for="(banner, index) in slides" :key="`${banner.id}-${index}`"
                     :href="banner.link_url || undefined"
                     class="relative block w-full shrink-0 md:h-full"
-                    :aria-hidden="index !== current"
+                    :aria-hidden="index !== current ? 'true' : undefined"
+                    :tabindex="banner.link_url && index !== current ? -1 : undefined"
                     @click="cliqueBanner"
                 >
                     <!-- <picture>: o navegador baixa só a imagem do tamanho de tela certo. -->

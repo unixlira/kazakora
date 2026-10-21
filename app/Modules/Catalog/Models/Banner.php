@@ -19,7 +19,7 @@ class Banner extends Model
         'is_active',
     ];
 
-    protected $appends = ['image_url', 'image_url_mobile', 'image_srcset_mobile'];
+    protected $appends = ['image_url', 'image_srcset', 'image_url_mobile', 'image_srcset_mobile'];
 
     protected function casts(): array
     {
@@ -32,6 +32,12 @@ class Banner extends Model
     public function getImageUrlAttribute(): string
     {
         return asset('storage/'.$this->image_path);
+    }
+
+    /** WebP do computador em 1280/1920/2560 px, quando já foi gerado (banners:gerar-webp). */
+    public function getImageSrcsetAttribute(): ?string
+    {
+        return $this->image_path ? BannerMobileOptimizer::srcset($this->image_path, larguras: BannerMobileOptimizer::LARGURAS_PC) : null;
     }
 
     public function getImageUrlMobileAttribute(): ?string

@@ -32,11 +32,20 @@ createInertiaApp({
             pixelOk = aceito;
         });
 
-        // Tela de abertura (resources/views/app.blade.php): some quando a loja montou.
+        // Tela de abertura (resources/views/app.blade.php): some quando a loja montou
+        // e o CSS da loja (carregado sem travar a página) já chegou.
         const abertura = document.getElementById('tela-abertura');
         if (abertura) {
-            requestAnimationFrame(() => abertura.classList.add('saindo'));
-            setTimeout(() => abertura.remove(), 600);
+            const cssPendente = [...document.querySelectorAll('link[data-adiado]')]
+                .filter((link) => !link.sheet)
+                .map((link) => new Promise((pronto) => {
+                    link.addEventListener('load', pronto, { once: true });
+                    link.addEventListener('error', pronto, { once: true });
+                }));
+            Promise.all(cssPendente).then(() => {
+                requestAnimationFrame(() => abertura.classList.add('saindo'));
+                setTimeout(() => abertura.remove(), 600);
+            });
         }
     },
     // Barra no topo nas trocas de página (a mesma de sempre); aparece aos

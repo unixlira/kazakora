@@ -9,10 +9,17 @@ use Illuminate\Support\Facades\Storage;
  * (480, 828 e 1080 px) pro celular baixar só o tamanho que a tela pede.
  * Nunca amplia: se o original é menor que a largura, ela não é gerada.
  * Sem GD/WebP, ou arquivo que não é imagem, o original fica como está.
+ *
+ * Desempenho (pedido 2026-10-21, PageSpeed verde sem mudar o visual): a
+ * imagem do computador também ganha WebP (1280, 1920 e 2560 px). Nesse caso
+ * o original FICA no disco e o WebP vai ao lado, com o mesmo nome
+ * ("abc.png" => "abc.webp"); o srcset acha o WebP sozinho.
  */
 class BannerMobileOptimizer
 {
     public const LARGURAS = [480, 828, 1080];
+
+    public const LARGURAS_PC = [1280, 1920, 2560];
 
     private const QUALIDADE = 82;
 
@@ -20,7 +27,7 @@ class BannerMobileOptimizer
      * @return string|null caminho relativo do arquivo principal (.webp), ou
      *                     null se não foi possível otimizar (o original fica).
      */
-    public static function otimizar(string $path, string $disk = 'public'): ?string
+    public static function otimizar(string $path, string $disk = 'public', array $larguras = self::LARGURAS, bool $manterOriginal = false): ?string
     {
         if (! function_exists('imagewebp') || ! function_exists('imagecreatetruecolor')) {
             return null;
@@ -50,17 +57,20 @@ class BannerMobileOptimizer
 
         $base = preg_replace('/\.\w+$/', '', $path);
         $principal = $base.'.webp';
-        $maior = min($largura, max(self::LARGURAS));
+        $maior = min($largura, max($larguras));
 
-        self::gravar($origem, $largura, $altura, $maior, $storage->path($principal));
-        foreach (self::LARGURAS as $alvo) {
+        // Original já em WebP e mantido: não sobrescreve, só gera as larguras menores.
+        if (! ($manterOriginal && $principal === $path)) {
+            self::gravar($origem, $largura, $altura, $maior, $storage->path($principal));
+        }
+        foreach ($larguras as $alvo) {
             if ($alvo < $maior) {
                 self::gravar($origem, $largura, $altura, $alvo, $storage->path(self::variante($principal, $alvo)));
             }
         }
         imagedestroy($origem);
 
-        if ($principal !== $path) {
+        if ($principal !== $path && ! $manterOriginal) {
             @unlink($completo);
         }
 
@@ -73,16 +83,28 @@ class BannerMobileOptimizer
         return preg_replace('/\.(\w+)$/', "-{$largura}w.$1", $path);
     }
 
-    /** Larguras que existem em disco, da menor pra maior (inclui o principal). */
-    public static function srcset(string $path, string $disk = 'public'): ?string
+    /** "banners/abc.png" => "banners/abc.webp" (o WebP gerado ao lado do original). */
+    public static function webpAoLado(string $path): string
     {
+        return preg_replace('/\.\w+$/', '', $path).'.webp';
+    }
+
+    /**
+     * Larguras que existem em disco, da menor pra maior (inclui o principal).
+     * Original que não é WebP usa o WebP gerado ao lado dele, se existir.
+     */
+    public static function srcset(string $path, string $disk = 'public', array $larguras = self::LARGURAS): ?string
+    {
+        $storage = Storage::disk($disk);
         if (! str_ends_with($path, '.webp')) {
-            return null;
+            $path = self::webpAoLado($path);
+            if (! $storage->exists($path)) {
+                return null;
+            }
         }
 
-        $storage = Storage::disk($disk);
         $itens = [];
-        foreach (self::LARGURAS as $alvo) {
+        foreach ($larguras as $alvo) {
             $variante = self::variante($path, $alvo);
             if ($storage->exists($variante)) {
                 $itens[] = asset('storage/'.$variante)." {$alvo}w";
@@ -93,7 +115,7 @@ class BannerMobileOptimizer
         }
 
         $info = @getimagesize($storage->path($path));
-        $itens[] = asset('storage/'.$path).' '.($info[0] ?? max(self::LARGURAS)).'w';
+        $itens[] = asset('storage/'.$path).' '.($info[0] ?? max($larguras)).'w';
 
         return implode(', ', $itens);
     }
@@ -105,8 +127,12 @@ class BannerMobileOptimizer
         }
         $storage = Storage::disk($disk);
         $storage->delete($path);
-        foreach (self::LARGURAS as $alvo) {
+        // Junto com o original vão o WebP ao lado dele e as larguras dos dois.
+        $webp = self::webpAoLado($path);
+        $storage->delete($webp);
+        foreach (array_unique([...self::LARGURAS, ...self::LARGURAS_PC]) as $alvo) {
             $storage->delete(self::variante($path, $alvo));
+            $storage->delete(self::variante($webp, $alvo));
         }
     }
 

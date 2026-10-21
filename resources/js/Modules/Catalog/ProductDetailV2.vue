@@ -641,21 +641,18 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
                         </section>
 
-                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e capas
-                             dentro de tablets à esquerda, oferta à direita. Sem "preço vendido separadamente":
-                             os guias não são vendidos, seria preço inventado. -->
+                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
+                             com os 3 tablets (feita pelo Jonathan, troca os tablets em CSS) à esquerda, oferta à
+                             direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
                                 <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                                <ul class="livros">
-                                    <li v-for="livro in livrosDigitais" :key="livro.id" class="tablet">
-                                        <img v-if="livro.capa_url" :src="livro.capa_url" :alt="livro.titulo" loading="lazy">
-                                        <span v-else class="livro-sem-capa"><i class="fa-solid fa-book-open" aria-hidden="true"></i>{{ livro.titulo }}</span>
-                                    </li>
-                                </ul>
+                                <img class="livros-img" src="/images/promocoes/livros-tablets.webp"
+                                     alt="Três guias digitais da KazaKora em tablets: Dor nas costas de quem trabalha sentado, Lombar travada: o que fazer nas primeiras 48 horas, e Acordei com dor nas costas: o problema pode estar na sua noite"
+                                     width="1200" height="600" loading="lazy">
                             </div>
                             <div class="livros-oferta">
-                                <p>Você recebe {{ livrosDigitais.length === 1 ? 'o guia' : 'os guias' }} em PDF com dicas práticas para ter mais saúde e qualidade de vida!</p>
+                                <p>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
                                 <p class="livros-lista">
                                     <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
                                 </p>
@@ -1115,12 +1112,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo-sorteio { width: 190px; }
 .pd2 .promo-livros { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; align-items: center; }
 .pd2 .promo-livros h2 { margin-bottom: 18px; }
-.pd2 .livros { display: flex; justify-content: center; margin: 0; padding: 0; list-style: none; }
-.pd2 .livros .tablet { flex: 0 1 150px; padding: 9px 7px 14px; background: #1c1f24; border-radius: 12px; box-shadow: 0 8px 18px rgba(0, 0, 0, .22); }
-.pd2 .livros .tablet + .tablet { margin-left: -6px; }
-.pd2 .livros img, .pd2 .livro-sem-capa { display: block; width: 100%; aspect-ratio: 909 / 1287; object-fit: cover; border-radius: 3px; background: #fff; }
-.pd2 .livro-sem-capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; color: #18212e; }
-.pd2 .livro-sem-capa i { font-size: 30px; }
+.pd2 .livros-img { display: block; width: 100%; height: auto; }
 .pd2 .livros-oferta p { margin: 0 0 14px; font-size: 17px; line-height: 1.5; }
 .pd2 .livros-lista { display: flex; flex-direction: column; gap: 6px; font-size: 14px !important; color: var(--ink); }
 .pd2 .livros-lista i { color: var(--green); }
@@ -1238,7 +1230,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .promo { flex-direction: column; align-items: flex-start; }
     .pd2 .promo-sorteio { width: 160px; align-self: center; }
     .pd2 .promo-livros { grid-template-columns: 1fr; gap: 20px; }
-    .pd2 .livros .tablet { padding: 6px 5px 10px; border-radius: 9px; }
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }

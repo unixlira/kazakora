@@ -4,6 +4,7 @@ import { DataTable } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { h, ref } from 'vue';
+import DiagnosticoMeta from './DiagnosticoMeta.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
 import { formatarData, formatarReais, STATUS_ESTILOS } from './metaAds';
 
@@ -39,6 +40,11 @@ const trocarPeriodo = (periodo) => router.get('/admin/publicidade/meta-ads/campa
 });
 
 const { can } = usePermissions();
+
+// Cartões do "O que fazer agora" (2026-10-21) levam à linha e ao modal do espelho.
+const tabela = ref(null);
+const verNaTabela = (alvo) => tabela.value?.mostrar(alvo.tipo, alvo.id);
+const editarAlvo = (alvo) => tabela.value?.editar(alvo.tipo, alvo.id);
 
 const periodo = (c) => (c.fim ? `${formatarData(c.inicio)} a ${formatarData(c.fim)}` : `A partir de ${formatarData(c.inicio)}`);
 
@@ -140,7 +146,9 @@ const columns = [
                 <p v-if="props.espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     Não deu para ler a Meta agora: {{ props.espelho.erro }}
                 </p>
-                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
+                <DiagnosticoMeta v-if="!props.espelho?.erro" :diagnostico="props.espelho?.diagnostico" :periodos="props.periodos"
+                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
+                <EspelhoMeta v-if="!props.espelho?.erro" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
                     :produtos="props.produtos" :chamadas="props.chamadas" :class="{ 'opacity-60': carregando }" @mudou="recarregar" />
             </Deferred>
         </section>

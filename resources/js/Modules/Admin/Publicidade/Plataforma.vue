@@ -7,7 +7,8 @@
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import DiagnosticoMeta from '@/Modules/Admin/MetaAds/DiagnosticoMeta.vue';
+import { Deferred, Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const props = defineProps({
@@ -15,6 +16,9 @@ const props = defineProps({
     conectado: { type: Boolean, default: false },
     ultimaSincronizacao: { type: [String, null], default: null },
     periodos: { type: Array, default: () => [] },
+    // Meta (2026-10-21): "O que fazer agora" curto, últimos 7 dias (prop adiada).
+    diagnostico: { type: Object, default: null },
+    temDiagnostico: { type: Boolean, default: false },
 });
 
 const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
@@ -57,6 +61,15 @@ const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0,
             ROAS é a venda atribuída dividida pelo gasto. O lucro de verdade fica em
             <Link href="/admin/dashboard-financeiro" class="font-medium text-primary hover:underline">Resultado e margem</Link>.
         </p>
+
+        <Deferred v-if="temDiagnostico" data="diagnostico">
+            <template #fallback>
+                <div class="mb-5 flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500" role="status" aria-live="polite">
+                    <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Consultando a Meta…
+                </div>
+            </template>
+            <DiagnosticoMeta :diagnostico="diagnostico" :periodos="{ last_7d: 'Últimos 7 dias' }" :limite="3" compacto />
+        </Deferred>
 
         <section
             v-if="!conectado"

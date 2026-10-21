@@ -1,9 +1,11 @@
 <script setup>
-// Vender › Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs
-// lado a lado. Cada card tem a chave "mostrar na página do produto", a imagem
+// Promoções (pedido 2026-10-21): tela própria, link direto no menu (antes
+// submenu de Vender), com "Adicionar Promoção" no topo e um card por
+// promoção. Airfryer e PDFs vêm primeiro, lado a lado; cada uma tem a chave "mostrar na página do produto", a imagem
 // do quadro (a de Entregáveis, uma pronta ou enviada, com tamanho e formato)
 // e os produtos onde aparece, cada um com a sua chave. Texto, período e
-// regras continuam na tela de cada promoção.
+// regras continuam na tela de cada promoção. As criadas pelo botão não têm
+// quadro na página do produto: o card mostra só status, período e regras.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
@@ -26,13 +28,14 @@ const ICONES = { airfryer: 'fa-fan', pdfs: 'fa-file-pdf' };
 const QUADRO = { airfryer: 'Quadro do sorteio', pdfs: 'Quadro dos livros digitais' };
 
 const porSlug = (slug) => props.promocoes.find((p) => p.slug === slug);
+const comQuadro = () => props.promocoes.filter((p) => p.quadro);
 
 const modoSalvo = (promocao) => {
     if (!promocao.imagem) return { modo: 'padrao', caminho: '' };
     return promocao.enviada ? { modo: 'enviada', caminho: '' } : { modo: 'pronta', caminho: promocao.imagem };
 };
 
-const estado = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, {
+const estado = reactive(Object.fromEntries(comQuadro().map((p) => [p.slug, {
     ...modoSalvo(p), arquivo: null, previa: null, medida: null, salvando: false, erro: '',
 }])));
 const inputs = ref({});
@@ -75,11 +78,12 @@ const medir = (slug, bytes = null) => {
     img.src = url;
 };
 
-onMounted(() => props.promocoes.forEach((p) => medir(p.slug)));
-onUnmounted(() => props.promocoes.forEach((p) => trocarPrevia(p.slug, null)));
+onMounted(() => comQuadro().forEach((p) => medir(p.slug)));
+onUnmounted(() => comQuadro().forEach((p) => trocarPrevia(p.slug, null)));
 
 // Depois de salvar o Inertia manda os dados novos: o seletor volta para o salvo.
-watch(() => props.promocoes, (novas) => novas.forEach((p) => {
+watch(() => props.promocoes, (novas) => novas.filter((p) => p.quadro).forEach((p) => {
+    estado[p.slug] ??= { previa: null, medida: null, salvando: false, erro: '' };
     Object.assign(estado[p.slug], modoSalvo(p), { arquivo: null });
     trocarPrevia(p.slug, null);
     medir(p.slug);
@@ -151,16 +155,60 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
     <Head title="Promoções" />
 
     <AdminLayout>
-        <div class="mb-6 max-w-3xl">
-            <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Os quadros da página do produto: ligue ou desligue cada promoção, escolha a imagem e em quais produtos ela aparece.
-                Texto, período e regras ficam em "Texto e regras" de cada uma.
-            </p>
+        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div class="max-w-3xl">
+                <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Os quadros da página do produto: ligue ou desligue cada promoção, escolha a imagem e em quais produtos ela aparece.
+                    Texto, período e regras ficam em "Texto e regras" de cada uma.
+                </p>
+            </div>
+            <Link v-if="podeEditar" href="/admin/promocoes/nova"
+                class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-plus" aria-hidden="true"></i>Adicionar Promoção
+            </Link>
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <section v-for="promocao in promocoes" :key="promocao.slug"
+            <template v-for="promocao in promocoes" :key="promocao.slug">
+            <!-- Promoção criada pelo "Adicionar Promoção": sem quadro na página do produto -->
+            <section v-if="!promocao.quadro"
+                class="flex flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <header class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="flex items-center gap-2 text-lg font-semibold">
+                            <i class="fas fa-tags text-primary" aria-hidden="true"></i>
+                            {{ promocao.nome }}
+                        </h2>
+                        <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            Página pública <StatusBadge :tone="promocao.ativa ? 'green' : 'gray'" :label="promocao.ativa ? 'Ativa' : 'Inativa'" />
+                            <template v-if="promocao.ativa && !promocao.no_ar"><span aria-hidden="true">·</span> fora do período</template>
+                        </p>
+                    </div>
+                    <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-sm text-primary hover:underline">
+                        <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                    </Link>
+                </header>
+
+                <p v-if="promocao.titulo" class="mt-4 text-sm font-medium">{{ promocao.titulo }}</p>
+                <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                    <dt class="text-slate-500">Período</dt>
+                    <dd>
+                        <template v-if="promocao.inicio || promocao.fim">{{ promocao.inicio ?? 'sem início' }} até {{ promocao.fim ?? 'sem fim' }}</template>
+                        <template v-else>Sem limite</template>
+                    </dd>
+                    <dt class="text-slate-500">Pedido mínimo</dt>
+                    <dd>{{ promocao.valor_minimo ? `R$ ${Number(promocao.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem mínimo' }}</dd>
+                    <dt class="text-slate-500">Regras</dt>
+                    <dd>{{ promocao.regras === 0 ? 'Nenhuma' : promocao.regras === 1 ? '1 regra' : `${promocao.regras} regras` }}</dd>
+                </dl>
+
+                <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="mt-4 inline-block text-xs text-primary hover:underline">
+                    <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Ver a página da promoção
+                </a>
+            </section>
+
+            <section v-else
                 class="flex flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
                 <header class="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -319,6 +367,7 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                     </div>
                 </div>
             </section>
+            </template>
         </div>
     </AdminLayout>
 </template>

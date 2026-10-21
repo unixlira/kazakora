@@ -29,6 +29,50 @@ class PromocoesTest extends TestCase
         $this->actingAs($admin)->get('/admin/promocoes/outra')->assertNotFound();
     }
 
+    public function test_adicionar_promocao_cria_card_e_pagina(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/admin/promocoes/nova')->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Admin/Promocoes/Editar', false)
+            ->where('promocao.slug', null));
+
+        $this->actingAs($admin)->post('/admin/promocoes', [
+            'nome' => 'Promoção Dia das Crianças',
+            'titulo' => 'Brinde no Dia das Crianças',
+            'ativa' => true,
+            'regras' => [['chave' => 'brinde', 'valor' => 'adesivo']],
+        ])->assertRedirect('/admin/promocoes')->assertSessionHasNoErrors();
+
+        $nova = Promocao::query()->where('slug', 'promocao-dia-das-criancas')->firstOrFail();
+        $this->assertSame('Promoção Dia das Crianças', $nova->nome);
+        $this->assertSame(['brinde' => 'adesivo'], $nova->regras);
+
+        // Mesmo nome de novo ganha -2; o card novo vem depois de Airfryer e PDFs, sem quadro.
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => 'Promoção Dia das Crianças'])->assertSessionHasNoErrors();
+        $this->assertTrue(Promocao::query()->where('slug', 'promocao-dia-das-criancas-2')->exists());
+
+        $this->actingAs($admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocoes.0.slug', 'airfryer')
+            ->where('promocoes.1.slug', 'pdfs')
+            ->where('promocoes.2.slug', 'promocao-dia-das-criancas')
+            ->where('promocoes.2.quadro', false)
+            ->where('promocoes.3.slug', 'promocao-dia-das-criancas-2'));
+
+        $this->actingAs($admin)->get('/admin/promocoes/promocao-dia-das-criancas')->assertOk();
+        $this->actingAs($admin)->put('/admin/promocoes/promocao-dia-das-criancas', ['nome' => 'Dia das Crianças'])->assertSessionHasNoErrors();
+        $this->assertSame('Dia das Crianças', $nova->fresh()->nome);
+        $this->get('/promocoes/promocao-dia-das-criancas')->assertOk();
+    }
+
+    public function test_promocao_nova_precisa_de_nome(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => ''])->assertSessionHasErrors('nome');
+        $this->assertSame(2, Promocao::query()->count());
+    }
+
     public function test_salva_regras_e_chaves(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

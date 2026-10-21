@@ -1,18 +1,21 @@
 <script setup>
-// Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da
-// Promoção PDFs. Mesma tela para as duas, só muda o slug.
+// Promoções (pedido 2026-10-21): texto e regras de cada promoção. Mesma tela
+// para todas, só muda o slug; sem slug é a promoção nova do botão
+// "Adicionar Promoção" (POST /admin/promocoes).
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     promocao: { type: Object, required: true },
 });
 
 const { can } = usePermissions();
+const nova = !props.promocao.slug;
 
 const form = useForm({
+    nome: props.promocao.nome ?? '',
     titulo: props.promocao.titulo ?? '',
     descricao: props.promocao.descricao ?? '',
     ativa: props.promocao.ativa,
@@ -25,18 +28,26 @@ const form = useForm({
 
 const addRegra = () => form.regras.push({ chave: '', valor: '' });
 const tirarRegra = (i) => form.regras.splice(i, 1);
-const salvar = () => form.put(`/admin/promocoes/${props.promocao.slug}`, { preserveScroll: true });
+const salvar = () => (nova
+    ? form.post('/admin/promocoes', { preserveScroll: true })
+    : form.put(`/admin/promocoes/${props.promocao.slug}`, { preserveScroll: true }));
 
 const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm';
 </script>
 
 <template>
-    <Head :title="promocao.nome" />
+    <Head :title="nova ? 'Nova promoção' : promocao.nome" />
 
     <AdminLayout>
         <div class="mb-6 max-w-2xl">
-            <h1 class="mb-1 text-2xl font-bold">{{ promocao.nome }}</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
+            <Link href="/admin/promocoes" class="mb-2 inline-block text-sm text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Promoções
+            </Link>
+            <h1 class="mb-1 text-2xl font-bold">{{ nova ? 'Nova promoção' : promocao.nome }}</h1>
+            <p v-if="nova" class="text-sm text-slate-500 dark:text-slate-400">
+                O nome aparece no admin e vira o endereço da página da promoção. Título e descrição são o que o cliente vê nela.
+            </p>
+            <p v-else class="text-sm text-slate-500 dark:text-slate-400">
                 Título e descrição que o cliente vê na
                 <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-primary hover:underline">página da promoção</a>,
                 se ela está ativa, o período, o valor mínimo do pedido e as chaves/regras próprias dela.
@@ -44,6 +55,12 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
         </div>
 
         <form class="max-w-3xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" @submit.prevent="salvar">
+            <div class="mb-4">
+                <label for="pr-nome" class="mb-1 block text-sm font-medium">Nome</label>
+                <input id="pr-nome" v-model="form.nome" type="text" maxlength="120" :required="nova" placeholder="Ex.: Promoção Dia das Crianças" :class="campo">
+                <InputError :message="form.errors.nome" />
+            </div>
+
             <div class="mb-4">
                 <label for="pr-titulo" class="mb-1 block text-sm font-medium">Título</label>
                 <input id="pr-titulo" v-model="form.titulo" type="text" maxlength="255" :class="campo">
@@ -109,8 +126,8 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
 
             <button v-if="can('cadastros.edit')" type="submit" :disabled="form.processing"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
-                <i class="fas mr-1" :class="form.processing ? 'fa-spinner animate-spin' : 'fa-floppy-disk'" aria-hidden="true"></i>
-                Salvar
+                <i class="fas mr-1" :class="form.processing ? 'fa-spinner animate-spin' : (nova ? 'fa-plus' : 'fa-floppy-disk')" aria-hidden="true"></i>
+                {{ nova ? 'Criar promoção' : 'Salvar' }}
             </button>
         </form>
     </AdminLayout>

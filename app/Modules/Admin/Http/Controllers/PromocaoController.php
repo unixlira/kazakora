@@ -12,12 +12,15 @@ use App\Modules\Catalog\Support\PromocoesDoProduto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Vender › Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs.
+ * Promoções (pedido 2026-10-21): Promoção Airfryer, Promoção PDFs e as que o
+ * Lira criar pelo botão "Adicionar Promoção" (tela própria, link direto no
+ * menu desde 2026-10-21; antes era submenu de Vender).
  * Cada uma tem título e descrição (página pública /promocoes/{slug}),
  * ativa/inativa, período, valor mínimo do pedido, observações e
  * chaves/regras livres que o Lira define.
@@ -31,11 +34,16 @@ class PromocaoController extends Controller
     public function index(): Response
     {
         $promocoes = Promocao::query()
-            ->whereIn('slug', [Promocao::AIRFRYER, Promocao::PDFS])
             ->with('produtos.product.images')
+            ->orderBy('id')
             ->get()
-            ->sortBy(fn (Promocao $promocao) => $promocao->slug === Promocao::AIRFRYER ? 0 : 1)
-            ->map(fn (Promocao $promocao) => $this->card($promocao))
+            // Airfryer e PDFs primeiro; as criadas depois, na ordem de criação.
+            ->sortBy(fn (Promocao $promocao) => [match ($promocao->slug) {
+                Promocao::AIRFRYER => 0,
+                Promocao::PDFS => 1,
+                default => 2,
+            }, $promocao->id])
+            ->map(fn (Promocao $promocao) => $this->temQuadro($promocao) ? $this->card($promocao) : $this->cardSimples($promocao))
             ->values();
 
         return Inertia::render('Admin/Promocoes/Index', [
@@ -122,6 +130,29 @@ class PromocaoController extends Controller
         return back()->with('success', 'Produto tirado da lista.');
     }
 
+    /** Só Airfryer e PDFs têm quadro na página do produto (imagem, produtos). */
+    private function temQuadro(Promocao $promocao): bool
+    {
+        return in_array($promocao->slug, [Promocao::AIRFRYER, Promocao::PDFS], true);
+    }
+
+    /** Card de promoção criada pelo "Adicionar Promoção": só texto, período e regras. */
+    private function cardSimples(Promocao $promocao): array
+    {
+        return [
+            'slug' => $promocao->slug,
+            'nome' => $promocao->nome,
+            'quadro' => false,
+            'titulo' => $promocao->titulo,
+            'ativa' => $promocao->ativa,
+            'no_ar' => $promocao->noAr(),
+            'inicio' => $promocao->inicio?->format('d/m/Y H:i'),
+            'fim' => $promocao->fim?->format('d/m/Y H:i'),
+            'valor_minimo' => $promocao->valor_minimo,
+            'regras' => count($promocao->regras ?? []),
+        ];
+    }
+
     /** Dados de um card da tela inicial. */
     private function card(Promocao $promocao): array
     {
@@ -142,6 +173,7 @@ class PromocaoController extends Controller
         return [
             'slug' => $slug,
             'nome' => $promocao->nome,
+            'quadro' => true,
             'ativa' => $promocao->ativa,
             'na_pagina_produto' => $promocao->na_pagina_produto,
             'todos_produtos' => $promocao->todos_produtos,
@@ -161,6 +193,33 @@ class PromocaoController extends Controller
                 ])
                 ->values(),
         ];
+    }
+
+    /** Formulário vazio do botão "Adicionar Promoção" (mesma tela de editar). */
+    public function create(): Response
+    {
+        return Inertia::render('Admin/Promocoes/Editar', [
+            'promocao' => [
+                'slug' => null,
+                'nome' => '',
+                'titulo' => '',
+                'descricao' => '',
+                'ativa' => false,
+                'inicio' => null,
+                'fim' => null,
+                'valor_minimo' => null,
+                'observacoes' => null,
+                'regras' => [],
+            ],
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $dados = $this->validar($request, true);
+        $promocao = Promocao::query()->create(['slug' => $this->slugLivre($dados['nome']), 'nome' => $dados['nome']] + $this->campos($request, $dados));
+
+        return redirect('/admin/promocoes')->with('success', "{$promocao->nome} criada.");
     }
 
     public function show(string $slug): Response
@@ -188,8 +247,18 @@ class PromocaoController extends Controller
     public function update(Request $request, string $slug): RedirectResponse
     {
         $promocao = Promocao::query()->where('slug', $slug)->firstOrFail();
+        $dados = $this->validar($request, false);
 
-        $dados = $request->validate([
+        // O nome muda, o slug (endereço /promocoes/{slug}) não.
+        $promocao->update((isset($dados['nome']) ? ['nome' => $dados['nome']] : []) + $this->campos($request, $dados));
+
+        return back()->with('success', "{$promocao->nome} salva.");
+    }
+
+    private function validar(Request $request, bool $nova): array
+    {
+        return $request->validate([
+            'nome' => [...($nova ? [] : ['sometimes']), 'required', 'string', 'max:120'],
             'titulo' => ['nullable', 'string', 'max:255'],
             'descricao' => ['nullable', 'string', 'max:10000'],
             'ativa' => ['boolean'],
@@ -201,11 +270,16 @@ class PromocaoController extends Controller
             'regras.*.chave' => ['required', 'string', 'max:60', 'regex:/^[A-Za-z0-9_.-]+$/'],
             'regras.*.valor' => ['nullable', 'string', 'max:500'],
         ], [
+            'nome.required' => 'Dê um nome para a promoção.',
             'fim.after_or_equal' => 'O fim precisa ser depois do início.',
             'regras.*.chave.required' => 'Toda regra precisa de uma chave.',
             'regras.*.chave.regex' => 'A chave usa só letras, números, ponto, hífen e _.',
         ]);
+    }
 
+    /** Colunas comuns a criar e salvar. */
+    private function campos(Request $request, array $dados): array
+    {
         $regras = [];
         foreach ($dados['regras'] ?? [] as $regra) {
             $regras[$regra['chave']] = $regra['valor'] ?? '';
@@ -214,7 +288,7 @@ class PromocaoController extends Controller
         // Quebra de linha do navegador (\r\n) vira \n: o texto fica igual ao digitado.
         $descricao = trim(str_replace(["\r\n", "\r"], "\n", (string) ($dados['descricao'] ?? '')));
 
-        $promocao->update([
+        return [
             'titulo' => ($dados['titulo'] ?? '') !== '' ? $dados['titulo'] : null,
             'descricao' => $descricao !== '' ? $descricao : null,
             'ativa' => $request->boolean('ativa'),
@@ -223,8 +297,19 @@ class PromocaoController extends Controller
             'valor_minimo' => $dados['valor_minimo'] ?? null,
             'observacoes' => ($dados['observacoes'] ?? '') !== '' ? $dados['observacoes'] : null,
             'regras' => $regras ?: null,
-        ]);
+        ];
+    }
 
-        return back()->with('success', "{$promocao->nome} salva.");
+    /** Slug do nome (vira /promocoes/{slug}); repetido ganha -2, -3... "nova" é a rota do formulário. */
+    private function slugLivre(string $nome): string
+    {
+        $base = Str::limit(Str::slug($nome), 34, '') ?: 'promocao';
+        $base = rtrim($base, '-');
+        $slug = $base;
+        for ($n = 2; $slug === 'nova' || Promocao::query()->where('slug', $slug)->exists(); $n++) {
+            $slug = "{$base}-{$n}";
+        }
+
+        return $slug;
     }
 }

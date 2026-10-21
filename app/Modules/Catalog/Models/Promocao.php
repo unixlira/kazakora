@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da
- * Promoção PDFs, definidas pelo Lira no admin. `regras` = chaves livres
+ * Promoções (pedido 2026-10-21): regras da Promoção Airfryer, da Promoção
+ * PDFs e das que o Lira cria em "Adicionar Promoção", definidas no admin. `regras` = chaves livres
  * (chave => valor). Por ora só guarda a configuração; quem aplica a regra
  * (checkout, página do produto) lê daqui. `titulo` e `descricao` aparecem na
  * página pública /promocoes/{slug}; a descrição é texto puro, linha em branco

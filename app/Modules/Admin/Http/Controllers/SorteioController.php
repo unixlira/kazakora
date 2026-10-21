@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Promocao;
 use App\Modules\Catalog\Models\Sorteio;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,14 @@ class SorteioController extends Controller
                 'ativo' => $sorteio->ativo,
             ]);
 
-        return Inertia::render('Admin/Entregaveis/Sorteios', ['sorteios' => $sorteios]);
+        // Com condições na Promoção Airfryer, elas substituem os parágrafos no
+        // quadro (2026-10-21): a tela avisa para não editar no lugar errado.
+        $airfryer = Promocao::query()->where('slug', Promocao::AIRFRYER)->first();
+
+        return Inertia::render('Admin/Entregaveis/Sorteios', [
+            'sorteios' => $sorteios,
+            'condicoesPromocao' => $airfryer?->condicoes,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse

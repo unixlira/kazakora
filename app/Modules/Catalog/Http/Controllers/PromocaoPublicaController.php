@@ -33,6 +33,7 @@ class PromocaoPublicaController extends Controller
                 'titulo' => $promocao->titulo ?: $promocao->nome,
                 'paragrafos' => $promocao->paragrafos(),
                 'regras' => $promocao->regrasParaCliente(),
+                'condicoes' => $promocao->condicoes,
                 'imagem_url' => isset(self::IMAGENS[$slug]) ? asset(self::IMAGENS[$slug]) : null,
             ],
             'previa' => $previa,

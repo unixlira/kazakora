@@ -511,6 +511,8 @@ class CatalogController extends Controller
             'sorteios' => $promocoes['sorteios'],
             'livrosDigitais' => $promocoes['livrosDigitais'],
             'livrosQuadro' => $promocoes['livrosQuadro'],
+            // Condições e botão para a página da promoção de cada quadro (2026-10-21).
+            'quadrosPromocao' => $promocoes['quadros'],
             'relatedProducts' => $relatedProducts->values(),
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')

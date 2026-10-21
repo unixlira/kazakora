@@ -27,11 +27,17 @@ use Illuminate\Support\Facades\Cache;
  * mostradas ao cliente na página pública e checadas por `pendencias()`. A
  * página pública lê de `doSlug()`, que fica em cache até a promoção mudar.
  *
+ * Texto e botão do quadro (2026-10-21): `condicoes` aparece no quadro (no
+ * Airfryer no lugar dos parágrafos do sorteio) e na página pública;
+ * `botao_ativo` põe no quadro o botão para /promocoes/{slug}, que só aparece
+ * com a promoção no ar (senão o cliente cairia num 404).
+ *
  * @property int $id
  * @property string $slug
  * @property string $nome
  * @property ?string $titulo
  * @property ?string $descricao
+ * @property ?string $condicoes
  * @property bool $ativa
  * @property ?Carbon $inicio
  * @property ?Carbon $fim
@@ -45,6 +51,8 @@ use Illuminate\Support\Facades\Cache;
  * @property bool $na_pagina_produto
  * @property bool $todos_produtos
  * @property ?string $imagem
+ * @property bool $botao_ativo
+ * @property ?string $botao_texto
  */
 class Promocao extends Model
 {
@@ -56,9 +64,11 @@ class Promocao extends Model
 
     public const PDFS = 'pdfs';
 
+    public const BOTAO_PADRAO = 'Ver regras da promoção';
+
     private const CACHE_TTL = 21600; // 6 h; salvar a promoção é que limpa de verdade.
 
-    protected $fillable = ['slug', 'nome', 'titulo', 'descricao', 'ativa', 'na_pagina_produto', 'todos_produtos', 'imagem', 'inicio', 'fim', 'valor_minimo', 'itens_minimos', 'limite_por_cliente', 'primeira_compra', 'acumula_cupom', 'regras', 'observacoes'];
+    protected $fillable = ['slug', 'nome', 'titulo', 'descricao', 'condicoes', 'ativa', 'na_pagina_produto', 'todos_produtos', 'imagem', 'botao_ativo', 'botao_texto', 'inicio', 'fim', 'valor_minimo', 'itens_minimos', 'limite_por_cliente', 'primeira_compra', 'acumula_cupom', 'regras', 'observacoes'];
 
     protected function casts(): array
     {
@@ -66,6 +76,7 @@ class Promocao extends Model
             'ativa' => 'boolean',
             'na_pagina_produto' => 'boolean',
             'todos_produtos' => 'boolean',
+            'botao_ativo' => 'boolean',
             'inicio' => 'datetime',
             'fim' => 'datetime',
             'valor_minimo' => 'decimal:2',
@@ -140,6 +151,11 @@ class Promocao extends Model
         return $this->ativa
             && ($this->inicio === null || $this->inicio->isPast())
             && ($this->fim === null || $this->fim->isFuture());
+    }
+
+    public function textoDoBotao(): string
+    {
+        return $this->botao_texto ?: self::BOTAO_PADRAO;
     }
 
     /**

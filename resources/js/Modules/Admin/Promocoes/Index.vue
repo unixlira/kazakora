@@ -7,6 +7,9 @@
 // Tela principal Promoções (Lira, 2026-10-21): link direto no menu, fora de
 // Vender, com "Adicionar Promoção" no topo. Embaixo, um card para cada
 // promoção criada aqui, que tem só texto, período e regras.
+// Texto do quadro (2026-10-21): condições ("pedidos pagos até...") e o botão
+// para a página da promoção ficam no card, com prévia e avisos de quando o
+// botão não aparece, para não ter que caçar o texto em Entregáveis.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
@@ -40,6 +43,26 @@ const estado = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, {
     ...modoSalvo(p), arquivo: null, previa: null, medida: null, salvando: false, erro: '',
 }])));
 const inputs = ref({});
+
+// Formulário de texto do quadro, um por promoção.
+const textoSalvo = (p) => ({ condicoes: p.condicoes ?? '', botao_ativo: p.botao_ativo, botao_texto: p.botao_texto ?? '' });
+const quadro = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, textoSalvo(p)])));
+const mudouQuadro = (slug) => JSON.stringify(quadro[slug]) !== JSON.stringify(textoSalvo(porSlug(slug)));
+const condicoesComFim = (promocao) => `Pedidos realizados e pagos até ${promocao.fim_data} participam automaticamente.`;
+const usarFim = (promocao) => { quadro[promocao.slug].condicoes = condicoesComFim(promocao); };
+// Data dd/mm/aaaa nas condições que já passou: aviso para não deixar texto vencido no ar.
+const dataVencida = (texto) => {
+    const m = (texto || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return null;
+    const fimDoDia = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 23, 59, 59);
+    return fimDoDia < new Date() ? m[0] : null;
+};
+const motivoSemBotao = (promocao) => {
+    if (!promocao.ativa) return 'A página da promoção está inativa: o botão fica escondido até você ativar em "Texto e regras".';
+    if (!promocao.no_ar) return 'A promoção está fora do período: o botão fica escondido até a data de início (ou some depois do fim).';
+    return '';
+};
+const salvarQuadro = (slug) => router.patch(`/admin/promocoes/${slug}/quadro`, { ...quadro[slug] }, opcoes(slug));
 
 const formatosTexto = props.formatos.filter((f) => f !== 'jpeg').map((f) => ({ jpg: 'JPG', webp: 'WebP' }[f] ?? f.toUpperCase())).join(', ');
 const maxMb = Math.round(props.maxKb / 1024);
@@ -84,6 +107,7 @@ onUnmounted(() => props.promocoes.forEach((p) => trocarPrevia(p.slug, null)));
 
 // Depois de salvar o Inertia manda os dados novos: o seletor volta para o salvo.
 watch(() => props.promocoes, (novas) => novas.forEach((p) => {
+    Object.assign(quadro[p.slug], textoSalvo(p));
     Object.assign(estado[p.slug], modoSalvo(p), { arquivo: null });
     trocarPrevia(p.slug, null);
     medir(p.slug);
@@ -182,8 +206,8 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
             <div class="max-w-3xl">
                 <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Os quadros da página do produto: ligue ou desligue cada promoção, escolha a imagem e em quais produtos ela aparece.
-                    Texto, período e regras ficam em "Texto e regras" de cada uma.
+                    Tudo do quadro da página do produto fica aqui: ligar e desligar, condições, botão para a página da promoção, imagem e em quais produtos aparece.
+                    A página da promoção (título, descrição, período e regras) fica em "Texto e regras".
                 </p>
             </div>
             <button v-if="podeEditar && !criando" type="button"
@@ -219,14 +243,22 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                             {{ promocao.nome }}
                         </h2>
                         <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            {{ QUADRO[promocao.slug] }}
+                            Quadro no produto <StatusBadge :tone="promocao.na_pagina_produto ? 'green' : 'gray'" :label="promocao.na_pagina_produto ? 'Ligado' : 'Desligado'" />
                             <span aria-hidden="true">·</span>
-                            Página pública <StatusBadge :tone="promocao.ativa ? 'green' : 'gray'" :label="promocao.ativa ? 'Ativa' : 'Inativa'" />
+                            Página da promoção <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
+                        </p>
+                        <p v-if="promocao.inicio || promocao.fim" class="mt-1 text-xs text-slate-500">
+                            <i class="far fa-calendar mr-1" aria-hidden="true"></i>{{ promocao.inicio ? `de ${promocao.inicio}` : '' }} {{ promocao.fim ? `até ${promocao.fim}` : '' }}
                         </p>
                     </div>
-                    <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-sm text-primary hover:underline">
-                        <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
-                    </Link>
+                    <div class="flex flex-col items-end gap-1 text-sm">
+                        <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
+                            <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                        </Link>
+                        <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-xs text-slate-500 hover:text-primary hover:underline">
+                            <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Abrir página da promoção
+                        </a>
+                    </div>
                 </header>
 
                 <!-- Chave geral da página do produto -->
@@ -244,6 +276,79 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                 </div>
 
                 <div :class="{ 'opacity-60': !promocao.na_pagina_produto }">
+                    <!-- Texto do quadro: condições e botão para a página da promoção -->
+                    <form class="mt-4 rounded-lg border border-[var(--surface-border)] p-3" @submit.prevent="salvarQuadro(promocao.slug)">
+                        <p class="text-xs font-semibold uppercase text-slate-500">Texto do quadro</p>
+
+                        <label :for="`condicoes-${promocao.slug}`" class="mt-2 block text-sm font-medium">Condições</label>
+                        <textarea :id="`condicoes-${promocao.slug}`" v-model="quadro[promocao.slug].condicoes" rows="2" maxlength="500" :disabled="!podeEditar"
+                            placeholder="Ex.: Pedidos realizados e pagos até 31/10/2026 participam automaticamente."
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                        <div class="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                            <span>
+                                {{ promocao.slug === 'airfryer'
+                                    ? 'Aparece no quadro no lugar do texto do sorteio de Entregáveis. Vazio = volta o texto do sorteio.'
+                                    : 'Aparece no quadro embaixo de "Adquirindo hoje: 100% GRÁTIS". Vazio = sem condições.' }}
+                                Também aparece na página da promoção.
+                            </span>
+                            <button v-if="podeEditar && promocao.fim_data" type="button" class="text-primary hover:underline" @click="usarFim(promocao)">
+                                Usar a data de fim ({{ promocao.fim_data }})
+                            </button>
+                        </div>
+                        <p v-if="dataVencida(quadro[promocao.slug].condicoes)" class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>A data {{ dataVencida(quadro[promocao.slug].condicoes) }} já passou: o cliente vai ver uma condição vencida.
+                        </p>
+                        <p v-if="promocao.slug === 'airfryer' && !quadro[promocao.slug].condicoes && promocao.entregaveis.texto_sorteio" class="mt-1 text-xs text-slate-500">
+                            Hoje o quadro mostra o texto do sorteio: "{{ promocao.entregaveis.texto_sorteio }}"
+                        </p>
+
+                        <div class="mt-3 flex items-center justify-between gap-3">
+                            <span class="text-sm font-medium">Botão para a página da promoção</span>
+                            <button type="button" role="switch" :aria-checked="quadro[promocao.slug].botao_ativo"
+                                :aria-label="`${promocao.nome}: botão para a página da promoção`" :disabled="!podeEditar"
+                                class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50"
+                                :class="quadro[promocao.slug].botao_ativo ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'"
+                                @click="quadro[promocao.slug].botao_ativo = !quadro[promocao.slug].botao_ativo">
+                                <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                                    :class="quadro[promocao.slug].botao_ativo ? 'left-[22px]' : 'left-0.5'"></span>
+                            </button>
+                        </div>
+                        <template v-if="quadro[promocao.slug].botao_ativo">
+                            <label :for="`botao-${promocao.slug}`" class="mt-2 block text-sm font-medium">Texto do botão</label>
+                            <input :id="`botao-${promocao.slug}`" v-model="quadro[promocao.slug].botao_texto" type="text" maxlength="60" :disabled="!podeEditar"
+                                :placeholder="promocao.botao_padrao"
+                                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-500">
+                                Leva o cliente para <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="font-mono text-primary hover:underline">/promocoes/{{ promocao.slug }}</a>.
+                                Vazio = "{{ promocao.botao_padrao }}".
+                            </p>
+                            <p v-if="motivoSemBotao(promocao)" class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>{{ motivoSemBotao(promocao) }}
+                            </p>
+                        </template>
+
+                        <!-- Prévia de como o texto fica no quadro -->
+                        <div v-if="quadro[promocao.slug].condicoes || quadro[promocao.slug].botao_ativo"
+                            class="mt-3 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800" aria-label="Prévia do texto do quadro">
+                            <p class="mb-1 text-[10px] font-semibold uppercase text-slate-400">Prévia</p>
+                            <p v-if="quadro[promocao.slug].condicoes" class="whitespace-pre-line text-slate-600 dark:text-slate-300">{{ quadro[promocao.slug].condicoes }}</p>
+                            <span v-if="quadro[promocao.slug].botao_ativo"
+                                class="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold text-white"
+                                :class="motivoSemBotao(promocao) ? 'bg-slate-400' : 'bg-[#00ab21]'">
+                                {{ quadro[promocao.slug].botao_texto || promocao.botao_padrao }} <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </span>
+                        </div>
+
+                        <div v-if="podeEditar" class="mt-3 flex items-center gap-3">
+                            <button type="submit" :disabled="!mudouQuadro(promocao.slug) || estado[promocao.slug].salvando"
+                                class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
+                                <i class="fas mr-1" :class="estado[promocao.slug].salvando ? 'fa-spinner animate-spin' : 'fa-floppy-disk'" aria-hidden="true"></i>
+                                Salvar texto
+                            </button>
+                            <span v-if="mudouQuadro(promocao.slug)" class="text-xs text-amber-700 dark:text-amber-400">Texto alterado, falta salvar.</span>
+                        </div>
+                    </form>
+
                     <!-- Imagem do quadro -->
                     <div class="mt-4 flex h-44 items-center justify-center overflow-hidden rounded-lg border border-[var(--surface-border)] bg-slate-100 dark:bg-slate-800">
                         <img v-if="urlEscolhida(promocao.slug)" :src="urlEscolhida(promocao.slug)" :alt="`Imagem do ${QUADRO[promocao.slug].toLowerCase()}`"
@@ -310,7 +415,7 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
 
                     <!-- O que o quadro mostra (cadastro de Entregáveis) -->
                     <div class="mt-5 border-t border-[var(--surface-border)] pt-4">
-                        <p class="text-xs font-semibold uppercase text-slate-500">No quadro (Entregáveis)</p>
+                        <p class="text-xs font-semibold uppercase text-slate-500">{{ promocao.slug === 'airfryer' ? 'Sorteio do quadro (Entregáveis)' : 'Livros do quadro (Entregáveis)' }}</p>
                         <ul v-if="promocao.entregaveis.itens.length" class="mt-2 space-y-1 text-sm">
                             <li v-for="item in promocao.entregaveis.itens" :key="item">
                                 <i class="fas fa-check mr-1 text-emerald-600" aria-hidden="true"></i>{{ item }}

@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Cache;
  * de Entregáveis com a chave, a imagem e os produtos de Vender › Promoções e
  * guarda em cache. Qualquer mudança em promoção, produto ligado, sorteio ou
  * livro troca a versão do cache, então a página nunca mostra quadro velho.
+ *
+ * `quadros` (2026-10-21): condições e botão de cada quadro, vindos da
+ * promoção. O botão depende do período, que o cache não acompanha: ele vai
+ * guardado com início e fim e é conferido a cada visita (paraPagina).
  */
 class PromocoesDoProduto
 {
@@ -59,15 +63,27 @@ class PromocoesDoProduto
     public const MAX_KB = 5120;
 
     /**
-     * Props da página do produto: sorteios, livrosDigitais e livrosQuadro.
+     * Props da página do produto: sorteios, livrosDigitais, livrosQuadro e
+     * quadros (condições e botão por promoção).
      *
-     * @return array{sorteios: list<array<string, mixed>>, livrosDigitais: list<array<string, mixed>>, livrosQuadro: ?string}
+     * @return array{sorteios: list<array<string, mixed>>, livrosDigitais: list<array<string, mixed>>, livrosQuadro: ?string, quadros: array<string, array{condicoes: ?string, botao: ?array{texto: string, url: string}}>}
      */
     public static function paraPagina(Product $produto): array
     {
         $chave = 'promocoes-produto:'.self::versao().':'.$produto->id;
+        $dados = Cache::remember($chave, self::TTL, fn () => self::montar($produto));
 
-        return Cache::remember($chave, self::TTL, fn () => self::montar($produto));
+        // Botão só com a página da promoção no ar agora (fora do período ela dá 404).
+        $agora = now()->getTimestamp();
+        foreach ($dados['quadros'] as $slug => $quadro) {
+            $botao = $quadro['botao'];
+            $noPeriodo = $botao !== null
+                && ($botao['inicio'] === null || $botao['inicio'] <= $agora)
+                && ($botao['fim'] === null || $botao['fim'] > $agora);
+            $dados['quadros'][$slug]['botao'] = $noPeriodo ? ['texto' => $botao['texto'], 'url' => $botao['url']] : null;
+        }
+
+        return $dados;
     }
 
     public static function limparCache(): void
@@ -97,7 +113,21 @@ class PromocoesDoProduto
         $sorteios = $exibe($airfryer) ? Sorteio::doProduto($produto) : collect();
         $livros = $exibe($pdfs) ? LivroDigital::doProduto($produto) : collect();
 
+        $quadro = fn (?Promocao $promocao) => [
+            'condicoes' => $promocao?->condicoes,
+            'botao' => $promocao !== null && $promocao->botao_ativo && $promocao->ativa ? [
+                'texto' => $promocao->textoDoBotao(),
+                'url' => '/promocoes/'.$promocao->slug,
+                'inicio' => $promocao->inicio?->getTimestamp(),
+                'fim' => $promocao->fim?->getTimestamp(),
+            ] : null,
+        ];
+
         return [
+            'quadros' => [
+                Promocao::AIRFRYER => $quadro($airfryer),
+                Promocao::PDFS => $quadro($pdfs),
+            ],
             'sorteios' => $sorteios->map(fn (Sorteio $sorteio) => [
                 'id' => $sorteio->id,
                 'titulo' => $sorteio->titulo,

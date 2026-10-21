@@ -197,6 +197,8 @@ class PerguntasMarketplaceController extends Controller
             'item_id' => $p->item_id,
             'produto' => $produtos[$p->canal.'|'.$p->item_id] ?? null,
             'link' => $p->link(),
+            'link_pergunta' => $p->linkDaPergunta(),
+            'comprador' => $p->comprador_nome,
             'pergunta' => $p->pergunta,
             'perguntada_em' => $p->perguntada_em?->toIso8601String(),
             'rascunho' => $p->resposta_rascunho,

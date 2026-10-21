@@ -7,6 +7,7 @@ use App\Services\MercadoLivre\Services\ClaimService;
 use App\Services\MercadoLivre\Services\MessageService;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
+use App\Services\MercadoLivre\Services\QuestionService;
 use App\Services\MercadoLivre\Services\ShipmentService;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -19,6 +20,7 @@ class WebhookHandler
         private readonly MessageService $messages,
         private readonly ShipmentService $shipments,
         private readonly ClaimService $claims,
+        private readonly QuestionService $questions,
     ) {}
 
     /**
@@ -30,7 +32,7 @@ class WebhookHandler
 
         Log::channel(config('mercadolivre.log_channel'))->info('mercadolivre.webhook.received', $payload);
 
-        if (! in_array($topic, ['orders', 'orders_v2', 'items', 'prices', 'messages', 'shipments', 'post_purchase'], true)) {
+        if (! in_array($topic, ['orders', 'orders_v2', 'items', 'prices', 'messages', 'shipments', 'post_purchase', 'questions'], true)) {
             Log::channel(config('mercadolivre.log_channel'))->info('mercadolivre.webhook.unhandled_topic', $payload);
 
             ChannelWebhookLog::whereKey($webhookLogId)->update(['status' => ChannelWebhookLog::STATUS_IGNORED]);
@@ -46,6 +48,7 @@ class WebhookHandler
                 'messages' => $this->messages->processWebhook($payload),
                 'shipments' => $this->shipments->processWebhook($payload),
                 'post_purchase' => $this->claims->processWebhook($payload),
+                'questions' => $this->questions->processWebhook($payload),
             };
 
             ChannelWebhookLog::whereKey($webhookLogId)->update(['status' => ChannelWebhookLog::STATUS_PROCESSED]);

@@ -8,6 +8,7 @@ import { usePermissions } from '@/Shared/usePermissions';
 import { secoesComEquipes } from '@/Shared/adminSidebarItems';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
+import PerguntasMarketplaceToasts from '@/Shared/Components/PerguntasMarketplaceToasts.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
@@ -26,11 +27,13 @@ try {
 const contagemBruta = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
 const sidebarBadge = (item) => {
     const total = contagemBruta(item);
+    // Alerta fixo (Perguntas MK Place, 2026-10-20): só some quando a pendência acaba.
+    if (item.alertaFixo) return total;
     const visto = badgesVistos.value[item.badgeKey] ?? 0;
     return total > visto ? total : 0;
 };
 const dispensarBadge = (item) => {
-    if (!item.badgeKey) return;
+    if (!item.badgeKey || item.alertaFixo) return;
     badgesVistos.value = { ...badgesVistos.value, [item.badgeKey]: contagemBruta(item) };
     try {
         localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(badgesVistos.value));
@@ -199,6 +202,8 @@ const alternarSubmenu = (item) => {
     try { localStorage.setItem(SUBMENUS, JSON.stringify(submenusEscolhidos.value)); } catch { /* sem storage: só não lembra */ }
 };
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
+// Alerta vermelho no título da seção, aberta ou fechada (Atendimento com pergunta esperando uma pessoa).
+const alertaDaSecao = (section) => section.items.reduce((total, item) => total + (item.alertaFixo ? sidebarBadge(item) : 0), 0);
 
 const logout = () => router.post('/sair');
 
@@ -328,6 +333,10 @@ watch(
                                 : 'text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
                             :aria-expanded="secaoExpandida(section.heading)" @click="alternarSecao(section.heading)">
                             <span class="flex-1 truncate">{{ section.heading }}</span>
+                            <span v-if="alertaDaSecao(section) > 0" class="relative flex h-2.5 w-2.5" :title="`${alertaDaSecao(section)} pergunta(s) esperando alguém da equipe`">
+                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-75"></span>
+                                <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-error"></span>
+                            </span>
                             <span v-if="!secaoExpandida(section.heading) && badgeDaSecao(section) > 0"
                                 class="min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-[10px] font-bold leading-5 text-white">{{ badgeDaSecao(section) }}</span>
                             <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeSeta(section), { 'rotate-180': secaoExpandida(section.heading) }]"></i>
@@ -462,11 +471,11 @@ watch(
                     <div class="ml-auto flex items-center gap-1">
                         <!-- Alerta de atendimento humano (Perguntas MK Place). -->
                         <Link v-if="perguntasHumano > 0" href="/admin/perguntas-marketplace?filtro=humano"
-                            class="mr-1 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-300 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-500/40"
+                            class="mr-1 inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 ring-1 ring-red-300 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-500/40"
                             :title="`${perguntasHumano} pergunta(s) de marketplace esperando atendimento humano`">
                             <span class="relative flex h-2 w-2">
-                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75"></span>
-                                <span class="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
+                                <span class="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
                             </span>
                             <i class="fas fa-circle-question"></i>
                             <span class="hidden sm:inline">{{ perguntasHumano === 1 ? '1 pergunta pra você' : `${perguntasHumano} perguntas pra você` }}</span>
@@ -589,5 +598,6 @@ watch(
 
         <LowStockAlertModal />
         <WhatsAppToasts v-if="can('pedidos.view')" />
+        <PerguntasMarketplaceToasts v-if="can('pedidos.view')" />
     </div>
 </template>

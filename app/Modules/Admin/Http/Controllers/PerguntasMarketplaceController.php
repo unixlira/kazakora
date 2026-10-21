@@ -12,9 +12,11 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\MercadoLivre\Services\RespostaPerguntaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Throwable;
 
 /**
  * Atendimento > Perguntas MK Place (pedido do Lira 2026-10-20): perguntas dos
@@ -55,6 +57,47 @@ class PerguntasMarketplaceController extends Controller
             'contagem' => collect(self::FILTROS)->mapWithKeys(fn ($f) => [$f => $this->filtrar(MercadoLivrePergunta::query(), $f)->count()]),
             'autoResposta' => MercadoLivrePergunta::manuelaRespondeSozinha(),
             'podeConfigurar' => (bool) $request->user()?->isAdmin(),
+        ]);
+    }
+
+    /**
+     * Aviso em tempo real no canto do admin (PerguntasMarketplaceToasts.vue,
+     * pedido 2026-10-20): perguntas que a Manuela acabou de marcar para uma
+     * pessoa e ninguém assumiu. O cursor é o horário da marca (rascunho_em),
+     * porque ela chega depois do Gemini e o id não serve.
+     */
+    public function chegando(Request $request): JsonResponse
+    {
+        $agora = now();
+        $total = MercadoLivrePergunta::query()->aguardandoHumano()->count();
+
+        if (! $request->filled('desde')) {
+            return response()->json(['desde' => $agora->toIso8601String(), 'total' => $total, 'perguntas' => []]);
+        }
+
+        try {
+            $desde = Carbon::parse((string) $request->query('desde'));
+        } catch (Throwable) {
+            $desde = $agora;
+        }
+
+        $novas = MercadoLivrePergunta::query()
+            ->pendentes()
+            ->where('precisa_humano', true)
+            ->whereNull('humano_assumiu_em')
+            ->where('rascunho_em', '>=', $desde->copy()->subSecond())
+            ->orderBy('rascunho_em')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'desde' => $agora->toIso8601String(),
+            'total' => $total,
+            'perguntas' => $novas->map(fn (MercadoLivrePergunta $p) => [
+                'id' => $p->id,
+                'item_id' => $p->item_id,
+                'pergunta' => mb_substr((string) $p->pergunta, 0, 200),
+            ]),
         ]);
     }
 

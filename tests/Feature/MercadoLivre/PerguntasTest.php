@@ -158,4 +158,21 @@ class PerguntasTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/perguntas-marketplace/auto-resposta', ['ligado' => true])->assertJson(['ligado' => true]);
         $this->assertTrue(MercadoLivrePergunta::manuelaRespondeSozinha());
     }
+
+    public function test_aviso_em_tempo_real_traz_so_a_pergunta_nova_sem_dono(): void
+    {
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $inicio = $this->actingAs($admin)->getJson('/admin/perguntas-marketplace/chegando')->assertOk()->json();
+        $this->assertSame([], $inicio['perguntas']);
+
+        MercadoLivrePergunta::create(['question_id' => 21, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Tem nota?', 'precisa_humano' => true, 'rascunho_em' => now()]);
+        MercadoLivrePergunta::create(['question_id' => 22, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Já assumida', 'precisa_humano' => true, 'rascunho_em' => now(), 'humano_assumiu_em' => now(), 'humano_assumiu_por' => $admin->id]);
+
+        $novas = $this->actingAs($admin)->getJson('/admin/perguntas-marketplace/chegando?desde='.urlencode($inicio['desde']))->assertOk()->json();
+
+        $this->assertSame(2, $novas['total']);
+        $this->assertCount(1, $novas['perguntas']);
+        $this->assertSame('Tem nota?', $novas['perguntas'][0]['pergunta']);
+    }
 }

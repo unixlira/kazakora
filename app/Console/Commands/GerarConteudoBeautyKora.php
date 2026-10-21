@@ -23,7 +23,7 @@ class GerarConteudoBeautyKora extends Command
         $ids = $this->option('produto') ? [(string) $this->option('produto')] : $servico->idsDaLoja();
 
         foreach ($ids as $id) {
-            $conteudo = $servico->conteudo($id, (bool) $this->option('forcar'));
+            $conteudo = $servico->conteudo($id, (bool) $this->option('forcar'), completarCta: true);
             $this->line($conteudo ? "{$id} → {$conteudo->fonte}".($conteudo->erro ? " ({$conteudo->erro})" : '') : "{$id} → não encontrado na loja");
         }
 

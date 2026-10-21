@@ -233,4 +233,81 @@ class ConteudoAnuncioTest extends TestCase
 
         $this->assertNotNull($product->fresh()->adContent);
     }
+
+    public function test_gemini_gera_o_cta_depois_das_duvidas_sem_preco(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'blocos' => [['titulo' => 'Chega de bagunça', 'texto' => 'Tudo no lugar.', 'imagem' => 0]],
+            'duvidas' => [['Serve no banheiro?', 'Sim.']],
+            'cta' => [
+                'titulo' => '✨ Sua casa organizada a partir de hoje',
+                'texto' => 'Imagine abrir o armário e achar tudo na hora 🧺. Leve por apenas R$ 89,90.',
+                'garantias' => ['🚚 Frete grátis até a sua casa', '🔄 7 dias para desistir', ''],
+                'botao' => '🛒 Quero organizar minha casa agora mesmo, já, hoje',
+            ],
+        ]))]);
+
+        $conteudo = app(AnuncioConteudoService::class)->gerar($this->produto());
+
+        $this->assertSame('✨ Sua casa organizada a partir de hoje', $conteudo->cta['titulo']);
+        $this->assertSame('Imagine abrir o armário e achar tudo na hora 🧺.', $conteudo->cta['texto'], 'frase com preço sai');
+        $this->assertSame(['🚚 Frete grátis até a sua casa', '🔄 7 dias para desistir'], $conteudo->cta['garantias']);
+        $this->assertSame('🛒 Quero o meu agora', $conteudo->cta['botao'], 'botão comprido demais vira o padrão');
+
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return str_contains($prompt, '"cta"') && str_contains($prompt, '30 dias para trocar produto com defeito')
+                && str_contains($prompt, 'Meus Pedidos');
+        });
+    }
+
+    public function test_cta_da_beauty_kora_usa_as_politicas_dela(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'blocos' => [['titulo' => 'Pele macia', 'texto' => 'Hidrata.', 'imagem' => null]],
+        ]))]);
+
+        $dados = app(AnuncioConteudoService::class)->gerarViaGemini('Beauty Kora (beleza e skincare)', 'Sérum', 'Sérum facial.', [], 0);
+
+        $this->assertNull($dados['cta'], 'sem CTA válido, o bloco não aparece');
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return str_contains($prompt, 'Minhas Compras') && str_contains($prompt, 'frete grátis para todo o Brasil');
+        });
+    }
+
+    public function test_comando_completa_so_o_cta_de_conteudo_antigo(): void
+    {
+        $product = $this->produto();
+        ProductAdContent::query()->create([
+            'product_id' => $product->id,
+            'chamada' => 'Chamada antiga',
+            'blocos' => [['titulo' => 'Antigo', 'texto' => 'Texto antigo.', 'imagem' => null]],
+            'duvidas' => [['Serve no banheiro?', 'Sim.']],
+            'fonte' => ProductAdContent::FONTE_GEMINI,
+            'origem_hash' => app(AnuncioConteudoService::class)->hash($product),
+            'gerado_em' => now(),
+        ]);
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini(['cta' => [
+            'titulo' => '🧺 Organização que dá orgulho',
+            'texto' => 'Falta só um clique para deixar tudo no lugar. ✨',
+            'garantias' => ['🔒 Compra segura'],
+            'botao' => '🛒 Garantir o meu',
+        ]]))]);
+
+        $this->artisan('produtos:gerar-conteudo-anuncio')->assertSuccessful();
+
+        $conteudo = $product->fresh()->adContent;
+        $this->assertSame('Chamada antiga', $conteudo->chamada, 'o resto do conteúdo não é refeito');
+        $this->assertSame('🛒 Garantir o meu', $conteudo->cta['botao']);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => str_contains($request->data()['contents'][0]['parts'][0]['text'], 'Serve no banheiro?'));
+
+        $this->artisan('produtos:gerar-conteudo-anuncio')->assertSuccessful();
+        Http::assertSentCount(1);
+    }
 }

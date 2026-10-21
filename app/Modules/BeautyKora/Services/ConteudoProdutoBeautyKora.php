@@ -76,7 +76,7 @@ class ConteudoProdutoBeautyKora
      * Conteúdo pronto (gera na hora se faltar ou estiver velho). null = o
      * produto não existe na loja. Nunca lança exceção por causa do Gemini.
      */
-    public function conteudo(string $id, bool $forcar = false): ?BeautyKoraProdutoConteudo
+    public function conteudo(string $id, bool $forcar = false, bool $completarCta = false): ?BeautyKoraProdutoConteudo
     {
         $produto = $this->produto($id);
 
@@ -88,6 +88,16 @@ class ConteudoProdutoBeautyKora
         $atual = BeautyKoraProdutoConteudo::query()->where('produto_id', $id)->first();
 
         if (! $forcar && $atual && $atual->origem_hash === $hash) {
+            // Conteúdo de antes do CTA (2026-10-20): só o comando completa,
+            // para o visitante não esperar o Gemini.
+            if ($completarCta && $this->anuncio->faltaCta($atual) && $this->gemini->isConfigured()) {
+                try {
+                    $atual->update(['cta' => $this->anuncio->ctaViaGemini('Beauty Kora', $produto['nome'], $produto['descricao'], (array) $atual->duvidas)]);
+                } catch (Throwable $exception) {
+                    Log::warning('beautykora.conteudo.cta_falhou', ['produto_id' => $id, 'erro' => $exception->getMessage()]);
+                }
+            }
+
             return $atual;
         }
 

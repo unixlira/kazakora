@@ -295,15 +295,16 @@ class ConteudoAnuncioTest extends TestCase
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini(['cta' => [
             'titulo' => '🧺 Organização que dá orgulho',
             'texto' => 'Falta só um clique para deixar tudo no lugar. ✨',
-            'garantias' => ['🔒 Compra segura'],
-            'botao' => '🛒 Garantir o meu',
+            'garantias' => ['Compra segura'],
+            'botao' => 'Garantir o meu',
         ]]))]);
 
         $this->artisan('produtos:gerar-conteudo-anuncio')->assertSuccessful();
 
         $conteudo = $product->fresh()->adContent;
         $this->assertSame('Chamada antiga', $conteudo->chamada, 'o resto do conteúdo não é refeito');
-        $this->assertSame('🛒 Garantir o meu', $conteudo->cta['botao']);
+        $this->assertSame('🛒 Garantir o meu', $conteudo->cta['botao'], 'sem emoji ganha o padrão');
+        $this->assertSame(['✅ Compra segura'], $conteudo->cta['garantias']);
         Http::assertSentCount(1);
         Http::assertSent(fn ($request) => str_contains($request->data()['contents'][0]['parts'][0]['text'], 'Serve no banheiro?'));
 

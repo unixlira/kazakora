@@ -40,7 +40,10 @@ class LivroDigitalController extends Controller
                 'produtos' => $livro->produtos->map(fn (Product $produto) => self::resumo($produto))->values(),
             ]);
 
-        return Inertia::render('Admin/Entregaveis/LivrosDigitais', ['livros' => $livros]);
+        return Inertia::render('Admin/Entregaveis/LivrosDigitais', [
+            'livros' => $livros,
+            'emailPedido' => LivroDigital::emailPedidoLigado(),
+        ]);
     }
 
     /** Busca de produto (pais ativos) para Livros Digitais e Sorteios. */
@@ -132,6 +135,17 @@ class LivroDigitalController extends Controller
         $livro->update(['ativo' => ! $livro->ativo]);
 
         return back()->with('success', $livro->ativo ? 'Livro ativado na página do produto.' : 'Livro desativado na página do produto.');
+    }
+
+    /** Chave da promoção: liga / desliga os livros anexados no e-mail de confirmação do pedido. */
+    public function alternarEmail(): RedirectResponse
+    {
+        $ligar = ! LivroDigital::emailPedidoLigado();
+        LivroDigital::ligarEmailPedido($ligar);
+
+        return back()->with('success', $ligar
+            ? 'Promoção ligada: os livros ativos vão anexados no e-mail de confirmação do pedido.'
+            : 'Promoção desligada: o e-mail de confirmação sai sem os livros.');
     }
 
     public function baixar(LivroDigital $livro): StreamedResponse

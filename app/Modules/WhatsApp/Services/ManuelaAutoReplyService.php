@@ -40,7 +40,7 @@ class ManuelaAutoReplyService
                 return [
                     'intent' => 'manuela_'.$remote['provider'],
                     'confidence' => 1.0,
-                    'reply' => $remote['reply'],
+                    'reply' => ManuelaSaudacao::semTudoBem($remote['reply'], $message),
                     'needs_human' => $remote['needs_human'] || $this->needsHuman(Str::lower(Str::ascii($message)), $this->settings->all()),
                     'needs_data' => [],
                     'suggested_next_action' => $remote['needs_human'] ? 'handoff' : 'reply',
@@ -80,7 +80,7 @@ class ManuelaAutoReplyService
     {
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
-        $saudacao = ManuelaSaudacao::REGRA;
+        $saudacao = ManuelaSaudacao::regra($s['brand_name']);
         $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
         $productBlock = $product
             ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)

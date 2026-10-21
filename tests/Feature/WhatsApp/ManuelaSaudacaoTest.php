@@ -36,6 +36,40 @@ class ManuelaSaudacaoTest extends TestCase
 
     public function test_regra_vai_no_prompt_da_manuela(): void
     {
-        $this->assertStringContainsString(ManuelaSaudacao::REGRA, app(ManuelaAutoReplyService::class)->systemPrompt());
+        $prompt = app(ManuelaAutoReplyService::class)->systemPrompt();
+
+        $this->assertStringContainsString(ManuelaSaudacao::regra('KazaKora'), $prompt);
+        $this->assertStringContainsString('Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?', $prompt);
+    }
+
+    public function test_apresentacao_usa_o_nome_da_loja(): void
+    {
+        $this->assertSame('Eu sou a Manuela do FerraKora. Como posso te ajudar hoje?', ManuelaSaudacao::apresentacao('FerraKora'));
+        $this->assertStringContainsString('"Eu sou a Manuela do FerraKora. Como posso te ajudar hoje?"', ManuelaSaudacao::regra('FerraKora'));
+    }
+
+    public function test_tira_o_tudo_bem_que_o_cliente_nao_perguntou(): void
+    {
+        $this->assertSame(
+            'Boa tarde! Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?',
+            ManuelaSaudacao::semTudoBem('Boa tarde, tudo bem com você? Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?', 'boa tarde'),
+        );
+        $this->assertSame(
+            'Bom dia! Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?',
+            ManuelaSaudacao::semTudoBem('Bom dia! Tudo bem? 😊 Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?', 'bom dia'),
+        );
+        $this->assertSame('Oi, Maria! Eu sou a Manuela do KazaKora.', ManuelaSaudacao::semTudoBem('Oi, Maria, tudo bem? Eu sou a Manuela do KazaKora.', 'oi'));
+        // "Tudo bem" sem pergunta não é cumprimento: fica.
+        $this->assertSame('Tudo bem, vou verificar com o time.', ManuelaSaudacao::semTudoBem('Tudo bem, vou verificar com o time.', 'pode ver pra mim?'));
+    }
+
+    public function test_tudo_bem_fica_quando_o_cliente_perguntou_primeiro(): void
+    {
+        $resposta = 'Boa noite! Tudo ótimo por aqui, e com você? Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?';
+
+        $this->assertSame($resposta, ManuelaSaudacao::semTudoBem($resposta, 'Boa noite, tudo bem?'));
+        $this->assertSame('Oi! Tudo bem? Posso ajudar?', ManuelaSaudacao::semTudoBem('Oi! Tudo bem? Posso ajudar?', 'oi td bem'));
+        $this->assertTrue(ManuelaSaudacao::clientePerguntouComoVai('Olá, como vai?'));
+        $this->assertFalse(ManuelaSaudacao::clientePerguntouComoVai('Boa tarde, tem a caixa de ferramentas?'));
     }
 }

@@ -3,13 +3,16 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\Correios\CorreiosPrePostagemService;
 use App\Services\J3\J3Client;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -24,6 +27,12 @@ use Throwable;
  * Nunca trava o pedido: J3 desligada, CEP fora, dado de pacote faltando ou
  * a API fora do ar devolvem null e o LabelFetchService segue com a
  * etiqueta do Mercado Livre de sempre. O motivo fica no log.
+ *
+ * Sites (KazaKora, FerraKora, Beauty Kora), pedido do Lira em 2026-10-21:
+ * frete grátis dentro do perímetro da Entrega Expressa (EntregaExpressa) e
+ * da área da J3 vira pedido avulso na J3 (sem `ecommerce`), que é o único
+ * que tem etiqueta própria dela. Fora disso, Correios como sempre. Ver
+ * LojaShippingDriver.
  */
 class J3FlexLabel
 {
@@ -39,6 +48,74 @@ class J3FlexLabel
             && $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
             && $shipment->shipping_method === ChannelShipment::METHOD_FLEX
             && filled($shipment->external_shipment_id);
+    }
+
+    /**
+     * Pedido do site que sai pela J3: chave J3_SITE_ENABLED, frete grátis
+     * (quem pagou SEDEX ou outra transportadora leva o que pagou), CEP no
+     * perímetro da Entrega Expressa e dentro da área da J3. A consulta de
+     * cobertura fora do ar conta como "não": o pedido segue pelos Correios.
+     */
+    public function atendeSite(Order $order): bool
+    {
+        if (! config('services.j3.site') || ! $this->j3->isConfigured()
+            || $order->origin !== Order::ORIGIN_STORE
+            || (float) $order->shipping_cost > 0
+            || ! app(EntregaExpressa::class)->atende($order->shipping_zip)) {
+            return false;
+        }
+
+        try {
+            return $this->j3->cepAtendido((string) $order->shipping_zip);
+        } catch (Throwable $exception) {
+            Log::warning('j3.site.cobertura_falhou', ['order_id' => $order->id, 'error' => $exception->getMessage()]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Pedido avulso na J3 para o pedido do site. Idempotente pelo número do
+     * pedido (shippingIntegrationId): retry do job reaproveita o que já foi
+     * criado, nunca cria um segundo (cada um é cobrado). Erro lança para o
+     * ConfirmChannelShippingJob tentar de novo, sem cair nos Correios: o
+     * POST pode ter passado e virariam dois envios pagos.
+     *
+     * @return array{tracking: string, order_code: ?string}
+     */
+    public function criarPedidoDoSite(Order $order): array
+    {
+        return Cache::lock("j3:site:{$order->id}", 120)->block(30, function () use ($order) {
+            $invoice = $order->invoice()->first();
+
+            if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED || ! $invoice->numero) {
+                throw new RuntimeException("Pedido #{$order->id}: NF-e ainda não autorizada — o pedido na J3 espera por ela.");
+            }
+
+            $integracao = $this->integracaoDoSite($order);
+            $resposta = $this->j3->pedidoPorEnvio($integracao)
+                ?: $this->j3->criarPedido($this->montar($order, $integracao, null));
+
+            if (blank($resposta['trackingNumber'] ?? null)) {
+                throw new RuntimeException("J3 não devolveu rastreio para o pedido #{$order->id}.");
+            }
+
+            Log::info('j3.site.pedido', ['order_id' => $order->id, 'tracking' => $resposta['trackingNumber']]);
+
+            return ['tracking' => (string) $resposta['trackingNumber'], 'order_code' => $resposta['orderCode'] ?? null];
+        });
+    }
+
+    /** PDF da etiqueta da J3 de um rastreio já criado. */
+    public function etiquetaPorRastreio(string $tracking): string
+    {
+        return $this->j3->baixarEtiqueta($this->j3->urlDaEtiqueta($tracking));
+    }
+
+    /** Número que casa o pedido do site com o da J3 (o mesmo que o cliente vê). */
+    public function integracaoDoSite(Order $order): string
+    {
+        return (string) ($order->external_order_id ?: "KZ-{$order->id}");
     }
 
     /** PDF da etiqueta da J3, ou null pra usar a etiqueta padrão. */
@@ -118,6 +195,16 @@ class J3FlexLabel
      */
     public function montarPedido(Order $order, ChannelShipment $shipment): array
     {
+        return $this->montar($order, (string) $shipment->external_shipment_id, 'MercadoLivre');
+    }
+
+    /**
+     * Sem $ecommerce = pedido avulso (site), o que tem etiqueta da J3.
+     *
+     * @return array<string, mixed>
+     */
+    private function montar(Order $order, string $integracao, ?string $ecommerce): array
+    {
         $order->loadMissing('items');
         $pacote = $this->pacotes->forOrder($order, sempreComMedidas: true);
 
@@ -136,10 +223,10 @@ class J3FlexLabel
         ], fn ($valor) => $valor !== null && $valor !== '');
 
         $dados = array_filter([
-            'shippingIntegrationId' => (string) $shipment->external_shipment_id,
+            'shippingIntegrationId' => $integracao,
             'date' => $order->created_at?->timezone('America/Sao_Paulo')->toDateString(),
             'nf' => $this->numeroDaNota($order),
-            'notes' => "Pedido KazaKora #{$order->id}",
+            'notes' => 'Pedido '.Order::rotuloDoCanal($order->origin, $order->site_origem)." #{$order->id}",
             'shippingAddress' => $endereco,
             'packages' => [[
                 'type' => $pacote['format'] === CorreiosPrePostagemService::FORMATO_ENVELOPE ? 'envelope' : 'box',
@@ -155,7 +242,7 @@ class J3FlexLabel
 
         return array_filter([
             'sellerCnpj' => config('services.j3.seller_cnpj') ?: null,
-            'ecommerce' => 'MercadoLivre',
+            'ecommerce' => $ecommerce,
             'order' => $dados,
         ]);
     }

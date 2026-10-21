@@ -297,6 +297,40 @@ class MetaAdsController extends Controller
     }
 
     /**
+     * Botão "Sincronizar com a Meta" (pedido do Lira 2026-10-20): traz
+     * nomes, orçamento, status, criativo e links de destino mudados direto
+     * no Gerenciador para o banco (MetaAdsService::sincronizar). Só lê a Meta.
+     */
+    public function sincronizar(MetaAdsService $meta): RedirectResponse
+    {
+        if (! $meta->configurado()) {
+            return back()->with('error', 'Meta não configurado.');
+        }
+
+        try {
+            $r = $meta->sincronizar();
+        } catch (MetaAdsException $erro) {
+            return back()->with('error', 'Não deu para ler a Meta: '.$erro->getMessage());
+        }
+
+        $partes = array_filter([
+            $r['campanhas'] ? "{$r['campanhas']} campanha(s)" : null,
+            $r['conjuntos'] ? "{$r['conjuntos']} conjunto(s)" : null,
+            $r['anuncios'] ? "{$r['anuncios']} anúncio(s)" : null,
+        ]);
+        $mensagem = $partes ? 'Sincronizado com a Meta: '.implode(', ', $partes).' atualizado(s)' : 'Tudo já estava igual à Meta';
+        $mensagem .= $r['links'] ? ", {$r['links']} link(s) de destino corrigido(s)." : '.';
+        if ($r['pulados']) {
+            $mensagem .= " {$r['pulados']} item(ns) em envio ficou(aram) para depois.";
+        }
+        if ($r['fora_da_meta']) {
+            $mensagem .= " {$r['fora_da_meta']} item(ns) não existe(m) mais na Meta.";
+        }
+
+        return back()->with('success', $mensagem);
+    }
+
+    /**
      * Recebe UM anúncio por requisição: o arquivo (vídeo ou imagem, até
      * 64 MB por envio no servidor) e, opcional, o produto e o texto dele.
      */

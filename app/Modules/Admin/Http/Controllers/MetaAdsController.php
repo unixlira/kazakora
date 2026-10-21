@@ -152,7 +152,7 @@ class MetaAdsController extends Controller
             'periodos' => MetaAdsService::PERIODOS,
             'espelho' => Inertia::defer(fn () => filled($campanha->meta_campaign_id)
                 ? $this->espelho($meta, $periodo, (string) $campanha->meta_campaign_id, $this->noKazaKora($campanha->id))
-                : ['campanhas' => [], 'erro' => null]),
+                : ['campanhas' => [], 'erro' => null, 'diagnostico' => null]),
             'config' => $this->estadoConfig($meta),
             'problemas' => $campanha->podeEnviar() ? $meta->problemasParaEnviar($campanha) : [],
             'pode' => [
@@ -1375,10 +1375,11 @@ class MetaAdsController extends Controller
     private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
     {
         if (! $meta->configurado()) {
-            return ['campanhas' => [], 'erro' => null];
+            return ['campanhas' => [], 'erro' => null, 'diagnostico' => null];
         }
 
         try {
+            $completo = $meta->espelhoCompleto($periodo, $campaignId);
             $campanhas = array_map(function (array $c) use ($noKazaKora, $meta) {
                 $local = $noKazaKora['campanhas'][$c['id']] ?? null;
                 $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local, $meta) {
@@ -1401,11 +1402,16 @@ class MetaAdsController extends Controller
                     'local_id' => $local['id'] ?? null,
                     'novo_conjunto' => (bool) ($local['novo_conjunto'] ?? false),
                 ];
-            }, $meta->espelho($periodo, $campaignId));
+            }, $completo['campanhas']);
 
-            return ['campanhas' => $campanhas, 'erro' => null];
+            // "O que fazer agora" (2026-10-21): só leitura, sobre o mesmo espelho.
+            return [
+                'campanhas' => $campanhas,
+                'erro' => null,
+                'diagnostico' => $meta->diagnosticar(['campanhas' => $campanhas] + $completo, $periodo),
+            ];
         } catch (MetaAdsException $erro) {
-            return ['campanhas' => [], 'erro' => $erro->getMessage()];
+            return ['campanhas' => [], 'erro' => $erro->getMessage(), 'diagnostico' => null];
         }
     }
 

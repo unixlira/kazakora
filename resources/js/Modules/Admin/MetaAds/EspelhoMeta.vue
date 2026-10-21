@@ -3,10 +3,10 @@
 // Anúncios lidos ao vivo da Meta, com as métricas de cada nível. Os números
 // de campanha e conjunto vêm da própria Meta (alcance não se soma).
 import { Link } from '@inertiajs/vue3';
-import { reactive, ref } from 'vue';
+import { nextTick, reactive, ref } from 'vue';
 import AnuncioModais from './AnuncioModais.vue';
 import GerenciarModais from './GerenciarModais.vue';
-import { formatarNumero, formatarReais, statusMeta } from './metaAds';
+import { ctaDoAnuncio, formatarNumero, formatarReais, statusMeta } from './metaAds';
 
 const props = defineProps({
     campanhas: { type: Array, default: () => [] },
@@ -64,6 +64,47 @@ const orcamento = (item) => {
     return '-';
 };
 
+// "Ver na tabela" e "Editar" dos cartões do O que fazer agora (2026-10-21):
+// abre a campanha e o conjunto, rola até a linha, destaca 2 s e põe o foco nela.
+const destacado = ref(null);
+const acharLinha = (tipo, id) => {
+    for (const c of props.campanhas) {
+        for (const s of c.conjuntos) {
+            if (tipo === 'conjunto' && s.id === id) return { c, s, a: null };
+            const a = s.anuncios.find((x) => x.id === id);
+            if (tipo === 'anuncio' && a) return { c, s, a };
+        }
+    }
+    return null;
+};
+const mostrar = async (tipo, id) => {
+    const achado = acharLinha(tipo, id);
+    if (!achado) return;
+    abertos[achado.c.id] = true;
+    if (achado.a) abertos[achado.s.id] = true;
+    await nextTick();
+    const linha = document.getElementById(`meta-linha-${id}`);
+    if (!linha) return;
+    const reduzir = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    linha.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'center' });
+    linha.focus({ preventScroll: true });
+    destacado.value = id;
+    setTimeout(() => { if (destacado.value === id) destacado.value = null; }, 2000);
+};
+const editar = (tipo, id) => {
+    const achado = acharLinha(tipo, id);
+    if (!achado || !props.editarAnuncios) return;
+    if (achado.a) {
+        if (achado.a.local) modais.value.editar(alvo(achado.a));
+        else gerenciar.value.editar(alvoAnuncio(achado.a));
+    } else {
+        gerenciar.value.editar(alvoConjunto(achado.c, achado.s));
+    }
+};
+defineExpose({ mostrar, editar });
+const classeDestaque = (id) => (destacado.value === id ? 'bg-primary/10 outline outline-2 outline-primary/50' : '');
+const cta = ctaDoAnuncio;
+
 const COLUNAS = [
     ['gasto', 'Gastos', (m) => formatarReais(m.gasto)],
     ['impressoes', 'Impressões', (m) => formatarNumero(m.impressoes)],
@@ -82,6 +123,7 @@ const COLUNAS = [
                 <tr>
                     <th scope="col" class="sticky left-0 z-10 bg-[var(--surface)] px-4 py-3">Nome</th>
                     <th scope="col" class="px-3 py-3">Status</th>
+                    <th scope="col" class="px-3 py-3" title="Botão de chamada do anúncio, igual ao do Gerenciador">Botão (CTA)</th>
                     <th scope="col" class="px-3 py-3 text-right">Orçamento</th>
                     <th v-for="[chave, rotulo] in COLUNAS" :key="chave" scope="col" class="px-3 py-3 text-right"
                         :title="chave === 'cpc' ? 'Custo por clique: gasto ÷ cliques (todos)' : (chave === 'roas' ? 'Valor das compras ÷ gasto' : undefined)">{{ rotulo }}</th>
@@ -117,6 +159,7 @@ const COLUNAS = [
                             </span>
                         </td>
                         <td class="px-3 py-3"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status(c.status)[1]">{{ status(c.status)[0] }}</span></td>
+                        <td class="px-3 py-3"></td>
                         <td class="whitespace-nowrap px-3 py-3 text-right" :title="c.orcamento_nivel === 'conjunto' ? 'Soma do orçamento dos conjuntos ativos' : 'Orçamento da campanha'">
                             {{ orcamento(c) }}
                             <span v-if="c.orcamento_nivel === 'conjunto'" class="block text-[11px] font-normal text-slate-500">nos conjuntos</span>
@@ -125,7 +168,7 @@ const COLUNAS = [
                     </tr>
                     <template v-if="aberto(c, c.id)">
                         <template v-for="s in c.conjuntos" :key="s.id">
-                            <tr class="border-t border-[var(--surface-border)]">
+                            <tr :id="`meta-linha-${s.id}`" tabindex="-1" class="border-t border-[var(--surface-border)] transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50" :class="classeDestaque(s.id)">
                                 <td class="sticky left-0 z-10 bg-[var(--surface)] py-2.5 pl-9 pr-4">
                                     <button type="button" class="flex items-start gap-2 text-left" :aria-expanded="aberto(c, s.id)" @click="alternar(c, s.id)">
                                         <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-400 transition-transform" :class="{ 'rotate-90': aberto(c, s.id) }" aria-hidden="true"></i>
@@ -148,11 +191,13 @@ const COLUNAS = [
                                     </span>
                                 </td>
                                 <td class="px-3 py-2.5"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status(s.status)[1]">{{ status(s.status)[0] }}</span></td>
+                                <td class="px-3 py-2.5"></td>
                                 <td class="whitespace-nowrap px-3 py-2.5 text-right">{{ c.orcamento_nivel === 'conjunto' ? orcamento(s) : 'da campanha' }}</td>
                                 <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{{ fmt(s.metricas) }}</td>
                             </tr>
                             <template v-if="aberto(c, s.id)">
-                                <tr v-for="a in s.anuncios" :key="a.id" class="border-t border-[var(--surface-border)] text-slate-700 dark:text-slate-300">
+                                <tr v-for="a in s.anuncios" :id="`meta-linha-${a.id}`" :key="a.id" tabindex="-1"
+                                    class="border-t border-[var(--surface-border)] text-slate-700 transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50 dark:text-slate-300" :class="classeDestaque(a.id)">
                                     <td class="sticky left-0 z-10 bg-[var(--surface)] py-2 pl-16 pr-4">
                                         <span class="flex items-center gap-2.5">
                                             <img v-if="a.miniatura" :src="a.miniatura" alt="" class="h-9 w-9 shrink-0 rounded object-cover" loading="lazy" referrerpolicy="no-referrer">
@@ -188,21 +233,33 @@ const COLUNAS = [
                                         </span>
                                     </td>
                                     <td class="px-3 py-2"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status(a.status)[1]">{{ status(a.status)[0] }}</span></td>
+                                    <td class="px-3 py-2">
+                                        <span v-if="cta(a.cta).alerta" role="img" :title="cta(a.cta).dica"
+                                            :aria-label="`${cta(a.cta).texto}: campanha de Vendas com botão de pouca intenção de compra`"
+                                            class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                                            <i class="fas fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
+                                            <span :class="{ 'font-mono': cta(a.cta).mono }">{{ cta(a.cta).texto }}</span>
+                                        </span>
+                                        <span v-else-if="cta(a.cta).texto === '-'" class="text-slate-400" :title="cta(a.cta).dica">-</span>
+                                        <span v-else :title="cta(a.cta).dica"
+                                            class="inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold"
+                                            :class="[cta(a.cta).vazio ? 'bg-slate-500/10 text-slate-500' : 'bg-slate-500/15 text-slate-700 dark:text-slate-200', { 'font-mono': cta(a.cta).mono }]">{{ cta(a.cta).texto }}</span>
+                                    </td>
                                     <td class="px-3 py-2 text-right text-slate-400">-</td>
                                     <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ fmt(a.metricas) }}</td>
                                 </tr>
                                 <tr v-if="!s.anuncios.length" class="border-t border-[var(--surface-border)]">
-                                    <td colspan="10" class="py-2 pl-16 text-xs text-amber-700">Conjunto sem anúncio.</td>
+                                    <td colspan="11" class="py-2 pl-16 text-xs text-amber-700">Conjunto sem anúncio.</td>
                                 </tr>
                             </template>
                         </template>
                         <tr v-if="!c.conjuntos.length" class="border-t border-[var(--surface-border)]">
-                            <td colspan="10" class="py-2 pl-9 text-xs text-amber-700">Campanha sem conjunto.</td>
+                            <td colspan="11" class="py-2 pl-9 text-xs text-amber-700">Campanha sem conjunto.</td>
                         </tr>
                     </template>
                 </template>
                 <tr v-if="!campanhas.length">
-                    <td colspan="10" class="px-4 py-6 text-center text-slate-500">Nenhuma campanha na conta da Meta.</td>
+                    <td colspan="11" class="px-4 py-6 text-center text-slate-500">Nenhuma campanha na conta da Meta.</td>
                 </tr>
             </tbody>
         </table>

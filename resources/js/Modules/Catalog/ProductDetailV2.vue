@@ -630,36 +630,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
-                        <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
-                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). -->
-                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
-                            <div class="promo-texto">
-                                <h2>{{ sorteio.titulo }}</h2>
-                                <p :class="{ 'sem-margem': !sorteio.paragrafo_2 }">{{ sorteio.paragrafo_1 }}</p>
-                                <p v-if="sorteio.paragrafo_2" class="sem-margem">{{ sorteio.paragrafo_2 }}</p>
-                            </div>
-                            <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
-                        </section>
-
-                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
-                             com os 3 tablets (feita pelo Jonathan, troca os tablets em CSS) à esquerda, oferta à
-                             direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
-                        <section v-if="livrosDigitais.length" class="card promo-livros">
-                            <div class="livros-vitrine">
-                                <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                                <img class="livros-img" src="/images/promocoes/livros-tablets.webp"
-                                     alt="Três guias digitais da KazaKora em tablets: Dor nas costas de quem trabalha sentado, Lombar travada: o que fazer nas primeiras 48 horas, e Acordei com dor nas costas: o problema pode estar na sua noite"
-                                     width="1200" height="600" loading="lazy">
-                            </div>
-                            <div class="livros-oferta">
-                                <p>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
-                                <p class="livros-lista">
-                                    <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
-                                </p>
-                                <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
-                            </div>
-                        </section>
-
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
@@ -731,6 +701,37 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <p v-else>{{ part.items[0] }}</p>
                                     </template>
                                 </div>
+                            </div>
+                        </section>
+
+                        <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
+                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). No fim da
+                             descrição, não mais abaixo do carrossel de imagens (pedido 2026-10-21). -->
+                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
+                            <div class="promo-texto">
+                                <h2>{{ sorteio.titulo }}</h2>
+                                <p :class="{ 'sem-margem': !sorteio.paragrafo_2 }">{{ sorteio.paragrafo_1 }}</p>
+                                <p v-if="sorteio.paragrafo_2" class="sem-margem">{{ sorteio.paragrafo_2 }}</p>
+                            </div>
+                            <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
+                        </section>
+
+                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
+                             com os 3 tablets (feita pelo Jonathan, troca os tablets em CSS) à esquerda, oferta à
+                             direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
+                        <section v-if="livrosDigitais.length" class="card promo-livros">
+                            <div class="livros-vitrine">
+                                <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
+                                <img class="livros-img" src="/images/promocoes/livros-tablets.webp"
+                                     alt="Três guias digitais da KazaKora em tablets: Dor nas costas de quem trabalha sentado, Lombar travada: o que fazer nas primeiras 48 horas, e Acordei com dor nas costas: o problema pode estar na sua noite"
+                                     width="1200" height="600" loading="lazy">
+                            </div>
+                            <div class="livros-oferta">
+                                <p>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
+                                <p class="livros-lista">
+                                    <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
+                                </p>
+                                <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
                             </div>
                         </section>
 

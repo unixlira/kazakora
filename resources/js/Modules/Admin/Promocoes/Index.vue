@@ -4,12 +4,14 @@
 // do quadro (a de Entregáveis, uma pronta ou enviada, com tamanho e formato)
 // e os produtos onde aparece, cada um com a sua chave. Texto, período e
 // regras continuam na tela de cada promoção.
-// Tela principal Promoções (Lira, 2026-10-21): link direto no menu, fora de
-// Vender, com "Adicionar Promoção" no topo. Embaixo, um card para cada
+// Tela principal Promoções (Lira, 2026-10-21): item de Vender no menu, com
+// "Adicionar Promoção" no topo. Embaixo, um card para cada
 // promoção criada aqui, que tem só texto, período e regras.
 // Texto do quadro (2026-10-21): condições ("pedidos pagos até...") e o botão
 // para a página da promoção ficam no card, com prévia e avisos de quando o
 // botão não aparece, para não ter que caçar o texto em Entregáveis.
+// Título, texto e destaque do quadro (2026-10-21) também ficam no card:
+// Entregáveis saiu do menu e o cadastro de sorteios e livros abre pelo link.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
@@ -45,7 +47,22 @@ const estado = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, {
 const inputs = ref({});
 
 // Formulário de texto do quadro, um por promoção.
-const textoSalvo = (p) => ({ condicoes: p.condicoes ?? '', botao_ativo: p.botao_ativo, botao_texto: p.botao_texto ?? '' });
+const textoSalvo = (p) => ({
+    quadro_titulo: p.quadro_titulo ?? '',
+    quadro_texto: p.quadro_texto ?? '',
+    quadro_destaque: p.quadro_destaque ?? '',
+    condicoes: p.condicoes ?? '',
+    botao_ativo: p.botao_ativo,
+    botao_texto: p.botao_texto ?? '',
+});
+// Texto que o quadro mostra com o campo vazio (o do sorteio; o fixo dos livros).
+const TITULO_LIVROS = 'Compre Hoje E Receba N Livros Digitais GRÁTIS!';
+const TEXTO_LIVROS = 'Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.';
+const DESTAQUE_LIVROS = 'Adquirindo hoje: 100% GRÁTIS';
+const tituloPadrao = (p) => (p.slug === 'airfryer' ? p.entregaveis.titulo_padrao ?? '' : TITULO_LIVROS);
+const textoPadrao = (p) => (p.slug === 'airfryer' ? p.entregaveis.texto_padrao ?? '' : TEXTO_LIVROS);
+// Parágrafos da prévia: linha em branco separa, como na página do produto.
+const paragrafos = (texto) => texto.split(/\n[ \t]*\n/).map((t) => t.trim()).filter(Boolean);
 const quadro = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, textoSalvo(p)])));
 const mudouQuadro = (slug) => JSON.stringify(quadro[slug]) !== JSON.stringify(textoSalvo(porSlug(slug)));
 const condicoesComFim = (promocao) => `Pedidos realizados e pagos até ${promocao.fim_data} participam automaticamente.`;
@@ -280,14 +297,43 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                     <form class="mt-4 rounded-lg border border-[var(--surface-border)] p-3" @submit.prevent="salvarQuadro(promocao.slug)">
                         <p class="text-xs font-semibold uppercase text-slate-500">Texto do quadro</p>
 
-                        <label :for="`condicoes-${promocao.slug}`" class="mt-2 block text-sm font-medium">Condições</label>
+                        <label :for="`titulo-${promocao.slug}`" class="mt-2 block text-sm font-medium">Título</label>
+                        <input :id="`titulo-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_titulo" type="text" maxlength="255" :disabled="!podeEditar"
+                            :placeholder="tituloPadrao(promocao)"
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ promocao.slug === 'airfryer'
+                                ? 'Vazio = o título do sorteio cadastrado.'
+                                : 'Vazio = "Compre Hoje E Receba N Livros Digitais GRÁTIS!", com N = quantos livros o produto tem.' }}
+                        </p>
+
+                        <label :for="`texto-${promocao.slug}`" class="mt-3 block text-sm font-medium">Texto</label>
+                        <textarea :id="`texto-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_texto" rows="4" maxlength="2000" :disabled="!podeEditar"
+                            :placeholder="textoPadrao(promocao)"
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Linha em branco separa parágrafos.
+                            {{ promocao.slug === 'airfryer'
+                                ? 'Vazio = os parágrafos do sorteio cadastrado (ou só as condições, se tiver).'
+                                : 'Vazio = o texto de sempre sobre os guias em PDF.' }}
+                        </p>
+
+                        <template v-if="promocao.slug === 'pdfs'">
+                            <label :for="`destaque-${promocao.slug}`" class="mt-3 block text-sm font-medium">Destaque</label>
+                            <input :id="`destaque-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_destaque" type="text" maxlength="120" :disabled="!podeEditar"
+                                :placeholder="DESTAQUE_LIVROS"
+                                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-500">Linha embaixo da lista de livros. Vazio = "{{ DESTAQUE_LIVROS }}".</p>
+                        </template>
+
+                        <label :for="`condicoes-${promocao.slug}`" class="mt-3 block text-sm font-medium">Condições</label>
                         <textarea :id="`condicoes-${promocao.slug}`" v-model="quadro[promocao.slug].condicoes" rows="2" maxlength="500" :disabled="!podeEditar"
                             placeholder="Ex.: Pedidos realizados e pagos até 31/10/2026 participam automaticamente."
                             class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
                         <div class="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                             <span>
                                 {{ promocao.slug === 'airfryer'
-                                    ? 'Aparece no quadro no lugar do texto do sorteio de Entregáveis. Vazio = volta o texto do sorteio.'
+                                    ? 'Aparece no quadro embaixo do texto (sem texto próprio, no lugar dos parágrafos do sorteio).'
                                     : 'Aparece no quadro embaixo de "Adquirindo hoje: 100% GRÁTIS". Vazio = sem condições.' }}
                                 Também aparece na página da promoção.
                             </span>
@@ -328,9 +374,17 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                         </template>
 
                         <!-- Prévia de como o texto fica no quadro -->
-                        <div v-if="quadro[promocao.slug].condicoes || quadro[promocao.slug].botao_ativo"
-                            class="mt-3 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800" aria-label="Prévia do texto do quadro">
+                        <div class="mt-3 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800" aria-label="Prévia do texto do quadro">
                             <p class="mb-1 text-[10px] font-semibold uppercase text-slate-400">Prévia</p>
+                            <p class="font-semibold">{{ quadro[promocao.slug].quadro_titulo || tituloPadrao(promocao) }}</p>
+                            <p v-for="(paragrafo, i) in paragrafos(quadro[promocao.slug].quadro_texto || (promocao.slug === 'airfryer' && quadro[promocao.slug].condicoes ? '' : textoPadrao(promocao)))"
+                                :key="i" class="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{{ paragrafo }}</p>
+                            <template v-if="promocao.slug === 'pdfs'">
+                                <p v-for="item in promocao.entregaveis.itens" :key="item" class="mt-1 text-slate-600 dark:text-slate-300">
+                                    <i class="fas fa-check mr-1 text-emerald-600" aria-hidden="true"></i>{{ item }}
+                                </p>
+                                <p class="mt-1">{{ quadro[promocao.slug].quadro_destaque || DESTAQUE_LIVROS }}</p>
+                            </template>
                             <p v-if="quadro[promocao.slug].condicoes" class="whitespace-pre-line text-slate-600 dark:text-slate-300">{{ quadro[promocao.slug].condicoes }}</p>
                             <span v-if="quadro[promocao.slug].botao_ativo"
                                 class="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold text-white"
@@ -359,7 +413,7 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                     <p class="mt-3 text-xs font-semibold uppercase text-slate-500">Imagem do quadro</p>
                     <div class="mt-2 flex flex-wrap gap-2">
                         <button type="button" :class="[miniatura, marcada(estado[promocao.slug].modo === 'padrao')]" :disabled="!podeEditar"
-                            title="A cadastrada em Entregáveis" @click="escolher(promocao.slug, 'padrao')">
+                            :title="promocao.slug === 'airfryer' ? 'A do sorteio cadastrado' : 'A padrão dos livros'" @click="escolher(promocao.slug, 'padrao')">
                             <img v-if="promocao.padrao_url" :src="promocao.padrao_url" alt="" class="h-full w-full object-cover">
                             <span :class="etiqueta">Padrão</span>
                         </button>
@@ -413,16 +467,18 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                     </div>
                     <InputError :message="estado[promocao.slug].erro" />
 
-                    <!-- O que o quadro mostra (cadastro de Entregáveis) -->
+                    <!-- O que o quadro mostra (cadastro de sorteios e livros, fora do menu desde 2026-10-21) -->
                     <div class="mt-5 border-t border-[var(--surface-border)] pt-4">
-                        <p class="text-xs font-semibold uppercase text-slate-500">{{ promocao.slug === 'airfryer' ? 'Sorteio do quadro (Entregáveis)' : 'Livros do quadro (Entregáveis)' }}</p>
+                        <p class="text-xs font-semibold uppercase text-slate-500">{{ promocao.slug === 'airfryer' ? 'Sorteio do quadro' : 'Livros do quadro' }}</p>
                         <ul v-if="promocao.entregaveis.itens.length" class="mt-2 space-y-1 text-sm">
                             <li v-for="item in promocao.entregaveis.itens" :key="item">
                                 <i class="fas fa-check mr-1 text-emerald-600" aria-hidden="true"></i>{{ item }}
                             </li>
                         </ul>
-                        <p v-else class="mt-2 text-sm text-amber-700 dark:text-amber-400">Nada ativo em Entregáveis: o quadro não aparece.</p>
-                        <Link :href="promocao.entregaveis.link" class="mt-1 inline-block text-xs text-primary hover:underline">Abrir em Entregáveis</Link>
+                        <p v-else class="mt-2 text-sm text-amber-700 dark:text-amber-400">{{ promocao.slug === 'airfryer' ? 'Nenhum sorteio ativo' : 'Nenhum livro ativo' }}: o quadro não aparece.</p>
+                        <Link :href="promocao.entregaveis.link" class="mt-1 inline-block text-xs text-primary hover:underline">
+                            {{ promocao.slug === 'airfryer' ? 'Cadastro de sorteios (prêmio, foto e produtos)' : 'Cadastro de livros (PDFs, capas e produtos)' }}
+                        </Link>
                     </div>
 
                     <!-- Produtos -->

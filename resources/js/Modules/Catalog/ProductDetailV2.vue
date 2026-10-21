@@ -748,10 +748,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                              da descrição, antes de Garantia, Pagamento Seguro e Informação adicional (teste pedido 2026-10-21). -->
                         <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
                             <div class="promo-texto">
-                                <h2>{{ sorteio.titulo }}</h2>
+                                <h2>{{ quadrosPromocao.airfryer?.titulo || sorteio.titulo }}</h2>
+                                <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar dos parágrafos do sorteio. -->
+                                <p v-for="(paragrafo, i) in quadrosPromocao.airfryer?.texto ?? []" :key="`st-${i}`" class="promo-texto-livre"
+                                   :class="{ 'sem-margem': i === quadrosPromocao.airfryer.texto.length - 1 && !quadrosPromocao.airfryer.condicoes && !quadrosPromocao.airfryer.botao }">{{ paragrafo }}</p>
                                 <!-- Condições da Promoção Airfryer (admin › Promoções) no lugar do texto do sorteio. -->
                                 <p v-if="quadrosPromocao.airfryer?.condicoes" class="promo-condicoes" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ quadrosPromocao.airfryer.condicoes }}</p>
-                                <template v-else>
+                                <template v-else-if="!quadrosPromocao.airfryer?.texto?.length">
                                     <p :class="{ 'sem-margem': !sorteio.paragrafo_2 && !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_1 }}</p>
                                     <p v-if="sorteio.paragrafo_2" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_2 }}</p>
                                 </template>
@@ -767,7 +770,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                              direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
-                                <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
+                                <h2 v-if="quadrosPromocao.pdfs?.titulo">{{ quadrosPromocao.pdfs.titulo }}</h2>
+                                <h2 v-else>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
                                 <!-- Clique amplia a imagem no mesmo lightbox das fotos de avaliação (pedido 2026-10-21). -->
                                 <button type="button" class="livros-zoom" aria-label="Ampliar imagem dos livros"
                                         @click="abrirFoto([{ image_url: livrosQuadroSrc, alt: livrosQuadroAlt }], 0, true)">
@@ -776,12 +780,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                             <div class="livros-oferta">
                                 <!-- Texto das costas só com a imagem padrão; grupo com imagem própria (ferramentas, Natal) usa texto neutro. -->
-                                <p v-if="livrosQuadro">Guias em PDF com orientações práticas para você aproveitar melhor a sua compra.</p>
+                                <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar do texto de sempre. -->
+                                <template v-if="quadrosPromocao.pdfs?.texto?.length">
+                                    <p v-for="(paragrafo, i) in quadrosPromocao.pdfs.texto" :key="`lt-${i}`" class="promo-texto-livre">{{ paragrafo }}</p>
+                                </template>
+                                <p v-else-if="livrosQuadro">Guias em PDF com orientações práticas para você aproveitar melhor a sua compra.</p>
                                 <p v-else>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
                                 <p class="livros-lista">
                                     <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
                                 </p>
-                                <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
+                                <p v-if="quadrosPromocao.pdfs?.destaque" class="livros-gratis">{{ quadrosPromocao.pdfs.destaque }}</p>
+                                <p v-else class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
                                 <p v-if="quadrosPromocao.pdfs?.condicoes" class="promo-condicoes livros-condicoes">{{ quadrosPromocao.pdfs.condicoes }}</p>
                                 <Link v-if="quadrosPromocao.pdfs?.botao" :href="quadrosPromocao.pdfs.botao.url" class="promo-botao livros-botao">
                                     {{ quadrosPromocao.pdfs.botao.texto }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
@@ -1168,7 +1177,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo-texto { flex: 1 1 auto; }
 .pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
 .pd2 .promo-sorteio { width: 190px; }
-.pd2 .promo-condicoes { white-space: pre-line; }
+.pd2 .promo-condicoes, .pd2 .promo-texto-livre { white-space: pre-line; }
 .pd2 .livros-oferta .livros-condicoes { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
 .pd2 .promo-botao { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px 18px; border-radius: 999px; background: var(--green); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; }
 .pd2 .promo-botao:hover { background: var(--green-edge); color: #fff; }

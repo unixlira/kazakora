@@ -8,7 +8,7 @@ import InputError from '@/Shared/Components/InputError.vue';
 import BuscaProduto from '@/Modules/Admin/Entregaveis/BuscaProduto.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -88,6 +88,10 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
 
     <AdminLayout>
         <div class="mb-6 max-w-2xl">
+            <!-- Fora do menu desde 2026-10-21: abre pelo card em Vender › Promoções. -->
+            <Link href="/admin/promocoes" class="mb-2 inline-block text-sm text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Promoções
+            </Link>
             <h1 class="mb-1 text-2xl font-bold">Livros Digitais</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 PDFs de brinde que aparecem na página do produto ("Compre hoje e receba … livros digitais grátis"). Ative ou desative a qualquer momento e escolha em quais produtos cada livro aparece.

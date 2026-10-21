@@ -82,9 +82,10 @@ const abrirSugestoes = (c) => {
     c.conjuntos.forEach((s) => { if (daLinha(s.id).length || s.anuncios.some((a) => daLinha(a.id).length)) abertos[s.id] = true; });
 };
 
-// Campanha ativa já vem aberta; o clique do Lira vale até sair da tela.
+// Campanha vem fechada (pedido do Lira, 21/10); ao abrir, os conjuntos da
+// campanha ativa já aparecem abertos. O clique do Lira vale até sair da tela.
 const abertos = reactive({});
-const aberto = (c, id) => abertos[id] ?? (props.abrirTudo || c.status === 'ACTIVE');
+const aberto = (c, id) => abertos[id] ?? (props.abrirTudo || (id !== c.id && c.status === 'ACTIVE'));
 const alternar = (c, id) => { abertos[id] = !aberto(c, id); };
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;

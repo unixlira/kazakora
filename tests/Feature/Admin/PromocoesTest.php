@@ -19,7 +19,11 @@ class PromocoesTest extends TestCase
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->get('/admin/promocoes')->assertRedirect('/admin/promocoes/airfryer');
+        // Tela inicial: as duas lado a lado (2026-10-21).
+        $this->actingAs($admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Admin/Promocoes/Index', false)
+            ->where('promocoes.0.slug', 'airfryer')
+            ->where('promocoes.1.slug', 'pdfs'));
         $this->actingAs($admin)->get('/admin/promocoes/airfryer')->assertOk();
         $this->actingAs($admin)->get('/admin/promocoes/pdfs')->assertOk();
         $this->actingAs($admin)->get('/admin/promocoes/outra')->assertNotFound();

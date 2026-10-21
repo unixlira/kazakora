@@ -372,7 +372,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::delete('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'destroy'])->whereNumber('sorteio')->middleware('permission:cadastros.delete')->name('entregaveis.sorteios.excluir');
 
     // Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da Promoção PDFs.
-    Route::redirect('promocoes', '/admin/promocoes/airfryer');
+    // Tela inicial (2026-10-21): Airfryer e PDFs lado a lado, com a chave, a imagem e os produtos da página do produto.
+    Route::get('promocoes', [PromocaoController::class, 'index'])->middleware('permission:cadastros.view')->name('promocoes.listar');
+    Route::patch('promocoes/{slug}/pagina-produto', [PromocaoController::class, 'paginaProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.pagina-produto');
+    Route::post('promocoes/{slug}/imagem', [PromocaoController::class, 'imagem'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.imagem');
+    Route::post('promocoes/{slug}/produtos', [PromocaoController::class, 'adicionarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.produtos.adicionar');
+    Route::patch('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'alternarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.alternar');
+    Route::delete('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'removerProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.remover');
     Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.view')->name('promocoes.exibir');
     Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
 

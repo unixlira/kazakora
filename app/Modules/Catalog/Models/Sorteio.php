@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Models;
 
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,6 +32,12 @@ class Sorteio extends Model
     protected function casts(): array
     {
         return ['ativo' => 'boolean'];
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => PromocoesDoProduto::limparCache());
+        static::deleted(fn () => PromocoesDoProduto::limparCache());
     }
 
     public function product(): BelongsTo

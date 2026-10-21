@@ -696,6 +696,129 @@ class MetaAdsService
         return $ativos->count() === 1 && $ativos->first() === $objeto['id'];
     }
 
+    // Status ao vivo e troca de link (pedido do Lira 2026-10-21) --------------
+
+    /**
+     * effective_status de todas as campanhas, conjuntos e anúncios da conta,
+     * por id. Três leituras leves (só id e status), guardadas 15 segundos:
+     * a tela pergunta a cada 20 s sem pesar na cota da Meta.
+     *
+     * @return array{campanhas: array<string, string>, conjuntos: array<string, string>, anuncios: array<string, string>, lido_em: string}
+     *
+     * @throws MetaAdsException
+     */
+    public function statusAoVivo(): array
+    {
+        return Cache::remember('meta_ads:status_ao_vivo:'.md5($this->conta()), 15, function () {
+            $ler = fn (string $borda) => collect($this->getPaginado($this->conta().'/'.$borda, ['fields' => 'id,effective_status', 'limit' => 500]))
+                ->mapWithKeys(fn (array $item) => [(string) $item['id'] => (string) ($item['effective_status'] ?? '')])
+                ->all();
+
+            return [
+                'campanhas' => $ler('campaigns'),
+                'conjuntos' => $ler('adsets'),
+                'anuncios' => $ler('ads'),
+                'lido_em' => now(self::FUSO)->toIso8601String(),
+            ];
+        });
+    }
+
+    public function esquecerStatusAoVivo(): void
+    {
+        Cache::forget('meta_ads:status_ao_vivo:'.md5($this->conta()));
+    }
+
+    /**
+     * Dá para trocar o link pelo admin? Só criativo com object_story_spec
+     * (imagem ou vídeo com link). Catálogo (product_set_id) e anúncio feito
+     * de publicação existente ficam no Gerenciador.
+     *
+     * @param  array<string, mixed>  $criativo
+     */
+    public static function linkTrocavel(array $criativo): bool
+    {
+        $spec = $criativo['object_story_spec'] ?? null;
+
+        return is_array($spec) && blank($criativo['product_set_id'] ?? null)
+            && (isset($spec['link_data']) || isset($spec['video_data']['call_to_action']));
+    }
+
+    /**
+     * Criativo da Meta com o link trocado em todo lugar onde ele aparece
+     * (link_data.link, botão e link_urls do asset_feed_spec), pronto para
+     * POST em adcreatives. Os campos que a Meta devolve na leitura mas
+     * recusa na criação saem (imagem por hash e por url juntas).
+     *
+     * @param  array<string, mixed>  $criativo  lido com object_story_spec, asset_feed_spec, url_tags e name
+     * @return array<string, string>
+     */
+    public static function criativoComLinkNovo(array $criativo, string $link): array
+    {
+        $spec = $criativo['object_story_spec'];
+        foreach (['link_data', 'video_data'] as $chave) {
+            if (! isset($spec[$chave])) {
+                continue;
+            }
+            if ($chave === 'link_data') {
+                $spec[$chave]['link'] = $link;
+                if (filled($spec[$chave]['image_hash'] ?? null)) {
+                    unset($spec[$chave]['picture']);
+                }
+            }
+            if ($chave === 'video_data' && filled($spec[$chave]['image_hash'] ?? null)) {
+                unset($spec[$chave]['image_url']);
+            }
+            if (isset($spec[$chave]['call_to_action'])) {
+                $spec[$chave]['call_to_action']['value']['link'] = $link;
+            }
+        }
+
+        $payload = [
+            'name' => mb_substr(((string) ($criativo['name'] ?? 'Criativo')).' | link novo', 0, 255),
+            'object_story_spec' => json_encode($spec),
+        ];
+
+        if (! empty($criativo['asset_feed_spec'])) {
+            $feed = $criativo['asset_feed_spec'];
+            if (isset($feed['link_urls'])) {
+                $feed['link_urls'] = array_map(fn (array $l) => array_merge($l, ['website_url' => $link]), $feed['link_urls']);
+            }
+            $payload['asset_feed_spec'] = json_encode($feed);
+        }
+
+        if (filled($criativo['url_tags'] ?? null)) {
+            $payload['url_tags'] = (string) $criativo['url_tags'];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Troca o link de um anúncio feito no Gerenciador: criativo novo igual
+     * ao atual com o link novo, e o anúncio passa a usar ele (volta para a
+     * análise da Meta). Se a Meta recusar o criativo, nada muda no anúncio.
+     *
+     * @param  array{id: string, campanha_id: ?string}  $objeto  (ver objeto('anuncio', ...))
+     *
+     * @throws MetaAdsException
+     */
+    public function trocarLinkDoAnuncio(array $objeto, string $link): string
+    {
+        $ad = $this->get($objeto['id'], ['fields' => 'creative{id,name,object_story_spec,asset_feed_spec,url_tags,product_set_id}']);
+        $criativo = $ad['creative'] ?? [];
+
+        if (! self::linkTrocavel($criativo)) {
+            throw new MetaAdsException('Este anúncio não tem link próprio (catálogo ou publicação existente). Troque pelo Gerenciador');
+        }
+
+        $novo = (string) $this->post($this->conta().'/adcreatives', self::criativoComLinkNovo($criativo, $link))['id'];
+        $this->post($objeto['id'], ['creative' => json_encode(['creative_id' => $novo])]);
+        $this->esquecerEspelho($objeto['campanha_id']);
+        $this->esquecerStatusAoVivo();
+
+        return $novo;
+    }
+
     /** O espelho fica guardado 2 minutos: depois de mudar algo, lê a Meta de novo. */
     public function esquecerEspelho(MetaAdsCampanha|string|null $campanha = null): void
     {
@@ -907,7 +1030,7 @@ class MetaAdsService
         // asset_feed_spec.call_to_action_types (pode ter vários).
         $anuncios = $this->getPaginadoComExtras($this->conta().'/ads', $filtro + ['limit' => 200],
             'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}',
-            ',created_time,creative{thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec{call_to_action_types},product_set_id}',
+            ',created_time,creative{thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec{call_to_action_types,link_urls},product_set_id}',
             'botao', $faltando, substituir: true);
 
         $metricas = [];
@@ -959,6 +1082,9 @@ class MetaAdsService
                     'criado_em' => isset($a['created_time']) ? Carbon::parse($a['created_time'])->setTimezone(self::FUSO)->toIso8601String() : null,
                     'cta' => in_array('botao', $faltando, true) ? null
                         : self::ctaDoCriativo($a['creative'] ?? null, $objetivoDe->get((string) $a['campaign_id'], '')),
+                    // Link de destino e se dá para trocar pelo admin (2026-10-21).
+                    'link' => in_array('botao', $faltando, true) ? null : self::textoDoCriativo($a['creative'] ?? [])['link'],
+                    'link_editavel' => ! in_array('botao', $faltando, true) && self::linkTrocavel($a['creative'] ?? []),
                     'metricas' => $metricas['ad'][(string) $a['id']] ?? $this->metricas([]),
                 ])->sortBy('nome', SORT_NATURAL)->values()->all(),
             ])->sortBy('nome', SORT_NATURAL)->values()->all());

@@ -9,7 +9,8 @@ import AnuncioModais from './AnuncioModais.vue';
 import DiagnosticoMeta from './DiagnosticoMeta.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
 import GerenciarModais from './GerenciarModais.vue';
-import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './metaAds';
+import { formatarData, formatarNumero, formatarReais, statusDaCampanhaLocal } from './metaAds';
+import { useStatusAoVivo } from './useStatusAoVivo';
 
 const props = defineProps({
     campanha: { type: Object, required: true },
@@ -95,6 +96,16 @@ const trocarPeriodo = (periodo) => router.get(base.value, periodo === 'maximum' 
 
 const { can } = usePermissions();
 const c = computed(() => props.campanha);
+
+// Status ao vivo (pedido do Lira 2026-10-21): o selo do topo segue a Meta
+// (Aguardando, Publicando, Em análise, Ativa, Pausada...) sem recarregar.
+const { estado: aoVivo } = useStatusAoVivo({ aoMudarLocal: () => router.reload({ only: ['campanha', 'pode', 'problemas', 'linkGerenciador'] }) });
+const statusNoTopo = computed(() => {
+    const agora = aoVivo.locais[c.value.id];
+    const status = agora?.status ?? c.value.status;
+    const daMeta = agora?.status_meta ?? (c.value.meta_campaign_id ? aoVivo.meta?.campanhas?.[c.value.meta_campaign_id] : null);
+    return statusDaCampanhaLocal(status, daMeta ?? null, agora?.status_rotulo ?? c.value.status_rotulo, agora?.ultimo_erro ?? c.value.ultimo_erro);
+});
 const base = computed(() => `/admin/publicidade/meta-ads/campanhas/${c.value.id}`);
 const orcamento = computed(() => formatarReais(Number(c.value.orcamento_diario)));
 const periodo = computed(() => (c.value.fim
@@ -203,7 +214,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     <i class="fab fa-meta text-[#0866FF]" aria-hidden="true"></i>
                     {{ c.nome }}
                 </h1>
-                <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="STATUS_ESTILOS[c.status]">{{ c.status_rotulo }}</span>
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold" :class="statusNoTopo[1]" :title="statusNoTopo[2]" role="status" aria-live="polite">
+                    <i v-if="c.status === 'enviando'" class="fas fa-circle-notch animate-spin text-[10px]" aria-hidden="true"></i>
+                    {{ statusNoTopo[0] }}
+                </span>
             </div>
             <div class="flex flex-wrap gap-2">
                 <Link v-if="pode.editar && can('financeiro.create')" :href="`${base}/editar`"
@@ -327,7 +341,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </p>
                 <DiagnosticoMeta v-if="!espelho?.erro" :diagnostico="espelho?.diagnostico" :periodos="periodos" titulo="O que fazer nesta campanha"
                     :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
-                <EspelhoMeta v-if="!espelho?.erro" ref="tabela" :campanhas="espelho?.campanhas ?? []" abrir-tudo sem-link-local :editar-anuncios="can('financeiro.create')"
+                <EspelhoMeta v-if="!espelho?.erro" ref="tabela" :campanhas="espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="espelho?.diagnostico" abrir-tudo sem-link-local :editar-anuncios="can('financeiro.create')"
                     :produtos="produtos" :chamadas="chamadas" :class="{ 'opacity-60': carregandoMeta }" @mudou="recarregarTudo" />
             </Deferred>
             <p class="mt-2 text-xs text-slate-500">Resultado que a própria Meta atribui. O lucro de verdade fica em Resultado e margem.</p>

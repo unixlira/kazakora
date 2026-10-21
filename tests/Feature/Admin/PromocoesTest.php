@@ -59,6 +59,39 @@ class PromocoesTest extends TestCase
         $this->get('/promocoes/promocao-black-friday')->assertOk()->assertInertia(fn ($page) => $page->where('promocao.titulo', 'Black Friday'));
     }
 
+    public function test_exclui_promocao_criada_pela_lista(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $promocao = Promocao::query()->create(['slug' => 'queima-de-estoque', 'nome' => 'Queima de estoque', 'ativa' => true]);
+
+        $this->actingAs($admin)->delete('/admin/promocoes/queima-de-estoque')
+            ->assertRedirect('/admin/promocoes')
+            ->assertSessionHas('success', 'Queima de estoque excluída.');
+
+        $this->assertDatabaseMissing('promocoes', ['id' => $promocao->id]);
+        $this->actingAs($admin)->get('/admin/promocoes/queima-de-estoque')->assertNotFound();
+        $this->actingAs($admin)->delete('/admin/promocoes/queima-de-estoque')->assertNotFound();
+    }
+
+    public function test_airfryer_e_pdfs_nao_sao_excluidas(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        foreach (['airfryer', 'pdfs'] as $slug) {
+            $this->actingAs($admin)->delete("/admin/promocoes/{$slug}")->assertSessionHas('error');
+            $this->assertDatabaseHas('promocoes', ['slug' => $slug]);
+        }
+    }
+
+    public function test_cliente_nao_exclui_promocao(): void
+    {
+        $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        Promocao::query()->create(['slug' => 'protegida', 'nome' => 'Protegida']);
+
+        $this->actingAs($cliente)->delete('/admin/promocoes/protegida');
+        $this->assertDatabaseHas('promocoes', ['slug' => 'protegida']);
+    }
+
     public function test_cliente_nao_cria_promocao(): void
     {
         $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);

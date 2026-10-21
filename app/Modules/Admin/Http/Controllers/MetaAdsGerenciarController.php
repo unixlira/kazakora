@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
@@ -166,6 +167,124 @@ class MetaAdsGerenciarController extends Controller
         ]);
     }
 
+    /**
+     * Troca o link de destino de um anúncio direto na tabela (pedido do Lira
+     * 2026-10-21). Criativo novo com o link novo; o anúncio volta para a
+     * análise da Meta, por isso pede confirmação. Anúncio do KazaKora passa
+     * pela mesma edição do modal (edicao_pendente + avancarEdicao), para o
+     * link ficar gravado aqui também; o do Gerenciador muda só na Meta.
+     */
+    public function link(Request $request, string $metaId, MetaAdsService $meta): JsonResponse
+    {
+        $validador = Validator::make($request->all(), [
+            'link' => ['required', 'string', 'max:2048', 'url:https'],
+            'confirmo_analise' => ['boolean'],
+        ], [
+            'link.required' => 'Cole o link de destino.',
+            'link.url' => 'Use um link completo começando com https://',
+        ]);
+        $validador->after(function ($v) use ($request) {
+            $host = (string) parse_url((string) $request->input('link'), PHP_URL_HOST);
+            if (preg_match('/(^|\.)kazakora\.com\.br$|devlira\.com\.br$/i', $host)) {
+                $v->errors()->add('link', 'Esse endereço não é o da loja no ar. Use https://kazakora.com/...');
+            }
+        });
+        if ($validador->fails()) {
+            return $this->erroDeCampo($validador->errors()->toArray());
+        }
+        if (! $request->boolean('confirmo_analise')) {
+            return $this->erroDeCampo(['confirmo_analise' => ['Confirme que o anúncio volta para a análise da Meta.']]);
+        }
+
+        if ($resposta = $this->semMeta($meta)) {
+            return $resposta;
+        }
+
+        try {
+            $objeto = $meta->objeto('anuncio', $metaId);
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'Não deu para ler o anúncio na Meta: '.$erro->getMessage()], 422);
+        }
+
+        $link = trim((string) $request->input('link'));
+        [$campanha] = $this->locais('anuncio', $objeto);
+        $video = MetaAdsVideo::query()->where('meta_ad_id', $objeto['id'])->first();
+
+        if ($campanha?->status === MetaAdsCampanha::STATUS_ENVIANDO || $video?->temEdicaoPendente()) {
+            return response()->json(['message' => 'Este anúncio está sendo enviado ou editado agora. Espere terminar.'], 409);
+        }
+
+        try {
+            if ($video && $campanha) {
+                if ($video->criativo($campanha)['link'] === $link) {
+                    return response()->json(['message' => 'O link já é esse.', 'ok' => true]);
+                }
+                $video->forceFill(['edicao_pendente' => [
+                    'campos' => ['link_destino' => $link, 'produto_id' => $this->produtoDoLink($link) ?? $video->produto_id],
+                    'nome' => null,
+                    'muda_criativo' => true,
+                    'midia' => null,
+                ]])->save();
+                $meta->avancarEdicao($campanha, $video);
+                $meta->esquecerStatusAoVivo();
+            } else {
+                $meta->trocarLinkDoAnuncio($objeto, $link);
+            }
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'A Meta recusou: '.rtrim($erro->getMessage(), '.').'. Nada foi alterado.'], 422);
+        }
+
+        return response()->json(['message' => 'Link trocado na Meta. O anúncio volta para a análise antes de rodar de novo.', 'ok' => true, 'link' => $link]);
+    }
+
+    /**
+     * Status real na Meta, para a tela atualizar sozinha (pedido do Lira
+     * 2026-10-21). Devolve o effective_status de tudo da conta e o status
+     * das campanhas montadas no KazaKora; campanha já enviada acompanha a
+     * Meta (ativada ou pausada no Gerenciador muda aqui também).
+     */
+    public function status(MetaAdsService $meta): JsonResponse
+    {
+        $naMeta = null;
+        $erro = null;
+        if ($meta->configurado()) {
+            try {
+                $naMeta = $meta->statusAoVivo();
+            } catch (MetaAdsException $e) {
+                $erro = $e->getMessage();
+            }
+        }
+
+        $locais = MetaAdsCampanha::query()->get()->map(function (MetaAdsCampanha $c) use ($naMeta) {
+            $daMeta = filled($c->meta_campaign_id) ? ($naMeta['campanhas'][(string) $c->meta_campaign_id] ?? null) : null;
+
+            if ($daMeta !== null && in_array($c->status, [MetaAdsCampanha::STATUS_ATIVA, MetaAdsCampanha::STATUS_ENVIADA_PAUSADA], true)) {
+                $acompanha = match ($daMeta) {
+                    'ACTIVE' => MetaAdsCampanha::STATUS_ATIVA,
+                    'PAUSED' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
+                    default => $c->status,
+                };
+                if ($acompanha !== $c->status) {
+                    $c->forceFill(['status' => $acompanha])->save();
+                }
+            }
+
+            return [
+                'id' => $c->id,
+                'status' => $c->status,
+                'status_rotulo' => $c->status_rotulo,
+                'status_meta' => $daMeta,
+                'ultimo_erro' => $c->ultimo_erro,
+            ];
+        });
+
+        return response()->json([
+            'meta' => $naMeta,
+            'erro' => $erro,
+            'locais' => $locais,
+        ]);
+    }
+
     // ------------------------------------------------------------------------
 
     /**
@@ -239,6 +358,14 @@ class MetaAdsGerenciarController extends Controller
         }
 
         $campanha->forceFill(['orcamento_diario' => round((float) $campanha->conjuntos()->sum('orcamento_diario'), 2)])->save();
+    }
+
+    /** Produto da loja pelo link (https://kazakora.com/produtos/slug), como na sincronização. */
+    private function produtoDoLink(string $link): ?int
+    {
+        return preg_match('#^https?://(www\.)?kazakora\.com/produtos/([^/?\#]+)#', $link, $m)
+            ? Product::query()->where('slug', $m[2])->value('id')
+            : null;
     }
 
     private function semMeta(MetaAdsService $meta): ?JsonResponse

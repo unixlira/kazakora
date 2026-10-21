@@ -949,6 +949,86 @@ class MetaAdsService
     ];
 
     /**
+     * Filtro de status da tela (pedido do Lira 2026-10-21): chave => [rótulo,
+     * effective_status da Meta que entram]. "Inativos" é tudo o que não está
+     * ACTIVE; "Todos" não filtra. Abre em "Ativos".
+     */
+    public const FILTROS_STATUS = [
+        'ativos' => ['Ativos', ['ACTIVE']],
+        'pausados' => ['Pausados', ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED']],
+        'em_analise' => ['Em análise', ['IN_PROCESS', 'PENDING_REVIEW', 'PREAPPROVED']],
+        'com_problema' => ['Com problema ou reprovados', ['WITH_ISSUES', 'DISAPPROVED', 'PENDING_BILLING_INFO']],
+        'arquivados' => ['Arquivados', ['ARCHIVED']],
+        'excluidos' => ['Excluídos', ['DELETED']],
+        'inativos' => ['Todos os inativos', []],
+        'todos' => ['Todos', []],
+    ];
+
+    public const FILTRO_STATUS_PADRAO = 'ativos';
+
+    /**
+     * effective_status que as bordas /campaigns, /adsets e /ads aceitam
+     * listar. Sem o parâmetro a Meta esconde os arquivados; DELETED ela
+     * recusa (erro 1815001), excluído só sai pelo insights.
+     */
+    private const STATUS_LISTAVEIS = ['ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO',
+        'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES'];
+
+    /** O filtro precisa ler arquivados e excluídos, que a Meta não traz por padrão. */
+    public static function filtroLeArquivados(string $filtro): bool
+    {
+        return in_array($filtro, ['arquivados', 'excluidos', 'inativos', 'todos'], true);
+    }
+
+    public static function statusEntra(string $status, string $filtro): bool
+    {
+        return match ($filtro) {
+            'todos' => true,
+            'inativos' => $status !== 'ACTIVE',
+            default => in_array($status, self::FILTROS_STATUS[$filtro][1] ?? [], true),
+        };
+    }
+
+    /**
+     * Espelho só com o que tem o status do filtro. O item fica se ele tem o
+     * status ou se tem filho com o status (anúncio excluído aparece dentro
+     * da campanha e do conjunto ativos). Os totais de dentro continuam
+     * contando tudo (confirmação de excluir a campanha).
+     *
+     * @param  list<array<string, mixed>>  $campanhas
+     * @return list<array<string, mixed>>
+     */
+    public static function filtrarPorStatus(array $campanhas, string $filtro): array
+    {
+        if ($filtro === 'todos') {
+            return $campanhas;
+        }
+
+        $entra = fn (array $item) => self::statusEntra((string) ($item['status'] ?? ''), $filtro);
+        $saida = [];
+
+        foreach ($campanhas as $c) {
+            $conjuntos = [];
+            foreach ($c['conjuntos'] ?? [] as $s) {
+                $anuncios = array_values(array_filter($s['anuncios'] ?? [], $entra));
+                if ($entra($s) || $anuncios !== []) {
+                    $conjuntos[] = ['anuncios' => $anuncios, 'anuncios_total' => count($s['anuncios'] ?? [])] + $s;
+                }
+            }
+
+            if ($entra($c) || $conjuntos !== []) {
+                $saida[] = [
+                    'conjuntos' => $conjuntos,
+                    'conjuntos_total' => count($c['conjuntos'] ?? []),
+                    'anuncios_total' => array_sum(array_map(fn ($s) => count($s['anuncios'] ?? []), $c['conjuntos'] ?? [])),
+                ] + $c;
+            }
+        }
+
+        return $saida;
+    }
+
+    /**
      * Espelho do Gerenciador (pedido do Lira 2026-10-18): a estrutura real
      * da conta, Campanha > Conjuntos > Anúncios, lida AO VIVO da Meta, com
      * as métricas de cada nível. Anúncio criado direto no Gerenciador
@@ -976,14 +1056,14 @@ class MetaAdsService
      *
      * @throws MetaAdsException
      */
-    public function espelhoCompleto(string $periodo = 'maximum', ?string $campaignId = null): array
+    public function espelhoCompleto(string $periodo = 'maximum', ?string $campaignId = null, bool $comArquivados = false): array
     {
         $periodo = array_key_exists($periodo, self::PERIODOS) ? $periodo : 'maximum';
 
         return Cache::remember(
-            self::CHAVE_ESPELHO.md5($this->conta().'|'.$periodo.'|'.$campaignId),
+            self::CHAVE_ESPELHO.md5($this->conta().'|'.$periodo.'|'.$campaignId.($comArquivados ? '|arquivados' : '')),
             now()->addMinutes(2),
-            fn () => $this->montarEspelho($periodo, $campaignId),
+            fn () => $this->montarEspelho($periodo, $campaignId, $comArquivados),
         );
     }
 
@@ -1015,27 +1095,35 @@ class MetaAdsService
     private const INSIGHTS_EXTRAS = ',frequency,inline_link_clicks,inline_link_click_ctr,cpm';
 
     /** @return array{campanhas: list<array<string, mixed>>, conta: ?array<string, mixed>, gerado_em: string, faltando: list<string>} */
-    private function montarEspelho(string $periodo, ?string $campaignId): array
+    private function montarEspelho(string $periodo, ?string $campaignId, bool $comArquivados = false): array
     {
-        $filtro = $campaignId ? ['filtering' => json_encode([['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaignId]])] : [];
+        $daCampanha = $campaignId ? [['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaignId]] : [];
+        $filtro = $daCampanha ? ['filtering' => json_encode($daCampanha)] : [];
+        // Filtro de status (2026-10-21): arquivados só vêm pedindo o effective_status.
+        $listar = $comArquivados ? ['effective_status' => json_encode(self::STATUS_LISTAVEIS)] : [];
         $faltando = [];
 
+        $camposCampanha = 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time';
         $campanhas = $campaignId
-            ? [$this->get($campaignId, ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time'])]
-            : $this->getPaginado($this->conta().'/campaigns', ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time', 'limit' => 100]);
-        $conjuntos = $this->getPaginadoComExtras($this->conta().'/adsets', $filtro + ['limit' => 200],
+            ? [$this->get($campaignId, ['fields' => $camposCampanha])]
+            : $this->getPaginado($this->conta().'/campaigns', $listar + ['fields' => $camposCampanha, 'limit' => 100]);
+        $conjuntos = $this->getPaginadoComExtras($this->conta().'/adsets', $filtro + $listar + ['limit' => 200],
             'id,name,campaign_id,effective_status,daily_budget,lifetime_budget', ',learning_stage_info', 'aprendizado', $faltando);
         // Botão do anúncio (2026-10-21): no criativo simples vem em
         // call_to_action_type / object_story_spec; no dinâmico, em
         // asset_feed_spec.call_to_action_types (pode ter vários).
-        $anuncios = $this->getPaginadoComExtras($this->conta().'/ads', $filtro + ['limit' => 200],
+        $anuncios = $this->getPaginadoComExtras($this->conta().'/ads', $filtro + $listar + ['limit' => 200],
             'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}',
             ',created_time,creative{thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec{call_to_action_types,link_urls},product_set_id}',
             'botao', $faltando, substituir: true);
 
         $metricas = [];
         foreach (['campaign', 'adset', 'ad'] as $nivel) {
-            $linhas = $this->getPaginadoComExtras($this->conta().'/insights', $filtro + [
+            // Com o filtro de status, o insights traz também o que foi excluído.
+            $filtragem = array_merge($daCampanha, $comArquivados
+                ? [['field' => $nivel.'.effective_status', 'operator' => 'IN', 'value' => [...self::STATUS_LISTAVEIS, 'DELETED']]]
+                : []);
+            $linhas = $this->getPaginadoComExtras($this->conta().'/insights', ($filtragem ? ['filtering' => json_encode($filtragem)] : []) + [
                 'level' => $nivel,
                 'date_preset' => $periodo,
                 'limit' => 500,
@@ -1043,6 +1131,18 @@ class MetaAdsService
             foreach ($linhas as $linha) {
                 $metricas[$nivel][(string) $linha[$nivel.'_id']] = $this->metricas($linha);
             }
+        }
+
+        // Excluído a Meta não lista: o que teve gasto no período e não veio
+        // nas listas é lido um a um pelo id (até 50 por nível).
+        if ($comArquivados) {
+            $campanhas = array_merge($campanhas, $this->lerForaDaLista(array_keys($metricas['campaign'] ?? []), $campanhas, $camposCampanha));
+            $conjuntos = array_merge($conjuntos, $this->lerForaDaLista(array_keys($metricas['adset'] ?? []), $conjuntos,
+                'id,name,campaign_id,effective_status,daily_budget,lifetime_budget'.(in_array('aprendizado', $faltando, true) ? '' : ',learning_stage_info')));
+            $anuncios = array_merge($anuncios, $this->lerForaDaLista(array_keys($metricas['ad'] ?? []), $anuncios,
+                in_array('botao', $faltando, true)
+                    ? 'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}'
+                    : 'id,name,adset_id,campaign_id,effective_status,created_time,creative{thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec{call_to_action_types,link_urls},product_set_id}'));
         }
 
         // Média da conta inteira (CPC do clique no link, regra R4), mesmo
@@ -1122,6 +1222,31 @@ class MetaAdsService
             'gerado_em' => now(self::FUSO)->toIso8601String(),
             'faltando' => array_values(array_unique($faltando)),
         ];
+    }
+
+    /**
+     * Objetos com métricas no período que não vieram na lista (excluídos),
+     * lidos um a um. O que a Meta não deixar ler fica de fora.
+     *
+     * @param  list<string|int>  $comMetricas
+     * @param  list<array<string, mixed>>  $lidos
+     * @return list<array<string, mixed>>
+     */
+    private function lerForaDaLista(array $comMetricas, array $lidos, string $campos): array
+    {
+        $jaLidos = array_map(fn (array $x) => (string) $x['id'], $lidos);
+        $faltam = array_slice(array_values(array_diff(array_map('strval', $comMetricas), $jaLidos)), 0, 50);
+        $achados = [];
+
+        foreach ($faltam as $id) {
+            try {
+                $achados[] = $this->get($id, ['fields' => $campos]);
+            } catch (MetaAdsException) {
+                // Sem acesso ao objeto: segue sem ele.
+            }
+        }
+
+        return $achados;
     }
 
     /**

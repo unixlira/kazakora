@@ -491,7 +491,7 @@ class MetaAdsEditarExcluirAnuncioTest extends TestCase
             'act_123/insights' => Http::response(['data' => []]),
         ];
 
-        $this->actingAs($this->admin())->get(self::BASE)->assertOk()
+        $this->actingAs($this->admin())->get(self::BASE.'?status=todos')->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->has('produtos')
                 ->has('chamadas')

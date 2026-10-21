@@ -40,12 +40,13 @@ const ativos = (lista) => lista.filter((x) => x.status === 'ACTIVE').length;
 const alvoCampanha = (c) => ({
     nivel: 'campanha', id: c.id, nome: c.nome, status: c.status, gasto: c.metricas?.gasto ?? 0,
     orcamento_diario: c.orcamento_nivel === 'campanha' ? c.orcamento_diario : null,
-    dentro: `${plural(c.conjuntos.length, 'conjunto', 'conjuntos')} e ${plural(totalAnuncios(c), 'anúncio', 'anúncios')}`,
+    // Com o filtro de status a linha mostra só parte; a confirmação conta tudo.
+    dentro: `${plural(c.conjuntos_total ?? c.conjuntos.length, 'conjunto', 'conjuntos')} e ${plural(c.anuncios_total ?? totalAnuncios(c), 'anúncio', 'anúncios')}`,
 });
 const alvoConjunto = (c, s) => ({
     nivel: 'conjunto', id: s.id, nome: s.nome, status: s.status, gasto: s.metricas?.gasto ?? 0,
     orcamento_diario: c.orcamento_nivel === 'conjunto' ? s.orcamento_diario : null,
-    dentro: s.anuncios.length ? plural(s.anuncios.length, 'anúncio', 'anúncios') : '',
+    dentro: (s.anuncios_total ?? s.anuncios.length) ? plural(s.anuncios_total ?? s.anuncios.length, 'anúncio', 'anúncios') : '',
     ultimoAtivo: s.status === 'ACTIVE' && ativos(c.conjuntos) === 1,
 });
 const alvoAnuncio = (a) => ({ nivel: 'anuncio', id: a.id, nome: a.nome, status: a.status, gasto: a.metricas?.gasto ?? 0, orcamento_diario: null, ultimoAtivo: a.ultimo_ativo });
@@ -82,9 +83,10 @@ const abrirSugestoes = (c) => {
     c.conjuntos.forEach((s) => { if (daLinha(s.id).length || s.anuncios.some((a) => daLinha(a.id).length)) abertos[s.id] = true; });
 };
 
-// Campanha ativa já vem aberta; o clique do Lira vale até sair da tela.
+// Campanha vem fechada (pedido do Lira, 21/10); ao abrir, os conjuntos da
+// campanha ativa já aparecem abertos. O clique do Lira vale até sair da tela.
 const abertos = reactive({});
-const aberto = (c, id) => abertos[id] ?? (props.abrirTudo || c.status === 'ACTIVE');
+const aberto = (c, id) => abertos[id] ?? (props.abrirTudo || (id !== c.id && c.status === 'ACTIVE'));
 const alternar = (c, id) => { abertos[id] = !aberto(c, id); };
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;

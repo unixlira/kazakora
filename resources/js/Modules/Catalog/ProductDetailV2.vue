@@ -507,7 +507,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="reviewsCount > 0" class="nota">
                                 <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
                                 <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <a href="#avaliacoes">({{ reviewsCount }})</a>
+                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
                             </div>
 
                             <ul v-if="highlights.length" class="checks">
@@ -517,8 +517,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <hr class="divisor">
 
                             <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço de
-                                 venda (final_price, igual ao card) em destaque, 12x e "R$ X de desconto".
-                                 O desconto do Pix só aparece no checkout. -->
+                                 venda (final_price, igual ao card) em destaque, selo do Pix, 12x e
+                                 "R$ X de desconto". O Pix desconta no checkout; aqui só o selo (pedido 2026-10-20). -->
                             <div class="preco">
                                 <span class="rot">{{ aPartirDe ? 'A partir de:' : 'Preço:' }}</span>
                                 <div class="valores">
@@ -527,6 +527,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <span v-if="percentualTotal > 0" class="selo">⇣ {{ percentualTotal }}%</span>
                                     </div>
                                     <div class="por">{{ formatPrice(precoPor) }}</div>
+                                    <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
                                     <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
                                 </div>
@@ -955,6 +956,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .de { color: var(--text); font-size: 22px; font-weight: 600; text-decoration: line-through; }
 .pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* Selo do Pix logo abaixo do preço, no azul padrão da loja (pedido 2026-10-20). */
+.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #e8efff; color: var(--navy); border: 1px solid var(--blue); border-radius: 6px; padding: 5px 10px; font-size: 13px; line-height: 1.3; }
+.pd2 .selo-pix i { color: var(--blue); font-size: 16px; }
+.pd2 .selo-pix strong { font-weight: 800; }
+.dark .pd2 .selo-pix { background: rgba(122, 162, 255, 0.14); color: var(--blue); }
 .pd2 .parc { color: var(--ink); font-size: 18px; }
 .pd2 .parc i { color: var(--navy); margin-right: 4px; }
 .dark .pd2 .parc i { color: var(--blue); }

@@ -161,12 +161,15 @@ class ProductController extends Controller
         $siblingsQuery = fn () => Product::query()
             ->where('parent_product_id', $product->parent_product_id ?? $product->id)
             ->whereKeyNot($product->id)
-            ->with('images:id,product_id,path,thumb_path,medium_path,is_primary')
+            ->with(['images' => fn ($query) => $query->select(['id', 'product_id', 'path', 'thumb_path', 'medium_path', 'is_primary', 'is_variant', 'position'])->orderBy('position')])
             ->get(['id', 'name', 'sku', 'variation', 'stock'])
             ->each(fn (Product $sibling) => $sibling->setAppends([]));
 
         $variationsPayload = [
-            'parent' => $product->parent()->select(['id', 'name', 'sku'])->first(),
+            // Fotos do pai entram para escolher a foto da variação dele também.
+            'parent' => $product->parent()->select(['id', 'name', 'sku', 'variation'])
+                ->with(['images' => fn ($query) => $query->select(['id', 'product_id', 'path', 'thumb_path', 'medium_path', 'is_primary', 'is_variant', 'position'])->orderBy('position')])
+                ->first()?->setAppends([]),
             'siblings' => $siblingsQuery(),
         ];
 

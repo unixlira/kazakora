@@ -29,6 +29,42 @@ class PromocoesTest extends TestCase
         $this->actingAs($admin)->get('/admin/promocoes/outra')->assertNotFound();
     }
 
+    public function test_cria_promocao_nova_pela_lista(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => 'Promoção Black Friday'])
+            ->assertRedirect('/admin/promocoes/promocao-black-friday');
+        // Mesmo nome de novo ganha outro endereço; nome reservado também.
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => 'Promoção Black Friday'])
+            ->assertRedirect('/admin/promocoes/promocao-black-friday-2');
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => 'Nova'])->assertRedirect('/admin/promocoes/nova-2');
+        $this->actingAs($admin)->post('/admin/promocoes', ['nome' => ''])->assertSessionHasErrors('nome');
+
+        $p = Promocao::query()->where('slug', 'promocao-black-friday')->first();
+        $this->assertSame('Promoção Black Friday', $p->nome);
+        $this->assertFalse($p->ativa);
+
+        // Aparece na lista, abre, salva e a página pública segue a mesma regra.
+        $this->actingAs($admin)->get('/admin/promocoes')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocoes.0.slug', 'airfryer')
+            ->has('outras', 3)
+            ->where('outras.2.slug', 'promocao-black-friday'));
+        $this->actingAs($admin)->get('/admin/promocoes/promocao-black-friday')->assertOk();
+        $this->actingAs($admin)->put('/admin/promocoes/promocao-black-friday', ['titulo' => 'Black Friday', 'ativa' => true])
+            ->assertSessionHasNoErrors();
+        auth()->logout();
+        $this->get('/promocoes/promocao-black-friday')->assertOk()->assertInertia(fn ($page) => $page->where('promocao.titulo', 'Black Friday'));
+    }
+
+    public function test_cliente_nao_cria_promocao(): void
+    {
+        $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        $this->actingAs($cliente)->post('/admin/promocoes', ['nome' => 'Invasora']);
+        $this->assertFalse(Promocao::query()->where('nome', 'Invasora')->exists());
+    }
+
     public function test_salva_regras_e_chaves(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

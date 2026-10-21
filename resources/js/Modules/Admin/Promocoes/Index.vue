@@ -4,17 +4,20 @@
 // do quadro (a de Entregáveis, uma pronta ou enviada, com tamanho e formato)
 // e os produtos onde aparece, cada um com a sua chave. Texto, período e
 // regras continuam na tela de cada promoção.
+// O menu Promoções abre direto esta lista (2026-10-21): embaixo ficam as
+// promoções criadas aqui, que têm só texto, período e regras.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import BuscaProduto from '@/Modules/Admin/Entregaveis/BuscaProduto.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
     promocoes: { type: Array, default: () => [] },
+    outras: { type: Array, default: () => [] },
     formatos: { type: Array, default: () => [] },
     maxKb: { type: Number, default: 5120 },
 });
@@ -142,6 +145,12 @@ const removerProduto = async (slug, produto) => {
     }
 };
 
+const criando = ref(false);
+const nova = useForm({ nome: '' });
+const campoNome = ref(null);
+const abrirNova = () => { criando.value = true; setTimeout(() => campoNome.value?.focus()); };
+const criar = () => nova.post('/admin/promocoes', { onSuccess: () => { nova.reset(); criando.value = false; } });
+
 const miniatura = 'relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-slate-50 dark:bg-slate-800';
 const marcada = (sim) => (sim ? 'border-primary ring-2 ring-primary/30' : 'border-[var(--surface-border)] hover:border-primary/60');
 const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px] font-semibold text-white';
@@ -151,13 +160,36 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
     <Head title="Promoções" />
 
     <AdminLayout>
-        <div class="mb-6 max-w-3xl">
-            <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Os quadros da página do produto: ligue ou desligue cada promoção, escolha a imagem e em quais produtos ela aparece.
-                Texto, período e regras ficam em "Texto e regras" de cada uma.
-            </p>
+        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div class="max-w-3xl">
+                <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Os quadros da página do produto: ligue ou desligue cada promoção, escolha a imagem e em quais produtos ela aparece.
+                    Texto, período e regras ficam em "Texto e regras" de cada uma.
+                </p>
+            </div>
+            <button v-if="podeEditar && !criando" type="button"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis" @click="abrirNova">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Nova promoção
+            </button>
         </div>
+
+        <form v-if="criando" class="mb-6 max-w-2xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" @submit.prevent="criar">
+            <label for="nova-promocao" class="mb-1 block text-sm font-medium">Nome da promoção</label>
+            <div class="flex flex-wrap gap-2">
+                <input id="nova-promocao" ref="campoNome" v-model="nova.nome" type="text" maxlength="255" placeholder="Ex.: Promoção Black Friday"
+                    class="min-w-0 flex-1 rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                <button type="submit" :disabled="nova.processing || !nova.nome.trim()"
+                    class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
+                    <i class="fas mr-1" :class="nova.processing ? 'fa-spinner animate-spin' : 'fa-check'" aria-hidden="true"></i>Criar
+                </button>
+                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm" @click="criando = false; nova.reset(); nova.clearErrors()">
+                    Cancelar
+                </button>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Ela nasce inativa. Depois de criar, você preenche título, descrição, período e regras.</p>
+            <InputError :message="nova.errors.nome" />
+        </form>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <section v-for="promocao in promocoes" :key="promocao.slug"
@@ -320,5 +352,34 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                 </div>
             </section>
         </div>
+
+        <!-- Promoções criadas pela lista: só texto, período e regras -->
+        <section class="mt-8">
+            <h2 class="mb-3 text-lg font-semibold">Outras promoções</h2>
+            <ul v-if="outras.length" class="divide-y divide-[var(--surface-border)] rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+                <li v-for="promocao in outras" :key="promocao.slug" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <i class="fas fa-tags text-primary" aria-hidden="true"></i>
+                    <div class="min-w-0 flex-1">
+                        <div class="truncate font-medium">{{ promocao.nome }}</div>
+                        <div class="text-xs text-slate-500">
+                            <template v-if="promocao.inicio || promocao.fim">
+                                {{ promocao.inicio ? `de ${promocao.inicio}` : '' }} {{ promocao.fim ? `até ${promocao.fim}` : '' }}
+                            </template>
+                            <template v-else>Sem período definido</template>
+                        </div>
+                    </div>
+                    <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
+                    <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-sm text-slate-500 hover:text-primary hover:underline">
+                        <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Página
+                    </a>
+                    <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-sm text-primary hover:underline">
+                        <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                    </Link>
+                </li>
+            </ul>
+            <p v-else class="rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-sm text-slate-500">
+                Nenhuma outra promoção ainda. Use "Nova promoção" para criar.
+            </p>
+        </section>
     </AdminLayout>
 </template>

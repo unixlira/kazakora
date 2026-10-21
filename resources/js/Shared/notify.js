@@ -1,30 +1,42 @@
-import Swal from 'sweetalert2';
+// Desempenho (pedido 2026-10-21): o SweetAlert2 (~80 KB) só é baixado na
+// primeira vez que um aviso aparece, não junto com a loja.
+let carregando = null;
+const swal = () => (carregando ??= import('sweetalert2').then((m) => m.default));
 
-const Toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 3500,
-    timerProgressBar: true,
-    didOpen: (toast) => {
-        toast.addEventListener('mouseenter', Swal.stopTimer);
-        toast.addEventListener('mouseleave', Swal.resumeTimer);
-    },
-});
+let toast = null;
+const Toast = async () => {
+    if (toast) return toast;
+    const Swal = await swal();
+    toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3500,
+        timerProgressBar: true,
+        didOpen: (el) => {
+            el.addEventListener('mouseenter', Swal.stopTimer);
+            el.addEventListener('mouseleave', Swal.resumeTimer);
+        },
+    });
+    return toast;
+};
 
-export function notifySuccess(message) {
-    Toast.fire({ icon: 'success', title: message });
+export { swal as carregarSwal };
+
+export async function notifySuccess(message) {
+    (await Toast()).fire({ icon: 'success', title: message });
 }
 
-export function notifyError(message) {
-    Toast.fire({ icon: 'error', title: message, timer: 5000 });
+export async function notifyError(message) {
+    (await Toast()).fire({ icon: 'error', title: message, timer: 5000 });
 }
 
-export function notifyWarning(message) {
-    Toast.fire({ icon: 'warning', title: message, timer: 4500 });
+export async function notifyWarning(message) {
+    (await Toast()).fire({ icon: 'warning', title: message, timer: 4500 });
 }
 
 export async function confirmDelete(options = {}) {
+    const Swal = await swal();
     const result = await Swal.fire({
         icon: options.icon ?? 'warning',
         title: options.title ?? 'Tem certeza?',

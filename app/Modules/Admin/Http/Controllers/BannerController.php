@@ -82,7 +82,7 @@ class BannerController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);
-        $validated['image_path'] = $request->file('image')->store('banners', 'public');
+        $validated['image_path'] = $this->guardarComputador($request->file('image'));
 
         if ($request->hasFile('image_mobile')) {
             $validated['image_path_mobile'] = $this->guardarMobile($request->file('image_mobile'));
@@ -107,8 +107,8 @@ class BannerController extends Controller
         $validated = $this->validated($request, requireImage: false);
 
         if ($request->hasFile('image')) {
-            Storage::disk('public')->delete($banner->image_path);
-            $validated['image_path'] = $request->file('image')->store('banners', 'public');
+            BannerMobileOptimizer::apagar($banner->image_path);
+            $validated['image_path'] = $this->guardarComputador($request->file('image'));
         }
 
         if ($request->hasFile('image_mobile')) {
@@ -121,6 +121,15 @@ class BannerController extends Controller
         return redirect()->route('admin.banners.listar')->with('success', 'Banner atualizado com sucesso.');
     }
 
+    /** Grava a imagem do computador como veio e gera o WebP ao lado (o site prefere o WebP). */
+    private function guardarComputador(\Illuminate\Http\UploadedFile $arquivo): string
+    {
+        $caminho = $arquivo->store('banners', 'public');
+        BannerMobileOptimizer::otimizar($caminho, 'public', BannerMobileOptimizer::LARGURAS_PC, manterOriginal: true);
+
+        return $caminho;
+    }
+
     /** Grava a imagem mobile já em WebP e nas larguras do celular; sem GD, fica o original. */
     private function guardarMobile(\Illuminate\Http\UploadedFile $arquivo): string
     {
@@ -131,7 +140,7 @@ class BannerController extends Controller
 
     public function destroy(Banner $banner): RedirectResponse
     {
-        Storage::disk('public')->delete($banner->image_path);
+        BannerMobileOptimizer::apagar($banner->image_path);
         BannerMobileOptimizer::apagar($banner->image_path_mobile);
         $banner->delete();
 

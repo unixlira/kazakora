@@ -4,7 +4,7 @@
 // próximo de um computador dividido não ver. Com login, a conta manda: o
 // AppLayout passa os ids compartilhados (`favorites.ids`) para cá.
 import { reactive } from 'vue';
-import Swal from 'sweetalert2';
+import { carregarSwal } from '@/Shared/notify';
 
 const CHAVE = 'kazakora.favoritos';
 const LIMITE = 200;
@@ -78,7 +78,8 @@ export const idsFavoritos = () => estado.ids;
 
 // Aviso de fundo laranja e letra vermelha ao adicionar e ao tirar (pedido
 // 2026-10-15). Laranja claro (#feab86) com vermelho #991b1b dá 4,6:1.
-function avisar(titulo, tirou) {
+async function avisar(titulo, tirou) {
+    const Swal = await carregarSwal();
     Swal.fire({
         toast: true,
         position: 'top-end',
@@ -115,6 +116,7 @@ export async function alternarFavorito(productId) {
         estado.ids = data.ids ?? estado.ids;
     } catch (erro) {
         estado.ids = antes;
+        const Swal = await carregarSwal();
         Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: erro.message, showConfirmButton: false, timer: 5000 });
     }
 }

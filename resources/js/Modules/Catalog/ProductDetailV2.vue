@@ -719,7 +719,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </section>
 
                         <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
-                             com os 3 tablets e capas estilo revista (entregas/quadro-livros-tablets-2026-10-21 do Homer) à esquerda, oferta à
+                             com os 3 tablets e capas estilo revista coloridas (entregas/capas-revista-livros-2026-10-21 do Homer) à esquerda, oferta à
                              direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
@@ -727,8 +727,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <img v-if="livrosQuadro" class="livros-img" :src="livrosQuadro"
                                      :alt="`Guias digitais da KazaKora em tablets: ${livrosDigitais.map((l) => l.titulo).join(', ')}`"
                                      width="1200" height="600" loading="lazy">
-                                <img v-else class="livros-img" src="/images/promocoes/livros-revista.webp"
-                                     alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Dor nas costas de quem trabalha sentado, Lombar travada: e agora?, e Acordei com dor nas costas"
+                                <img v-else class="livros-img" src="/images/promocoes/livros-revista-cores.webp"
+                                     alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Sentou, doeu? Dor nas costas de quem trabalha sentado; Travou a lombar? O que fazer nas primeiras 48 horas; Acordou com dor? O problema pode estar na sua noite"
                                      width="1200" height="600" loading="lazy">
                             </div>
                             <div class="livros-oferta">

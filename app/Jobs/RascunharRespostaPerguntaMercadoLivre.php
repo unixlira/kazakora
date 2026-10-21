@@ -2,10 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\User;
 use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\Marketplace\Models\MercadoLivrePergunta;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
+use App\Notifications\PerguntaMercadoLivreSemRespostaNotification;
 use App\Services\MercadoLivre\MercadoLivreClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
@@ -35,7 +38,13 @@ class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
     {
         $pergunta = MercadoLivrePergunta::find($this->perguntaId);
 
-        if (! $pergunta || $pergunta->rascunho_em !== null || ! $gemini->isConfigured()) {
+        if (! $pergunta || $pergunta->rascunho_em !== null) {
+            return;
+        }
+
+        if (! $gemini->isConfigured()) {
+            $this->marcarParaLira($pergunta);
+
             return;
         }
 
@@ -66,6 +75,8 @@ class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
         } catch (Throwable $e) {
             Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.questions.gemini_falhou', ['pergunta' => $pergunta->question_id, 'erro' => mb_substr($e->getMessage(), 0, 180)]);
 
+            $this->marcarParaLira($pergunta);
+
             return;
         }
 
@@ -78,6 +89,25 @@ class RascunharRespostaPerguntaMercadoLivre implements ShouldQueue
             'precisa_humano' => $humano || $texto === '',
             'rascunho_em' => now(),
         ]);
+
+        if ($pergunta->precisa_humano) {
+            $this->avisar($pergunta);
+        }
+    }
+
+    /** Sem rascunho (ficha não responde, Gemini fora): fica marcada e o Lira é avisado. */
+    private function marcarParaLira(MercadoLivrePergunta $pergunta): void
+    {
+        $pergunta->update(['precisa_humano' => true, 'rascunho_em' => now()]);
+        $this->avisar($pergunta);
+    }
+
+    private function avisar(MercadoLivrePergunta $pergunta): void
+    {
+        Notification::send(
+            User::query()->where('role', User::ROLE_ADMIN)->get(),
+            new PerguntaMercadoLivreSemRespostaNotification($pergunta->question_id, $pergunta->item_id, (string) $pergunta->pergunta),
+        );
     }
 
     private function instrucoes(): string

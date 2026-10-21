@@ -21,6 +21,8 @@ const props = defineProps({
     product: { type: Object, required: true },
     variations: { type: Array, default: () => [] },
     galeria: { type: Array, default: null },
+    // Modelos ligados (2026-10-21): anúncios separados do mesmo grupo.
+    modelos: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
@@ -127,6 +129,16 @@ const escolherVariacao = (variant) => {
     prazo.value = null;
 };
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
+
+// Modelos ligados (pedido 2026-10-21, Caixa Sanfonada 85/168 peças): cada
+// modelo é outro anúncio. O clique troca na hora a foto grande pela foto
+// principal do outro (nunca o vídeo) e o <Link> leva para a página dele.
+// Clique com Ctrl/Shift/botão do meio abre outra aba: aí a foto não troca.
+const fotoModelo = ref(null);
+const escolherModelo = (modelo, event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (modelo.foto_url) fotoModelo.value = modelo.foto_url;
+};
 const isLightboxOpen = ref(false);
 
 // Vídeo sem autoplay (pedido 2026-10-15): mostra a primeira foto como capa com
@@ -464,7 +476,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                                    <template v-if="activeMedia?.type === 'video'">
+                                    <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
+                                    <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
                                         <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
                                             <img v-if="videoPoster" :src="videoPoster" :alt="`${product.name} — vídeo`">
@@ -533,6 +546,22 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
                                     <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
+                                </div>
+                            </div>
+
+                            <div v-if="modelos.length > 1" class="variacoes modelos">
+                                <span class="subtitulo">Modelo</span>
+                                <div class="opcoes">
+                                    <template v-for="modelo in modelos" :key="modelo.id">
+                                        <span v-if="modelo.atual" class="opcao atual" aria-current="page">
+                                            <img v-if="modelo.thumb_url" :src="modelo.thumb_url" alt="">
+                                            {{ modelo.rotulo }}
+                                        </span>
+                                        <Link v-else :href="modelo.url" class="opcao" @click="escolherModelo(modelo, $event)">
+                                            <img v-if="modelo.thumb_url" :src="modelo.thumb_url" alt="">
+                                            {{ modelo.rotulo }}
+                                        </Link>
+                                    </template>
                                 </div>
                             </div>
 
@@ -981,6 +1010,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .opcao img { width: 34px; height: 34px; border-radius: 2px; object-fit: cover; }
 .pd2 .opcao:hover { border-color: var(--ink); }
 .pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }
+.pd2 span.opcao.atual { cursor: default; }
 .pd2 .opcao.esgotada { opacity: .5; text-decoration: line-through; }
 /* Variação obrigatória (pedido 2026-10-15): alerta vermelho ao lado do título. */
 .pd2 .alerta-variacao { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 600; vertical-align: middle; animation: pd2-tremer .35s; }

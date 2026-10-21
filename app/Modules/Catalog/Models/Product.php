@@ -32,6 +32,8 @@ class Product extends Model
         'model',
         'color',
         'variation',
+        'grupo_modelos',
+        'rotulo_modelo',
         'video_path',
         'video_duration_seconds',
         'price',

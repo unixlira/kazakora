@@ -476,6 +476,7 @@ class CatalogController extends Controller
             'product' => $product->makeHidden('cost_price'),
             'variations' => $variations,
             'galeria' => $galeria,
+            'modelos' => $this->modelosLigados($product),
             'reviews' => $reviews,
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
@@ -535,6 +536,48 @@ class CatalogController extends Controller
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
         ]);
+    }
+
+    /**
+     * Modelos ligados (pedido 2026-10-21, Caixa Sanfonada 85 e 168 peças):
+     * anúncios SEPARADOS (sem pai/filho) com o mesmo `grupo_modelos` aparecem
+     * como opções de "Modelo" na página uns dos outros, cada um com a foto
+     * principal dele. Só ativos; com menos de 2 no grupo, nada aparece.
+     * Uma consulta para os produtos e outra para as fotos (sem N+1).
+     */
+    private function modelosLigados(Product $product): array
+    {
+        if (blank($product->grupo_modelos)) {
+            return [];
+        }
+
+        $modelos = Product::query()
+            ->where('grupo_modelos', $product->grupo_modelos)
+            ->where('is_active', true)
+            ->with(['images' => fn ($query) => $query->reorder()->orderByDesc('is_primary')->orderBy('position')->orderBy('id')])
+            ->get(['id', 'name', 'slug', 'rotulo_modelo']);
+
+        if ($modelos->count() < 2) {
+            return [];
+        }
+
+        return $modelos
+            ->map(function (Product $modelo) use ($product) {
+                $foto = $modelo->images->first();
+
+                return [
+                    'id' => $modelo->id,
+                    'slug' => $modelo->slug,
+                    'rotulo' => $modelo->rotulo_modelo ?: $modelo->name,
+                    'url' => route('produtos.ver', $modelo->slug, false),
+                    'thumb_url' => $foto?->thumb_url,
+                    'foto_url' => $foto?->media_url,
+                    'atual' => $modelo->id === $product->id,
+                ];
+            })
+            ->sortBy('rotulo', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
     }
 
     public function shipping(Product $product): Response

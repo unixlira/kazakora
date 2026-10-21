@@ -48,4 +48,20 @@ class PerguntasTest extends TestCase
         $this->assertNotNull(MercadoLivrePergunta::where('question_id', 556)->first()->respondida_em);
         Queue::assertNotPushed(RascunharRespostaPerguntaMercadoLivre::class);
     }
+
+    public function test_sem_gemini_a_pergunta_fica_marcada_e_o_admin_e_avisado(): void
+    {
+        config(['services.gemini.api_key' => null]);
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        $p = MercadoLivrePergunta::create(['question_id' => 7, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Serve no modelo X?']);
+
+        $gemini = Mockery::mock(\App\Modules\WhatsApp\Services\GeminiClient::class);
+        $gemini->shouldReceive('isConfigured')->andReturn(false);
+
+        (new RascunharRespostaPerguntaMercadoLivre($p->id))->handle($gemini, Mockery::mock(MercadoLivreClient::class));
+
+        $this->assertTrue($p->fresh()->precisa_humano);
+        $this->assertNull($p->fresh()->resposta_enviada);
+        $this->assertCount(1, $admin->notifications);
+    }
 }

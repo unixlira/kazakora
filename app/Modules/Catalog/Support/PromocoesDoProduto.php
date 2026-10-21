@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Cache;
  * `quadros` (2026-10-21): condições e botão de cada quadro, vindos da
  * promoção. O botão depende do período, que o cache não acompanha: ele vai
  * guardado com início e fim e é conferido a cada visita (paraPagina).
+ * `titulo`, `texto` (parágrafos) e `destaque` trocam o texto de sempre do
+ * quadro; null / lista vazia = o de sempre.
  */
 class PromocoesDoProduto
 {
@@ -66,7 +68,7 @@ class PromocoesDoProduto
      * Props da página do produto: sorteios, livrosDigitais, livrosQuadro e
      * quadros (condições e botão por promoção).
      *
-     * @return array{sorteios: list<array<string, mixed>>, livrosDigitais: list<array<string, mixed>>, livrosQuadro: ?string, quadros: array<string, array{condicoes: ?string, botao: ?array{texto: string, url: string}}>}
+     * @return array{sorteios: list<array<string, mixed>>, livrosDigitais: list<array<string, mixed>>, livrosQuadro: ?string, quadros: array<string, array{titulo: ?string, texto: list<string>, destaque: ?string, condicoes: ?string, botao: ?array{texto: string, url: string}}>}
      */
     public static function paraPagina(Product $produto): array
     {
@@ -114,6 +116,9 @@ class PromocoesDoProduto
         $livros = $exibe($pdfs) ? LivroDigital::doProduto($produto) : collect();
 
         $quadro = fn (?Promocao $promocao) => [
+            'titulo' => $promocao?->quadro_titulo,
+            'texto' => $promocao?->paragrafosDoQuadro() ?? [],
+            'destaque' => $promocao?->quadro_destaque,
             'condicoes' => $promocao?->condicoes,
             'botao' => $promocao !== null && $promocao->botao_ativo && $promocao->ativa ? [
                 'texto' => $promocao->textoDoBotao(),

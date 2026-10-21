@@ -19,6 +19,8 @@ use Inertia\Response;
 
 /**
  * Vender › Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs.
+ * Voltou para dentro de Vender (Lira, 2026-10-21) e Entregáveis saiu do
+ * menu: o cadastro de sorteios e livros abre pelo link de cada card.
  * Cada uma tem título e descrição (página pública /promocoes/{slug}),
  * ativa/inativa, período, valor mínimo do pedido, observações e
  * chaves/regras livres que o Lira define.
@@ -34,8 +36,9 @@ use Inertia\Response;
  * "mostrar na página do produto", a imagem do quadro (pronta, enviada ou a
  * de Entregáveis) e os produtos onde aparece (tabela promocao_produto).
  *
- * Texto do quadro (2026-10-21): condições ("pedidos pagos até...") e o botão
- * para a página da promoção também ficam no card, junto do resto do quadro.
+ * Texto do quadro (2026-10-21): título, texto, destaque (só livros),
+ * condições ("pedidos pagos até...") e o botão para a página da promoção
+ * também ficam no card, junto do resto do quadro.
  */
 class PromocaoController extends Controller
 {
@@ -137,24 +140,35 @@ class PromocaoController extends Controller
         return back()->with('success', "{$promocao->nome}: {$mensagem}");
     }
 
-    /** Condições e botão do quadro (o botão leva a /promocoes/{slug}). */
+    /** Título, texto, destaque, condições e botão do quadro (o botão leva a /promocoes/{slug}). */
     public function quadro(Request $request, string $slug): RedirectResponse
     {
         $promocao = Promocao::query()->where('slug', $slug)->firstOrFail();
         $dados = $request->validate([
+            'quadro_titulo' => ['nullable', 'string', 'max:255'],
+            'quadro_texto' => ['nullable', 'string', 'max:2000'],
+            'quadro_destaque' => ['nullable', 'string', 'max:120'],
             'condicoes' => ['nullable', 'string', 'max:500'],
             'botao_ativo' => ['boolean'],
             'botao_texto' => ['nullable', 'string', 'max:60'],
         ], [
+            'quadro_titulo.max' => 'O título pode ter no máximo 255 caracteres.',
+            'quadro_texto.max' => 'O texto pode ter no máximo 2000 caracteres.',
+            'quadro_destaque.max' => 'O destaque pode ter no máximo 120 caracteres.',
             'condicoes.max' => 'As condições podem ter no máximo 500 caracteres.',
             'botao_texto.max' => 'O texto do botão pode ter no máximo 60 caracteres.',
         ]);
 
-        $condicoes = trim(str_replace(["\r\n", "\r"], "\n", (string) ($dados['condicoes'] ?? '')));
+        // Quebra de linha do navegador (\r\n) vira \n; vazio = texto de sempre.
+        $limpo = fn (string $campo) => trim(str_replace(["\r\n", "\r"], "\n", (string) ($dados[$campo] ?? ''))) ?: null;
         $texto = trim((string) ($dados['botao_texto'] ?? ''));
 
         $promocao->update([
-            'condicoes' => $condicoes !== '' ? $condicoes : null,
+            'quadro_titulo' => $limpo('quadro_titulo'),
+            'quadro_texto' => $limpo('quadro_texto'),
+            // O destaque só existe no quadro dos livros.
+            'quadro_destaque' => $slug === Promocao::PDFS ? $limpo('quadro_destaque') : null,
+            'condicoes' => $limpo('condicoes'),
             'botao_ativo' => $request->boolean('botao_ativo'),
             'botao_texto' => $texto !== '' && $texto !== Promocao::BOTAO_PADRAO ? $texto : null,
         ]);
@@ -231,12 +245,19 @@ class PromocaoController extends Controller
     {
         $slug = $promocao->slug;
 
-        // O que está cadastrado em Entregáveis (texto do quadro) e a imagem
-        // que o quadro usa quando a promoção não tem a sua.
+        // O que está cadastrado (sorteios ou livros), o texto que o quadro
+        // usa com os campos vazios e a imagem quando a promoção não tem a sua.
         if ($slug === Promocao::AIRFRYER) {
             $ativos = Sorteio::query()->where('ativo', true)->orderBy('id')->get();
-            $padrao = $ativos->first()?->imagem_url ?? asset(PromocoesDoProduto::PRONTAS[$slug][0]['caminho']);
-            $entregaveis = ['itens' => $ativos->pluck('titulo')->values(), 'link' => '/admin/entregaveis/sorteios', 'texto_sorteio' => $ativos->first()?->paragrafo_1];
+            $primeiro = $ativos->first();
+            $padrao = $primeiro?->imagem_url ?? asset(PromocoesDoProduto::PRONTAS[$slug][0]['caminho']);
+            $entregaveis = [
+                'itens' => $ativos->pluck('titulo')->values(),
+                'link' => '/admin/entregaveis/sorteios',
+                'texto_sorteio' => $primeiro?->paragrafo_1,
+                'titulo_padrao' => $primeiro?->titulo,
+                'texto_padrao' => $primeiro ? trim($primeiro->paragrafo_1."\n\n".($primeiro->paragrafo_2 ?? '')) : null,
+            ];
         } else {
             $ativos = LivroDigital::query()->where('ativo', true)->orderBy('id')->get();
             $padrao = asset(PromocoesDoProduto::QUADRO_LIVROS_PADRAO);
@@ -252,6 +273,9 @@ class PromocaoController extends Controller
             'fim' => $promocao->fim?->format('d/m/Y H:i'),
             'fim_data' => $promocao->fim?->format('d/m/Y'),
             'condicoes' => $promocao->condicoes,
+            'quadro_titulo' => $promocao->quadro_titulo,
+            'quadro_texto' => $promocao->quadro_texto,
+            'quadro_destaque' => $promocao->quadro_destaque,
             'botao_ativo' => $promocao->botao_ativo,
             'botao_texto' => $promocao->botao_texto,
             'botao_padrao' => Promocao::BOTAO_PADRAO,

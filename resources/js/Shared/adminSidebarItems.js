@@ -37,15 +37,10 @@ export const sidebarSections = [
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', cor: 'rosa', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', cor: 'ambar', permission: 'cadastros.view' },
-        ],
-    },
-    {
-        // Promoções (Lira, 2026-10-21): tela principal com link direto, fora
-        // de Vender e sem submenu. Lá ficam os cards (Airfryer, PDFs e as que
-        // ele criar) e o botão "Adicionar Promoção".
-        heading: 'Promoções',
-        direto: true,
-        items: [
+            // Promoções (Lira, 2026-10-21): voltou para dentro de Vender. Lá
+            // ficam os cards (Airfryer, PDFs e as que ele criar), o texto dos
+            // quadros e o link para o cadastro de sorteios e livros, que
+            // saiu do menu junto com Entregáveis.
             { label: 'Promoções', href: '/admin/promocoes', icon: 'fas fa-tags', cor: 'rosa', permission: 'cadastros.view' },
         ],
     },
@@ -141,15 +136,6 @@ export const sidebarSections = [
             { label: 'Baixar vídeos', href: '/admin/download-videos', icon: 'fas fa-download', cor: 'azul', permission: 'operacional.create' },
             // Validação de criativos (2026-10-21): vídeos de anúncio esperando o Lira aprovar.
             { label: 'Validação de criativos', href: '/admin/validacao-criativos', icon: 'fas fa-clapperboard', cor: 'violeta', permission: 'cadastros.view', badgeKey: 'criativosAguardando' },
-        ],
-    },
-    {
-        // Entregáveis (pedido do Lira 2026-10-20): livros digitais e sorteios
-        // que aparecem na página do produto, ligados e desligados por produto.
-        heading: 'Entregáveis',
-        items: [
-            { label: 'Livros Digitais', href: '/admin/entregaveis/livros-digitais', icon: 'fas fa-book-open', cor: 'indigo', permission: 'cadastros.view' },
-            { label: 'Sorteios', href: '/admin/entregaveis/sorteios', icon: 'fas fa-gift', cor: 'rosa', permission: 'cadastros.view' },
         ],
     },
     {

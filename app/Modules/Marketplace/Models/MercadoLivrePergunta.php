@@ -86,6 +86,21 @@ class MercadoLivrePergunta extends Model
         };
     }
 
+    /**
+     * Onde responder direto no painel do marketplace (Lira, 2026-10-20: se não
+     * der para responder aqui, um clique leva à pergunta lá). O ML não tem
+     * endereço por pergunta: a tela de perguntas do vendedor lista as abertas
+     * por anúncio. Sem tela de perguntas conhecida, cai no anúncio.
+     */
+    public function linkDaPergunta(): ?string
+    {
+        return match ($this->canal ?? self::CANAL_MERCADO_LIVRE) {
+            self::CANAL_MERCADO_LIVRE => 'https://www.mercadolivre.com.br/perguntas/vendedor',
+            self::CANAL_AMAZON => 'https://sellercentral.amazon.com.br/messaging/inbox',
+            default => $this->link(),
+        };
+    }
+
     public function linkNoMercadoLivre(): string
     {
         // MLB123456 → produto.mercadolivre.com.br/MLB-123456

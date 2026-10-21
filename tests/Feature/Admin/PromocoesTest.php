@@ -55,4 +55,45 @@ class PromocoesTest extends TestCase
             'regras' => [['chave' => 'chave inválida', 'valor' => 'x']],
         ])->assertSessionHasErrors(['fim', 'regras.0.chave']);
     }
+
+    public function test_airfryer_vem_com_o_titulo_e_salva_descricao_com_paragrafos(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->assertSame('Compre, concorra no air fryer', Promocao::query()->where('slug', 'airfryer')->value('titulo'));
+
+        $this->actingAs($admin)->put('/admin/promocoes/airfryer', [
+            'titulo' => 'Compre, concorra no air fryer',
+            'descricao' => "Primeira linha\r\nsegunda linha\r\n\r\n\r\nOutro parágrafo",
+            'ativa' => true,
+        ])->assertSessionHasNoErrors();
+
+        $p = Promocao::query()->where('slug', 'airfryer')->first();
+        $this->assertSame("Primeira linha\nsegunda linha\n\n\nOutro parágrafo", $p->descricao);
+        $this->assertSame(["Primeira linha\nsegunda linha", 'Outro parágrafo'], $p->paragrafos());
+    }
+
+    public function test_pagina_publica_mostra_paragrafos_e_some_quando_desativada(): void
+    {
+        $p = Promocao::query()->where('slug', 'airfryer')->first();
+        $p->update(['ativa' => true, 'descricao' => "Linha 1\nLinha 2\n\n<b>Parágrafo 2</b>"]);
+
+        $this->get('/promocoes/airfryer')->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Promocoes/Ver', false)
+            ->where('promocao.titulo', 'Compre, concorra no air fryer')
+            ->where('promocao.paragrafos', ["Linha 1\nLinha 2", '<b>Parágrafo 2</b>'])
+            ->where('previa', false));
+
+        $p->update(['ativa' => false]);
+        $this->get('/promocoes/airfryer')->assertNotFound();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->get('/promocoes/airfryer')->assertOk()->assertInertia(fn ($page) => $page->where('previa', true));
+    }
+
+    public function test_pagina_publica_some_depois_do_fim(): void
+    {
+        Promocao::query()->where('slug', 'airfryer')->update(['ativa' => true, 'fim' => now()->subMinute()]);
+
+        $this->get('/promocoes/airfryer')->assertNotFound();
+    }
 }

@@ -755,7 +755,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <img v-if="livrosQuadro" class="livros-img" :src="livrosQuadro"
                                      :alt="`Guias digitais da KazaKora em tablets: ${livrosDigitais.map((l) => l.titulo).join(', ')}`"
                                      width="1200" height="600" loading="lazy">
-                                <img v-else class="livros-img" src="/images/promocoes/livros-revista-cores.webp"
+                                <img v-else class="livros-img" src="/images/promocoes/livros-revista-simbolos.webp"
                                      alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Sentou, doeu? Dor nas costas de quem trabalha sentado; Travou a lombar? O que fazer nas primeiras 48 horas; Acordou com dor? O problema pode estar na sua noite"
                                      width="1200" height="600" loading="lazy">
                             </div>

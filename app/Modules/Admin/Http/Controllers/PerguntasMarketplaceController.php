@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Jobs\RascunharRespostaPerguntaMercadoLivre;
 use App\Models\Setting;
 use App\Models\User;
-use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\MercadoLivrePergunta;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\MercadoLivre\Services\RespostaPerguntaService;
@@ -20,8 +19,9 @@ use Throwable;
 
 /**
  * Atendimento > Perguntas MK Place (pedido do Lira 2026-10-20): perguntas dos
- * anúncios dos marketplaces (hoje o Mercado Livre; a Shopee não tem perguntas
- * públicas na API). A Manuela atende primeiro; o que ela não sabe fica
+ * anúncios dos marketplaces. Cada pergunta guarda o canal de origem (coluna
+ * canal); hoje só o Mercado Livre entrega perguntas e aceita resposta pela
+ * API (a Shopee e a Amazon não têm perguntas públicas na API). A Manuela atende primeiro; o que ela não sabe fica
  * marcado para uma pessoa, com aviso no topo do admin. O atendente pode
  * assumir qualquer pergunta, editar o rascunho e enviar, ou devolver para ela.
  */
@@ -29,24 +29,34 @@ class PerguntasMarketplaceController extends Controller
 {
     private const FILTROS = ['humano', 'rascunho', 'abertas', 'respondidas', 'todas'];
 
+    private const CANAIS = [
+        MercadoLivrePergunta::CANAL_MERCADO_LIVRE,
+        MercadoLivrePergunta::CANAL_SHOPEE,
+        MercadoLivrePergunta::CANAL_AMAZON,
+        MercadoLivrePergunta::CANAL_TIKTOK_SHOP,
+    ];
+
     public function index(Request $request): Response
     {
         $filtro = in_array($request->query('filtro'), self::FILTROS, true) ? $request->query('filtro') : 'humano';
         $busca = trim((string) $request->query('busca', ''));
+        $canal = in_array($request->query('canal'), self::CANAIS, true) ? $request->query('canal') : null;
 
         $perguntas = $this->filtrar(MercadoLivrePergunta::query(), $filtro)
+            ->when($canal, fn ($q) => $q->where('canal', $canal))
             ->when($busca !== '', fn ($q) => $q->where(fn ($w) => $w->where('pergunta', 'like', "%{$busca}%")->orWhere('item_id', 'like', "%{$busca}%")))
             ->orderByRaw('respondida_em is null desc')
             ->orderByDesc('perguntada_em')->orderByDesc('id')
             ->limit(200)
             ->get();
 
+        // Nome do produto por canal + código do anúncio.
         $produtos = ProductChannelListing::query()
-            ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
+            ->whereIn('channel', $perguntas->pluck('canal')->unique())
             ->whereIn('external_id', $perguntas->pluck('item_id')->unique())
             ->with('product:id,name')
             ->get()
-            ->mapWithKeys(fn ($l) => [$l->external_id => $l->product?->name]);
+            ->mapWithKeys(fn ($l) => [$l->channel.'|'.$l->external_id => $l->product?->name]);
 
         $atendentes = User::query()->whereIn('id', $perguntas->pluck('humano_assumiu_por')->merge($perguntas->pluck('respondida_por_user_id'))->filter()->unique())->pluck('name', 'id');
 
@@ -54,6 +64,8 @@ class PerguntasMarketplaceController extends Controller
             'perguntas' => $perguntas->map(fn (MercadoLivrePergunta $p) => $this->linha($p, $produtos, $atendentes))->values(),
             'filtro' => $filtro,
             'busca' => $busca,
+            'canal' => $canal,
+            'canais' => MercadoLivrePergunta::query()->select('canal')->distinct()->pluck('canal')->merge([MercadoLivrePergunta::CANAL_MERCADO_LIVRE])->unique()->values(),
             'contagem' => collect(self::FILTROS)->mapWithKeys(fn ($f) => [$f => $this->filtrar(MercadoLivrePergunta::query(), $f)->count()]),
             'autoResposta' => MercadoLivrePergunta::manuelaRespondeSozinha(),
             'podeConfigurar' => (bool) $request->user()?->isAdmin(),
@@ -95,6 +107,7 @@ class PerguntasMarketplaceController extends Controller
             'total' => $total,
             'perguntas' => $novas->map(fn (MercadoLivrePergunta $p) => [
                 'id' => $p->id,
+                'canal' => $p->canal,
                 'item_id' => $p->item_id,
                 'pergunta' => mb_substr((string) $p->pergunta, 0, 200),
             ]),
@@ -110,6 +123,10 @@ class PerguntasMarketplaceController extends Controller
     public function enviar(Request $request, MercadoLivrePergunta $pergunta, RespostaPerguntaService $respostas): JsonResponse
     {
         $dados = $request->validate(['texto' => ['required', 'string', 'max:'.RespostaPerguntaService::LIMITE]]);
+
+        if (! $pergunta->podeEnviar()) {
+            return response()->json(['message' => 'Esse marketplace ainda não aceita resposta pela API. Responda direto no painel dele.'], 422);
+        }
 
         try {
             $respostas->enviar($pergunta, $dados['texto'], MercadoLivrePergunta::POR_HUMANO, $request->user()->id);
@@ -175,10 +192,11 @@ class PerguntasMarketplaceController extends Controller
     {
         return [
             'id' => $p->id,
-            'canal' => 'mercado_livre',
+            'canal' => $p->canal,
+            'pode_enviar' => $p->podeEnviar(),
             'item_id' => $p->item_id,
-            'produto' => $produtos[$p->item_id] ?? null,
-            'link' => $p->linkNoMercadoLivre(),
+            'produto' => $produtos[$p->canal.'|'.$p->item_id] ?? null,
+            'link' => $p->link(),
             'pergunta' => $p->pergunta,
             'perguntada_em' => $p->perguntada_em?->toIso8601String(),
             'rascunho' => $p->resposta_rascunho,

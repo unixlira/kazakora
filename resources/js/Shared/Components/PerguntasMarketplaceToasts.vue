@@ -6,6 +6,7 @@ const avisadas = new Set();
 </script>
 
 <script setup>
+import { canalPergunta } from '@/Shared/canaisPerguntas';
 import { router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -87,7 +88,7 @@ function dismiss(key) {
 
 function open(toast) {
     dismiss(toast.key);
-    router.visit('/admin/perguntas-marketplace?filtro=humano');
+    router.visit(`/admin/perguntas-marketplace?filtro=humano&pergunta=${toast.id}`);
 }
 </script>
 
@@ -105,7 +106,7 @@ function open(toast) {
                 </span>
                 <button type="button" class="min-w-0 flex-1 text-left" @click="open(toast)">
                     <span class="block text-sm font-semibold text-red-700 dark:text-red-300">A Manuela não soube responder</span>
-                    <span class="block text-[11px] text-slate-500 dark:text-slate-400"><i class="fas fa-handshake mr-1 text-[#e6b800]"></i>Mercado Livre · {{ toast.item_id }}</span>
+                    <span class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400"><span class="inline-flex h-4 w-4 items-center justify-center rounded text-[9px]" :class="canalPergunta(toast.canal).fundo"><i :class="canalPergunta(toast.canal).icone"></i></span>{{ canalPergunta(toast.canal).nome }} · {{ toast.item_id }}</span>
                     <span class="mt-1 line-clamp-2 text-sm text-slate-700 dark:text-slate-200">{{ toast.pergunta }}</span>
                     <span class="mt-1 block text-xs font-medium text-red-700 underline dark:text-red-300">Assumir o atendimento</span>
                 </button>

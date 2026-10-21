@@ -100,15 +100,21 @@ class Promocao extends Model
         });
     }
 
-    /** Promoção pelo endereço, em cache (página pública abre sem ir ao banco). */
+    /**
+     * Promoção pelo endereço, em cache (página pública abre sem ir ao banco).
+     * Guarda só as colunas: o cache não desserializa objetos
+     * (config/cache.php serializable_classes = false).
+     */
     public static function doSlug(string $slug): ?self
     {
-        return Cache::remember(self::chaveCache($slug), self::CACHE_TTL, fn () => self::query()->where('slug', $slug)->first());
+        $colunas = Cache::remember(self::chaveCache($slug), self::CACHE_TTL, fn () => self::query()->where('slug', $slug)->first()?->getAttributes());
+
+        return is_array($colunas) ? (new self)->newFromBuilder($colunas) : null;
     }
 
     private static function chaveCache(string $slug): string
     {
-        return 'promocao:'.$slug;
+        return 'promocao:v2:'.$slug;
     }
 
     public function produtos(): HasMany

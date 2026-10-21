@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Models;
 
 
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -88,6 +89,14 @@ class Product extends Model
             }
             // O slug novo é do produto agora: não pode redirecionar para outro.
             ProductSlugAntigo::query()->where('slug', $product->slug)->delete();
+        });
+
+        // Variação vinculada/desvinculada muda de quem ela herda os quadros
+        // promocionais (sorteio e livros) guardados em cache.
+        static::updated(function (Product $product) {
+            if ($product->wasChanged('parent_product_id')) {
+                PromocoesDoProduto::limparCache();
+            }
         });
     }
 

@@ -17,12 +17,13 @@ const props = defineProps({
 
 const { can } = usePermissions();
 
-const vazio = () => ({ titulo: '', pdf: null, capa: null, remover_capa: false, ativo: true, todos_produtos: true, produtos: [] });
+const vazio = () => ({ titulo: '', pdf: null, capa: null, remover_capa: false, imagem_quadro: null, remover_imagem_quadro: false, ativo: true, todos_produtos: true, produtos: [] });
 const form = useForm(vazio());
 const editando = ref(null);
 const escolhidos = ref([]);
 const inputPdf = ref(null);
 const inputCapa = ref(null);
+const inputQuadro = ref(null);
 
 const adicionar = (produto) => {
     if (!escolhidos.value.some((p) => p.id === produto.id)) escolhidos.value.push(produto);
@@ -34,12 +35,13 @@ const remover = (produto) => {
 const limparArquivos = () => {
     if (inputPdf.value) inputPdf.value.value = '';
     if (inputCapa.value) inputCapa.value.value = '';
+    if (inputQuadro.value) inputQuadro.value.value = '';
 };
 
 const editar = (livro) => {
     editando.value = livro;
     escolhidos.value = [...livro.produtos];
-    form.defaults({ titulo: livro.titulo, pdf: null, capa: null, remover_capa: false, ativo: livro.ativo, todos_produtos: livro.todos_produtos, produtos: [] });
+    form.defaults({ titulo: livro.titulo, pdf: null, capa: null, remover_capa: false, imagem_quadro: null, remover_imagem_quadro: false, ativo: livro.ativo, todos_produtos: livro.todos_produtos, produtos: [] });
     form.reset();
     form.clearErrors();
     limparArquivos();
@@ -116,6 +118,17 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
                     <input id="ld-capa" ref="inputCapa" type="file" accept="image/*" class="block w-full text-sm" @input="form.capa = $event.target.files[0] ?? null">
                     <p class="mt-1 text-xs text-slate-400">Imagem da capa na página do produto. Sem capa, aparece só o título.</p>
                     <InputError :message="form.errors.capa" />
+                </div>
+
+                <div class="mb-4">
+                    <label for="ld-quadro" class="mb-1 block text-sm font-medium">Imagem do quadro (tablets)</label>
+                    <div v-if="editando?.imagem_quadro_url && !form.remover_imagem_quadro" class="mb-2 flex items-center gap-3">
+                        <img :src="editando.imagem_quadro_url" alt="" class="h-12 w-24 rounded object-contain">
+                        <button type="button" class="text-xs text-red-600 hover:underline" @click="form.remover_imagem_quadro = true">Remover imagem</button>
+                    </div>
+                    <input id="ld-quadro" ref="inputQuadro" type="file" accept="image/*" class="block w-full text-sm" @input="form.imagem_quadro = $event.target.files[0] ?? null">
+                    <p class="mt-1 text-xs text-slate-400">Imagem que aparece no quadro da página do produto; vale a do primeiro livro do grupo.</p>
+                    <InputError :message="form.errors.imagem_quadro" />
                 </div>
 
                 <fieldset class="mb-4">

@@ -35,6 +35,8 @@ const props = defineProps({
     // Entregáveis do admin (pedido 2026-10-20).
     sorteios: { type: Array, default: () => [] },
     livrosDigitais: { type: Array, default: () => [] },
+    // Imagem dos tablets do grupo de livros (admin); null = padrão (dor nas costas).
+    livrosQuadro: { type: String, default: null },
 });
 
 const page = usePage();
@@ -776,12 +778,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
                                 <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                                <img class="livros-img" src="/images/promocoes/livros-revista.webp"
+                                <img v-if="livrosQuadro" class="livros-img" :src="livrosQuadro"
+                                     :alt="`Guias digitais da KazaKora em tablets: ${livrosDigitais.map((l) => l.titulo).join(', ')}`"
+                                     width="1200" height="600" loading="lazy">
+                                <img v-else class="livros-img" src="/images/promocoes/livros-revista.webp"
                                      alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Dor nas costas de quem trabalha sentado, Lombar travada: e agora?, e Acordei com dor nas costas"
                                      width="1200" height="600" loading="lazy">
                             </div>
                             <div class="livros-oferta">
-                                <p>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
+                                <!-- Texto das costas só com a imagem padrão; grupo com imagem própria (ferramentas, Natal) usa texto neutro. -->
+                                <p v-if="livrosQuadro">Guias em PDF com orientações práticas para você aproveitar melhor a sua compra.</p>
+                                <p v-else>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
                                 <p class="livros-lista">
                                     <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
                                 </p>

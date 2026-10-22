@@ -37,6 +37,11 @@ export const sidebarSections = [
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', cor: 'rosa', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', cor: 'ambar', permission: 'cadastros.view' },
+            // Promoções (Lira, 2026-10-21): voltou para dentro de Vender. Lá
+            // ficam os cards (Airfryer, PDFs e as que ele criar), o texto dos
+            // quadros e o link para o cadastro de sorteios e livros, que
+            // saiu do menu junto com Entregáveis.
+            { label: 'Promoções', href: '/admin/promocoes', icon: 'fas fa-tags', cor: 'rosa', permission: 'cadastros.view' },
         ],
     },
     {

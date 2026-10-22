@@ -20,6 +20,7 @@ use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KoraSyncController;
+use App\Modules\Admin\Http\Controllers\LivroDigitalController;
 use App\Modules\Admin\Http\Controllers\EnviosFlexController;
 use App\Modules\Admin\Http\Controllers\DevolucoesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
@@ -64,6 +65,8 @@ use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
+use App\Modules\Admin\Http\Controllers\PromocaoController;
+use App\Modules\Admin\Http\Controllers\SorteioController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
 use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
@@ -134,6 +137,8 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
 ]))->name('legal.cookies');
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
+// Página pública da promoção (pedido 2026-10-21): título e descrição de Vender › Promoções.
+Route::get('/promocoes/{slug}', [\App\Modules\Catalog\Http\Controllers\PromocaoPublicaController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('promocoes.ver');
 
 // URLs da loja antiga (Nuvemshop) que o Google ainda mostra nos resultados
 // (pedido 2026-10-12: clicar em "kazakora.com › quem-somos" dava 404).
@@ -241,6 +246,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
 });
+// Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link assinado do
+// e-mail e da página do pedido, abre sem login.
+Route::get('/pedidos/{order}/livros/{livro}', [CheckoutController::class, 'livroDoPedido'])
+    ->whereNumber(['order', 'livro'])
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('pedidos.livro.baixar');
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.
@@ -351,6 +362,37 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::put('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'update'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.atualizar');
     Route::patch('ofertas-relampago/{oferta}/ativo', [OfertaRelampagoController::class, 'alternar'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.alternar');
     Route::delete('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'destroy'])->whereNumber('oferta')->middleware('permission:cadastros.delete')->name('ofertas-relampago.excluir');
+
+    // Entregáveis (pedido 2026-10-20): livros digitais (PDF) e sorteios na página do produto.
+    Route::get('entregaveis/produtos', [LivroDigitalController::class, 'produtos'])->middleware('permission:cadastros.view')->name('entregaveis.produtos');
+    Route::get('entregaveis/livros-digitais', [LivroDigitalController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.livros.listar');
+    Route::post('entregaveis/livros-digitais', [LivroDigitalController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.livros.armazenar');
+    Route::put('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'update'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.atualizar');
+    Route::patch('entregaveis/livros-digitais/email-pedido', [LivroDigitalController::class, 'alternarEmail'])->middleware('permission:cadastros.edit')->name('entregaveis.livros.email');
+    Route::patch('entregaveis/livros-digitais/{livro}/ativo', [LivroDigitalController::class, 'alternar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.alternar');
+    Route::get('entregaveis/livros-digitais/{livro}/pdf', [LivroDigitalController::class, 'baixar'])->whereNumber('livro')->middleware('permission:cadastros.view')->name('entregaveis.livros.baixar');
+    Route::delete('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'destroy'])->whereNumber('livro')->middleware('permission:cadastros.delete')->name('entregaveis.livros.excluir');
+    Route::get('entregaveis/sorteios', [SorteioController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.sorteios.listar');
+    Route::post('entregaveis/sorteios', [SorteioController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.sorteios.armazenar');
+    Route::put('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'update'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.atualizar');
+    Route::patch('entregaveis/sorteios/{sorteio}/ativo', [SorteioController::class, 'alternar'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.alternar');
+    Route::delete('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'destroy'])->whereNumber('sorteio')->middleware('permission:cadastros.delete')->name('entregaveis.sorteios.excluir');
+
+    // Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da Promoção PDFs.
+    // Tela inicial (2026-10-21): Airfryer e PDFs lado a lado, com a chave, a imagem e os produtos da página do produto.
+    Route::get('promocoes', [PromocaoController::class, 'index'])->middleware('permission:cadastros.view')->name('promocoes.listar');
+    // Nova promoção pela lista (2026-10-21): o menu abre direto a lista, que cria outras além de Airfryer e PDFs.
+    Route::post('promocoes', [PromocaoController::class, 'store'])->middleware('permission:cadastros.edit')->name('promocoes.armazenar');
+    Route::patch('promocoes/{slug}/pagina-produto', [PromocaoController::class, 'paginaProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.pagina-produto');
+    Route::patch('promocoes/{slug}/quadro', [PromocaoController::class, 'quadro'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.quadro');
+    Route::post('promocoes/{slug}/imagem', [PromocaoController::class, 'imagem'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.imagem');
+    Route::post('promocoes/{slug}/produtos', [PromocaoController::class, 'adicionarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.produtos.adicionar');
+    Route::patch('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'alternarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.alternar');
+    Route::delete('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'removerProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.remover');
+    Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.view')->name('promocoes.exibir');
+    Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
+    // Excluir promoção (2026-10-21): só as criadas pela lista; Airfryer e PDFs controlam os quadros da página do produto.
+    Route::delete('promocoes/{slug}', [PromocaoController::class, 'destroy'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.edit')->name('promocoes.excluir');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

@@ -31,6 +31,13 @@ const props = defineProps({
     relatedFavoriteIds: { type: Array, default: () => [] },
     relatedReviewableIds: { type: Array, default: () => [] },
     relatedReviewedIds: { type: Array, default: () => [] },
+    // Entregáveis do admin (pedido 2026-10-20).
+    sorteios: { type: Array, default: () => [] },
+    livrosDigitais: { type: Array, default: () => [] },
+    // Imagem dos tablets do grupo de livros (admin); null = padrão (dor nas costas).
+    livrosQuadro: { type: String, default: null },
+    // Condições e botão de cada quadro, definidos em Promoções (2026-10-21): { airfryer: {condicoes, botao}, pdfs: {...} }.
+    quadrosPromocao: { type: Object, default: () => ({}) },
 });
 
 const page = usePage();
@@ -417,7 +424,14 @@ const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const ehVideo = (midia) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(midia?.image_url ?? '');
 const fotoAberta = ref(null);
-const abrirFoto = (imagens, indice) => { fotoAberta.value = { imagens, indice }; };
+// `largo`: imagem horizontal (quadro dos livros) abre maior que a foto da avaliação.
+const abrirFoto = (imagens, indice, largo = false) => { fotoAberta.value = { imagens, indice, largo }; };
+
+// Quadro dos livros: imagem do grupo (admin) ou a padrão das costas.
+const livrosQuadroSrc = computed(() => props.livrosQuadro || '/images/promocoes/livros-revista-cama.webp');
+const livrosQuadroAlt = computed(() => (props.livrosQuadro
+    ? `Guias digitais da KazaKora em tablets: ${props.livrosDigitais.map((l) => l.titulo).join(', ')}`
+    : 'Três guias digitais grátis da KazaKora em tablets, com capa de revista: Sentou, doeu? Dor nas costas de quem trabalha sentado; Travou a lombar? O que fazer nas primeiras 48 horas; Acordou com dor? O problema pode estar na sua noite'));
 const fecharFoto = () => { fotoAberta.value = null; };
 const passarFoto = (passo) => {
     if (!fotoAberta.value) return;
@@ -701,6 +715,61 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                         </section>
 
+                        <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
+                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). Logo depois
+                             da descrição, antes de Garantia, Pagamento Seguro e Informação adicional (teste pedido 2026-10-21). -->
+                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
+                            <div class="promo-texto">
+                                <h2>{{ quadrosPromocao.airfryer?.titulo || sorteio.titulo }}</h2>
+                                <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar dos parágrafos do sorteio. -->
+                                <p v-for="(paragrafo, i) in quadrosPromocao.airfryer?.texto ?? []" :key="`st-${i}`" class="promo-texto-livre"
+                                   :class="{ 'sem-margem': i === quadrosPromocao.airfryer.texto.length - 1 && !quadrosPromocao.airfryer.condicoes && !quadrosPromocao.airfryer.botao }">{{ paragrafo }}</p>
+                                <!-- Condições da Promoção Airfryer (admin › Promoções) no lugar do texto do sorteio. -->
+                                <p v-if="quadrosPromocao.airfryer?.condicoes" class="promo-condicoes" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ quadrosPromocao.airfryer.condicoes }}</p>
+                                <template v-else-if="!quadrosPromocao.airfryer?.texto?.length">
+                                    <p :class="{ 'sem-margem': !sorteio.paragrafo_2 && !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_1 }}</p>
+                                    <p v-if="sorteio.paragrafo_2" :class="{ 'sem-margem': !quadrosPromocao.airfryer?.botao }">{{ sorteio.paragrafo_2 }}</p>
+                                </template>
+                                <Link v-if="quadrosPromocao.airfryer?.botao" :href="quadrosPromocao.airfryer.botao.url" class="promo-botao">
+                                    {{ quadrosPromocao.airfryer.botao.texto }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                </Link>
+                            </div>
+                            <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
+                        </section>
+
+                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
+                             com os 3 tablets e capas estilo revista coloridas (entregas/capas-revista-livros-2026-10-21 do Homer) à esquerda, oferta à
+                             direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
+                        <section v-if="livrosDigitais.length" class="card promo-livros">
+                            <div class="livros-vitrine">
+                                <h2 v-if="quadrosPromocao.pdfs?.titulo">{{ quadrosPromocao.pdfs.titulo }}</h2>
+                                <h2 v-else>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
+                                <!-- Clique amplia a imagem no mesmo lightbox das fotos de avaliação (pedido 2026-10-21). -->
+                                <button type="button" class="livros-zoom" aria-label="Ampliar imagem dos livros"
+                                        @click="abrirFoto([{ image_url: livrosQuadroSrc, alt: livrosQuadroAlt }], 0, true)">
+                                    <img class="livros-img" :src="livrosQuadroSrc" :alt="livrosQuadroAlt" width="1200" height="600" loading="lazy">
+                                </button>
+                            </div>
+                            <div class="livros-oferta">
+                                <!-- Texto das costas só com a imagem padrão; grupo com imagem própria (ferramentas, Natal) usa texto neutro. -->
+                                <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar do texto de sempre. -->
+                                <template v-if="quadrosPromocao.pdfs?.texto?.length">
+                                    <p v-for="(paragrafo, i) in quadrosPromocao.pdfs.texto" :key="`lt-${i}`" class="promo-texto-livre">{{ paragrafo }}</p>
+                                </template>
+                                <p v-else-if="livrosQuadro">Guias em PDF com orientações práticas para você aproveitar melhor a sua compra.</p>
+                                <p v-else>Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.</p>
+                                <p class="livros-lista">
+                                    <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
+                                </p>
+                                <p v-if="quadrosPromocao.pdfs?.destaque" class="livros-gratis">{{ quadrosPromocao.pdfs.destaque }}</p>
+                                <p v-else class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
+                                <p v-if="quadrosPromocao.pdfs?.condicoes" class="promo-condicoes livros-condicoes">{{ quadrosPromocao.pdfs.condicoes }}</p>
+                                <Link v-if="quadrosPromocao.pdfs?.botao" :href="quadrosPromocao.pdfs.botao.url" class="promo-botao livros-botao">
+                                    {{ quadrosPromocao.pdfs.botao.texto }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                </Link>
+                            </div>
+                        </section>
+
                         <section class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
@@ -784,11 +853,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- Foto da avaliação ampliada -->
                 <Teleport to="body">
-                    <div v-if="fotoAberta" class="aval-lightbox" role="dialog" aria-modal="true" aria-label="Foto da avaliação" @click.self="fecharFoto">
+                    <div v-if="fotoAberta" class="aval-lightbox" :class="{ 'lb-largo': fotoAberta.largo }" role="dialog" aria-modal="true" :aria-label="fotoAberta.largo ? 'Imagem ampliada' : 'Foto da avaliação'" @click.self="fecharFoto">
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
                         <video v-if="ehVideo(fotoAberta.imagens[fotoAberta.indice])" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" autoplay controls playsinline></video>
-                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
+                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>
@@ -898,7 +967,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
 .pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
 .pd2 .col-principal > .card { grid-column: 1; }
-.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 5; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
 .pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
@@ -1071,6 +1140,28 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .lista li { margin-bottom: 4px; }
 .pd2 .linhas { list-style: none; margin: 0 0 14px; padding: 0; }
 .pd2 .bloco > :last-child { margin-bottom: 0; }
+/* banners promocionais (sorteio AirFryer e livros digitais) */
+.pd2 .promo { display: flex; align-items: center; gap: 24px; }
+.pd2 .promo h2 { margin-bottom: 12px; }
+.pd2 .promo-texto { flex: 1 1 auto; }
+.pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
+.pd2 .promo-sorteio { width: 190px; }
+.pd2 .promo-condicoes, .pd2 .promo-texto-livre { white-space: pre-line; }
+.pd2 .livros-oferta .livros-condicoes { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.pd2 .promo-botao { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px 18px; border-radius: 999px; background: var(--green); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; }
+.pd2 .promo-botao:hover { background: var(--green-edge); color: #fff; }
+.pd2 .promo-botao:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.pd2 .livros-botao { margin-top: 14px; }
+.pd2 .promo-livros { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; align-items: center; }
+.pd2 .promo-livros h2 { margin-bottom: 18px; }
+.pd2 .livros-img { display: block; width: 100%; height: auto; }
+.pd2 .livros-zoom { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.pd2 .livros-zoom:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+.pd2 .livros-oferta p { margin: 0 0 14px; font-size: 17px; line-height: 1.5; }
+.pd2 .livros-lista { display: flex; flex-direction: column; gap: 6px; font-size: 14px !important; color: var(--ink); }
+.pd2 .livros-lista i { color: var(--green); }
+.pd2 .livros-oferta .livros-gratis { margin: 0; color: var(--ink); }
+.pd2 .livros-gratis b { color: var(--green); font-weight: 700; white-space: nowrap; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
@@ -1115,6 +1206,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 @media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
 .aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
 .aval-lightbox img, .aval-lightbox video { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
+.aval-lightbox.lb-largo img { max-width: min(96vw, 1400px); max-height: 88vh; cursor: zoom-out; }
 .aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }
 .aval-lightbox button:hover { background: rgba(255,255,255,.28); }
 .aval-lightbox .lb-fechar { top: 14px; right: 14px; }
@@ -1180,6 +1272,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .fretefundo li { font-size: 14px; }
     .pd2 .fretefundo i { color: #7b7b7b; }
     .pd2 .garantia { grid-template-columns: 30% 70%; }
+    .pd2 .promo { flex-direction: column; align-items: flex-start; }
+    .pd2 .promo-sorteio { width: 160px; align-self: center; }
+    .pd2 .promo-livros { grid-template-columns: 1fr; gap: 20px; }
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }

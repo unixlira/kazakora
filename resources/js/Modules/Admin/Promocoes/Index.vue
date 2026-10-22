@@ -1,0 +1,584 @@
+<script setup>
+// Promoções (pedido 2026-10-21): Promoção Airfryer e Promoção PDFs
+// lado a lado. Cada card tem a chave "mostrar na página do produto", a imagem
+// do quadro (a de Entregáveis, uma pronta ou enviada, com tamanho e formato)
+// e os produtos onde aparece, cada um com a sua chave. Texto, período e
+// regras continuam na tela de cada promoção.
+// Tela principal Promoções (Lira, 2026-10-21): item de Vender no menu, com
+// "Adicionar Promoção" no topo. Embaixo, um card para cada
+// promoção criada aqui, que tem só texto, período e regras.
+// Texto do quadro (2026-10-21): condições ("pedidos pagos até...") e o botão
+// para a página da promoção ficam no card, com prévia e avisos de quando o
+// botão não aparece, para não ter que caçar o texto em Entregáveis.
+// Título, texto e destaque do quadro (2026-10-21) também ficam no card:
+// Entregáveis saiu do menu e o cadastro de sorteios e livros abre pelo link.
+import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import InputError from '@/Shared/Components/InputError.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
+import BuscaProduto from '@/Modules/Admin/Entregaveis/BuscaProduto.vue';
+import { usePermissions } from '@/Shared/usePermissions';
+import { confirmDelete } from '@/Shared/notify';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+
+const props = defineProps({
+    promocoes: { type: Array, default: () => [] },
+    outras: { type: Array, default: () => [] },
+    formatos: { type: Array, default: () => [] },
+    maxKb: { type: Number, default: 5120 },
+});
+
+const { can } = usePermissions();
+const podeEditar = can('cadastros.edit');
+
+const ICONES = { airfryer: 'fa-fan', pdfs: 'fa-file-pdf' };
+const QUADRO = { airfryer: 'Quadro do sorteio', pdfs: 'Quadro dos livros digitais' };
+
+const porSlug = (slug) => props.promocoes.find((p) => p.slug === slug);
+
+const modoSalvo = (promocao) => {
+    if (!promocao.imagem) return { modo: 'padrao', caminho: '' };
+    return promocao.enviada ? { modo: 'enviada', caminho: '' } : { modo: 'pronta', caminho: promocao.imagem };
+};
+
+const estado = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, {
+    ...modoSalvo(p), arquivo: null, previa: null, medida: null, salvando: false, erro: '',
+}])));
+const inputs = ref({});
+
+// Formulário de texto do quadro, um por promoção.
+const textoSalvo = (p) => ({
+    quadro_titulo: p.quadro_titulo ?? '',
+    quadro_texto: p.quadro_texto ?? '',
+    quadro_destaque: p.quadro_destaque ?? '',
+    condicoes: p.condicoes ?? '',
+    botao_ativo: p.botao_ativo,
+    botao_texto: p.botao_texto ?? '',
+});
+// Texto que o quadro mostra com o campo vazio (o do sorteio; o fixo dos livros).
+const TITULO_LIVROS = 'Compre Hoje E Receba N Livros Digitais GRÁTIS!';
+const TEXTO_LIVROS = 'Guias em PDF com orientações práticas para cuidar das costas no trabalho, nas crises e na hora de dormir.';
+const DESTAQUE_LIVROS = 'Adquirindo hoje: 100% GRÁTIS';
+const tituloPadrao = (p) => (p.slug === 'airfryer' ? p.entregaveis.titulo_padrao ?? '' : TITULO_LIVROS);
+const textoPadrao = (p) => (p.slug === 'airfryer' ? p.entregaveis.texto_padrao ?? '' : TEXTO_LIVROS);
+// Parágrafos da prévia: linha em branco separa, como na página do produto.
+const paragrafos = (texto) => texto.split(/\n[ \t]*\n/).map((t) => t.trim()).filter(Boolean);
+const quadro = reactive(Object.fromEntries(props.promocoes.map((p) => [p.slug, textoSalvo(p)])));
+const mudouQuadro = (slug) => JSON.stringify(quadro[slug]) !== JSON.stringify(textoSalvo(porSlug(slug)));
+const condicoesComFim = (promocao) => `Pedidos realizados e pagos até ${promocao.fim_data} participam automaticamente.`;
+const usarFim = (promocao) => { quadro[promocao.slug].condicoes = condicoesComFim(promocao); };
+// Data dd/mm/aaaa nas condições que já passou: aviso para não deixar texto vencido no ar.
+const dataVencida = (texto) => {
+    const m = (texto || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return null;
+    const fimDoDia = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 23, 59, 59);
+    return fimDoDia < new Date() ? m[0] : null;
+};
+const motivoSemBotao = (promocao) => {
+    if (!promocao.ativa) return 'A página da promoção está inativa: o botão fica escondido até você ativar em "Texto e regras".';
+    if (!promocao.no_ar) return 'A promoção está fora do período: o botão fica escondido até a data de início (ou some depois do fim).';
+    return '';
+};
+const salvarQuadro = (slug) => router.patch(`/admin/promocoes/${slug}/quadro`, { ...quadro[slug] }, opcoes(slug));
+
+const formatosTexto = props.formatos.filter((f) => f !== 'jpeg').map((f) => ({ jpg: 'JPG', webp: 'WebP' }[f] ?? f.toUpperCase())).join(', ');
+const maxMb = Math.round(props.maxKb / 1024);
+const tamanho = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.round(bytes / 1024)} KB`);
+
+const trocarPrevia = (slug, url) => {
+    if (estado[slug].previa) URL.revokeObjectURL(estado[slug].previa);
+    estado[slug].previa = url;
+};
+
+const urlEscolhida = (slug) => {
+    const promocao = porSlug(slug);
+    const atual = estado[slug];
+    if (atual.modo === 'arquivo') return atual.previa;
+    if (atual.modo === 'enviada') return promocao.imagem_url;
+    if (atual.modo === 'pronta') return promocao.prontas.find((p) => p.caminho === atual.caminho)?.url ?? null;
+    return promocao.padrao_url;
+};
+
+// Medida real da imagem escolhida e aviso quando foge do tamanho recomendado.
+const medir = (slug, bytes = null) => {
+    estado[slug].medida = null;
+    const url = urlEscolhida(slug);
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => {
+        const rec = porSlug(slug).recomendado;
+        const alvo = rec.largura / rec.altura;
+        estado[slug].medida = {
+            largura: img.naturalWidth,
+            altura: img.naturalHeight,
+            bytes,
+            proporcaoErrada: Math.abs(img.naturalWidth / img.naturalHeight - alvo) / alvo > 0.1,
+            pequena: img.naturalWidth < rec.largura / 2,
+        };
+    };
+    img.src = url;
+};
+
+onMounted(() => props.promocoes.forEach((p) => medir(p.slug)));
+onUnmounted(() => props.promocoes.forEach((p) => trocarPrevia(p.slug, null)));
+
+// Depois de salvar o Inertia manda os dados novos: o seletor volta para o salvo.
+watch(() => props.promocoes, (novas) => novas.forEach((p) => {
+    Object.assign(quadro[p.slug], textoSalvo(p));
+    Object.assign(estado[p.slug], modoSalvo(p), { arquivo: null });
+    trocarPrevia(p.slug, null);
+    medir(p.slug);
+}));
+
+const escolher = (slug, modo, caminho = '') => {
+    Object.assign(estado[slug], { modo, caminho, arquivo: null, erro: '' });
+    trocarPrevia(slug, null);
+    medir(slug);
+};
+
+const aoEscolherArquivo = (slug, event) => {
+    const arquivo = event.target.files[0];
+    event.target.value = '';
+    if (!arquivo) return;
+    estado[slug].erro = '';
+    const extensao = arquivo.name.split('.').pop().toLowerCase();
+    if (!props.formatos.includes(extensao)) {
+        estado[slug].erro = `Formato .${extensao} não serve. Use ${formatosTexto}.`;
+        return;
+    }
+    if (arquivo.size > props.maxKb * 1024) {
+        estado[slug].erro = `A imagem tem ${tamanho(arquivo.size)}; o máximo é ${maxMb} MB.`;
+        return;
+    }
+    Object.assign(estado[slug], { modo: 'arquivo', caminho: '', arquivo });
+    trocarPrevia(slug, URL.createObjectURL(arquivo));
+    medir(slug, arquivo.size);
+};
+
+const mudouImagem = (slug) => {
+    const salvo = modoSalvo(porSlug(slug));
+    const atual = estado[slug];
+    return atual.modo === 'arquivo' || atual.modo !== salvo.modo || atual.caminho !== salvo.caminho;
+};
+
+const opcoes = (slug, extra = {}) => ({
+    preserveScroll: true,
+    onStart: () => { estado[slug].salvando = true; estado[slug].erro = ''; },
+    onError: (erros) => { estado[slug].erro = Object.values(erros)[0] ?? 'Não deu para salvar.'; },
+    onFinish: () => { estado[slug].salvando = false; },
+    ...extra,
+});
+
+const salvarImagem = (slug) => {
+    const atual = estado[slug];
+    const dados = atual.modo === 'arquivo'
+        ? { imagem: atual.arquivo }
+        : { imagem_pronta: atual.modo === 'pronta' ? atual.caminho : '' };
+    router.post(`/admin/promocoes/${slug}/imagem`, dados, opcoes(slug, { forceFormData: true }));
+};
+
+const mudarChave = (slug, campo, valor) => router.patch(`/admin/promocoes/${slug}/pagina-produto`, { [campo]: valor }, opcoes(slug));
+
+const adicionarProduto = (slug, produto) => router.post(`/admin/promocoes/${slug}/produtos`, { product_id: produto.id }, opcoes(slug));
+const alternarProduto = (slug, produto) => router.patch(`/admin/promocoes/${slug}/produtos/${produto.ligacao_id}`, {}, opcoes(slug));
+const removerProduto = async (slug, produto) => {
+    if (await confirmDelete({ title: `Tirar "${produto.nome}" da lista?`, text: 'O produto volta a seguir a regra geral da promoção.' })) {
+        router.delete(`/admin/promocoes/${slug}/produtos/${produto.ligacao_id}`, opcoes(slug));
+    }
+};
+
+// Excluir promoção (2026-10-21): só as de "Outras promoções", com confirmação.
+const excluindo = ref(null);
+const excluir = async (promocao) => {
+    const confirmou = await confirmDelete({
+        title: `Excluir "${promocao.nome}"?`,
+        text: 'A promoção, o texto, as regras e a página pública somem de vez. Essa ação não pode ser desfeita.',
+        confirmButtonText: 'Sim, excluir',
+        focusCancel: true,
+    });
+    if (!confirmou) return;
+    router.delete(`/admin/promocoes/${promocao.slug}`, {
+        preserveScroll: true,
+        onStart: () => { excluindo.value = promocao.slug; },
+        onFinish: () => { excluindo.value = null; },
+    });
+};
+
+const criando = ref(false);
+const nova = useForm({ nome: '' });
+const campoNome = ref(null);
+const abrirNova = () => { criando.value = true; setTimeout(() => campoNome.value?.focus()); };
+const criar = () => nova.post('/admin/promocoes', { onSuccess: () => { nova.reset(); criando.value = false; } });
+
+const miniatura = 'relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-slate-50 dark:bg-slate-800';
+const marcada = (sim) => (sim ? 'border-primary ring-2 ring-primary/30' : 'border-[var(--surface-border)] hover:border-primary/60');
+const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px] font-semibold text-white';
+</script>
+
+<template>
+    <Head title="Promoções" />
+
+    <AdminLayout>
+        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div class="max-w-3xl">
+                <h1 class="mb-1 text-2xl font-bold">Promoções</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Tudo do quadro da página do produto fica aqui: ligar e desligar, condições, botão para a página da promoção, imagem e em quais produtos aparece.
+                    A página da promoção (título, descrição, período e regras) fica em "Texto e regras".
+                </p>
+            </div>
+            <button v-if="podeEditar && !criando" type="button"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis" @click="abrirNova">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Adicionar Promoção
+            </button>
+        </div>
+
+        <form v-if="criando" class="mb-6 max-w-2xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" @submit.prevent="criar">
+            <label for="nova-promocao" class="mb-1 block text-sm font-medium">Nome da promoção</label>
+            <div class="flex flex-wrap gap-2">
+                <input id="nova-promocao" ref="campoNome" v-model="nova.nome" type="text" maxlength="255" placeholder="Ex.: Promoção Black Friday"
+                    class="min-w-0 flex-1 rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                <button type="submit" :disabled="nova.processing || !nova.nome.trim()"
+                    class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
+                    <i class="fas mr-1" :class="nova.processing ? 'fa-spinner animate-spin' : 'fa-check'" aria-hidden="true"></i>Criar
+                </button>
+                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm" @click="criando = false; nova.reset(); nova.clearErrors()">
+                    Cancelar
+                </button>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Ela nasce inativa. Depois de criar, você preenche título, descrição, período e regras.</p>
+            <InputError :message="nova.errors.nome" />
+        </form>
+
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <section v-for="promocao in promocoes" :key="promocao.slug"
+                class="flex flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <header class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="flex items-center gap-2 text-lg font-semibold">
+                            <i class="fas text-primary" :class="ICONES[promocao.slug]" aria-hidden="true"></i>
+                            {{ promocao.nome }}
+                        </h2>
+                        <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            Quadro no produto <StatusBadge :tone="promocao.na_pagina_produto ? 'green' : 'gray'" :label="promocao.na_pagina_produto ? 'Ligado' : 'Desligado'" />
+                            <span aria-hidden="true">·</span>
+                            Página da promoção <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
+                        </p>
+                        <p v-if="promocao.inicio || promocao.fim" class="mt-1 text-xs text-slate-500">
+                            <i class="far fa-calendar mr-1" aria-hidden="true"></i>{{ promocao.inicio ? `de ${promocao.inicio}` : '' }} {{ promocao.fim ? `até ${promocao.fim}` : '' }}
+                        </p>
+                    </div>
+                    <div class="flex flex-col items-end gap-1 text-sm">
+                        <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
+                            <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                        </Link>
+                        <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-xs text-slate-500 hover:text-primary hover:underline">
+                            <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Abrir página da promoção
+                        </a>
+                    </div>
+                </header>
+
+                <!-- Chave geral da página do produto -->
+                <div class="mt-4 flex items-center justify-between gap-3 rounded-lg border border-[var(--surface-border)] px-3 py-2.5">
+                    <span class="text-sm font-medium">Mostrar na página do produto</span>
+                    <button type="button" role="switch" :aria-checked="promocao.na_pagina_produto"
+                        :aria-label="`${promocao.nome}: mostrar na página do produto`"
+                        :disabled="!podeEditar || estado[promocao.slug].salvando"
+                        class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50"
+                        :class="promocao.na_pagina_produto ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'"
+                        @click="mudarChave(promocao.slug, 'na_pagina_produto', !promocao.na_pagina_produto)">
+                        <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                            :class="promocao.na_pagina_produto ? 'left-[22px]' : 'left-0.5'"></span>
+                    </button>
+                </div>
+
+                <div :class="{ 'opacity-60': !promocao.na_pagina_produto }">
+                    <!-- Texto do quadro: condições e botão para a página da promoção -->
+                    <form class="mt-4 rounded-lg border border-[var(--surface-border)] p-3" @submit.prevent="salvarQuadro(promocao.slug)">
+                        <p class="text-xs font-semibold uppercase text-slate-500">Texto do quadro</p>
+
+                        <label :for="`titulo-${promocao.slug}`" class="mt-2 block text-sm font-medium">Título</label>
+                        <input :id="`titulo-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_titulo" type="text" maxlength="255" :disabled="!podeEditar"
+                            :placeholder="tituloPadrao(promocao)"
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ promocao.slug === 'airfryer'
+                                ? 'Vazio = o título do sorteio cadastrado.'
+                                : 'Vazio = "Compre Hoje E Receba N Livros Digitais GRÁTIS!", com N = quantos livros o produto tem.' }}
+                        </p>
+
+                        <label :for="`texto-${promocao.slug}`" class="mt-3 block text-sm font-medium">Texto</label>
+                        <textarea :id="`texto-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_texto" rows="4" maxlength="2000" :disabled="!podeEditar"
+                            :placeholder="textoPadrao(promocao)"
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Linha em branco separa parágrafos.
+                            {{ promocao.slug === 'airfryer'
+                                ? 'Vazio = os parágrafos do sorteio cadastrado (ou só as condições, se tiver).'
+                                : 'Vazio = o texto de sempre sobre os guias em PDF.' }}
+                        </p>
+
+                        <template v-if="promocao.slug === 'pdfs'">
+                            <label :for="`destaque-${promocao.slug}`" class="mt-3 block text-sm font-medium">Destaque</label>
+                            <input :id="`destaque-${promocao.slug}`" v-model="quadro[promocao.slug].quadro_destaque" type="text" maxlength="120" :disabled="!podeEditar"
+                                :placeholder="DESTAQUE_LIVROS"
+                                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-500">Linha embaixo da lista de livros. Vazio = "{{ DESTAQUE_LIVROS }}".</p>
+                        </template>
+
+                        <label :for="`condicoes-${promocao.slug}`" class="mt-3 block text-sm font-medium">Condições</label>
+                        <textarea :id="`condicoes-${promocao.slug}`" v-model="quadro[promocao.slug].condicoes" rows="2" maxlength="500" :disabled="!podeEditar"
+                            placeholder="Ex.: Pedidos realizados e pagos até 31/10/2026 participam automaticamente."
+                            class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                        <div class="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                            <span>
+                                {{ promocao.slug === 'airfryer'
+                                    ? 'Aparece no quadro embaixo do texto (sem texto próprio, no lugar dos parágrafos do sorteio).'
+                                    : 'Aparece no quadro embaixo de "Adquirindo hoje: 100% GRÁTIS". Vazio = sem condições.' }}
+                                Também aparece na página da promoção.
+                            </span>
+                            <button v-if="podeEditar && promocao.fim_data" type="button" class="text-primary hover:underline" @click="usarFim(promocao)">
+                                Usar a data de fim ({{ promocao.fim_data }})
+                            </button>
+                        </div>
+                        <p v-if="dataVencida(quadro[promocao.slug].condicoes)" class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                            <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>A data {{ dataVencida(quadro[promocao.slug].condicoes) }} já passou: o cliente vai ver uma condição vencida.
+                        </p>
+                        <p v-if="promocao.slug === 'airfryer' && !quadro[promocao.slug].condicoes && promocao.entregaveis.texto_sorteio" class="mt-1 text-xs text-slate-500">
+                            Hoje o quadro mostra o texto do sorteio: "{{ promocao.entregaveis.texto_sorteio }}"
+                        </p>
+
+                        <div class="mt-3 flex items-center justify-between gap-3">
+                            <span class="text-sm font-medium">Botão para a página da promoção</span>
+                            <button type="button" role="switch" :aria-checked="quadro[promocao.slug].botao_ativo"
+                                :aria-label="`${promocao.nome}: botão para a página da promoção`" :disabled="!podeEditar"
+                                class="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50"
+                                :class="quadro[promocao.slug].botao_ativo ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'"
+                                @click="quadro[promocao.slug].botao_ativo = !quadro[promocao.slug].botao_ativo">
+                                <span class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all"
+                                    :class="quadro[promocao.slug].botao_ativo ? 'left-[22px]' : 'left-0.5'"></span>
+                            </button>
+                        </div>
+                        <template v-if="quadro[promocao.slug].botao_ativo">
+                            <label :for="`botao-${promocao.slug}`" class="mt-2 block text-sm font-medium">Texto do botão</label>
+                            <input :id="`botao-${promocao.slug}`" v-model="quadro[promocao.slug].botao_texto" type="text" maxlength="60" :disabled="!podeEditar"
+                                :placeholder="promocao.botao_padrao"
+                                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-500">
+                                Leva o cliente para <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="font-mono text-primary hover:underline">/promocoes/{{ promocao.slug }}</a>.
+                                Vazio = "{{ promocao.botao_padrao }}".
+                            </p>
+                            <p v-if="motivoSemBotao(promocao)" class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>{{ motivoSemBotao(promocao) }}
+                            </p>
+                        </template>
+
+                        <!-- Prévia de como o texto fica no quadro -->
+                        <div class="mt-3 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800" aria-label="Prévia do texto do quadro">
+                            <p class="mb-1 text-[10px] font-semibold uppercase text-slate-400">Prévia</p>
+                            <p class="font-semibold">{{ quadro[promocao.slug].quadro_titulo || tituloPadrao(promocao) }}</p>
+                            <p v-for="(paragrafo, i) in paragrafos(quadro[promocao.slug].quadro_texto || (promocao.slug === 'airfryer' && quadro[promocao.slug].condicoes ? '' : textoPadrao(promocao)))"
+                                :key="i" class="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{{ paragrafo }}</p>
+                            <template v-if="promocao.slug === 'pdfs'">
+                                <p v-for="item in promocao.entregaveis.itens" :key="item" class="mt-1 text-slate-600 dark:text-slate-300">
+                                    <i class="fas fa-check mr-1 text-emerald-600" aria-hidden="true"></i>{{ item }}
+                                </p>
+                                <p class="mt-1">{{ quadro[promocao.slug].quadro_destaque || DESTAQUE_LIVROS }}</p>
+                            </template>
+                            <p v-if="quadro[promocao.slug].condicoes" class="whitespace-pre-line text-slate-600 dark:text-slate-300">{{ quadro[promocao.slug].condicoes }}</p>
+                            <span v-if="quadro[promocao.slug].botao_ativo"
+                                class="mt-2 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold text-white"
+                                :class="motivoSemBotao(promocao) ? 'bg-slate-400' : 'bg-[#00ab21]'">
+                                {{ quadro[promocao.slug].botao_texto || promocao.botao_padrao }} <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </span>
+                        </div>
+
+                        <div v-if="podeEditar" class="mt-3 flex items-center gap-3">
+                            <button type="submit" :disabled="!mudouQuadro(promocao.slug) || estado[promocao.slug].salvando"
+                                class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
+                                <i class="fas mr-1" :class="estado[promocao.slug].salvando ? 'fa-spinner animate-spin' : 'fa-floppy-disk'" aria-hidden="true"></i>
+                                Salvar texto
+                            </button>
+                            <span v-if="mudouQuadro(promocao.slug)" class="text-xs text-amber-700 dark:text-amber-400">Texto alterado, falta salvar.</span>
+                        </div>
+                    </form>
+
+                    <!-- Imagem do quadro -->
+                    <div class="mt-4 flex h-44 items-center justify-center overflow-hidden rounded-lg border border-[var(--surface-border)] bg-slate-100 dark:bg-slate-800">
+                        <img v-if="urlEscolhida(promocao.slug)" :src="urlEscolhida(promocao.slug)" :alt="`Imagem do ${QUADRO[promocao.slug].toLowerCase()}`"
+                            class="max-h-full max-w-full object-contain">
+                        <span v-else class="text-sm text-slate-400">Sem imagem</span>
+                    </div>
+
+                    <p class="mt-3 text-xs font-semibold uppercase text-slate-500">Imagem do quadro</p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <button type="button" :class="[miniatura, marcada(estado[promocao.slug].modo === 'padrao')]" :disabled="!podeEditar"
+                            :title="promocao.slug === 'airfryer' ? 'A do sorteio cadastrado' : 'A padrão dos livros'" @click="escolher(promocao.slug, 'padrao')">
+                            <img v-if="promocao.padrao_url" :src="promocao.padrao_url" alt="" class="h-full w-full object-cover">
+                            <span :class="etiqueta">Padrão</span>
+                        </button>
+                        <button v-for="pronta in promocao.prontas" :key="pronta.caminho" type="button" :disabled="!podeEditar"
+                            :class="[miniatura, marcada(estado[promocao.slug].modo === 'pronta' && estado[promocao.slug].caminho === pronta.caminho)]"
+                            :title="`${pronta.nome} · ${pronta.largura} × ${pronta.altura} px`" :aria-label="pronta.nome"
+                            @click="escolher(promocao.slug, 'pronta', pronta.caminho)">
+                            <img :src="pronta.url" alt="" class="h-full w-full object-cover" loading="lazy">
+                        </button>
+                        <button v-if="promocao.enviada" type="button" :class="[miniatura, marcada(estado[promocao.slug].modo === 'enviada')]"
+                            :disabled="!podeEditar" title="Imagem enviada" @click="escolher(promocao.slug, 'enviada')">
+                            <img :src="promocao.imagem_url" alt="" class="h-full w-full object-cover">
+                            <span :class="etiqueta">Enviada</span>
+                        </button>
+                        <span v-if="estado[promocao.slug].modo === 'arquivo'" :class="[miniatura, marcada(true)]" title="Nova imagem (falta salvar)">
+                            <img :src="estado[promocao.slug].previa" alt="" class="h-full w-full object-cover">
+                            <span :class="etiqueta">Nova</span>
+                        </span>
+                        <button v-if="podeEditar" type="button"
+                            :class="[miniatura, 'border-dashed border-[var(--surface-border)] text-slate-400 hover:border-primary hover:text-primary']"
+                            title="Enviar imagem do computador" @click="inputs[promocao.slug].click()">
+                            <span class="text-center text-[11px] leading-tight"><i class="fas fa-upload mb-1 block text-base" aria-hidden="true"></i>Enviar</span>
+                        </button>
+                        <input :ref="(el) => { inputs[promocao.slug] = el; }" type="file" class="hidden"
+                            :accept="formatos.map((f) => `.${f}`).join(',')" @change="aoEscolherArquivo(promocao.slug, $event)">
+                    </div>
+
+                    <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-slate-500">
+                        <dt class="font-semibold">Recomendado</dt>
+                        <dd>{{ promocao.recomendado.largura }} × {{ promocao.recomendado.altura }} px ({{ promocao.recomendado.proporcao }})</dd>
+                        <dt class="font-semibold">Formato</dt>
+                        <dd>{{ formatosTexto }}, até {{ maxMb }} MB</dd>
+                        <template v-if="estado[promocao.slug].medida">
+                            <dt class="font-semibold">Escolhida</dt>
+                            <dd :class="{ 'text-amber-700 dark:text-amber-400': estado[promocao.slug].medida.proporcaoErrada || estado[promocao.slug].medida.pequena }">
+                                {{ estado[promocao.slug].medida.largura }} × {{ estado[promocao.slug].medida.altura }} px<span v-if="estado[promocao.slug].medida.bytes">, {{ tamanho(estado[promocao.slug].medida.bytes) }}</span>
+                                <span v-if="estado[promocao.slug].medida.proporcaoErrada">: proporção diferente, vai sobrar ou cortar</span>
+                                <span v-else-if="estado[promocao.slug].medida.pequena">: pequena, pode ficar borrada</span>
+                            </dd>
+                        </template>
+                    </dl>
+
+                    <div v-if="podeEditar" class="mt-3 flex items-center gap-3">
+                        <button type="button" :disabled="!mudouImagem(promocao.slug) || estado[promocao.slug].salvando"
+                            class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50"
+                            @click="salvarImagem(promocao.slug)">
+                            <i class="fas mr-1" :class="estado[promocao.slug].salvando ? 'fa-spinner animate-spin' : 'fa-floppy-disk'" aria-hidden="true"></i>
+                            Salvar imagem
+                        </button>
+                        <span v-if="mudouImagem(promocao.slug)" class="text-xs text-amber-700 dark:text-amber-400">Imagem alterada, falta salvar.</span>
+                    </div>
+                    <InputError :message="estado[promocao.slug].erro" />
+
+                    <!-- O que o quadro mostra (cadastro de sorteios e livros, fora do menu desde 2026-10-21) -->
+                    <div class="mt-5 border-t border-[var(--surface-border)] pt-4">
+                        <p class="text-xs font-semibold uppercase text-slate-500">{{ promocao.slug === 'airfryer' ? 'Sorteio do quadro' : 'Livros do quadro' }}</p>
+                        <ul v-if="promocao.entregaveis.itens.length" class="mt-2 space-y-1 text-sm">
+                            <li v-for="item in promocao.entregaveis.itens" :key="item">
+                                <i class="fas fa-check mr-1 text-emerald-600" aria-hidden="true"></i>{{ item }}
+                            </li>
+                        </ul>
+                        <p v-else class="mt-2 text-sm text-amber-700 dark:text-amber-400">{{ promocao.slug === 'airfryer' ? 'Nenhum sorteio ativo' : 'Nenhum livro ativo' }}: o quadro não aparece.</p>
+                        <Link :href="promocao.entregaveis.link" class="mt-1 inline-block text-xs text-primary hover:underline">
+                            {{ promocao.slug === 'airfryer' ? 'Cadastro de sorteios (prêmio, foto e produtos)' : 'Cadastro de livros (PDFs, capas e produtos)' }}
+                        </Link>
+                    </div>
+
+                    <!-- Produtos -->
+                    <div class="mt-5 border-t border-[var(--surface-border)] pt-4">
+                        <p class="text-xs font-semibold uppercase text-slate-500">Em quais produtos</p>
+                        <div class="mt-2 flex flex-wrap gap-4 text-sm" role="radiogroup" :aria-label="`${promocao.nome}: em quais produtos`">
+                            <label class="flex items-center gap-2">
+                                <input type="radio" :name="`todos-${promocao.slug}`" :checked="promocao.todos_produtos" :disabled="!podeEditar"
+                                    @change="mudarChave(promocao.slug, 'todos_produtos', true)"> Todos os produtos
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" :name="`todos-${promocao.slug}`" :checked="!promocao.todos_produtos" :disabled="!podeEditar"
+                                    @change="mudarChave(promocao.slug, 'todos_produtos', false)"> Só os ligados abaixo
+                            </label>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ promocao.todos_produtos
+                                ? 'Aparece em todos. Desligue a chave de um produto da lista para tirar só dele.'
+                                : 'Aparece só nos produtos da lista com a chave ligada.' }}
+                        </p>
+
+                        <BuscaProduto v-if="podeEditar" :id="`busca-${promocao.slug}`" class="mt-3"
+                            @escolher="(produto) => adicionarProduto(promocao.slug, produto)" />
+
+                        <ul v-if="promocao.produtos.length" class="mt-3 divide-y divide-[var(--surface-border)] rounded-lg border border-[var(--surface-border)]">
+                            <li v-for="produto in promocao.produtos" :key="produto.ligacao_id" class="flex items-center gap-3 px-3 py-2">
+                                <img v-if="produto.foto" :src="produto.foto" alt="" class="h-9 w-9 rounded object-cover">
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm">{{ produto.nome }}</div>
+                                    <div class="font-mono text-xs text-slate-500">{{ produto.sku }}</div>
+                                </div>
+                                <button type="button" role="switch" :aria-checked="produto.ativo"
+                                    :aria-label="`${promocao.nome} em ${produto.nome}`" :disabled="!podeEditar || estado[promocao.slug].salvando"
+                                    class="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50"
+                                    :class="produto.ativo ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'"
+                                    @click="alternarProduto(promocao.slug, produto)">
+                                    <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all"
+                                        :class="produto.ativo ? 'left-[18px]' : 'left-0.5'"></span>
+                                </button>
+                                <button v-if="podeEditar" type="button" class="px-1 text-slate-400 hover:text-red-600"
+                                    :aria-label="`Tirar ${produto.nome} da lista`" title="Tirar da lista" @click="removerProduto(promocao.slug, produto)">
+                                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                                </button>
+                            </li>
+                        </ul>
+                        <p v-else class="mt-3 rounded-lg border border-dashed border-[var(--surface-border)] p-3 text-xs text-slate-500">
+                            {{ promocao.todos_produtos ? 'Nenhuma exceção: aparece em todos os produtos.' : 'Nenhum produto na lista: o quadro não aparece em lugar nenhum.' }}
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Promoções criadas pela lista: só texto, período e regras -->
+        <section class="mt-8">
+            <h2 class="mb-3 text-lg font-semibold">Outras promoções</h2>
+            <div v-if="outras.length" class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                <section v-for="promocao in outras" :key="promocao.slug"
+                    class="flex flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <header class="flex items-start justify-between gap-3">
+                        <h3 class="flex min-w-0 items-center gap-2 text-lg font-semibold">
+                            <i class="fas fa-tags text-primary" aria-hidden="true"></i>
+                            <span class="truncate">{{ promocao.nome }}</span>
+                        </h3>
+                        <StatusBadge :tone="promocao.no_ar ? 'green' : 'gray'" :label="promocao.no_ar ? 'No ar' : (promocao.ativa ? 'Fora do período' : 'Inativa')" />
+                    </header>
+                    <p v-if="promocao.titulo" class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ promocao.titulo }}</p>
+                    <dl class="mb-4 mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-slate-500">Período</dt>
+                        <dd>
+                            <template v-if="promocao.inicio || promocao.fim">
+                                {{ promocao.inicio ? `de ${promocao.inicio}` : '' }} {{ promocao.fim ? `até ${promocao.fim}` : '' }}
+                            </template>
+                            <template v-else>Sem período definido</template>
+                        </dd>
+                        <dt class="text-slate-500">Pedido mínimo</dt>
+                        <dd>{{ promocao.valor_minimo ? `R$ ${Number(promocao.valor_minimo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Sem mínimo' }}</dd>
+                        <dt class="text-slate-500">Regras</dt>
+                        <dd>{{ promocao.regras === 0 ? 'Nenhuma' : promocao.regras === 1 ? '1 regra' : `${promocao.regras} regras` }}</dd>
+                    </dl>
+                    <footer class="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] pt-3 text-sm">
+                        <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-slate-500 hover:text-primary hover:underline">
+                            <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Página
+                        </a>
+                        <div class="flex items-center gap-4">
+                            <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
+                                <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                            </Link>
+                            <button v-if="podeEditar" type="button" :disabled="excluindo === promocao.slug"
+                                class="text-slate-500 hover:text-red-600 hover:underline disabled:opacity-50"
+                                :aria-label="`Excluir ${promocao.nome}`" @click="excluir(promocao)">
+                                <i class="fas mr-1" :class="excluindo === promocao.slug ? 'fa-spinner animate-spin' : 'fa-trash-can'" aria-hidden="true"></i>Excluir
+                            </button>
+                        </div>
+                    </footer>
+                </section>
+            </div>
+            <p v-else class="rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-sm text-slate-500">
+                Nenhuma outra promoção ainda. Use "Adicionar Promoção" para criar.
+            </p>
+        </section>
+    </AdminLayout>
+</template>

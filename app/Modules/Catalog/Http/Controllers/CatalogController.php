@@ -12,6 +12,7 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
@@ -466,6 +467,10 @@ class CatalogController extends Controller
             ? (int) $request->query('v')
             : self::PRODUCT_PAGE_VERSION;
 
+        // Quadros do sorteio e dos livros (Entregáveis) com a chave, a imagem
+        // e os produtos de Vender › Promoções (2026-10-21), em cache.
+        $promocoes = PromocoesDoProduto::paraPagina($product);
+
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             'product' => $product->makeHidden('cost_price'),
@@ -497,6 +502,13 @@ class CatalogController extends Controller
             'hasReviewed' => $user
                 ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
+            // Entregáveis: sorteios, livros digitais (sem o PDF) e a imagem
+            // dos tablets do quadro dos livros (null = padrão das costas).
+            'sorteios' => $promocoes['sorteios'],
+            'livrosDigitais' => $promocoes['livrosDigitais'],
+            'livrosQuadro' => $promocoes['livrosQuadro'],
+            // Condições e botão para a página da promoção de cada quadro (2026-10-21).
+            'quadrosPromocao' => $promocoes['quadros'],
             'relatedProducts' => $relatedProducts->values(),
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')

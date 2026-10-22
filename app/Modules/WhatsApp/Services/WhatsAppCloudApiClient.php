@@ -136,9 +136,9 @@ class WhatsAppCloudApiClient
         return (string) $mediaId;
     }
 
-    public function sendMedia(string $to, string $mediaType, string $mediaId, ?string $caption = null): array
+    public function sendMedia(string $to, string $mediaType, string $mediaId, ?string $caption = null, ?string $filename = null): array
     {
-        if (! in_array($mediaType, ['image', 'video', 'audio'], true)) {
+        if (! in_array($mediaType, ['image', 'video', 'audio', 'document'], true)) {
             throw new RuntimeException('Tipo de mídia inválido para WhatsApp.');
         }
 
@@ -146,6 +146,10 @@ class WhatsAppCloudApiClient
         // Áudio não aceita legenda na API.
         if (filled($caption) && $mediaType !== 'audio') {
             $media['caption'] = $caption;
+        }
+        // Sem filename o cliente recebe o documento como "Untitled".
+        if (filled($filename) && $mediaType === 'document') {
+            $media['filename'] = $filename;
         }
 
         return $this->postMessage([

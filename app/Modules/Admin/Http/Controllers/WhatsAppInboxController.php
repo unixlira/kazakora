@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Services\ConversorDeVoz;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
@@ -14,9 +15,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
+use Throwable;
 
 /**
  * Tela "Conversas" (pedido explícito 2026-10-08): todas as conversas do
@@ -31,6 +38,15 @@ class WhatsAppInboxController extends Controller
     private const CONVERSATION_PAGE = 300;
 
     private const MESSAGE_PAGE = 80;
+
+    private const DOCUMENT_MAX_KB = 60 * 1024;
+
+    // Formatos que o WhatsApp mostra como foto/vídeo/áudio; o resto vai como documento.
+    private const IMAGE_TYPES = ['image/jpeg', 'image/png'];
+
+    private const VIDEO_TYPES = ['video/mp4', 'video/3gpp'];
+
+    private const AUDIO_TYPES = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
 
     public function index(WhatsAppSettings $settings, ManuelaAgentClient $agent): Response
     {
@@ -146,20 +162,109 @@ class WhatsAppInboxController extends Controller
             'body' => ['required', 'string', 'max:4096'],
         ]);
 
-        // Pessoa respondeu: a Manuela sai da conversa até alguém devolver, e o
-        // alerta de "precisa de humano" está atendido.
-        $conversation->update([
-            'ai_enabled' => false,
-            'unread_count' => 0,
-            'needs_human' => false,
-            'status' => $conversation->status === 'needs_human' ? 'open' : $conversation->status,
-        ]);
+        $this->humanTakesOver($conversation);
 
         $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id);
 
         return response()->json([
             'message' => $this->messagePayload($message),
             'conversation' => $this->conversationPayload($conversation->fresh()),
+        ]);
+    }
+
+    /**
+     * Nota de voz gravada na tela (`gravacao`) ou arquivo anexado (clipe).
+     * Limites da Meta: imagem 5 MB, áudio e vídeo 16 MB, documento 100 MB
+     * (aqui 60 MB, abaixo do client_max_body_size de 64M do nginx).
+     */
+    public function sendMedia(Request $request, WhatsAppConversation $conversation, WhatsAppOutbox $outbox, ConversorDeVoz $conversor): JsonResponse
+    {
+        // Validator manual: no admin o Laravel só responde JSON em api/*; um
+        // ValidationException aqui viraria redirect e a tela não veria o motivo.
+        $validator = Validator::make($request->all(), [
+            'arquivo' => ['required', 'file', 'max:'.self::DOCUMENT_MAX_KB],
+            'gravacao' => ['sometimes', 'boolean'],
+            'legenda' => ['nullable', 'string', 'max:1024'],
+        ], [
+            'arquivo.required' => 'Escolha um arquivo.',
+            'arquivo.max' => 'Arquivo grande demais: o limite é 60 MB.',
+            'arquivo.uploaded' => 'O arquivo não chegou ao servidor (grande demais?).',
+            'legenda.max' => 'Legenda grande demais: até 1024 caracteres.',
+        ]);
+        if ($validator->fails()) {
+            return $this->mediaError($validator->errors()->first());
+        }
+        $validated = $validator->validated();
+
+        $file = $request->file('arquivo');
+        $caption = filled($validated['legenda'] ?? null) ? trim($validated['legenda']) : null;
+        $temporary = null;
+
+        // Gravar áudio é coisa do atendente humano: com a Manuela atendendo,
+        // a tela deixa o microfone desligado e o servidor recusa também.
+        if ($request->boolean('gravacao') && $conversation->ai_enabled) {
+            return $this->mediaError('Áudio gravado só no modo humano: desligue a chave da Manuela para gravar.');
+        }
+
+        if ($request->boolean('gravacao')) {
+            try {
+                $temporary = $conversor->paraOgg($file->getRealPath());
+            } catch (Throwable $exception) {
+                Log::warning('whatsapp_voice_convert_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+
+                return $this->mediaError('Não deu para converter o áudio gravado. Tente de novo.');
+            }
+            [$type, $path, $mime, $name, $caption] = ['audio', $temporary, 'audio/ogg', 'audio.ogg', null];
+        } else {
+            $mime = $file->getMimeType() ?: 'application/octet-stream';
+            $size = $file->getSize();
+            $type = match (true) {
+                in_array($mime, self::IMAGE_TYPES, true) && $size <= 5 * 1024 * 1024 => 'image',
+                in_array($mime, self::VIDEO_TYPES, true) && $size <= 16 * 1024 * 1024 => 'video',
+                in_array($mime, self::AUDIO_TYPES, true) && $size <= 16 * 1024 * 1024 && ! $caption => 'audio',
+                default => 'document',
+            };
+            $path = $file->getRealPath();
+            $name = mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), -200) ?: 'arquivo';
+        }
+
+        if ($type === 'audio' && filesize($path) > 16 * 1024 * 1024) {
+            if ($temporary) {
+                @unlink($temporary);
+            }
+
+            return $this->mediaError('Áudio grande demais: o WhatsApp aceita até 16 MB.');
+        }
+
+        $this->humanTakesOver($conversation);
+
+        try {
+            $message = $outbox->sendMedia($conversation, $type, $path, $mime, $request->user()->name, $request->user()->id, $caption, $name);
+        } finally {
+            if ($temporary) {
+                @unlink($temporary);
+            }
+        }
+
+        return response()->json([
+            'message' => $this->messagePayload($message),
+            'conversation' => $this->conversationPayload($conversation->fresh()),
+        ]);
+    }
+
+    private function mediaError(string $message): JsonResponse
+    {
+        return response()->json(['message' => $message, 'errors' => ['arquivo' => [$message]]], 422);
+    }
+
+    /** Pessoa respondeu: a Manuela sai da conversa até alguém devolver, e o alerta de "precisa de humano" está atendido. */
+    private function humanTakesOver(WhatsAppConversation $conversation): void
+    {
+        $conversation->update([
+            'ai_enabled' => false,
+            'unread_count' => 0,
+            'needs_human' => false,
+            'status' => $conversation->status === 'needs_human' ? 'open' : $conversation->status,
         ]);
     }
 
@@ -207,6 +312,7 @@ class WhatsAppInboxController extends Controller
             $conversation->messages()->delete();
             $conversation->delete();
         });
+        Storage::disk('local')->deleteDirectory('whatsapp/enviadas/'.$conversation->id);
 
         return response()->json(['deleted' => $conversation->id]);
     }
@@ -231,13 +337,24 @@ class WhatsAppInboxController extends Controller
      */
     public function media(WhatsAppMessage $message, WhatsAppMediaDownloader $downloader): HttpResponse
     {
+        $headers = ['Cache-Control' => 'private, max-age=86400'];
+        $fileName = $message->payload['document']['filename'] ?? null;
+        if ($fileName) {
+            $headers['Content-Disposition'] = HeaderUtils::makeDisposition('inline', $fileName, Str::ascii($fileName) ?: 'documento');
+        }
+
+        // Enviado pela tela: cópia local, sem ir à Meta.
+        $local = $message->localMediaPath();
+        if ($local && Storage::disk('local')->exists($local)) {
+            return Storage::disk('local')->response($local, null, $headers + [
+                'Content-Type' => $message->payload[$message->type]['mime_type'] ?? Storage::disk('local')->mimeType($local),
+            ]);
+        }
+
         $file = $downloader->download($message);
         abort_unless($file, 404);
 
-        return response($file['body'], 200, [
-            'Content-Type' => $file['mime_type'],
-            'Cache-Control' => 'private, max-age=86400',
-        ]);
+        return response($file['body'], 200, $headers + ['Content-Type' => $file['mime_type']]);
     }
 
     private function conversationQuery()
@@ -278,7 +395,7 @@ class WhatsAppInboxController extends Controller
             'status' => $m->status,
             'sentBy' => $m->sent_by,
             'at' => ($m->received_at ?? $m->sent_at ?? $m->created_at)?->toISOString(),
-            'hasMedia' => $m->mediaId() !== null,
+            'hasMedia' => $m->hasMedia(),
             'mimeType' => $payload[$m->type]['mime_type'] ?? null,
             'fileName' => $payload['document']['filename'] ?? null,
             'transcription' => $payload['transcription'] ?? null,

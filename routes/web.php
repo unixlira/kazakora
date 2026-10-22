@@ -921,6 +921,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     });
     Route::middleware('permission:pedidos.edit')->group(function () {
         Route::post('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'send'])->whereNumber('conversation')->name('whatsapp.conversas.enviar');
+        Route::post('whatsapp/conversas/{conversation}/midia', [WhatsAppInboxController::class, 'sendMedia'])->whereNumber('conversation')->name('whatsapp.conversas.enviar-midia');
         Route::post('whatsapp/conversas/{conversation}/manuela', [WhatsAppInboxController::class, 'toggleManuela'])->whereNumber('conversation')->name('whatsapp.conversas.manuela');
         Route::post('whatsapp/conversas/{conversation}/status', [WhatsAppInboxController::class, 'updateStatus'])->whereNumber('conversation')->name('whatsapp.conversas.status');
         Route::delete('whatsapp/conversas/{conversation}', [WhatsAppInboxController::class, 'destroy'])->whereNumber('conversation')->name('whatsapp.conversas.apagar');

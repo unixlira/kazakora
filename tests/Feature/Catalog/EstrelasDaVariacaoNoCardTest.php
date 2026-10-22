@@ -41,6 +41,11 @@ class EstrelasDaVariacaoNoCardTest extends TestCase
         $this->assertEqualsWithDelta(4.0, (float) $cards[$pai->id]['reviews_avg_rating'], 0.001);
         $this->assertEqualsWithDelta(1.0, (float) $cards[$outro->id]['reviews_avg_rating'], 0.001);
         $this->assertNull($cards[$semNota->id]['reviews_avg_rating']);
+
+        // Quantidade ao lado das estrelas (pedido 2026-10-22), variações incluídas.
+        $this->assertSame(3, (int) $cards[$pai->id]['reviews_count']);
+        $this->assertSame(1, (int) $cards[$outro->id]['reviews_count']);
+        $this->assertSame(0, (int) $cards[$semNota->id]['reviews_count']);
     }
 
     public function test_variacao_apagada_nao_entra_na_media(): void
@@ -52,6 +57,8 @@ class EstrelasDaVariacaoNoCardTest extends TestCase
         $this->avaliar($apagada, 1);
         $apagada->delete();
 
-        $this->assertEqualsWithDelta(5.0, (float) $this->cards()[$pai->id]['reviews_avg_rating'], 0.001);
+        $card = $this->cards()[$pai->id];
+        $this->assertEqualsWithDelta(5.0, (float) $card['reviews_avg_rating'], 0.001);
+        $this->assertSame(1, (int) $card['reviews_count']);
     }
 }

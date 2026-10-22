@@ -14,12 +14,13 @@ class ProductImage extends Model
         'path',
         'thumb_path',
         'medium_path',
+        'mini_path',
         'position',
         'is_primary',
         'is_variant',
     ];
 
-    protected $appends = ['url', 'thumb_url', 'media_url'];
+    protected $appends = ['url', 'thumb_url', 'media_url', 'mini_url'];
 
     /**
      * O front nunca usa o caminho cru — usa `url` e `thumb_url`, que são
@@ -28,7 +29,7 @@ class ProductImage extends Model
      * a serialização pra JSON, o acesso em PHP (OrderImageArchiveService,
      * publicação em canal) continua igual.
      */
-    protected $hidden = ['path', 'thumb_path', 'medium_path'];
+    protected $hidden = ['path', 'thumb_path', 'medium_path', 'mini_path'];
 
     /**
      * Performance 2026-09-03: toda foto nova nasce com miniatura, venha de
@@ -46,6 +47,9 @@ class ProductImage extends Model
             if ($image->medium_path === null && $image->path) {
                 $image->medium_path = ProductImageThumbnailer::generateMedium($image->path);
             }
+            if ($image->mini_path === null && $image->path) {
+                $image->mini_path = ProductImageThumbnailer::generateMini($image->path);
+            }
         });
 
         static::deleted(function (self $image) {
@@ -54,6 +58,9 @@ class ProductImage extends Model
             }
             if ($image->medium_path) {
                 Storage::disk('public')->delete($image->medium_path);
+            }
+            if ($image->mini_path) {
+                Storage::disk('public')->delete($image->mini_path);
             }
         });
     }
@@ -96,6 +103,19 @@ class ProductImage extends Model
         }
 
         return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->medium_path), '/'));
+    }
+
+    /**
+     * Foto pequena (miniaturas da galeria e das variações) quando existe,
+     * senão a miniatura da vitrine.
+     */
+    public function getMiniUrlAttribute(): string
+    {
+        if (! $this->mini_path) {
+            return $this->thumb_url;
+        }
+
+        return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->mini_path), '/'));
     }
 
     public function getUrlAttribute(): string

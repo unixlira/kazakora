@@ -1,3 +1,49 @@
+<script>
+// Compartilhado por todos os cards (PageSpeed, 2026-10-21): títulos já medidos
+// e a fila de medidas, que roda em partes de ~12 ms para não travar a página.
+const titulosMedidos = new Map();
+const filaMedidas = [];
+let filaAgendada = false;
+const rodarFila = () => {
+    const inicio = performance.now();
+    while (filaMedidas.length && performance.now() - inicio < 12) filaMedidas.shift()();
+    if (filaMedidas.length) setTimeout(rodarFila, 0);
+    else filaAgendada = false;
+};
+// A loja carrega o CSS sem travar a página (app.blade.php): medir antes dele
+// chegar dá a altura errada, então a fila só começa com o CSS aplicado.
+const cssPronto = typeof document === 'undefined'
+    ? Promise.resolve()
+    : Promise.all([...document.querySelectorAll('link[data-adiado]')]
+        .filter((link) => !link.sheet)
+        .map((link) => new Promise((pronto) => {
+            link.addEventListener('load', pronto, { once: true });
+            link.addEventListener('error', pronto, { once: true });
+        })));
+const medirNaFila = (medir) => {
+    filaMedidas.push(medir);
+    if (!filaAgendada) {
+        filaAgendada = true;
+        cssPronto.then(() => setTimeout(rodarFila, 0));
+    }
+};
+// Fonte da loja chega sem travar a página (app.blade.php): quando uma fonte
+// termina de baixar, os cards na tela medem de novo com ela.
+const cardsNaTela = new Set();
+let geracaoFontes = 0;
+if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
+    // Várias fontes chegam juntas (texto e ícones): remede uma vez só no fim.
+    let espera = null;
+    document.fonts.addEventListener('loadingdone', () => {
+        clearTimeout(espera);
+        espera = setTimeout(() => {
+            geracaoFontes += 1;
+            cardsNaTela.forEach((medir) => medirNaFila(medir));
+        }, 150);
+    });
+}
+</script>
+
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -118,17 +164,33 @@ const titulo = ref({ texto: String(props.product.name ?? '').trim(), cortado: fa
 const SELINHO = '<span class="titulo-ver-mais">Ver mais</span>';
 const escapar = (texto) => texto.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Desempenho (PageSpeed, 2026-10-21): cada medida força o navegador a recalcular
+// a página. O resultado fica guardado por nome + largura + fonte (o mesmo produto
+// aparece em várias vitrines) e cada card mede uma vez só na montagem.
+// `titulosMedidos` é de todos os cards (bloco <script> no fim do arquivo).
+let larguraMedida = 0;
+let alturaMedida = 0;
+
 const ajustarTitulo = () => {
     const alvo = tituloEl.value;
     const medidor = medidorEl.value;
     if (!alvo || !medidor) return;
     const nome = String(props.product.name ?? '').trim();
-    medidor.style.width = `${alvo.clientWidth}px`;
-    const limite = alvo.clientHeight + 1;
+    larguraMedida = alvo.clientWidth;
+    alturaMedida = alvo.clientHeight;
+    const limite = alturaMedida + 1;
+    const chave = `${larguraMedida}|${limite}|${geracaoFontes}|${nome}`;
+    const guardado = titulosMedidos.get(chave);
+    if (guardado) {
+        titulo.value = guardado;
+        return;
+    }
+    medidor.style.width = `${larguraMedida}px`;
     const cabe = (html) => { medidor.innerHTML = html; return medidor.scrollHeight <= limite; };
 
     if (cabe(escapar(nome))) {
         titulo.value = { texto: nome, cortado: false };
+        titulosMedidos.set(chave, titulo.value);
         return;
     }
     const palavras = nome.split(/\s+/);
@@ -152,23 +214,35 @@ const ajustarTitulo = () => {
     }
     texto = (texto + resto.slice(0, b)).replace(/[\s,.;:–|-]+$/, '');
     titulo.value = { texto, cortado: true };
+    titulosMedidos.set(chave, titulo.value);
 };
 
 let observador = null;
+let montado = true;
+const medirSeMontado = () => montado && ajustarTitulo();
 onMounted(() => {
     // Foto que já estava no cache do navegador pode terminar antes do @load.
     if (fotoEl.value?.complete) fotoCarregada.value = true;
-    nextTick(ajustarTitulo);
+    // Vários cards montam juntos: a medida entra numa fila que roda em partes,
+    // sem travar a página (antes eram ~400 medidas seguidas na home).
+    nextTick(() => medirNaFila(medirSeMontado));
+    cardsNaTela.add(medirSeMontado);
     if (window.ResizeObserver && tituloEl.value) {
-        let largura = 0;
+        // Só remede quando o tamanho muda de verdade (o aviso inicial do
+        // observador tem o mesmo tamanho da medida da montagem).
         observador = new ResizeObserver(([entrada]) => {
-            if (Math.abs(entrada.contentRect.width - largura) > 1) { largura = entrada.contentRect.width; ajustarTitulo(); }
+            const largura = Math.round(entrada.contentRect.width);
+            const altura = Math.round(entrada.contentRect.height);
+            if (larguraMedida && (Math.abs(largura - larguraMedida) > 1 || Math.abs(altura - alturaMedida) > 1)) medirNaFila(medirSeMontado);
         });
         observador.observe(tituloEl.value);
     }
-    document.fonts?.ready?.then(ajustarTitulo);
 });
-onBeforeUnmount(() => observador?.disconnect());
+onBeforeUnmount(() => {
+    montado = false;
+    cardsNaTela.delete(medirSeMontado);
+    observador?.disconnect();
+});
 
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 // Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).

@@ -10,11 +10,21 @@ const rodarFila = () => {
     if (filaMedidas.length) setTimeout(rodarFila, 0);
     else filaAgendada = false;
 };
+// A loja carrega o CSS sem travar a página (app.blade.php): medir antes dele
+// chegar dá a altura errada, então a fila só começa com o CSS aplicado.
+const cssPronto = typeof document === 'undefined'
+    ? Promise.resolve()
+    : Promise.all([...document.querySelectorAll('link[data-adiado]')]
+        .filter((link) => !link.sheet)
+        .map((link) => new Promise((pronto) => {
+            link.addEventListener('load', pronto, { once: true });
+            link.addEventListener('error', pronto, { once: true });
+        })));
 const medirNaFila = (medir) => {
     filaMedidas.push(medir);
     if (!filaAgendada) {
         filaAgendada = true;
-        setTimeout(rodarFila, 0);
+        cssPronto.then(() => setTimeout(rodarFila, 0));
     }
 };
 // Fonte da loja chega sem travar a página (app.blade.php): quando uma fonte
@@ -159,6 +169,7 @@ const escapar = (texto) => texto.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<':
 // aparece em várias vitrines) e cada card mede uma vez só na montagem.
 // `titulosMedidos` é de todos os cards (bloco <script> no fim do arquivo).
 let larguraMedida = 0;
+let alturaMedida = 0;
 
 const ajustarTitulo = () => {
     const alvo = tituloEl.value;
@@ -166,7 +177,8 @@ const ajustarTitulo = () => {
     if (!alvo || !medidor) return;
     const nome = String(props.product.name ?? '').trim();
     larguraMedida = alvo.clientWidth;
-    const limite = alvo.clientHeight + 1;
+    alturaMedida = alvo.clientHeight;
+    const limite = alturaMedida + 1;
     const chave = `${larguraMedida}|${limite}|${geracaoFontes}|${nome}`;
     const guardado = titulosMedidos.get(chave);
     if (guardado) {
@@ -216,11 +228,12 @@ onMounted(() => {
     nextTick(() => medirNaFila(medirSeMontado));
     cardsNaTela.add(medirSeMontado);
     if (window.ResizeObserver && tituloEl.value) {
-        // Só remede quando a largura muda de verdade (o aviso inicial do
-        // observador tem a mesma largura da medida da montagem).
+        // Só remede quando o tamanho muda de verdade (o aviso inicial do
+        // observador tem o mesmo tamanho da medida da montagem).
         observador = new ResizeObserver(([entrada]) => {
-            const largura = tituloEl.value?.clientWidth ?? Math.round(entrada.contentRect.width);
-            if (larguraMedida && Math.abs(largura - larguraMedida) > 1) ajustarTitulo();
+            const largura = Math.round(entrada.contentRect.width);
+            const altura = Math.round(entrada.contentRect.height);
+            if (larguraMedida && (Math.abs(largura - larguraMedida) > 1 || Math.abs(altura - alturaMedida) > 1)) medirNaFila(medirSeMontado);
         });
         observador.observe(tituloEl.value);
     }

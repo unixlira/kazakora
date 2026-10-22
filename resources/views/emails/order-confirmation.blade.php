@@ -20,12 +20,13 @@
         Olá, {{ $order->shipping_name }}! Recebemos seu pagamento e seu pedido já está sendo preparado com carinho.
     </p>
 
-    @if ($invoiceAuthorized)
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #ecfdf3; border: 1px solid #b7ebc6; border-radius: 10px;">
+    @if ($notaAnexada ?? $invoiceAuthorized)
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #ecfdf3; border: 2px solid #0FB930; border-radius: 10px;">
             <tr>
-                <td style="padding: 14px 18px; font-size: 13px; color: #065f46;">
-                    <strong>&#128206; Nota fiscal em anexo.</strong> A NF-e do seu pedido está anexada a este e-mail em PDF e XML.<br>
-                    <span style="font-size: 11px; color: #4b7a63; word-break: break-all;">Chave de acesso: {{ $order->invoice->chave_acesso }}</span>
+                <td style="padding: 16px 18px; color: #065f46;">
+                    <div style="font-size: 16px; font-weight: 800; margin: 0 0 4px;">&#128206; A Nota Fiscal do seu pedido está em anexo</div>
+                    <div style="font-size: 13px;">Enviamos a NF-e (DANFE) em PDF anexada a este e-mail. É só abrir o anexo para ver, salvar ou imprimir.</div>
+                    <div style="font-size: 11px; color: #4b7a63; word-break: break-all; margin-top: 6px;">Chave de acesso: {{ $order->invoice->chave_acesso }}</div>
                 </td>
             </tr>
         </table>

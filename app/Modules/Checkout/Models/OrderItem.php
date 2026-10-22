@@ -24,6 +24,8 @@ class OrderItem extends Model
         'product_price',
         'quantity',
         'subtotal',
+        // Frete somado ao preço da unidade (FreteEmbutido), 2026-10-22.
+        'frete_embutido',
         // Custo manual da linha, só usado quando product_id é nulo (sem
         // produto local pra editar cost_price) — ver migration
         // add_manual_cost_price_to_order_items_table e
@@ -53,6 +55,7 @@ class OrderItem extends Model
             'product_price' => 'decimal:2',
             'quantity' => 'integer',
             'subtotal' => 'decimal:2',
+            'frete_embutido' => 'decimal:2',
             'manual_cost_price' => 'decimal:2',
             'origem_mercadoria' => 'integer',
             'pis_aliquota' => 'decimal:2',

@@ -174,8 +174,9 @@ const REDES = [
         <FaixaPromo />
         <TrocarSenhaModal />
         <AvisoCookies />
-        <!-- Marquee -->
-        <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
+        <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
+             (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
+        <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
                  (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco.
                  Roda também com "reduzir movimento" ligado (pedido 2026-10-15): no celular
@@ -243,7 +244,7 @@ const REDES = [
                                             <p class="mt-2 text-xl font-bold leading-tight">Frete grátis em todos os produtos</p>
                                             <p class="mt-2 text-sm opacity-80">E com o Full você recebe no mesmo dia.</p>
                                         </div>
-                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-[#f27a2a] hover:text-white">
+                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-store-laranja hover:text-white">
                                             Ver todos os produtos <i class="fa-solid fa-arrow-right text-xs"></i>
                                         </a>
                                     </div>
@@ -478,7 +479,7 @@ const REDES = [
 
                     <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
                                 <li><a href="/?todos=1#produtos" class="hover:opacity-100">Produtos</a></li>
@@ -486,7 +487,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
                                 <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
@@ -494,7 +495,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
                                 <li><Link href="/politica-de-cookies" class="hover:opacity-100">Política de Cookies</Link></li>
@@ -504,7 +505,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <template v-if="!user">
                                     <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
@@ -522,7 +523,7 @@ const REDES = [
 
                 <div class="mt-10 flex flex-col items-center gap-6 text-center lg:mt-12 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
                     <div>
-                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
+                        <h2 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h2>
                         <!-- Celular: bandeiras menores, todas numa linha só (sem arrastar). -->
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
@@ -537,7 +538,7 @@ const REDES = [
                          a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14).
                          Tamanho original (grande), sem a redução de 5px (pedido 2026-10-14). -->
                     <div class="lg:text-right">
-                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
+                        <h2 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h2>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                                 class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"

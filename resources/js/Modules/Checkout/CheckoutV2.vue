@@ -16,6 +16,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
+    // Média das avaliações dos produtos do carrinho: { media, total } ou null.
+    avaliacaoItens: { type: Object, default: null },
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
@@ -102,6 +104,10 @@ const turbo = ref(null);
 // A tela nasce sempre no frete grátis (pedido 2026-10-12).
 const turboEscolhido = ref(false);
 const itens = ref(props.items);
+// Estrelas do resumo (pedido 2026-10-21): cada estrela preenche a fração da
+// média que cabe nela (4,8 = 4 cheias e 80% da 5ª), como no StarRating.
+const notaItens = computed(() => Math.max(0, Math.min(5, Number(props.avaliacaoItens?.media) || 0)));
+const preenchimentoEstrela = (estrela) => Math.max(0, Math.min(100, (notaItens.value - (estrela - 1)) * 100));
 const subtotalAtual = ref(Number(props.subtotal) || 0);
 // Vários itens numa caixa só (2026-10-12): o frete real sai menor que o
 // somado no preço de cada item; a diferença entra como "Desconto da plataforma".
@@ -527,7 +533,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmado) => {
 const tentarDeNovo = () => router.visit('/finalizacao');
 
 // ---------- Resumo ----------
-const resumoAberto = ref(false);
+const resumoAberto = ref(true);
 const fotoDoItem = (item) => {
     const imagens = item.product?.images ?? [];
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
@@ -543,7 +549,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
     <CheckoutLayout>
         <div class="mx-auto grid w-full max-w-[1160px] gap-6 px-3 py-6 md:px-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:py-9">
-            <!-- Resumo no celular (recolhível) -->
+            <!-- Resumo no celular (aberto por padrão, recolhível) -->
             <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
                 <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <i class="fa-solid fa-cart-shopping text-emerald-600"></i>
@@ -796,6 +802,17 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
                         </p>
                     </section>
+
+                    <!-- Celular: selos de confiança debaixo do Finalizar pedido (pedido 2026-10-21). -->
+                    <ul class="space-y-3 lg:hidden">
+                        <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                            <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
+                            <div class="text-sm text-slate-600">
+                                <strong class="block text-slate-900">{{ selo.titulo }}</strong>
+                                {{ selo.texto }}
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </main>
 
@@ -815,7 +832,23 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span class="text-sm font-medium text-slate-800">{{ formatPrice(item.subtotal) }}</span>
                         </li>
                     </ul>
-                    <Link href="/carrinho" class="mt-1 inline-block text-xs font-medium text-sky-600 hover:underline">Alterar itens do carrinho</Link>
+                    <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). Cores
+                         fixas do checkout; link em sky-700 para passar no contraste. -->
+                    <div class="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <Link href="/carrinho" class="inline-block text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
+                        <span v-if="avaliacaoItens" class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                            <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
+                                <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
+                                    <i class="fa-regular fa-star text-slate-400"></i>
+                                    <span class="absolute left-0 top-0 h-full overflow-hidden" :style="{ width: `${preenchimentoEstrela(estrela)}%` }">
+                                        <i class="fa-solid fa-star text-amber-500"></i>
+                                    </span>
+                                </span>
+                            </span>
+                            <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
+                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }} {{ avaliacaoItens.total === 1 ? 'avaliação' : 'avaliações' }})</span>
+                        </span>
+                    </div>
 
                     <div class="mt-3 border-t border-slate-100 pt-3">
                         <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
@@ -859,8 +892,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                 </div>
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop
-                     adaptados à KazaKora). -->
-                <ul class="mt-4 space-y-3">
+                     adaptados à KazaKora). No celular ficam debaixo do Finalizar pedido (2026-10-21). -->
+                <ul class="mt-4 hidden space-y-3 lg:block">
                     <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">

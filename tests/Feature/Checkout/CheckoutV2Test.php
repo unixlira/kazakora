@@ -5,6 +5,7 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Operacional\Models\ShippingMethod;
@@ -51,6 +52,32 @@ class CheckoutV2Test extends TestCase
         $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
 
         return $product;
+    }
+
+    public function test_resumo_traz_a_media_das_avaliacoes_com_as_variacoes(): void
+    {
+        $product = $this->noCarrinho();
+        $variacao = Product::factory()->create(['parent_product_id' => $product->id]);
+        foreach ([[$product, 5], [$variacao, 4], [$variacao, 5]] as [$avaliado, $nota]) {
+            $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+            Review::create(['user_id' => $cliente->id, 'product_id' => $avaliado->id, 'rating' => $nota, 'comment' => 'Bom']);
+        }
+
+        $this->get('/finalizacao')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Checkout/CheckoutV2', false)
+                ->where('avaliacaoItens.media', 4.7)
+                ->where('avaliacaoItens.total', 3));
+    }
+
+    public function test_resumo_sem_avaliacao_nao_mostra_estrelas(): void
+    {
+        $this->noCarrinho();
+
+        $this->get('/finalizacao')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('avaliacaoItens', null));
     }
 
     public function test_tela_unica_preenche_os_dados_do_cliente_logado(): void

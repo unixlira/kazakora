@@ -74,10 +74,10 @@ const irPara = (indice) => {
             <button v-if="atual < produtos.length - 1" type="button" aria-label="Próxima oferta"
                 class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual + 1)"><i class="fas fa-angle-right"></i></button>
-            <div class="mt-3 flex justify-center gap-2">
+            <div class="mt-2 flex justify-center">
                 <button v-for="(product, indice) in produtos" :key="product.id" type="button" :aria-label="`Oferta ${indice + 1}`"
-                    class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"
-                    @click="irPara(indice)"></button>
+                    class="flex h-6 min-w-6 items-center justify-center"
+                    @click="irPara(indice)"><span class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"></span></button>
             </div>
         </div>
         <div v-if="!slider || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco, 'max-md:hidden': slider }">

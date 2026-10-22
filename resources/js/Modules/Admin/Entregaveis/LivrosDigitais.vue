@@ -68,7 +68,7 @@ const salvar = () => {
     form.post(editando.value ? `/admin/entregaveis/livros-digitais/${editando.value.id}` : '/admin/entregaveis/livros-digitais', opcoes);
 };
 
-// Chave da promoção (pedido 2026-10-21): livros ativos anexados no e-mail de confirmação do pedido.
+// Chave da promoção (pedido 2026-10-21): além do link, os PDFs vão anexados no e-mail de confirmação do pedido.
 const alternarEmail = () => router.patch('/admin/entregaveis/livros-digitais/email-pedido', {}, { preserveScroll: true });
 
 const alternar = (livro) => router.patch(`/admin/entregaveis/livros-digitais/${livro.id}/ativo`, {}, { preserveScroll: true });
@@ -100,9 +100,9 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
 
         <div class="mb-6 flex max-w-2xl items-start gap-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
             <div class="min-w-0 flex-1">
-                <h2 id="ld-email-titulo" class="text-base font-semibold">Enviar os livros no e-mail de confirmação do pedido</h2>
+                <h2 id="ld-email-titulo" class="text-base font-semibold">Anexar os PDFs no e-mail de confirmação do pedido</h2>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Ligada: o e-mail de pedido confirmado do kazakora.com leva uma mensagem de presente e os PDFs dos livros ativos dos produtos comprados. Desligada: o e-mail sai sem os livros.
+                    O link para baixar os livros ganhos na compra vai sempre no e-mail de confirmação e na página do pedido. Ligada: os PDFs vão também anexados (até 15 MB no total; acima disso, só o link).
                 </p>
             </div>
             <button type="button" role="switch" :aria-checked="props.emailPedido" aria-labelledby="ld-email-titulo" :disabled="!can('cadastros.edit')"

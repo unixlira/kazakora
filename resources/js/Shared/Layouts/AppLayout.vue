@@ -174,8 +174,9 @@ const REDES = [
         <FaixaPromo />
         <TrocarSenhaModal />
         <AvisoCookies />
-        <!-- Marquee -->
-        <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
+        <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
+             (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
+        <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
                  (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco.
                  Roda também com "reduzir movimento" ligado (pedido 2026-10-15): no celular

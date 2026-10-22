@@ -62,6 +62,7 @@ const irPara = (indice) => {
         <!-- Slide do celular: 2 cards por tela, arrasta com o dedo, setas e bolinhas. -->
         <div v-if="slider && celular" class="relative md:hidden">
             <div ref="trilho" class="no-scrollbar -mx-2 flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
+                <!-- Sem as estrelas ao lado do FULL: com 2 cards por tela elas ficavam cortadas (2026-10-22). -->
                 <div v-for="(product, indice) in produtos" :key="product.id" class="w-1/2 shrink-0 px-2" :class="{ 'snap-start': indice % 2 === 0 }">
                     <ProductCard :product="product"
                         :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"

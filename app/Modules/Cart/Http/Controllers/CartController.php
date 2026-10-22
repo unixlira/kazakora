@@ -22,8 +22,9 @@ class CartController extends Controller
 
     public function index(): Response
     {
-        // Abriu o carrinho: desistiu da compra direta, volta ao carrinho normal.
-        $this->cart->encerrarCompraDireta();
+        // Abriu o carrinho no meio de uma compra direta ("Alterar itens do
+        // carrinho"): o item dela vai para o carrinho normal, não some.
+        $this->cart->levarCompraDiretaParaCarrinho();
 
         return Inertia::render('Cart/Index', [
             'items' => $this->cart->items(),

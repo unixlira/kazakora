@@ -38,14 +38,35 @@ class CompraDiretaECpfTest extends TestCase
         $this->assertFalse(app(CartManager::class)->emCompraDireta());
     }
 
-    public function test_abrir_o_carrinho_desiste_da_compra_direta(): void
+    public function test_abrir_o_carrinho_leva_a_compra_direta_para_o_carrinho(): void
+    {
+        $noCarrinho = Product::factory()->create(['price' => 50, 'stock' => 5, 'is_active' => true]);
+        $comprado = Product::factory()->create(['price' => 80, 'stock' => 5, 'is_active' => true]);
+
+        $this->post('/carrinho', ['product_id' => $noCarrinho->id, 'quantity' => 1]);
+        $this->post('/comprar-agora', ['product_id' => $comprado->id, 'quantity' => 2]);
+
+        // "Alterar itens do carrinho": o item da finalização aparece junto com o que já havia.
+        $this->get('/carrinho')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('items', 2)
+            ->where('total', 210));
+
+        $this->assertFalse(app(CartManager::class)->emCompraDireta());
+        $this->assertSame([$noCarrinho->id => 1, $comprado->id => 2], session('cart'));
+
+        // Voltar à finalização leva o carrinho inteiro.
+        $this->assertCount(2, app(CartManager::class)->items());
+    }
+
+    public function test_compra_direta_de_produto_que_ja_estava_no_carrinho_nao_soma_em_dobro(): void
     {
         $produto = Product::factory()->create(['price' => 80, 'stock' => 5, 'is_active' => true]);
 
-        $this->post('/comprar-agora', ['product_id' => $produto->id, 'quantity' => 1]);
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 1]);
+        $this->post('/comprar-agora', ['product_id' => $produto->id, 'quantity' => 2]);
         $this->get('/carrinho')->assertOk();
 
-        $this->assertFalse(app(CartManager::class)->emCompraDireta());
+        $this->assertSame([$produto->id => 2], session('cart'));
     }
 
     public function test_cliente_logado_com_cpf_invalido_nao_vai_para_o_pagamento(): void

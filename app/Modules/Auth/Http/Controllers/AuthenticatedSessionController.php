@@ -14,6 +14,9 @@ use Inertia\Response;
 
 class AuthenticatedSessionController extends Controller
 {
+    /** Endereços da loja onde o nginx devolve 404 para /admin (sites-enabled/kazakora). */
+    private const HOSTS_SEM_PAINEL = ['kazakora.com', 'www.kazakora.com'];
+
     public function create(): Response
     {
         return Inertia::render('Auth/Login', [
@@ -49,7 +52,11 @@ class AuthenticatedSessionController extends Controller
         // AdminLayout agora (antes vazava pra loja também). Sem URL
         // "intended" salva, admin cai direto no painel — senão o flash
         // acima nunca teria layout pra aparecer.
-        $default = $isAdmin ? route('admin.painel') : route('catalogo.inicio');
+        // Correção 2026-10-22: em kazakora.com o nginx bloqueia /admin (404),
+        // o painel mora em painel.kazakora.com. Admin que entra pela loja
+        // fica na home da loja.
+        $painelNesteEndereco = ! in_array($request->getHost(), self::HOSTS_SEM_PAINEL, true);
+        $default = $isAdmin && $painelNesteEndereco ? route('admin.painel') : route('catalogo.inicio');
 
         return redirect()->intended($default);
     }

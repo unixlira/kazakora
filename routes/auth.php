@@ -30,6 +30,11 @@ Route::middleware('guest')->group(function () {
         ->name('senha.armazenar');
 });
 
+// Admin que entra por kazakora.com chega ao painel.kazakora.com já logado.
+Route::get('entrar/painel/{user}', [AuthenticatedSessionController::class, 'entrarNoPainel'])
+    ->middleware(['signed:relative', 'throttle:10,1'])
+    ->name('entrar.painel');
+
 Route::middleware('auth')->group(function () {
     Route::post('sair', [AuthenticatedSessionController::class, 'destroy'])
         ->name('sair');

@@ -14,6 +14,7 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
+const lojaUrl = computed(() => page.props.lojaUrl || 'https://kazakora.com');
 // Contador por item do menu (ex.: alertas abertos dos Envios Flex).
 // Clicou no item: o alerta some. Guardamos o número visto no navegador; o
 // badge só volta se a contagem passar desse número (alerta novo).
@@ -403,7 +404,7 @@ watch(
                             </Link>
                         </li>
                         <li>
-                            <a href="/" target="_blank" rel="noopener" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
+                            <a :href="lojaUrl" target="_blank" rel="noopener" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
                                 <i class="fas fa-store icone-marca icone-kazakora w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </a>

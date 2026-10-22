@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Models\User;
+use App\Support\NomeBrasileiro;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -88,6 +89,22 @@ class Review extends Model
             return 'Cliente KazaKora';
         }
 
-        return $this->user?->name ?? $this->reviewer_name ?? 'Cliente KazaKora';
+        if ($this->user) {
+            return $this->user->name;
+        }
+
+        // Avaliação importada (de outra loja ou de canal) sem autor, gravada como
+        // "Comprador de outra loja" ou com apelido mascarado ("s***a") mostra um
+        // nome sorteado pelo id: o mesmo para a mesma avaliação (pedidos 20 e
+        // 22/10). Não depende de outra_loja: em 22/10 o campo estava zerado e a
+        // tela caía no "Cliente KazaKora". O banco continua com o texto original.
+        $nome = trim((string) $this->reviewer_name);
+        $importada = $this->getAttribute('outra_loja') || $this->getAttribute('origem_loja') || $this->external_id;
+
+        if ($importada && ($nome === '' || $nome === 'Comprador de outra loja' || str_contains($nome, '***'))) {
+            return NomeBrasileiro::gerar($this->getKey() ?? $this->external_id);
+        }
+
+        return $nome !== '' ? $this->reviewer_name : 'Cliente KazaKora';
     }
 }

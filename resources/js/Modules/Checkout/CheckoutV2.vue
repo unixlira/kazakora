@@ -527,7 +527,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmado) => {
 const tentarDeNovo = () => router.visit('/finalizacao');
 
 // ---------- Resumo ----------
-const resumoAberto = ref(false);
+const resumoAberto = ref(true);
 const fotoDoItem = (item) => {
     const imagens = item.product?.images ?? [];
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
@@ -543,7 +543,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
     <CheckoutLayout>
         <div class="mx-auto grid w-full max-w-[1160px] gap-6 px-3 py-6 md:px-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:py-9">
-            <!-- Resumo no celular (recolhível) -->
+            <!-- Resumo no celular (aberto por padrão, recolhível) -->
             <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
                 <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <i class="fa-solid fa-cart-shopping text-emerald-600"></i>

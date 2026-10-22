@@ -33,8 +33,6 @@
             .so-celular { display: inline !important; }
             .selo-ponto { display: none !important; }
             .coluna-celular { display: block !important; width: 100% !important; box-sizing: border-box; }
-            .livros-miniatura { padding: 0 18px 14px !important; }
-            .livros-miniatura img { width: 200px !important; }
         }
     </style>
 </head>

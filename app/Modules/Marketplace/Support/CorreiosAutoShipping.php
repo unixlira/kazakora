@@ -82,7 +82,7 @@ class CorreiosAutoShipping
         }
 
         $pacote = $this->pacotes->forOrder($order);
-        [$servico, $preco] = $this->servicoMaisBarato($order, $pacote);
+        [$servico, $preco] = $this->servicoPagoPeloCliente($order, $pacote) ?? $this->servicoMaisBarato($order, $pacote);
 
         $input = [
             'customer' => [
@@ -234,16 +234,7 @@ class CorreiosAutoShipping
     private function servicoMaisBarato(Order $order, array $pacote): array
     {
         $cotacoes = collect(array_keys(CorreiosPrePostagemService::SERVICOS_CONTRATO))
-            ->mapWithKeys(fn (string $servico) => [$servico => $this->precos->priceFor(
-                $servico,
-                (string) $order->shipping_zip,
-                $pacote['weight_grams'],
-                $pacote['format'],
-                $pacote['height'],
-                $pacote['width'],
-                $pacote['length'],
-                null,
-            )])
+            ->mapWithKeys(fn (string $servico) => [$servico => $this->cotar($servico, $order, $pacote)])
             ->filter(fn ($preco) => $preco !== null)
             ->sort();
 
@@ -252,5 +243,47 @@ class CorreiosAutoShipping
         }
 
         return [(string) $cotacoes->keys()->first(), (float) $cotacoes->first()];
+    }
+
+    /**
+     * Pedido do site em que o cliente escolheu o serviço: TURBO grava
+     * "SEDEX (TURBO)" e o cliente paga a diferença pelo SEDEX. ACHADO REAL
+     * 2026-10-22 (#3343): TURBO pago e a etiqueta saiu PAC, o mais barato.
+     * Escolha do cliente vale mesmo se a cotação falhar. null = sem escolha,
+     * fica o mais barato.
+     *
+     * @param  array{format: string, weight_grams: int, height: ?float, width: ?float, length: ?float}  $pacote
+     * @return array{0: string, 1: ?float}|null
+     */
+    private function servicoPagoPeloCliente(Order $order, array $pacote): ?array
+    {
+        if ($order->origin !== Order::ORIGIN_STORE) {
+            return null;
+        }
+
+        $servico = match (TipoDeEnvio::montar($order->origin, null, $order->shipping_carrier_name)['tipo']) {
+            TipoDeEnvio::CORREIOS_SEDEX => CorreiosPrePostagemService::SERVICO_SEDEX,
+            TipoDeEnvio::CORREIOS_PAC => CorreiosPrePostagemService::SERVICO_PAC,
+            default => null,
+        };
+
+        return $servico ? [$servico, $this->cotar($servico, $order, $pacote)] : null;
+    }
+
+    /** @param  array{format: string, weight_grams: int, height: ?float, width: ?float, length: ?float}  $pacote */
+    private function cotar(string $servico, Order $order, array $pacote): ?float
+    {
+        $preco = $this->precos->priceFor(
+            $servico,
+            (string) $order->shipping_zip,
+            $pacote['weight_grams'],
+            $pacote['format'],
+            $pacote['height'],
+            $pacote['width'],
+            $pacote['length'],
+            null,
+        );
+
+        return $preco === null ? null : (float) $preco;
     }
 }

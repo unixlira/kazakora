@@ -61,6 +61,14 @@ const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.reviews.length));
 const stars = (value) => Math.round(value);
 
+// Foto grande no celular baixa a de 512px quando ela basta (PageSpeed
+// 2026-10-21); `sizes` é a largura da área da foto. O mesmo par vai no
+// <link rel="preload"> do app.blade.php: mudar aqui, mudar lá.
+const FOTO_SIZES = '(max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px';
+const srcsetFoto = (image) => (image?.thumb_url && image.media_url && image.thumb_url !== image.media_url
+    ? `${image.thumb_url} 512w, ${image.media_url} 1200w`
+    : null);
+
 // Galeria: vídeo primeiro, depois as imagens em ordem. `src` é a foto média
 // (1200px; pedido 2026-10-15, página lenta) e `full` a original, só no zoom.
 const mediaItems = computed(() => {
@@ -69,9 +77,9 @@ const mediaItems = computed(() => {
     // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
     // a foto da variação escolhida só ganha borda, não muda de lugar.
     if (props.galeria?.length) {
-        for (const image of props.galeria) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id });
+        for (const image of props.galeria) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id });
     } else {
-        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, mini: image.mini_url });
+        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url });
     }
     return items;
 });
@@ -130,6 +138,7 @@ const isLightboxOpen = ref(false);
 // Vídeo sem autoplay (pedido 2026-10-15): mostra a primeira foto como capa com
 // um botão de play; o vídeo só começa quando o cliente clica.
 const videoPoster = computed(() => props.product.images?.[0]?.media_url ?? props.product.images?.[0]?.url ?? null);
+const videoPosterSrcset = computed(() => srcsetFoto(props.product.images?.[0]));
 const videoEl = ref(null);
 const isVideoStarted = ref(false);
 const startVideo = async () => {
@@ -286,6 +295,7 @@ const descriptionSections = computed(() => {
 const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
 const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
+const srcsetDoBloco = (indice) => (indice === null || indice === undefined ? null : srcsetFoto(props.product.images?.[indice]));
 
 const highlights = computed(() => {
     if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
@@ -450,12 +460,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <template v-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
                                         <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
-                                            <img v-if="videoPoster" :src="videoPoster" :alt="`${product.name} — vídeo`">
+                                            <img v-if="videoPoster" :src="videoPoster" :srcset="videoPosterSrcset" :sizes="videoPosterSrcset ? FOTO_SIZES : null" :alt="`${product.name} — vídeo`" fetchpriority="high">
                                             <video v-else :src="activeMedia.src" muted playsinline preload="metadata"></video>
                                             <span class="play grande"><i class="fas fa-play"></i></span>
                                         </button>
                                     </template>
-                                    <img v-else-if="activeMedia" :src="activeMedia.src" :alt="`${product.name} — foto ${activeIndex + 1}`">
+                                    <img v-else-if="activeMedia" :src="activeMedia.src" :srcset="activeMedia.srcset" :sizes="activeMedia.srcset ? FOTO_SIZES : null" :alt="`${product.name} — foto ${activeIndex + 1}`" fetchpriority="high">
                                     <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
 
                                     <template v-if="mediaItems.length > 1">
@@ -581,20 +591,20 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                  as frases e o negrito azul daqui. -->
                             <ul class="fretefundo">
                                 <li>
-                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
+                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
                                 </li>
                                 <li>
-                                    <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
+                                    <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
                                 </li>
                                 <li>
-                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
+                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
                                 </li>
                                 <li>
-                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
+                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
@@ -615,7 +625,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                      estrutura da página do FerraKora (pedido 2026-10-19). -->
                                 <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
                                     :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
-                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
+                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? '320px' : null" :alt="bloco.titulo" loading="lazy" decoding="async">
                                     <div>
                                         <h3>{{ bloco.titulo }}</h3>
                                         <p>{{ bloco.texto }}</p>
@@ -677,7 +687,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
-                                <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.png" alt="Garantia de 100% de satisfação" loading="lazy">
+                                <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.webp" alt="Garantia de 100% de satisfação" loading="lazy">
                                 <p>
                                     Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade, sem risco nenhum!
                                 </p>

@@ -78,7 +78,7 @@ const tempo = computed(() => {
         <footer class="mt-auto bg-black px-4 py-10 text-white">
             <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8">
                 <div class="flex flex-col items-center justify-center md:col-span-4">
-                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto rounded-[8px]">
+                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.webp'" alt="KazaKora" width="160" height="28" class="h-8 w-auto rounded-[8px]">
                     <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}
@@ -106,7 +106,7 @@ const tempo = computed(() => {
                             class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
                             :style="{ height: `${alturaSelo}px` }"
                             title="Ver a verificação do Google Safe Browsing">
-                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
+                            <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
                         <!-- Selo oficial RA Verificada (2026-10-14). Mesma escala do Google: caixa
                              branca da mesma altura, selo com 80% dela como o logo (pedido 2026-10-14). -->

@@ -59,14 +59,14 @@ class KazaKoraDanfe extends Danfe
             : $this->wPrint - $this->wCanhoto;
         $w = round($maxW * 0.41, 0);
 
-        // Logo de até 12 mm de altura e, abaixo, ~10 mm de texto; o bloco fica
-        // centralizado na altura do quadro (32 mm, 3 mm do título).
+        // Dados do emitente (~10 mm de texto) no pé do quadro de 32 mm, uns
+        // 3 mm (12 px) abaixo de onde ficavam; o logo de até 12 mm de altura
+        // fica centralizado no espaço entre o título (3,5 mm) e os dados.
+        $yTexto = $y + 22.4;
         $logoW = min($w - 8, 12 * $this->marcaProporcao);
         $logoH = $logoW / $this->marcaProporcao;
-        $yLogo = $y + 3 + (29 - ($logoH + 10.5)) / 2;
+        $yLogo = $y + 3.5 + ($yTexto - 1 - ($y + 3.5) - $logoH) / 2;
         $this->pdf->Image($this->marca, $x + ($w - $logoW) / 2, $yLogo, $logoW, $logoH, 'jpeg');
-
-        $yTexto = $yLogo + $logoH + 1;
 
         $aFont = ['font' => $this->fontePadrao, 'size' => 7.5, 'style' => 'B'];
         $nome = $this->emit->getElementsByTagName('xNome')->item(0)->nodeValue;

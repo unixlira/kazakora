@@ -57,9 +57,9 @@ const tempo = computed(() => {
             <i class="fa-solid fa-stopwatch" :class="{ 'animate-pulse': restante > 0 }"></i>
             <!-- Sem "FULL" e sem raio na tarja (pedido 2026-10-21); o FULL segue na entrega. -->
             <span>Frete grátis por tempo limitado:</span>
-            <span class="inline-block rounded-md bg-white/20 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
+            <span class="inline-block rounded-md bg-black/25 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
         </div>
-        <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#0FB930] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">
+        <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#00843f] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">
             <span><i class="fa-solid fa-lock mr-1"></i>COMPRA 100% SEGURA</span>
             <span class="opacity-60">·</span>
             <span><i class="fa-solid fa-fingerprint mr-1"></i>DADOS PROTEGIDOS</span>

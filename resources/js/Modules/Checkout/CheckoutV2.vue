@@ -552,7 +552,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
             <!-- Resumo no celular (aberto por padrão, recolhível) -->
             <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
                 <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <i class="fa-solid fa-cart-shopping text-emerald-600"></i>
+                    <i class="fa-solid fa-cart-shopping text-emerald-700"></i>
                     {{ resumoAberto ? 'Ocultar resumo' : 'Ver resumo' }} ({{ totalItens }} {{ totalItens === 1 ? 'item' : 'itens' }})
                     <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }"></i>
                 </span>
@@ -579,7 +579,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </h2>
                             <!-- Logado (pedido 2026-10-18): sem "Comprando como" nem campo de e-mail; o pedido usa o e-mail da conta. -->
                             <p v-if="!isLoggedIn" class="mt-0.5 text-sm text-slate-500">
-                                Preencha seus dados corretamente · Já tem conta? <Link href="/entrar" class="font-medium text-sky-600 hover:underline">Entrar</Link>
+                                Preencha seus dados corretamente · Já tem conta? <Link href="/entrar" class="font-medium text-sky-700 hover:underline">Entrar</Link>
                             </p>
                         </header>
 
@@ -628,7 +628,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                     {{ address.neighborhood }} · {{ address.city }}/{{ address.state }} · CEP {{ address.zip }}
                                 </span>
                             </label>
-                            <button type="button" class="mt-1 text-sm font-medium text-sky-600 hover:underline" @click="usarNovoEndereco = true">
+                            <button type="button" class="mt-1 text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = true">
                                 <i class="fa-solid fa-plus mr-1"></i> Entregar em outro endereço
                             </button>
                         </div>
@@ -651,7 +651,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <input ref="numeroInput" v-model="endereco.number" type="text" :class="[inputClass, erro('new_address.number') && inputErroClass]" placeholder="Nº">
                             </label>
                             <label class="col-span-4">
-                                <span class="text-sm font-medium text-slate-700">Complemento <span class="font-normal text-slate-400">(opcional)</span></span>
+                                <span class="text-sm font-medium text-slate-700">Complemento <span class="font-normal text-slate-500">(opcional)</span></span>
                                 <input v-model="endereco.complement" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Apto, bloco, casa...">
                             </label>
                             <label class="col-span-6 md:col-span-2" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
@@ -670,7 +670,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
                                 <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ errosEndereco.join(' ') }}
                             </p>
-                            <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-600 hover:underline" @click="usarNovoEndereco = false">
+                            <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = false">
                                 <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
                             </button>
                         </div>
@@ -693,11 +693,11 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
                         <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
                         <div v-if="freteCarregando && totalItens > 1" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
-                            <i class="fa-solid fa-box-open fa-bounce text-lg text-sky-600"></i>
+                            <i class="fa-solid fa-box-open fa-bounce text-lg text-sky-700"></i>
                             <span>Seus <strong>{{ totalItens }} itens</strong> vão juntos na mesma caixa. Recalculando o frete para você pagar menos…</span>
                         </div>
                         <div v-else-if="descontoPlataforma > 0" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
-                            <i class="fa-solid fa-box text-lg text-emerald-600"></i>
+                            <i class="fa-solid fa-box text-lg text-emerald-700"></i>
                             <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
                         </div>
 
@@ -707,10 +707,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
                             <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-600"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
                                 <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                             </span>
-                            <span class="text-sm font-bold text-emerald-600">Grátis</span>
+                            <span class="text-sm font-bold text-emerald-700">Grátis</span>
                         </label>
 
                         <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
@@ -719,13 +719,13 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
                             <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong :class="turboEscolhido ? 'text-[#F44D00]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
+                                <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
                                 <span class="ml-1 text-slate-500">
                                     <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
                                     <template v-else>entrega mais rápida pelo SEDEX</template>
                                 </span>
                             </span>
-                            <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#F44D00]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
+                            <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
                         </label>
                         <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                     </section>
@@ -745,7 +745,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <button type="button" class="relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
                                 :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 @click="metodo = 'pix'">
-                                <span v-if="pixDiscountPercentage > 0" class="absolute -top-2.5 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white shadow">-{{ pixPercentualTexto }}%</span>
+                                <span v-if="pixDiscountPercentage > 0" class="absolute -top-2.5 right-2 rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold text-white shadow">-{{ pixPercentualTexto }}%</span>
                                 <i class="fa-brands fa-pix text-2xl text-[#32BCAD]"></i>
                                 <span class="text-sm font-semibold text-slate-900">Pix</span>
                                 <span class="text-xs text-slate-500">Aprovação na hora</span>
@@ -793,7 +793,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </div>
 
                         <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
-                            class="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-[#0FB930] px-6 py-4 text-xl font-bold text-white shadow-[0_4px_0_#0a8a23] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#0a8a23] disabled:cursor-not-allowed disabled:opacity-60 md:text-2xl"
+                            class="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-[#00843f] px-6 py-4 text-xl font-bold text-white shadow-[0_4px_0_#006631] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#006631] disabled:cursor-not-allowed disabled:opacity-60 md:text-2xl"
                             @click="finalizar">
                             <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
                             {{ processando ? 'Processando...' : 'Finalizar pedido' }}
@@ -850,7 +850,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
                             </button>
                         </div>
-                        <button v-else-if="!mostrarCupom" type="button" class="text-sm font-medium text-[#F44D00] hover:underline" @click="mostrarCupom = true">
+                        <button v-else-if="!mostrarCupom" type="button" class="text-sm font-medium text-[#c2450c] hover:underline" @click="mostrarCupom = true">
                             <i class="fa-solid fa-ticket mr-1"></i> Tem um cupom? Clique aqui
                         </button>
                         <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
@@ -858,7 +858,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm uppercase outline-none focus:border-[#F44D00]"
                                 :class="cupomErro ? 'border-red-400' : 'border-slate-300'" @input="cupomErro = null">
                             <button type="submit" :disabled="!cupom.trim() || cupomCarregando"
-                                class="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg bg-[#F44D00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E74900] disabled:opacity-50">
+                                class="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg bg-[#c2450c] px-4 py-2 text-sm font-semibold text-white hover:bg-[#a83a0a] disabled:opacity-50">
                                 <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
                                 {{ cupomCarregando ? 'Buscando' : 'Aplicar' }}
                             </button>
@@ -868,10 +868,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
                     <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-700">
                         <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
-                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
-                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
-                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
+                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
+                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
+                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
+                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
                             <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
                             <dt>Total</dt>

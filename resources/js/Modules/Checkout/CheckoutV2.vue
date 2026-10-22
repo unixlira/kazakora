@@ -16,6 +16,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
+    // Média das avaliações dos produtos do carrinho: { media, total } ou null.
+    avaliacaoItens: { type: Object, default: null },
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
@@ -102,6 +104,10 @@ const turbo = ref(null);
 // A tela nasce sempre no frete grátis (pedido 2026-10-12).
 const turboEscolhido = ref(false);
 const itens = ref(props.items);
+// Estrelas do resumo (pedido 2026-10-21): cada estrela preenche a fração da
+// média que cabe nela (4,8 = 4 cheias e 80% da 5ª), como no StarRating.
+const notaItens = computed(() => Math.max(0, Math.min(5, Number(props.avaliacaoItens?.media) || 0)));
+const preenchimentoEstrela = (estrela) => Math.max(0, Math.min(100, (notaItens.value - (estrela - 1)) * 100));
 const subtotalAtual = ref(Number(props.subtotal) || 0);
 // Vários itens numa caixa só (2026-10-12): o frete real sai menor que o
 // somado no preço de cada item; a diferença entra como "Desconto da plataforma".
@@ -815,7 +821,23 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span class="text-sm font-medium text-slate-800">{{ formatPrice(item.subtotal) }}</span>
                         </li>
                     </ul>
-                    <Link href="/carrinho" class="mt-1 inline-block text-xs font-medium text-sky-600 hover:underline">Alterar itens do carrinho</Link>
+                    <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). Cores
+                         fixas do checkout; link em sky-700 para passar no contraste. -->
+                    <div class="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <Link href="/carrinho" class="inline-block text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
+                        <span v-if="avaliacaoItens" class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                            <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
+                                <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
+                                    <i class="fa-regular fa-star text-slate-400"></i>
+                                    <span class="absolute left-0 top-0 h-full overflow-hidden" :style="{ width: `${preenchimentoEstrela(estrela)}%` }">
+                                        <i class="fa-solid fa-star text-amber-500"></i>
+                                    </span>
+                                </span>
+                            </span>
+                            <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
+                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }} {{ avaliacaoItens.total === 1 ? 'avaliação' : 'avaliações' }})</span>
+                        </span>
+                    </div>
 
                     <div class="mt-3 border-t border-slate-100 pt-3">
                         <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">

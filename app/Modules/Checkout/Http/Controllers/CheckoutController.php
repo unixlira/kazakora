@@ -8,6 +8,7 @@ use App\Rules\CpfValido;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -36,6 +37,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1715,6 +1717,7 @@ class CheckoutController extends Controller
 
         return [
             'items' => $cartItems,
+            'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
@@ -1728,6 +1731,37 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
+    }
+
+    /**
+     * Estrelas do resumo do checkout (pedido 2026-10-21): média das avaliações
+     * dos produtos do carrinho, cada um com o anúncio pai e as variações (mesma
+     * regra da página do produto). Null quando nenhum tem avaliação.
+     *
+     * @return array{media: float, total: int}|null
+     */
+    private function avaliacaoDosItens(Collection $cartItems): ?array
+    {
+        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $grupos = Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
+            ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)
+            ->unique()
+            ->all();
+
+        $avaliacao = Review::query()
+            ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
+            ->selectRaw('avg(rating) as media, count(*) as total')
+            ->first();
+
+        if (! $avaliacao || (int) $avaliacao->total === 0) {
+            return null;
+        }
+
+        return ['media' => round((float) $avaliacao->media, 1), 'total' => (int) $avaliacao->total];
     }
 
     private function wantsJsonDelivery(Request $request): bool

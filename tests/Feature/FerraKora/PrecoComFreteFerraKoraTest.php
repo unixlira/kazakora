@@ -24,7 +24,7 @@ class PrecoComFreteFerraKoraTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['frete_embutido.ativo' => true, 'app.url' => 'https://kazakora.devlira.com.br']);
+        config(['frete_embutido.ativo' => true, 'frete_embutido.embutido_kazakora' => true, 'app.url' => 'https://kazakora.devlira.com.br']);
 
         Company::create([
             'razao_social' => 'Kazakora Comércio Ltda', 'nome_fantasia' => 'KazaKora', 'cnpj' => '65604590000107',

@@ -124,7 +124,7 @@ const tempo = computed(() => {
                 <li class="font-bold"><i class="fa-solid fa-lock mr-2 text-[#0FB930]"></i>Criptografia SSL</li>
                 <li><i class="fa-solid fa-cart-shopping mr-2 text-[#0FB930]"></i>Compra segura</li>
                 <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados protegidos</li>
-                <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega gratuita</li>
+                <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega garantida</li>
             </ul>
         </footer>
     </div>

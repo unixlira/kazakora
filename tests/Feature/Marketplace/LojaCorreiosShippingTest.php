@@ -7,6 +7,8 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
+use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\ProductFiscalData;
@@ -89,10 +91,10 @@ class LojaCorreiosShippingTest extends TestCase
         return $order;
     }
 
-    private function fakeCorreios(): Mockery\MockInterface
+    private function fakeCorreios(float $pac = 14.0, float $sedex = 11.15): Mockery\MockInterface
     {
         $precos = Mockery::mock(CorreiosFreightQuoteService::class);
-        $precos->shouldReceive('priceFor')->andReturnUsing(fn (string $servico) => $servico === CorreiosPrePostagemService::SERVICO_PAC ? 14.0 : 11.15);
+        $precos->shouldReceive('priceFor')->andReturnUsing(fn (string $servico) => $servico === CorreiosPrePostagemService::SERVICO_PAC ? $pac : $sedex);
         $this->app->instance(CorreiosFreightQuoteService::class, $precos);
 
         $correios = Mockery::mock(CorreiosPrePostagemService::class);
@@ -127,6 +129,41 @@ class LojaCorreiosShippingTest extends TestCase
         $this->assertSame(PrintJob::STATUS_QUEUED, $job->status);
         $this->assertSame(Order::ORIGIN_STORE, $job->channel);
         $this->assertStringStartsWith('%PDF-', Storage::disk('local')->get($job->label_path));
+    }
+
+    /** Achado real 2026-10-22 (#3343): cliente pagou o TURBO e a etiqueta saiu PAC. */
+    public function test_turbo_order_gets_sedex_label_even_when_pac_is_cheaper(): void
+    {
+        Queue::fake();
+        $order = $this->pedidoDoSite();
+        $order->update(['shipping_carrier_name' => FreteEmbutido::TURBO, 'shipping_cost' => 3.29]);
+
+        $correios = $this->fakeCorreios(pac: 23.17, sedex: 31.40);
+        $correios->shouldReceive('create')->once()
+            ->withArgs(fn (array $input) => $input['service_code'] === CorreiosPrePostagemService::SERVICO_SEDEX)
+            ->andReturn(['id' => 'PP53', 'codigoObjeto' => 'AB123456789BR']);
+
+        app(ChannelShippingService::class)->confirm($order);
+
+        $prePostagem = CorreiosPrePostagem::query()->where('order_id', $order->id)->sole();
+        $this->assertSame(CorreiosPrePostagemService::SERVICO_SEDEX, $prePostagem->service_code);
+        $this->assertEquals(31.40, $prePostagem->postage_price);
+    }
+
+    public function test_free_shipping_order_keeps_the_cheapest_service(): void
+    {
+        Queue::fake();
+        $order = $this->pedidoDoSite();
+        $order->update(['shipping_carrier_name' => 'Frete Grátis', 'shipping_cost' => 0]);
+
+        $correios = $this->fakeCorreios(pac: 23.17, sedex: 31.40);
+        $correios->shouldReceive('create')->once()
+            ->withArgs(fn (array $input) => $input['service_code'] === CorreiosPrePostagemService::SERVICO_PAC)
+            ->andReturn(['id' => 'PP54', 'codigoObjeto' => 'AB987654321BR']);
+
+        app(ChannelShippingService::class)->confirm($order);
+
+        $this->assertSame(CorreiosPrePostagemService::SERVICO_PAC, CorreiosPrePostagem::query()->where('order_id', $order->id)->sole()->service_code);
     }
 
     public function test_site_is_a_shipping_driver_but_not_a_marketplace_channel(): void

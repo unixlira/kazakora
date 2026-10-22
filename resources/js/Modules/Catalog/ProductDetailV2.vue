@@ -995,6 +995,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 a { color: inherit; }
 /* Botões dos cards (Ver detalhes / Detalhes) ficam brancos: o inherit acima deixava cinza (pedido 2026-10-20). */
 .pd2 a.text-white { color: #fff; }
+/* Detalhes em laranja vivo leva texto grafite (pedido 2026-10-22). */
+.pd2 a.botao-detalhes { color: #1f2225; }
 .pd2 h1, .pd2 h2, .pd2 h3 { color: var(--ink); font-family: inherit; margin: 0; line-height: 1.2; }
 .pd2 h2 { font-size: 28px; font-weight: 500; margin-bottom: 16px; }
 .pd2 p { margin: 0 0 14px; }

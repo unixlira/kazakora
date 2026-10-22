@@ -378,14 +378,16 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL
                          (margem negativa: o botão é mais alto que a linha e não muda a altura
                          do card); no celular vira a última linha do card. Menor no computador
-                         (pedido 2026-10-17): era 30px de altura e ficava grande no card. -->
+                         (pedido 2026-10-17): era 30px de altura e ficava grande no card.
+                         Laranja vivo #ff9500 com texto grafite (pedido 2026-10-22): o
+                         #c2450c era opaco e avermelhado. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-store-laranja px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-store-laranja-hover md:inline-flex">
+                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-[#1f2225] shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-store-laranja px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-store-laranja-hover md:hidden">
+                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-[#1f2225] shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
                     Ver detalhes
                 </Link>
             </div>

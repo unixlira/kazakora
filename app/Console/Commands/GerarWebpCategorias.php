@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Support\BannerMobileOptimizer;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Desempenho (PageSpeed, pedido 2026-10-21): gera o WebP das imagens das
@@ -26,6 +27,9 @@ class GerarWebpCategorias extends Command
                 ? $this->info("Categoria {$categoria->id} ({$categoria->slug}): {$webp}")
                 : $this->warn("Categoria {$categoria->id} ({$categoria->slug}): não deu para gerar o WebP, fica o original.");
         }
+
+        // Menu e home guardam as categorias por 10 min (MenuDaLoja).
+        Cache::forget('loja:departamentos');
 
         return self::SUCCESS;
     }

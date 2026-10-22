@@ -309,6 +309,8 @@ class Order extends Model
         'discount_amount',
         'pix_discount_amount',
         'desconto_plataforma_amount',
+        // Soma do frete embutido nos itens (FreteEmbutido), 2026-10-22.
+        'frete_embutido_amount',
         'total',
         // API de Conversões da Meta (2026-10-18, ver ConversoesMeta).
         'meta_rastreio',
@@ -327,6 +329,7 @@ class Order extends Model
             'discount_amount' => 'decimal:2',
             'pix_discount_amount' => 'decimal:2',
             'desconto_plataforma_amount' => 'decimal:2',
+            'frete_embutido_amount' => 'decimal:2',
             'total' => 'decimal:2',
             'visitante_latitude' => 'decimal:7',
             'visitante_longitude' => 'decimal:7',

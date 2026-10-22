@@ -74,7 +74,8 @@ class AlertaColetaFinanceira
         }
 
         $conversa = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $para],
+            // Aviso interno sai sempre pelo número da KazaKora.
+            ['wa_id' => $para, 'loja' => 'kazakora'],
             ['phone' => $para, 'profile_name' => 'Lira', 'last_message_at' => now(), 'unread_count' => 0],
         );
 

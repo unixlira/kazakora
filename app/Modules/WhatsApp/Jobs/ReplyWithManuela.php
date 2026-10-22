@@ -154,6 +154,12 @@ class ReplyWithManuela
             $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
         }
 
+        // FerraKora: Procon, Reclame Aqui, golpe, advogado... a Manuela para
+        // (chave desliga) e fica só a pessoa do time.
+        if ($reply['stop_bot'] ?? false) {
+            $conversation->update(['ai_enabled' => false]);
+        }
+
         if (! filled($reply['reply'])) {
             return;
         }

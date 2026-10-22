@@ -2,14 +2,32 @@
 
 namespace App\Modules\WhatsApp\Services;
 
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class WhatsAppCloudApiClient
 {
+    /** Loja dona do número que manda (services.whatsapp.numeros). */
+    private string $loja = WhatsAppNumeros::KAZAKORA;
+
     public function __construct(private readonly WhatsAppSettings $settings)
     {
+    }
+
+    /** Cópia que manda pelo número da loja (a conversa responde sempre pelo número dela). */
+    public function paraLoja(?string $loja): static
+    {
+        $copia = clone $this;
+        $copia->loja = WhatsAppNumeros::normalizar($loja);
+
+        return $copia;
+    }
+
+    public function loja(): string
+    {
+        return $this->loja;
     }
 
     public function sendText(string $to, string $message): array
@@ -100,9 +118,7 @@ class WhatsAppCloudApiClient
 
     public function uploadMedia(string $absolutePath, string $mimeType): string
     {
-        if (! $this->settings->isReadyToSend()) {
-            throw new RuntimeException('WhatsApp ainda não tem WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID configurados no servidor.');
-        }
+        $this->garantirPronto();
 
         if (! is_file($absolutePath) || ! is_readable($absolutePath)) {
             throw new RuntimeException('Arquivo de mídia não encontrado para upload no WhatsApp.');
@@ -114,7 +130,7 @@ class WhatsAppCloudApiClient
         }
 
         try {
-            $response = Http::withToken(config('services.whatsapp.access_token'))
+            $response = Http::withToken((string) WhatsAppNumeros::accessToken($this->loja))
                 ->acceptJson()
                 ->attach('file', $handle, basename($absolutePath), ['Content-Type' => $mimeType])
                 ->post($this->graphUrl('media'), [
@@ -163,11 +179,9 @@ class WhatsAppCloudApiClient
 
     private function postMessage(array $payload): array
     {
-        if (! $this->settings->isReadyToSend()) {
-            throw new RuntimeException('WhatsApp ainda não tem WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID configurados no servidor.');
-        }
+        $this->garantirPronto();
 
-        $response = Http::withToken(config('services.whatsapp.access_token'))
+        $response = Http::withToken((string) WhatsAppNumeros::accessToken($this->loja))
             ->acceptJson()
             ->post($this->graphUrl('messages'), $payload);
 
@@ -178,10 +192,19 @@ class WhatsAppCloudApiClient
         return $response->json() ?? [];
     }
 
+    private function garantirPronto(): void
+    {
+        if (! $this->settings->isReadyToSend($this->loja)) {
+            throw new RuntimeException($this->loja === WhatsAppNumeros::KAZAKORA
+                ? 'WhatsApp ainda não tem WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID configurados no servidor.'
+                : 'WhatsApp da '.WhatsAppNumeros::nome($this->loja).' ainda não tem número configurado no servidor.');
+        }
+    }
+
     private function graphUrl(string $edge): string
     {
         $baseUrl = rtrim(config('services.whatsapp.graph_url', 'https://graph.facebook.com/v20.0'), '/');
-        $phoneNumberId = config('services.whatsapp.phone_number_id');
+        $phoneNumberId = WhatsAppNumeros::phoneNumberId($this->loja);
 
         return "{$baseUrl}/{$phoneNumberId}/{$edge}";
     }

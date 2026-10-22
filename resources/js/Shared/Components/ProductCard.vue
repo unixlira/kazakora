@@ -145,6 +145,7 @@ const submitReview = () => {
 // Média das avaliações (0 = sem avaliação, aí não mostra estrela nenhuma).
 const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const notaTexto = computed(() => nota.value.toFixed(1).replace('.', ','));
+const totalAvaliacoes = computed(() => Number(props.product.reviews_count ?? 0));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
 // Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
@@ -320,15 +321,15 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <h3 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
-            <!-- Estrelas da média e a nota em negrito ao lado, em todo card (pedido
-                 2026-10-20). Sem avaliação a linha fica vazia com a mesma altura. -->
-            <div class="flex h-4 items-center gap-px text-[11px] text-amber-400">
-                <template v-if="nota > 0">
-                    <span class="flex items-center gap-px" role="img" :aria-label="`Nota ${notaTexto} de 5`">
-                        <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
-                    </span>
-                    <span class="ml-1 text-xs font-bold text-store-fg" aria-hidden="true">{{ notaTexto }}</span>
-                </template>
+            <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
+                 todo card (pedidos 2026-10-20 e 2026-10-22). Sem avaliação: estrelas
+                 vazias e "(0)", na mesma altura. -->
+            <!-- No celular, fonte um ponto menor: no card de 149 px, "★★★★★ 4,8 (735)" cabe certo. -->
+            <div class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
+                :aria-label="totalAvaliacoes ? `Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações'">
+                <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
+                <span v-if="nota > 0" class="ml-1 text-[11px] font-bold text-store-fg md:text-xs" aria-hidden="true">{{ notaTexto }}</span>
+                <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
             </div>
             <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
                  computador), laterais inclinadas "/ texto /", parte cinza do caminhão
@@ -346,13 +347,17 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
                      desconto, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
-                <!-- Sem "A partir de" antes do selo (pedido 2026-10-22): quebrava a linha. -->
-                <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
-                    <template v-if="precoAntes">
-                        <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
-                        <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
-                        <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
-                    </template>
+                <!-- Sem "A partir de" antes do selo (pedido 2026-10-22): quebrava a linha.
+                     Card estreito (celular, 2 por linha): a linha mede a própria largura
+                     (@container) e o riscado só aparece quando cabe; o "X% OFF" fica inteiro. -->
+                <div class="@container">
+                    <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
+                        <template v-if="precoAntes">
+                            <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
+                            <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
+                            <s class="hidden min-w-0 truncate whitespace-nowrap text-xs text-store-fg-faint @[7rem]:block">{{ formatPrice(precoAntes) }}</s>
+                        </template>
+                    </div>
                 </div>
                 <div class="flex h-[30px] items-end gap-x-1.5 overflow-hidden">
                     <div class="flex shrink-0 items-start leading-none text-store-fg">

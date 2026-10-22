@@ -277,6 +277,8 @@ onBeforeUnmount(() => observador?.disconnect());
 
             <div>
                 <div>
+                    <!-- Título invisível: o nome do card é h3 e não pode vir logo depois do h1 (PageSpeed, ordem dos títulos). -->
+                    <h2 class="sr-only">Produtos</h2>
                     <div v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
                         <i class="fas fa-magnifying-glass mb-3 text-3xl text-store-fg-faint"></i>
                         <p class="text-base font-semibold text-store-fg">

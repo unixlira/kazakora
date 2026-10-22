@@ -823,9 +823,9 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </ul>
                     <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). Cores
                          fixas do checkout; link em sky-700 para passar no contraste. -->
-                    <div class="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <Link href="/carrinho" class="inline-block text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
-                        <span v-if="avaliacaoItens" class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                    <div class="mt-1 flex items-center justify-between gap-2">
+                        <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
+                        <span v-if="avaliacaoItens" class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
                             <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
                                 <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
                                     <i class="fa-regular fa-star text-slate-400"></i>
@@ -835,7 +835,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 </span>
                             </span>
                             <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
-                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }} {{ avaliacaoItens.total === 1 ? 'avaliação' : 'avaliações' }})</span>
+                            <!-- No celular só o número, para caber na linha do "Alterar itens". -->
+                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only"> {{ avaliacaoItens.total === 1 ? 'avaliação' : 'avaliações' }}</span>)</span>
                         </span>
                     </div>
 

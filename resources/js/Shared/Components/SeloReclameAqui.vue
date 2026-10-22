@@ -12,6 +12,10 @@
  * Enquanto o selo não carrega (ou se um bloqueador barrar o script), aparece
  * a imagem local do selo apontando para o mesmo link.
  *
+ * `semLink` (checkout, pedido 2026-10-21): só a imagem local do selo, sem <a>
+ * e sem o script do Reclame AQUI (o widget oficial sempre desenha um link),
+ * para o cliente não sair da tela de pagamento.
+ *
  * `altura` (px, sem unidade) encolhe o selo proporcionalmente para alinhar
  * com os outros selos da faixa. Aceita a variável CSS --ra-altura para tamanho
  * responsivo (ex.: class="[--ra-altura:30] lg:[--ra-altura:51]").
@@ -21,6 +25,7 @@ import { usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
     altura: { type: Number, default: null },
+    semLink: { type: Boolean, default: false },
 });
 
 const LINK_PADRAO = 'https://www.reclameaqui.com.br/rav/F68R';
@@ -63,7 +68,7 @@ let adiarScript = null;
 const aoCarregar = () => { adiarScript = setTimeout(injetarScript, 300); };
 
 onMounted(() => {
-    if (!alvo.value) return;
+    if (props.semLink || !alvo.value) return;
 
     observador = new MutationObserver(() => ajustarLink());
     observador.observe(alvo.value, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
@@ -106,14 +111,18 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="selo-ra relative shrink-0 overflow-hidden" :style="estiloCaixa">
+        <div v-if="semLink" class="absolute inset-0 flex items-center justify-center rounded-[8px] bg-white">
+            <img src="/images/selos/reclame-aqui-verificada-qrcode.webp" alt="Verificada por Reclame AQUI" width="294" height="88"
+                class="h-[90%] w-auto">
+        </div>
         <!-- Fallback: imagem local do selo, até o oficial carregar. -->
-        <a v-if="!carregado" :href="link" target="_blank" rel="noopener"
+        <a v-else-if="!carregado" :href="link" target="_blank" rel="noopener"
             class="absolute inset-0 flex items-center justify-center rounded-[8px] bg-white transition hover:opacity-90"
             title="Verificada por Reclame AQUI">
             <img src="/images/selos/reclame-aqui-verificada-qrcode.webp" alt="Verificada por Reclame AQUI" width="294" height="88"
                 class="h-[90%] w-auto">
         </a>
-        <div class="selo-ra-escala absolute left-0 top-0" :class="{ invisible: !carregado }"
+        <div v-if="!semLink" class="selo-ra-escala absolute left-0 top-0" :class="{ invisible: !carregado }"
             :style="{ width: `${LARGURA}px`, height: `${ALTURA}px` }">
             <div :id="alvoId" ref="alvo"></div>
         </div>

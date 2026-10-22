@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
  * Indicadores (relatorios.view) ou Pedidos (toda a equipe vê). O conteúdo
  * do Gerenciador foi para Indicadores, em abas (ver
  * Support\Indicadores\PainelGerencial). A query string vai junto; o link
- * antigo dos acessos (/admin?mes=AAAA-MM) abre a aba Acessos ao site.
+ * antigo dos acessos (/admin?mes=AAAA-MM) abre a aba Visitas KazaKora.
  */
 class DashboardController extends Controller
 {

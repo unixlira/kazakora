@@ -991,15 +991,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     --bg: #0b0f17; --card: #141a24; --ink: #f3f4f6; --text: #c4c9d2; --muted: #9ca3af; --line: #273042; --soft: #1a2130; --sunk: #1f2736;
     --blue: #7aa2ff; --green: #00ab21; --shadow: none; --shadow-strong: none;
 }
-.pd2 img { max-width: 100%; display: block; }
-.pd2 a { color: inherit; }
-/* Botões dos cards (Ver detalhes / Detalhes) ficam brancos: o inherit acima deixava cinza (pedido 2026-10-20). */
-.pd2 a.text-white { color: #fff; }
-/* Detalhes em laranja vivo leva texto grafite (pedido 2026-10-22). */
-.pd2 a.botao-detalhes { color: #1f2225; }
-.pd2 h1, .pd2 h2, .pd2 h3 { color: var(--ink); font-family: inherit; margin: 0; line-height: 1.2; }
+/* Os estilos gerais da página não entram no card de produto (.card-produto, pedido
+   2026-10-22): no "Você também pode gostar de" ele ficava diferente do resto da loja
+   (título apertado, margem embaixo do "Frete grátis" e "Detalhes" cinza). */
+.pd2 img:not(.card-produto *) { max-width: 100%; display: block; }
+.pd2 a:not(.card-produto *) { color: inherit; }
+.pd2 :is(h1, h2, h3):not(.card-produto *) { color: var(--ink); font-family: inherit; margin: 0; line-height: 1.2; }
 .pd2 h2 { font-size: 28px; font-weight: 500; margin-bottom: 16px; }
-.pd2 p { margin: 0 0 14px; }
+.pd2 p:not(.card-produto *) { margin: 0 0 14px; }
 .pd2 .sem-margem { margin: 0; }
 /* Mesma largura do cabeçalho e do resto da loja (max-w-[1320px] px-6): com 1400px o produto passava do menu. */
 .pd2 .wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px; }

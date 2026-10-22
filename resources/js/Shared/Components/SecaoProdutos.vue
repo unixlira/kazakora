@@ -1,6 +1,7 @@
 <script setup>
 // Seção de produtos da home (pedido 2026-10-10): título, link "Ver todos"
-// e grade de cards — 2 por linha no celular, 4 no computador.
+// e grade de cards: 2 por linha no celular, 3 no tablet e 4 no computador, a
+// mesma grade de todas as vitrines (pedido 2026-10-22: card igual em toda a loja).
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -13,9 +14,8 @@ const props = defineProps({
     favoriteIds: { type: Array, default: () => [] },
     reviewableProductIds: { type: Array, default: () => [] },
     reviewedProductIds: { type: Array, default: () => [] },
-    // 5 colunas no computador (Ofertas do dia têm 5 produtos).
-    cinco: { type: Boolean, default: false },
-    // Celular: slide com 1 card por tela (Ofertas do dia, pedido 2026-10-10).
+    // Celular: slide com 2 cards por tela, do tamanho dos outros (Ofertas do dia,
+    // pedido 2026-10-10; eram 1 por tela até 2026-10-22).
     slider: { type: Boolean, default: false },
 });
 
@@ -33,6 +33,7 @@ onBeforeUnmount(() => consultaCelular?.removeEventListener('change', aoMudarTela
 
 const trilho = ref(null);
 const atual = ref(0);
+const paginas = computed(() => Math.ceil(props.produtos.length / 2));
 const aoRolar = () => {
     const el = trilho.value;
     if (el) atual.value = Math.round(el.scrollLeft / el.clientWidth);
@@ -40,7 +41,7 @@ const aoRolar = () => {
 const irPara = (indice) => {
     const el = trilho.value;
     if (!el) return;
-    const destino = Math.max(0, Math.min(props.produtos.length - 1, indice));
+    const destino = Math.max(0, Math.min(paginas.value - 1, indice));
     el.scrollTo({ left: destino * el.clientWidth, behavior: 'smooth' });
 };
 </script>
@@ -58,10 +59,10 @@ const irPara = (indice) => {
                 </Link>
             </slot>
         </div>
-        <!-- Slide do celular: 1 card por tela, arrasta com o dedo, setas e bolinhas. -->
+        <!-- Slide do celular: 2 cards por tela, arrasta com o dedo, setas e bolinhas. -->
         <div v-if="slider && celular" class="relative md:hidden">
-            <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
-                <div v-for="product in produtos" :key="product.id" class="w-full shrink-0 snap-center px-1">
+            <div ref="trilho" class="no-scrollbar -mx-2 flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
+                <div v-for="(product, indice) in produtos" :key="product.id" class="w-1/2 shrink-0 px-2" :class="{ 'snap-start': indice % 2 === 0 }">
                     <ProductCard :product="product"
                         :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                         :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
@@ -71,16 +72,16 @@ const irPara = (indice) => {
             <button v-if="atual > 0" type="button" aria-label="Oferta anterior"
                 class="absolute left-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual - 1)"><i class="fas fa-angle-left"></i></button>
-            <button v-if="atual < produtos.length - 1" type="button" aria-label="Próxima oferta"
+            <button v-if="atual < paginas - 1" type="button" aria-label="Próxima oferta"
                 class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual + 1)"><i class="fas fa-angle-right"></i></button>
             <div class="mt-2 flex justify-center">
-                <button v-for="(product, indice) in produtos" :key="product.id" type="button" :aria-label="`Oferta ${indice + 1}`"
+                <button v-for="indice in paginas" :key="indice" type="button" :aria-label="`Ofertas ${indice * 2 - 1} e ${indice * 2}`"
                     class="flex h-6 min-w-6 items-center justify-center"
-                    @click="irPara(indice)"><span class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"></span></button>
+                    @click="irPara(indice - 1)"><span class="h-2 rounded-full transition-all" :class="indice - 1 === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"></span></button>
             </div>
         </div>
-        <div v-if="!slider || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco, 'max-md:hidden': slider }">
+        <div v-if="!slider || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4" :class="{ 'max-md:hidden': slider }">
             <ProductCard v-for="product in produtos" :key="product.id" :product="product"
                 :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                 :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />

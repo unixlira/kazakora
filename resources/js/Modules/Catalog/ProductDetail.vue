@@ -601,7 +601,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
             <section v-if="relatedProducts.length">
                 <h2 class="mb-6 font-display text-2xl font-semibold text-store-fg md:text-3xl">Você também pode gostar de</h2>
-                <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
+                <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4">
                     <ProductCard v-for="related in relatedProducts" :key="related.id" :product="related" :is-favorite="isFavoriteRelated(related.id)" :is-authenticated="isAuthenticated" :can-review="canReviewRelated(related.id)" :has-reviewed="hasReviewedRelated(related.id)" />
                 </div>
             </section>

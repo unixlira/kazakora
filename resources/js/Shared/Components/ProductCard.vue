@@ -264,7 +264,9 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
 </script>
 
 <template>
-    <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
+    <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
+         com estilo próprio (página do produto, pedido 2026-10-22). -->
+    <article class="card-produto group flex font-store h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
         <div class="relative aspect-square cursor-pointer bg-white"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
@@ -371,9 +373,10 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 </div>
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
-                    <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
-                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
-                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-store-verde-texto md:text-sm">
+                    <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-[11px] font-semibold text-red-600 md:text-xs">Esgotado</p>
+                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte.
+                         Menor (pedido 2026-10-22): no card estreito o FULL ficava embaixo do "Detalhes". -->
+                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto md:text-xs">
                         Frete grátis
                         <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
                     </p>
@@ -382,15 +385,15 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          (margem negativa: o botão é mais alto que a linha e não muda a altura
                          do card); no celular vira a última linha do card. Menor no computador
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card.
-                         Laranja vivo #ff9500 com texto grafite (pedido 2026-10-22): o
-                         #c2450c era opaco e avermelhado. -->
+                         Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
+                         avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-[#1f2225] shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
+                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-[#1f2225] shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
+                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
                     Ver detalhes
                 </Link>
             </div>

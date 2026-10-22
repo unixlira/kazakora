@@ -1,7 +1,8 @@
 <script setup>
 // "Você também pode gostar de" na página do produto (pedido 2026-10-20):
 // carrossel de cards que passa para o lado com o dedo, setas e bolinhas.
-// 2 por vez no celular, 3 no tablet e 5 no computador.
+// 2 por vez no celular, 3 no tablet e 4 no computador: o mesmo tamanho de card
+// das outras vitrines (pedido 2026-10-22; eram 5 e o card ficava menor).
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -42,7 +43,7 @@ watch(() => props.produtos, () => {
     <div class="relative">
         <div ref="trilho" class="no-scrollbar -mx-2 flex snap-x snap-mandatory overflow-x-auto scroll-smooth py-1" @scroll.passive="atualizar">
             <div v-for="product in produtos" :key="product.id"
-                class="w-1/2 shrink-0 snap-start px-2 sm:w-1/3 lg:w-1/5 lg:px-3">
+                class="w-1/2 shrink-0 snap-start px-2 md:w-1/3 lg:px-3 xl:w-1/4">
                 <ProductCard :product="product"
                     :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                     :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />

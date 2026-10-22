@@ -75,10 +75,8 @@ const goTo = (index) => {
     start();
 };
 
-// Pausa só com mouse de verdade (pedido 2026-10-10: no celular o toque
-// disparava o "mouseenter", pausava e nunca mais trocava de banner).
-const pausarComMouse = (event) => { if (event.pointerType === 'mouse') stop(); };
-const retomarComMouse = (event) => { if (event.pointerType === 'mouse') start(); };
+// Sem pausa com o mouse (pedido 2026-10-22): o carrossel passa sozinho mesmo
+// com o cursor em cima; antes, mouse parado no banner congelava a troca.
 
 // Arrastar com o dedo para o lado troca o banner.
 let toqueX = null;
@@ -128,8 +126,6 @@ onUnmounted(() => {
 <template>
     <section
         class="group relative w-full touch-pan-y select-none overflow-hidden"
-        @pointerenter="pausarComMouse"
-        @pointerleave="retomarComMouse"
         @touchstart.passive="inicioToque"
         @touchend="fimToque"
     >

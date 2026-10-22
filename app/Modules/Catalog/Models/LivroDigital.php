@@ -36,8 +36,9 @@ class LivroDigital extends Model
     protected $table = 'livros_digitais';
 
     /**
-     * Chave da promoção: '1' = além do link de download (que vai sempre), os
-     * livros vão anexados no e-mail de confirmação do pedido.
+     * Chave da promoção: além do link de download (que vai sempre), os
+     * livros vão anexados no e-mail de confirmação do pedido. Ligada por
+     * padrão (aprovado pelo Lira em 2026-10-21): só '0' desliga.
      */
     public const SETTING_EMAIL_PEDIDO = 'livros_digitais.email_pedido';
 
@@ -107,7 +108,7 @@ class LivroDigital extends Model
 
     public static function emailPedidoLigado(): bool
     {
-        return Setting::get(self::SETTING_EMAIL_PEDIDO) === '1';
+        return Setting::get(self::SETTING_EMAIL_PEDIDO, '1') !== '0';
     }
 
     public static function ligarEmailPedido(bool $ligar): void

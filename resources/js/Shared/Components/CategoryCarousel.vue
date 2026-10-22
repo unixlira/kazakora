@@ -3,6 +3,7 @@
 // filtra a vitrine pelo departamento; clicar de novo no ativo tira o filtro.
 import { Link } from '@inertiajs/vue3';
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
 const props = defineProps({
     categories: {
@@ -47,7 +48,7 @@ const hrefDe = (category) => (props.ativa === category.slug ? '/#produtos' : `/?
                 class="group flex w-full shrink-0 snap-center flex-col items-center gap-2 text-center text-store-fg no-underline md:w-[160px] md:snap-start">
                 <span class="flex h-[180px] w-[180px] items-center justify-center overflow-hidden rounded-full border-2 bg-white shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md md:h-[150px] md:w-[150px]"
                     :class="ativa === category.slug ? 'border-store-accent' : 'border-store-border'">
-                    <img v-if="category.image_url" :src="category.image_url" alt="" loading="lazy" decoding="async"
+                    <img v-if="category.image_url" :src="imagensLiberadas ? category.image_url : undefined" alt="" loading="lazy" decoding="async"
                         class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                     <i v-else class="fas fa-tag text-5xl text-store-fg-faint md:text-4xl"></i>
                 </span>

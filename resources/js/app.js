@@ -2,6 +2,7 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { rastrearPagina } from '@/Shared/pixelMeta';
+import { liberarImagensDepoisDaPrimeiraPintura } from '@/Shared/imagensDepoisDoTopo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
 const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
@@ -17,6 +18,7 @@ createInertiaApp({
         createApp({ render: () => h(App, props) })
             .use(plugin)
             .mount(el);
+        liberarImagensDepoisDaPrimeiraPintura();
 
         // Pixel da Meta: só roda depois do OK de cookies (Shared/pixelMeta.js).
         // `navigate` cobre a primeira página e cada troca de página; o OK chega

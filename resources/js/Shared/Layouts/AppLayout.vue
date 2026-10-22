@@ -4,6 +4,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { atualizarFavoritos, totalFavoritos } from '@/Shared/favoritos';
 import { useClickOutside } from '@/Shared/useClickOutside';
+import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
@@ -463,7 +464,7 @@ const REDES = [
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto rounded-[8px] lg:mx-0" loading="lazy">
+                        <img :src="imagensLiberadas ? marca.logoRodape : undefined" :alt="imagensLiberadas ? 'KazaKora' : ''" class="mx-auto h-8 w-auto rounded-[8px] lg:mx-0" loading="lazy">
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
@@ -527,7 +528,7 @@ const REDES = [
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
                                  retos no arquivo; o arredondamento leve vem do CSS (pedido 2026-10-14). -->
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand"
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="imagensLiberadas ? `/images/payments/novas/${brand}.webp` : undefined" :alt="imagensLiberadas ? brand : ''"
                                 loading="lazy" decoding="async" width="249" height="167"
                                 class="h-[30px] w-auto shrink-0 rounded-[8px] sm:h-[44px] lg:h-[51px]">
                         </div>
@@ -542,7 +543,7 @@ const REDES = [
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                                 class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a verificação do Google Safe Browsing">
-                                <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" loading="lazy" decoding="async"
+                                <img :src="imagensLiberadas ? '/images/selos/selo-google-safe.png' : undefined" :alt="imagensLiberadas ? 'Google Safe Browsing' : ''" width="139" height="45" loading="lazy" decoding="async"
                                     class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
                             <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma

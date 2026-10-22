@@ -37,7 +37,7 @@ onBeforeUnmount(() => clearInterval(timer));
             <Link href="/" class="mb-8 no-underline">
                 <picture>
                     <source media="(prefers-color-scheme: dark)" :srcset="$page.props.marca?.logoRodape">
-                    <img :src="$page.props.marca?.logoNav ?? '/images/marca/logo-nav.png'" alt="KazaKora" class="h-9 w-auto">
+                    <img :src="$page.props.marca?.logoNav ?? '/images/marca/logo-nav.webp'" alt="KazaKora" class="h-9 w-auto">
                 </picture>
             </Link>
 

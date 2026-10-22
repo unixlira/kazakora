@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Storage;
 class Marca
 {
     public const ITENS = [
-        'logo_nav' => ['padrao' => '/images/marca/logo-nav.png'],
-        'logo_rodape' => ['padrao' => '/images/marca/logo-rodape.png'],
+        'logo_nav' => ['padrao' => '/images/marca/logo-nav.png', 'loja' => '/images/marca/logo-nav.webp'],
+        'logo_rodape' => ['padrao' => '/images/marca/logo-rodape.png', 'loja' => '/images/marca/logo-rodape.webp'],
         'favicon' => ['padrao' => '/images/marca/favicon-32.png'],
     ];
 
@@ -34,6 +34,17 @@ class Marca
         return $caminho ? Storage::disk('public')->url($caminho) : self::ITENS[$item]['padrao'];
     }
 
+    /**
+     * Para as páginas da loja (PageSpeed 2026-10-21): sem upload, o padrão em
+     * WebP, mais leve. E-mail continua no PNG (urlAbsoluta), que todo leitor abre.
+     */
+    public static function urlLoja(string $item): string
+    {
+        $caminho = self::caminho($item);
+
+        return $caminho ? Storage::disk('public')->url($caminho) : (self::ITENS[$item]['loja'] ?? self::ITENS[$item]['padrao']);
+    }
+
     /** Endereço completo (com domínio), para e-mails. */
     public static function urlAbsoluta(string $item): string
     {
@@ -48,8 +59,8 @@ class Marca
         $favicon = self::url('favicon');
 
         return [
-            'logoNav' => self::url('logo_nav'),
-            'logoRodape' => self::url('logo_rodape'),
+            'logoNav' => self::urlLoja('logo_nav'),
+            'logoRodape' => self::urlLoja('logo_rodape'),
             'favicon' => $favicon,
             'faviconTipo' => str_ends_with(strtolower(parse_url($favicon, PHP_URL_PATH) ?? ''), '.ico') ? 'image/x-icon' : 'image/png',
         ];

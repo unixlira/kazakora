@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
 const props = defineProps({
     banners: {
@@ -153,10 +154,11 @@ onUnmounted(() => {
                 >
                     <!-- <picture>: o navegador baixa só a imagem do tamanho de tela certo. -->
                     <picture class="block h-full">
-                        <source media="(min-width: 768px)" :srcset="banner.image_srcset || banner.image_url"
+                        <!-- Só o 1º banner sai na 1ª pintura; os outros depois (imagensDepoisDoTopo.js). -->
+                        <source media="(min-width: 768px)" :srcset="index === 0 || imagensLiberadas ? (banner.image_srcset || banner.image_url) : undefined"
                             :sizes="banner.image_srcset ? '100vw' : undefined">
-                        <img :src="banner.image_url_mobile || banner.image_url"
-                            :srcset="banner.image_srcset_mobile || undefined"
+                        <img :src="index === 0 || imagensLiberadas ? (banner.image_url_mobile || banner.image_url) : undefined"
+                            :srcset="index === 0 || imagensLiberadas ? (banner.image_srcset_mobile || undefined) : undefined"
                             :sizes="banner.image_srcset_mobile ? '100vw' : undefined"
                             :alt="banner.title || 'Banner promocional'"
                             class="img-fluid md:object-cover" decoding="async" draggable="false"

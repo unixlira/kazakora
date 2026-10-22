@@ -10,6 +10,7 @@ import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import BuscaLocal from './BuscaLocal.vue';
+import EscolherCriativo from './EscolherCriativo.vue';
 import { enviarArquivo, formatarReais, pedirJson } from './metaAds';
 
 const props = defineProps({
@@ -68,7 +69,7 @@ const maxBytes = props.limites.max_mb * 1024 * 1024;
 let sequencia = 0;
 
 const anuncios = ref(props.videos.map((v) => ({
-    chave: `s${v.id}`, id: v.id, arquivo: null, tipo: v.tipo, nome: v.nome, previa: v.url,
+    chave: `s${v.id}`, id: v.id, criativoId: null, arquivo: null, tipo: v.tipo, nome: v.nome, previa: v.url,
     tamanho: `${v.tamanho_mb} MB`, formato: v.formato ?? '', campos: camposDe(v), estado: 'salvo', progresso: 0, erro: '', aberto: false,
 })));
 const removidos = ref([]);
@@ -91,8 +92,27 @@ const adicionarArquivos = (lista) => {
             break;
         }
         anuncios.value.push({
-            chave: `n${sequencia++}`, id: null, arquivo, tipo: TIPOS[arquivo.type], nome: arquivo.name, previa: URL.createObjectURL(arquivo),
+            chave: `n${sequencia++}`, id: null, criativoId: null, arquivo, tipo: TIPOS[arquivo.type], nome: arquivo.name, previa: URL.createObjectURL(arquivo),
             tamanho: `${(arquivo.size / 1048576).toFixed(1)} MB`, formato: '', campos: camposDe(), estado: 'esperando', progresso: 0, erro: '', aberto: true,
+        });
+    }
+};
+
+// "Dentro da plataforma": criativo aprovado em Validação de criativos (o servidor copia o arquivo).
+const escolhendo = ref(false);
+const adicionarDaPlataforma = (lista) => {
+    aviso.value = '';
+    for (const c of lista) {
+        if (vagas() <= 0) {
+            aviso.value = `Limite de ${props.limites.max_videos} anúncios por campanha.`;
+            break;
+        }
+        const campos = camposDe();
+        const produto = props.produtos.find((p) => p.id === c.produto_id);
+        if (produto) Object.assign(campos, { produto_id: produto.id, link_destino: produto.link });
+        anuncios.value.push({
+            chave: `n${sequencia++}`, id: null, criativoId: c.id, arquivo: null, tipo: c.tipo, nome: c.titulo, previa: c.url,
+            tamanho: `${c.tamanho_mb} MB`, formato: c.proporcao ?? '', campos, estado: 'esperando', progresso: 0, erro: '', aberto: true,
         });
     }
 };
@@ -106,7 +126,7 @@ const aoSoltar = (evento) => {
 const removerAnuncio = (i) => {
     const [tirado] = anuncios.value.splice(i, 1);
     if (tirado.id) removidos.value.push(tirado.id);
-    else URL.revokeObjectURL(tirado.previa);
+    else if (tirado.arquivo) URL.revokeObjectURL(tirado.previa);
 };
 
 const aoEscolherProduto = (a) => {
@@ -189,9 +209,11 @@ const salvar = async () => {
                 continue;
             }
             a.estado = 'subindo';
-            const resposta = await enviarArquivo(`${BASE}/videos`, 'video', a.arquivo, (p) => { a.progresso = p; }, extras);
-            URL.revokeObjectURL(a.previa);
-            Object.assign(a, { id: resposta.video.id, arquivo: null, previa: resposta.video.url, estado: 'salvo', formato: resposta.video.formato || a.formato });
+            const resposta = a.criativoId
+                ? await pedirJson('POST', `${BASE}/videos/da-plataforma`, { ...extras, criativo_id: a.criativoId })
+                : await enviarArquivo(`${BASE}/videos`, 'video', a.arquivo, (p) => { a.progresso = p; }, extras);
+            if (a.arquivo) URL.revokeObjectURL(a.previa);
+            Object.assign(a, { id: resposta.video.id, criativoId: null, arquivo: null, previa: resposta.video.url, estado: 'salvo', formato: resposta.video.formato || a.formato });
         } catch (erro) {
             a.estado = a.id ? 'salvo' : 'erro';
             a.erro = erro.message;
@@ -371,11 +393,18 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                     :class="arrastando ? 'border-primary bg-primary/5' : 'border-[var(--surface-border)]'"
                     @dragover.prevent="arrastando = true" @dragleave.prevent="arrastando = false" @drop.prevent="aoSoltar">
                     <p class="text-slate-500">Solte vídeos ou imagens aqui. Cada arquivo vira um anúncio.</p>
-                    <label class="cursor-pointer rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10">
-                        <i class="fas fa-plus text-xs" aria-hidden="true"></i> Anúncio
-                        <input type="file" accept="video/mp4,video/quicktime,image/jpeg,image/png" multiple class="sr-only" :disabled="salvando"
-                            @change="adicionarArquivos($event.target.files); $event.target.value = ''">
-                    </label>
+                    <div class="flex flex-wrap justify-center gap-2">
+                        <label class="cursor-pointer rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10">
+                            <i class="fas fa-upload text-xs" aria-hidden="true"></i> Do computador
+                            <input type="file" accept="video/mp4,video/quicktime,image/jpeg,image/png" multiple class="sr-only" :disabled="salvando"
+                                @change="adicionarArquivos($event.target.files); $event.target.value = ''">
+                        </label>
+                        <button type="button" :disabled="salvando || vagas() <= 0"
+                            class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="escolhendo = true">
+                            <i class="fas fa-photo-film text-xs" aria-hidden="true"></i> Dentro da plataforma
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -392,5 +421,6 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                 </div>
             </div>
         </form>
+        <EscolherCriativo :open="escolhendo" :vagas="Math.max(0, vagas())" @close="escolhendo = false" @escolher="adicionarDaPlataforma" />
     </AdminLayout>
 </template>

@@ -687,11 +687,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
         Route::post('sincronizar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'sincronizar'])->name('sincronizar')->middleware(['permission:financeiro.create', 'throttle:6,1']);
         Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
+        // "Dentro da plataforma" (2026-10-21): criativo aprovado em Validação de criativos vira anúncio.
+        Route::get('criativos-aprovados', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'criativosAprovados'])->name('criativos-aprovados')->middleware('permission:financeiro.create');
+        Route::get('criativos-aprovados/{criativo}/arquivo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'criativoAprovadoArquivo'])->whereNumber('criativo')->name('criativos-aprovados.arquivo')->middleware('permission:financeiro.create');
         Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
         Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');
         Route::put('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'update'])->whereNumber('campanha')->name('atualizar')->middleware('permission:financeiro.create');
         Route::delete('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'destroy'])->whereNumber('campanha')->name('excluir')->middleware('permission:financeiro.create');
         Route::post('{campanha}/videos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoStore'])->whereNumber('campanha')->name('videos.armazenar')->middleware('permission:financeiro.create');
+        Route::post('{campanha}/videos/da-plataforma', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDaPlataforma'])->whereNumber('campanha')->name('videos.da-plataforma')->middleware('permission:financeiro.create');
         Route::put('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoUpdate'])->whereNumber(['campanha', 'video'])->name('videos.atualizar')->middleware('permission:financeiro.create');
         Route::delete('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDestroy'])->whereNumber(['campanha', 'video'])->name('videos.excluir')->middleware('permission:financeiro.create');
         // Editar (PUT acima) e excluir/pausar anúncio que já está na Meta (2026-10-19).

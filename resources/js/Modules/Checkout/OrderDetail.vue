@@ -347,6 +347,19 @@ onUnmounted(limparTimers);
                         <p v-else class="mt-2 text-sm text-store-fg-muted">A nota sai logo depois da confirmação do pagamento.</p>
                     </section>
 
+                    <!-- Livros digitais ganhos na compra (Promoção PDFs) -->
+                    <section v-if="pedido.livros?.itens?.length" class="rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
+                        <h2 class="flex items-center gap-2 font-bold"><i class="fas fa-gift text-[#F27A2A]"></i> Seus livros digitais</h2>
+                        <p v-if="!pedido.livros.liberados" class="mt-2 text-sm text-store-fg-muted">Os livros ficam disponíveis para baixar assim que o pagamento for confirmado.</p>
+                        <ul class="mt-3 space-y-2">
+                            <li v-for="livro in pedido.livros.itens" :key="livro.url" class="flex items-center gap-3">
+                                <img v-if="livro.capa" :src="livro.capa" alt="" class="h-14 w-10 flex-none rounded object-cover" loading="lazy">
+                                <span class="min-w-0 flex-1 text-sm font-semibold">{{ livro.titulo }}</span>
+                                <a v-if="pedido.livros.liberados" :href="livro.url" class="flex-none rounded-lg bg-[#c2450c] px-3 py-2 text-xs font-bold text-white no-underline hover:brightness-95"><i class="fas fa-download mr-1"></i> Baixar PDF</a>
+                            </li>
+                        </ul>
+                    </section>
+
                     <!-- Entrega -->
                     <section class="rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
                         <h2 class="flex items-center gap-2 font-bold"><i class="fas fa-location-dot text-[#F27A2A]"></i> Entrega</h2>

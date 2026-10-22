@@ -15,6 +15,7 @@ use Throwable;
  * grava no histórico, manda pela Cloud API e atualiza a lista de conversas.
  * Sem credencial da Meta, a mensagem fica gravada como "draft_no_token" —
  * aparece no chat com relógio, pra dar pra testar a tela antes do token.
+ * Sai SEMPRE pelo número da loja da conversa (KazaKora ou FerraKora).
  */
 class WhatsAppOutbox
 {
@@ -45,14 +46,14 @@ class WhatsAppOutbox
 
         $conversation->registerMessage($message);
 
-        if (! $this->settings->isReadyToSend()) {
+        if (! $this->settings->isReadyToSend($conversation->loja)) {
             $message->update(['status' => 'draft_no_token']);
 
             return $message;
         }
 
         try {
-            $response = $this->client->sendText($conversation->wa_id, $body);
+            $response = $this->client->paraLoja($conversation->loja)->sendText($conversation->wa_id, $body);
 
             $message->update([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,
@@ -111,15 +112,15 @@ class WhatsAppOutbox
 
         $conversation->registerMessage($message);
 
-        if (! $this->settings->isReadyToSend()) {
+        if (! $this->settings->isReadyToSend($conversation->loja)) {
             $message->update(['status' => 'draft_no_token']);
 
             return $message;
         }
 
         try {
-            $mediaId = $this->client->uploadMedia(Storage::disk('local')->path($localPath), $mimeType);
-            $response = $this->client->sendMedia($conversation->wa_id, $type, $mediaId, $caption, $fileName);
+            $mediaId = $this->client->paraLoja($conversation->loja)->uploadMedia(Storage::disk('local')->path($localPath), $mimeType);
+            $response = $this->client->paraLoja($conversation->loja)->sendMedia($conversation->wa_id, $type, $mediaId, $caption, $fileName);
 
             $message->update([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,
@@ -151,13 +152,13 @@ class WhatsAppOutbox
         string $sentBy,
         array $extraPayload = [],
     ): ?WhatsAppMessage {
-        if (! $this->settings->isReadyToSend()) {
+        if (! $this->settings->isReadyToSend($conversation->loja)) {
             return null;
         }
 
         try {
-            $mediaId = $this->client->uploadMedia($absolutePath, 'audio/ogg');
-            $response = $this->client->sendMedia($conversation->wa_id, 'audio', $mediaId);
+            $mediaId = $this->client->paraLoja($conversation->loja)->uploadMedia($absolutePath, 'audio/ogg');
+            $response = $this->client->paraLoja($conversation->loja)->sendMedia($conversation->wa_id, 'audio', $mediaId);
         } catch (Throwable $exception) {
             Log::warning('whatsapp_voice_send_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
 

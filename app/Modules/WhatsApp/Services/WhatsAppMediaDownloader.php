@@ -3,6 +3,7 @@
 namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -16,7 +17,8 @@ class WhatsAppMediaDownloader
     public function download(WhatsAppMessage $message): ?array
     {
         $mediaId = $message->mediaId();
-        $token = config('services.whatsapp.access_token');
+        // Token do número que recebeu a mídia (loja da conversa).
+        $token = WhatsAppNumeros::accessToken($message->conversation?->loja);
 
         if (! $mediaId || ! filled($token)) {
             return null;

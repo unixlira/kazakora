@@ -4,6 +4,7 @@ namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -114,8 +115,12 @@ class ManuelaAgentClient
 
         // A Manuela pede a busca (buscar_produto/abrir_produto), o sistema
         // procura de verdade e devolve; ela só fala de produto com base nisso.
+        // A busca é no catálogo da KazaKora: conversa da FerraKora fica sem
+        // ferramenta (produto pelo site dela ou com uma pessoa do time).
+        $tools = $conversation->loja === WhatsAppNumeros::FERRAKORA ? [] : self::tools();
+
         for ($round = 0; $round <= self::MAX_TOOL_ROUNDS; $round++) {
-            $parts = $this->gemini->request((string) config('services.gemini.chat_model'), $contents, $systemPrompt, $round < self::MAX_TOOL_ROUNDS ? self::tools() : []);
+            $parts = $this->gemini->request((string) config('services.gemini.chat_model'), $contents, $systemPrompt, $round < self::MAX_TOOL_ROUNDS ? $tools : []);
             $calls = collect($parts)->pluck('functionCall')->filter()->values();
 
             if ($calls->isEmpty()) {
@@ -241,7 +246,7 @@ class ManuelaAgentClient
                     ...$this->history($conversation),
                 ],
                 // Identifica o cliente pro Hermes separar memória/sessão por contato.
-                'user' => 'whatsapp:'.$conversation->wa_id,
+                'user' => 'whatsapp:'.($conversation->loja === WhatsAppNumeros::KAZAKORA ? '' : $conversation->loja.':').$conversation->wa_id,
             ]);
 
         if ($response->failed()) {

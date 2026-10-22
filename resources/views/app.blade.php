@@ -71,18 +71,14 @@
         <link rel="icon" type="{{ $marca['faviconTipo'] }}" href="{{ $marca['favicon'] }}">
         <link rel="apple-touch-icon" href="{{ str_starts_with($marca['favicon'], '/images/marca/') ? '/images/marca/favicon-180.png' : $marca['favicon'] }}">
 
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        @php($fontesGoogle = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap')
-        @if (request()->is('admin*'))
-            <link rel="stylesheet" href="{{ $fontesGoogle }}">
-        @else
-            {{-- Desempenho (pedido 2026-10-21, PageSpeed): na loja, fontes e CSS não travam
+        {{-- Fontes do Google servidas pelo próprio site, dentro do app.css (resources/css/fontes-google.css).
+             A da loja (IBM Plex Sans) é pedida já aqui, sem esperar o CSS chegar. --}}
+        @unless (request()->is('admin*'))
+            <link rel="preload" as="font" type="font/woff2" crossorigin href="{{ \Illuminate\Support\Facades\Vite::asset('resources/fonts/google/ibm-plex-sans-variavel-latin.woff2') }}">
+            {{-- Desempenho (pedido 2026-10-21, PageSpeed): na loja, o CSS não trava
                  a primeira pintura. A tela de abertura (estilo próprio, abaixo) cobre a página
                  até a loja montar, e o app.js só a tira depois que o CSS chegou: o visual
                  não muda, só aparece mais cedo. --}}
-            <link rel="stylesheet" href="{{ $fontesGoogle }}" media="print" onload="this.media='all'">
-            <noscript><link rel="stylesheet" href="{{ $fontesGoogle }}"></noscript>
             @php(\Illuminate\Support\Facades\Vite::useStyleTagAttributes(['media' => 'print', 'onload' => "this.media='all'", 'data-adiado' => true]))
             {{-- 1º banner da home pedido já no HTML, sem esperar o JavaScript montar a vitrine. --}}
             @php($bannerTopo = ($page['component'] ?? '') === 'Catalog/Home' && ! empty($page['props']['vitrine']) ? (json_decode(json_encode($page['props']['banners'] ?? []), true)[0] ?? null) : null)
@@ -94,7 +90,7 @@
                     href="{{ $bannerTopo['image_url'] }}"
                     @if (! empty($bannerTopo['image_srcset'])) imagesrcset="{{ $bannerTopo['image_srcset'] }}" imagesizes="100vw" @endif>
             @endif
-        @endif
+        @endunless
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
     </head>

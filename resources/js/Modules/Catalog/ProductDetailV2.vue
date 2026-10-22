@@ -716,8 +716,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </section>
 
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
-                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). No fim da
-                             descrição, não mais abaixo do carrossel de imagens (pedido 2026-10-21). -->
+                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). Logo depois
+                             da descrição, antes de Garantia, Pagamento Seguro e Informação adicional (teste pedido 2026-10-21). -->
                         <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
                             <div class="promo-texto">
                                 <h2>{{ quadrosPromocao.airfryer?.titulo || sorteio.titulo }}</h2>

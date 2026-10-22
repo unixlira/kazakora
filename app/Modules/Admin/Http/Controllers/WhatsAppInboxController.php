@@ -200,6 +200,12 @@ class WhatsAppInboxController extends Controller
         $caption = filled($validated['legenda'] ?? null) ? trim($validated['legenda']) : null;
         $temporary = null;
 
+        // Gravar áudio é coisa do atendente humano: com a Manuela atendendo,
+        // a tela deixa o microfone desligado e o servidor recusa também.
+        if ($request->boolean('gravacao') && $conversation->ai_enabled) {
+            return $this->mediaError('Áudio gravado só no modo humano: desligue a chave da Manuela para gravar.');
+        }
+
         if ($request->boolean('gravacao')) {
             try {
                 $temporary = $conversor->paraOgg($file->getRealPath());

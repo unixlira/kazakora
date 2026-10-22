@@ -82,6 +82,11 @@ grep -q '^maxmemory-policy ' /etc/redis/redis.conf || echo 'maxmemory-policy vol
 
 echo "== PHP-FPM e OPcache"
 cp "$AQUI/php-fpm-kazakora.conf" /etc/php/8.3/fpm/pool.d/kazakora.conf
+# Pools separados (22/10/2026): painel, API da FerraKora e integrações.
+cp "$AQUI/php-fpm-painel.conf" /etc/php/8.3/fpm/pool.d/painel.conf
+cp "$AQUI/php-fpm-ferrakora-api.conf" /etc/php/8.3/fpm/pool.d/ferrakora-api.conf
+cp "$AQUI/php-fpm-integracoes.conf" /etc/php/8.3/fpm/pool.d/integracoes.conf
+mkdir -p /var/log/php-fpm
 cp "$AQUI/php-kazakora.ini" /etc/php/8.3/fpm/conf.d/90-kazakora.ini
 cp "$AQUI/php-kazakora.ini" /etc/php/8.3/cli/conf.d/90-kazakora.ini
 # O pool padrão (www) não é usado pela loja.
@@ -103,6 +108,7 @@ fi
 echo "== nginx (site novo; o korasync continua como está)"
 # Só na primeira vez: depois o certbot acrescenta o https neste arquivo.
 [ -f /etc/nginx/sites-available/kazakora ] || cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
+cp "$AQUI/nginx-kazakora-pools.conf" /etc/nginx/conf.d/kazakora-pools.conf
 ln -sf /etc/nginx/sites-available/kazakora /etc/nginx/sites-enabled/kazakora
 nginx -t
 

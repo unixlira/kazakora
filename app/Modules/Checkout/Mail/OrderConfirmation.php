@@ -18,15 +18,33 @@ use Illuminate\Support\Facades\Storage;
  */
 class OrderConfirmation extends Mailable
 {
-    /** Livros digitais de brinde anexados (chave da promoção em Entregáveis › Livros Digitais). */
+    /** Anexo acima disso some (provedor recusa ou joga no spam); fica só o link. */
+    private const LIMITE_ANEXOS_BYTES = 15 * 1024 * 1024;
+
+    /** Livros digitais ganhos no pedido (Promoção PDFs): link de download sempre. */
     public readonly Collection $brindes;
+
+    /** Com a chave de Entregáveis › Livros Digitais ligada, os PDFs vão também anexados. */
+    public readonly bool $livrosAnexados;
 
     public function __construct(public readonly Order $order)
     {
         $this->order->loadMissing('items', 'invoice');
-        $this->brindes = LivroDigital::doPedido($this->order)
+        $livros = LivroDigital::doPedido($this->order);
+
+        // Pedido que não passou pelo checkout com os livros gravados (falha
+        // na hora, pedido antigo): grava agora com a regra da página.
+        if ($livros->isEmpty()) {
+            $livros = LivroDigital::garantirParaPedido($this->order);
+        }
+
+        $this->brindes = $livros
             ->filter(fn (LivroDigital $livro) => Storage::disk('local')->exists($livro->arquivo))
             ->values();
+
+        $this->livrosAnexados = $this->brindes->isNotEmpty()
+            && LivroDigital::emailPedidoLigado()
+            && $this->brindes->sum(fn (LivroDigital $livro) => Storage::disk('local')->size($livro->arquivo)) <= self::LIMITE_ANEXOS_BYTES;
     }
 
     public function build(): self
@@ -38,7 +56,7 @@ class OrderConfirmation extends Mailable
             // Remetente com o nome do site só no FerraKora; KazaKora segue o MAIL_FROM_NAME.
             ->when($this->order->site_origem === Order::SITE_FERRAKORA, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
             ->subject("Pedido {$this->order->numero} confirmado - {$marca['nome']}")
-            ->view('emails.order-confirmation', ['marcaEmail' => $marca, 'brindes' => $this->brindes]);
+            ->view('emails.order-confirmation', ['marcaEmail' => $marca, 'brindes' => $this->brindes, 'livrosAnexados' => $this->livrosAnexados]);
     }
 
     /**
@@ -65,7 +83,7 @@ class OrderConfirmation extends Mailable
         }
 
         // Pedido 2026-10-21: com a chave da promoção ligada, os livros de brinde.
-        foreach ($this->brindes as $livro) {
+        foreach ($this->livrosAnexados ? $this->brindes : [] as $livro) {
             $anexos[] = Attachment::fromStorageDisk('local', $livro->arquivo)
                 ->as($livro->nome_arquivo)
                 ->withMime('application/pdf');

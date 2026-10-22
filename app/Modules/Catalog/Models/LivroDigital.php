@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Entregáveis › Livros Digitais (pedido 2026-10-20): PDF de brinde que
@@ -33,8 +35,14 @@ class LivroDigital extends Model
 
     protected $table = 'livros_digitais';
 
-    /** Chave da promoção: '1' = os livros vão anexados no e-mail de confirmação do pedido. */
+    /**
+     * Chave da promoção: '1' = além do link de download (que vai sempre), os
+     * livros vão anexados no e-mail de confirmação do pedido.
+     */
     public const SETTING_EMAIL_PEDIDO = 'livros_digitais.email_pedido';
+
+    /** Livros ganhos em cada pedido (garantirParaPedido). */
+    public const TABELA_PEDIDO = 'pedido_livros_digitais';
 
     protected $fillable = ['titulo', 'arquivo', 'nome_arquivo', 'tamanho', 'capa', 'imagem_quadro', 'ativo', 'todos_produtos'];
 
@@ -108,51 +116,87 @@ class LivroDigital extends Model
     }
 
     /**
-     * Brindes que vão anexados no e-mail de confirmação (pedido 2026-10-21):
-     * só com a chave da promoção ligada e só em pedido do kazakora.com (os
-     * livros aparecem na página do produto de lá). Mesma regra da página do
-     * produto, somando os produtos do pedido, sem repetir livro.
+     * Livros que o pedido ganhou (pedido 2026-10-21), gravados na compra por
+     * garantirParaPedido(). Ficam com o cliente mesmo que o livro seja
+     * desativado ou a promoção acabe depois; só some se o livro for apagado.
      */
     public static function doPedido(Order $order): Collection
     {
-        if (! self::emailPedidoLigado()
-            || $order->origin !== Order::ORIGIN_STORE
-            || $order->site_origem !== null) {
+        if (! self::pedidoDaLoja($order)) {
+            return new Collection;
+        }
+
+        return self::query()
+            ->whereIn('id', DB::table(self::TABELA_PEDIDO)->where('order_id', $order->id)->select('livro_digital_id'))
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Grava os livros do pedido com a regra que a página do produto mostrava
+     * na hora (PromocoesDoProduto: chave da Promoção PDFs, produtos ligados e
+     * livros ativos), somando os produtos sem repetir livro. Só pedido do
+     * kazakora.com: é lá que o quadro dos livros aparece.
+     */
+    public static function garantirParaPedido(Order $order): Collection
+    {
+        if (! self::pedidoDaLoja($order)) {
             return new Collection;
         }
 
         $order->loadMissing('items.product');
 
-        return self::dosProdutos($order->items->toBase()->map(fn ($item) => $item->product));
+        $ids = $order->items
+            ->toBase()
+            ->map(fn ($item) => $item->product)
+            ->filter()
+            ->flatMap(fn (Product $produto) => array_column(PromocoesDoProduto::paraPagina($produto)['livrosDigitais'], 'id'))
+            ->unique()
+            ->values();
+
+        DB::table(self::TABELA_PEDIDO)->insertOrIgnore($ids->map(fn (int $id) => [
+            'order_id' => $order->id,
+            'livro_digital_id' => $id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all());
+
+        return self::doPedido($order);
     }
 
     /**
-     * Presente no checkout (pedido 2026-10-21): os mesmos livros que o e-mail
-     * de confirmação vai levar, a partir dos produtos do carrinho. Só com a
-     * chave da promoção ligada; o checkout do kazakora.com é o único que
-     * passa por aqui (os outros sites usam CheckoutOutroSite).
+     * Presente no checkout (pedido 2026-10-21): os livros que o pedido vai
+     * ganhar, com a mesma regra de garantirParaPedido(), a partir dos
+     * produtos do carrinho. Só o checkout do kazakora.com passa por aqui (os
+     * outros sites usam CheckoutOutroSite).
      *
      * @param  iterable<?Product>  $produtos
      */
     public static function doCarrinho(iterable $produtos): Collection
     {
-        if (! self::emailPedidoLigado()) {
-            return new Collection;
-        }
-
-        return self::dosProdutos(collect($produtos));
-    }
-
-    /** @param  \Illuminate\Support\Collection<int, ?Product>  $produtos */
-    private static function dosProdutos(\Illuminate\Support\Collection $produtos): Collection
-    {
-        $livros = $produtos
+        $ids = collect($produtos)
             ->filter()
-            ->flatMap(fn (Product $produto) => self::doProduto($produto)->all())
-            ->unique('id')
-            ->sortBy('id')
+            ->flatMap(fn (Product $produto) => array_column(PromocoesDoProduto::paraPagina($produto)['livrosDigitais'], 'id'))
+            ->unique()
             ->values();
 
-        return new Collection($livros->all());
+        return $ids->isEmpty() ? new Collection : self::query()->whereIn('id', $ids)->orderBy('id')->get();
+    }
+
+    /** Link de download do livro no pedido (assinado: abre do e-mail sem login). */
+    public function urlDoPedido(Order $order): string
+    {
+        return URL::signedRoute('pedidos.livro.baixar', ['order' => $order->id, 'livro' => $this->id]);
+    }
+
+    /** Download liberado: pedido pago (ou já enviado/entregue), nunca pendente ou cancelado. */
+    public static function pedidoLiberado(Order $order): bool
+    {
+        return in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+    }
+
+    private static function pedidoDaLoja(Order $order): bool
+    {
+        return $order->origin === Order::ORIGIN_STORE && $order->site_origem === null;
     }
 }

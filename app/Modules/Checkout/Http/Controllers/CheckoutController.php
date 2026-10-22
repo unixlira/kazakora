@@ -739,6 +739,7 @@ class CheckoutController extends Controller
                 ]);
 
                 $this->createOrderItems($order, $cartItems, $lockedProducts);
+                $this->garantirLivrosDigitais($order);
 
                 $primaryMethod = $methods[0];
                 $isSplit = count($methods) > 1;
@@ -1176,6 +1177,16 @@ class CheckoutController extends Controller
                     'pdf' => $nota->danfe_path ? route('pedidos.nota.cliente', [$order, 'pdf']) : null,
                     'xml' => $nota->xml_path ? route('pedidos.nota.cliente', [$order, 'xml']) : null,
                 ] : null,
+                // Livros digitais da Promoção PDFs ganhos na compra (2026-10-21):
+                // o link só funciona com o pedido pago.
+                'livros' => [
+                    'liberados' => LivroDigital::pedidoLiberado($order),
+                    'itens' => LivroDigital::doPedido($order)->map(fn (LivroDigital $livro) => [
+                        'titulo' => $livro->titulo,
+                        'capa' => $livro->capa_url,
+                        'url' => $livro->urlDoPedido($order),
+                    ])->values(),
+                ],
                 'entrega' => [
                     'nome' => $order->shipping_name,
                     'endereco' => trim($order->shipping_street.', '.$order->shipping_number.($order->shipping_complement ? ' - '.$order->shipping_complement : '')),
@@ -1225,6 +1236,28 @@ class CheckoutController extends Controller
             'Content-Type' => $tipo === 'xml' ? 'application/xml' : 'application/pdf',
             'Content-Disposition' => 'attachment; filename="nota-fiscal-'.$order->numero.'.'.($tipo === 'xml' ? 'xml' : 'pdf').'"',
         ]);
+    }
+
+    /**
+     * Download do livro digital ganho no pedido (pedido 2026-10-21). Link
+     * assinado (middleware `signed`), que abre do e-mail sem login; só com o
+     * livro gravado no pedido e o pedido pago.
+     */
+    public function livroDoPedido(Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
+    {
+        $ganhou = DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id);
+
+        abort_unless($ganhou->exists(), 404);
+        // Resposta direta, não abort(403): o 403 de visitante vira tela de login (bootstrap/app.php).
+        if (! LivroDigital::pedidoLiberado($order)) {
+            return response('O livro fica disponível para baixar assim que o pagamento do pedido for confirmado.', 403);
+        }
+
+        abort_unless(Storage::disk('local')->exists($livro->arquivo), 404);
+
+        $ganhou->update(['downloads' => DB::raw('downloads + 1'), 'ultimo_download_em' => now(), 'updated_at' => now()]);
+
+        return Storage::disk('local')->download($livro->arquivo, $livro->nome_arquivo, ['Content-Type' => 'application/pdf']);
     }
 
     /**
@@ -1555,6 +1588,22 @@ class CheckoutController extends Controller
                 reason: "Pedido #{$order->id}",
                 reference: $order,
             );
+        }
+    }
+
+    /**
+     * Livros digitais da Promoção PDFs (pedido 2026-10-21): grava no pedido os
+     * que a página do produto mostrava agora, para o cliente baixar depois do
+     * pagamento mesmo que a promoção mude. Falha aqui não derruba a compra
+     * (o e-mail de confirmação tenta de novo).
+     */
+    private function garantirLivrosDigitais(Order $order): void
+    {
+        try {
+            // fresh(): o Order::create não traz o origin, que vem do padrão do banco.
+            LivroDigital::garantirParaPedido($order->fresh());
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 

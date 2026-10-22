@@ -72,17 +72,15 @@ class CheckoutV2Test extends TestCase
                 ->where('avaliacaoItens.total', 3));
     }
 
-    public function test_presente_lista_os_livros_com_a_chave_ligada(): void
+    public function test_presente_lista_os_livros_que_o_pedido_vai_ganhar(): void
     {
         $this->noCarrinho();
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('brindes', []));
+
         LivroDigital::query()->create([
             'titulo' => 'Mais Saúde', 'arquivo' => 'livros-digitais/1.pdf', 'nome_arquivo' => 'Mais Saúde.pdf',
             'tamanho' => 13, 'ativo' => true, 'todos_produtos' => true, 'capa' => 'livros-digitais/capa-1.jpg',
         ]);
-
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('brindes', []));
-
-        LivroDigital::ligarEmailPedido(true);
 
         $this->get('/finalizacao')
             ->assertOk()

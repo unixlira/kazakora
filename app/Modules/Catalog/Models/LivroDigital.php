@@ -123,9 +123,30 @@ class LivroDigital extends Model
 
         $order->loadMissing('items.product');
 
-        $livros = $order->items
-            ->toBase()
-            ->map(fn ($item) => $item->product)
+        return self::dosProdutos($order->items->toBase()->map(fn ($item) => $item->product));
+    }
+
+    /**
+     * Presente no checkout (pedido 2026-10-21): os mesmos livros que o e-mail
+     * de confirmação vai levar, a partir dos produtos do carrinho. Só com a
+     * chave da promoção ligada; o checkout do kazakora.com é o único que
+     * passa por aqui (os outros sites usam CheckoutOutroSite).
+     *
+     * @param  iterable<?Product>  $produtos
+     */
+    public static function doCarrinho(iterable $produtos): Collection
+    {
+        if (! self::emailPedidoLigado()) {
+            return new Collection;
+        }
+
+        return self::dosProdutos(collect($produtos));
+    }
+
+    /** @param  \Illuminate\Support\Collection<int, ?Product>  $produtos */
+    private static function dosProdutos(\Illuminate\Support\Collection $produtos): Collection
+    {
+        $livros = $produtos
             ->filter()
             ->flatMap(fn (Product $produto) => self::doProduto($produto)->all())
             ->unique('id')

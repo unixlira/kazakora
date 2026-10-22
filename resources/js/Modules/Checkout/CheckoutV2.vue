@@ -18,6 +18,8 @@ const props = defineProps({
     items: { type: Array, default: () => [] },
     // Média das avaliações dos produtos do carrinho: { media, total } ou null.
     avaliacaoItens: { type: Object, default: null },
+    // Presente (2026-10-21): livros digitais que vão no e-mail de confirmação, embaixo do endereço.
+    brindes: { type: Array, default: () => [] },
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
@@ -673,6 +675,19 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = false">
                                 <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
                             </button>
+                        </div>
+
+                        <!-- Presente embaixo do endereço (pedido do Lira 2026-10-21): capas dos livros em miniatura. -->
+                        <div v-if="brindes.length" class="mt-4 flex items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-3">
+                            <div class="flex shrink-0 -space-x-3" aria-hidden="true">
+                                <img v-for="livro in brindes.filter((l) => l.capa_url).slice(0, 3)" :key="livro.id" :src="livro.capa_url" alt=""
+                                    width="36" height="48" loading="lazy" class="h-12 w-9 rounded border-2 border-white object-cover shadow-sm">
+                            </div>
+                            <p class="text-sm text-orange-950">
+                                <strong><i class="fa-solid fa-gift mr-1 text-orange-700" aria-hidden="true"></i>Presente:</strong>
+                                {{ brindes.length === 1 ? '1 livro digital grátis' : `${brindes.length} livros digitais grátis` }} no e-mail de confirmação do pedido.
+                                <span class="block text-xs text-orange-900">{{ brindes.map((l) => l.titulo).join(' · ') }}</span>
+                            </p>
                         </div>
                     </section>
 

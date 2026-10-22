@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Rules\CpfValido;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
+use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Address;
@@ -1718,6 +1719,7 @@ class CheckoutController extends Controller
         return [
             'items' => $cartItems,
             'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
+            'brindes' => $this->brindesDoCarrinho($cartItems),
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
@@ -1731,6 +1733,25 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
+    }
+
+    /**
+     * Presente no checkout (pedido 2026-10-21): livros digitais que o e-mail
+     * de confirmação vai levar, com a capa em miniatura, embaixo do endereço.
+     *
+     * @return list<array{id: int, titulo: string, capa_url: ?string}>
+     */
+    private function brindesDoCarrinho(Collection $cartItems): array
+    {
+        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return LivroDigital::doCarrinho(Product::query()->whereIn('id', $ids)->get())
+            ->map(fn (LivroDigital $livro) => ['id' => $livro->id, 'titulo' => $livro->titulo, 'capa_url' => $livro->capa_url])
+            ->values()
+            ->all();
     }
 
     /**

@@ -374,12 +374,22 @@ class Product extends Model
             // importada fica na variação vendida, e o withAvg só via a do pai,
             // então anúncio com variação ficava sem estrela no card. Mesma
             // regra da nota da página do produto (CatalogController::show).
-            ->addSelect(['reviews_avg_rating' => Review::query()
-                ->selectRaw('avg(reviews.rating)')
-                ->join('products as grupo_avaliado', 'grupo_avaliado.id', '=', 'reviews.product_id')
-                ->whereNull('grupo_avaliado.deleted_at')
-                ->where(fn ($grupo) => $grupo->whereColumn('grupo_avaliado.id', 'products.id')
-                    ->orWhereColumn('grupo_avaliado.parent_product_id', 'products.id'))]);
+            // Quantidade de avaliações ao lado das estrelas (pedido 2026-10-22),
+            // pela mesma regra, para bater com o número da página do produto.
+            ->addSelect([
+                'reviews_avg_rating' => self::avaliacoesDoGrupo()->selectRaw('avg(reviews.rating)'),
+                'reviews_count' => self::avaliacoesDoGrupo()->selectRaw('count(*)'),
+            ]);
+    }
+
+    /** Avaliações do produto e das variações dele (subconsulta do card). */
+    private static function avaliacoesDoGrupo(): Builder
+    {
+        return Review::query()
+            ->join('products as grupo_avaliado', 'grupo_avaliado.id', '=', 'reviews.product_id')
+            ->whereNull('grupo_avaliado.deleted_at')
+            ->where(fn ($grupo) => $grupo->whereColumn('grupo_avaliado.id', 'products.id')
+                ->orWhereColumn('grupo_avaliado.parent_product_id', 'products.id'));
     }
 
     public function images(): HasMany

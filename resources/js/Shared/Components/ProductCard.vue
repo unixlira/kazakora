@@ -347,18 +347,15 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
                      desconto, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
-                <!-- Card estreito (celular, 2 por linha): "A partir de" + "5% OFF" + preço
-                     riscado não cabem e o riscado virava só "R" (pedido 2026-10-22). A linha
-                     mede a própria largura (@container): sem espaço, o riscado sai e o
-                     selo fica inteiro. -->
+                <!-- Sem "A partir de" antes do selo (pedido 2026-10-22): quebrava a linha.
+                     Card estreito (celular, 2 por linha): a linha mede a própria largura
+                     (@container) e o riscado só aparece quando cabe; o "X% OFF" fica inteiro. -->
                 <div class="@container">
                     <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
-                        <span v-if="aPartirDe" class="shrink-0 whitespace-nowrap text-[11px] text-store-fg-muted md:text-xs">A partir de</span>
                         <template v-if="precoAntes">
                             <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
                             <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
-                            <s class="min-w-0 truncate whitespace-nowrap text-xs text-store-fg-faint"
-                                :class="aPartirDe ? 'hidden @[11rem]:block' : 'hidden @[7rem]:block'">{{ formatPrice(precoAntes) }}</s>
+                            <s class="hidden min-w-0 truncate whitespace-nowrap text-xs text-store-fg-faint @[7rem]:block">{{ formatPrice(precoAntes) }}</s>
                         </template>
                     </div>
                 </div>

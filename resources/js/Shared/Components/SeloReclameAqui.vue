@@ -24,7 +24,12 @@ const props = defineProps({
 });
 
 const LINK_PADRAO = 'https://www.reclameaqui.com.br/rav/F68R';
-const SCRIPT_SRC = 'https://s3.amazonaws.com/raichu-beta/ra-verified/bundle.js';
+// Cópia local do bundle oficial (PageSpeed, 2026-10-21): o styles.css do s3
+// puxava Open Sans e Inter Tight do Google Fonts. O bundle monta o caminho do
+// CSS e das imagens a partir deste src; em public/vendor/reclame-aqui o CSS é
+// o mesmo, sem os @import, e as fontes são servidas pelo site. Os dados do
+// selo continuam vindo da API do Reclame AQUI.
+const SCRIPT_SRC = '/vendor/reclame-aqui/bundle.js';
 const DATA_ID = 'c0tVZkQyUnBkUVltM3R1QTo2NS02MDQtNTkwLWpvc2Utcm9iZXJ0by1saXJh';
 const LARGURA = 142;
 const ALTURA = 52;
@@ -60,7 +65,34 @@ function ajustarLink() {
 }
 
 let adiarScript = null;
-const aoCarregar = () => { adiarScript = setTimeout(injetarScript, 300); };
+let visivel = null;
+const INTERACOES = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
+
+// Desempenho (pedido 2026-10-21): o script do Reclame AQUI só entra depois
+// que a página terminou de carregar E quando o selo chega perto da tela ou o
+// visitante interage; até lá fica a imagem local do selo (mesmo visual).
+function quandoPrecisar() {
+    pararDeEsperar();
+    adiarScript = setTimeout(injetarScript, 300);
+}
+
+function pararDeEsperar() {
+    window.removeEventListener('load', aoCarregar);
+    INTERACOES.forEach((ev) => window.removeEventListener(ev, quandoPrecisar));
+    visivel?.disconnect();
+    visivel = null;
+}
+
+function aoCarregar() {
+    if (!alvo.value) return;
+    INTERACOES.forEach((ev) => window.addEventListener(ev, quandoPrecisar, { once: true, passive: true }));
+    if ('IntersectionObserver' in window) {
+        visivel = new IntersectionObserver((entradas) => {
+            if (entradas.some((e) => e.isIntersecting)) quandoPrecisar();
+        }, { rootMargin: '300px' });
+        visivel.observe(alvo.value.parentElement ?? alvo.value);
+    }
+}
 
 onMounted(() => {
     if (!alvo.value) return;
@@ -68,14 +100,12 @@ onMounted(() => {
     observador = new MutationObserver(() => ajustarLink());
     observador.observe(alvo.value, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
 
-    // Desempenho (pedido 2026-10-21): o script do Reclame AQUI só entra depois
-    // que a página terminou de carregar; até lá fica a imagem local do selo.
-    if (document.readyState === 'complete') adiarScript = setTimeout(injetarScript, 300);
+    if (document.readyState === 'complete') aoCarregar();
     else window.addEventListener('load', aoCarregar, { once: true });
 });
 
 function injetarScript() {
-    if (!alvo.value) return;
+    if (!alvo.value || script) return;
     script = document.createElement('script');
     script.type = 'text/javascript';
     script.id = 'ra-embed-verified-seal';
@@ -93,7 +123,7 @@ function injetarScript() {
 }
 
 onBeforeUnmount(() => {
-    window.removeEventListener('load', aoCarregar);
+    pararDeEsperar();
     clearTimeout(adiarScript);
     observador?.disconnect();
     observador = null;

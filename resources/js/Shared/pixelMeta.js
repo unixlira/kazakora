@@ -10,13 +10,34 @@ let liberado = false;
 // card, CEP) não repete PageView/ViewContent.
 let ultimaUrl = null;
 
+// Desempenho (PageSpeed, pedido 2026-10-21): o fbq nasce na hora e guarda os
+// eventos na fila; o fbevents.js (~100 KB) só é baixado na 1ª interação do
+// visitante ou 3 s depois do load, e então envia a fila inteira. Nenhum
+// evento se perde, só sai alguns segundos depois.
+const INTERACOES = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
+const ESPERA_MS = 3000;
+
+function baixarScript() {
+    if (document.querySelector('script[src*="connect.facebook.net/en_US/fbevents.js"]')) return;
+    INTERACOES.forEach((ev) => window.removeEventListener(ev, baixarScript));
+    const t = document.createElement('script');
+    t.async = true;
+    t.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    document.head.appendChild(t);
+}
+
 function carregar(id) {
     if (iniciado) return;
     iniciado = true;
     /* eslint-disable */
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    !function(f,n){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[]}(window);
     /* eslint-enable */
     window.fbq('init', id);
+
+    INTERACOES.forEach((ev) => window.addEventListener(ev, baixarScript, { once: true, passive: true }));
+    const depoisDoLoad = () => setTimeout(baixarScript, ESPERA_MS);
+    if (document.readyState === 'complete') depoisDoLoad();
+    else window.addEventListener('load', depoisDoLoad, { once: true });
 }
 
 const numero = (v) => Math.round(Number(v ?? 0) * 100) / 100;

@@ -76,6 +76,9 @@ class HandleInertiaRequests extends Middleware
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             // Selo do Reclame Aqui no rodapé (config/loja.php).
             'reclameAqui' => fn () => ['verificada' => (bool) config('loja.selo_ra_verificada'), 'url' => (string) config('loja.reclame_aqui_url')],
+            // Endereço da loja para o "Ver loja" do admin: o admin roda em
+            // painel.kazakora.com, então "/" caía no próprio painel.
+            'lojaUrl' => fn () => $request->is('admin*') ? rtrim((string) config('app.url'), '/') : null,
             // Logos e favicon (Admin > Banners > Logos e favicon).
             'marca' => fn () => rescue(fn () => \App\Support\Marca::urls(), null, false),
             // Topo da loja (pedido 2026-10-10): mega menu de departamentos e

@@ -45,7 +45,7 @@ class SitemapController
                 ->whereNull('parent_product_id')
                 ->whereNotNull('slug')
                 ->orderBy('id')
-                ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'medium_path', 'thumb_path', 'position', 'is_primary'])
+                ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'medium_path', 'mini_path', 'thumb_path', 'position', 'is_primary'])
                     ->reorder()->orderByDesc('is_primary')->orderBy('position')])
                 ->get(['id', 'slug', 'name', 'description', 'video_path', 'video_duration_seconds', 'created_at', 'updated_at'])
                 ->each(function ($p) use (&$linhas, $base, $esc) {

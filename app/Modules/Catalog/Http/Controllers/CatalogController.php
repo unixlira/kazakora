@@ -439,6 +439,7 @@ class CatalogController extends Controller
                     'url' => $image->url,
                     'thumb_url' => $image->thumb_url,
                     'media_url' => $image->media_url,
+                    'mini_url' => $image->mini_url,
                     'variant_id' => $fotoDoPai && $image->id === $fotoDoPai->id ? $pai->id : null,
                 ])->all();
 
@@ -458,7 +459,7 @@ class CatalogController extends Controller
 
                         continue;
                     }
-                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'media_url' => $imagem->media_url, 'variant_id' => $irmaId];
+                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'media_url' => $imagem->media_url, 'mini_url' => $imagem->mini_url, 'variant_id' => $irmaId];
                 }
             }
         }
@@ -566,6 +567,7 @@ class CatalogController extends Controller
                     'rotulo' => $modelo->rotulo_modelo ?: $modelo->name,
                     'url' => route('produtos.ver', $modelo->slug, false),
                     'thumb_url' => $foto?->thumb_url,
+                    'mini_url' => $foto?->mini_url,
                     'foto_url' => $foto?->media_url,
                     'atual' => $modelo->id === $product->id,
                 ];

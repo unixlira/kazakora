@@ -5,6 +5,7 @@ import CarregandoProdutos from '@/Shared/Components/CarregandoProdutos.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import FiltrosCatalogo from '@/Shared/Components/FiltrosCatalogo.vue';
 import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
+import RelogioOfertas from '@/Shared/Components/RelogioOfertas.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import SecaoProdutos from '@/Shared/Components/SecaoProdutos.vue';
 import { DESCONTOS, PRECOS } from '@/Shared/filtrosCatalogo';
@@ -150,20 +151,7 @@ watch(() => props.products, (novos) => {
 
 const temMais = computed(() => !!props.products && props.products.current_page < props.products.last_page);
 
-// Ofertas do dia: contagem visual de 24h (23:59:59 → 00:00:00) até a meia-noite
-// de São Paulo, reiniciando todo dia (pedido 2026-10-18). Só o relógio: quais
-// ofertas aparecem continua pelo início/fim configurados no back-end.
-const restanteOfertas = ref('');
-let relogioOfertas = null;
-const horaSaoPaulo = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
-const atualizarRelogio = () => {
-    const [h, m, s] = horaSaoPaulo.format(new Date()).split(':').map(Number);
-    const segundos = Math.max(0, 86399 - (h * 3600 + m * 60 + s));
-    const dois = (valor) => String(valor).padStart(2, '0');
-    restanteOfertas.value = `${dois(Math.floor(segundos / 3600))}:${dois(Math.floor((segundos % 3600) / 60))}:${dois(segundos % 60)}`;
-};
-onMounted(() => { atualizarRelogio(); relogioOfertas = setInterval(atualizarRelogio, 1000); });
-onBeforeUnmount(() => clearInterval(relogioOfertas));
+// Relógio das Ofertas do dia: Shared/Components/RelogioOfertas.vue.
 
 const carregarMais = () => {
     if (carregandoMais.value || !temMais.value) return;
@@ -241,7 +229,7 @@ onBeforeUnmount(() => observador?.disconnect());
                     <!-- Celular: largura toda, texto no centro e relógio pulsando (pedido 2026-10-10). -->
                     <div class="flex w-full flex-col gap-1.5 md:w-auto md:items-end">
                         <span class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E02424] px-3 py-2 text-sm font-bold text-white md:inline-flex md:w-auto md:py-1.5">
-                            <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
+                            <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <RelogioOfertas />
                         </span>
                         <!-- Página com todas as ofertas e filtros (pedido 2026-10-15). -->
                         <Link href="/ofertas" class="text-sm font-semibold text-store-accent hover:underline">

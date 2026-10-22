@@ -1652,6 +1652,8 @@ class CheckoutController extends Controller
 
     private function createOrderItems(Order $order, $cartItems, $products): void
     {
+        $freteDoPedido = 0.0;
+
         foreach ($cartItems as $item) {
             $product = $products->get($item['product']->id);
             // Estoque já validado em lockProductsForCart() (ainda sob o
@@ -1663,6 +1665,9 @@ class CheckoutController extends Controller
             }
 
             $unitPrice = $product->unitPriceForQuantity($quantity);
+            // Parte do preço que é frete (0 fora do frete embutido), 2026-10-22.
+            $frete = round($product->freteEmbutido(), 2);
+            $freteDoPedido += $frete * $quantity;
 
             $order->items()->create([
                 'product_id' => $product->id,
@@ -1670,6 +1675,7 @@ class CheckoutController extends Controller
                 'product_price' => $unitPrice,
                 'quantity' => $quantity,
                 'subtotal' => round($unitPrice * $quantity, 2),
+                'frete_embutido' => $frete,
             ]);
 
             $this->stock->adjust(
@@ -1680,6 +1686,8 @@ class CheckoutController extends Controller
                 reference: $order,
             );
         }
+
+        $order->update(['frete_embutido_amount' => round($freteDoPedido, 2)]);
     }
 
     /**

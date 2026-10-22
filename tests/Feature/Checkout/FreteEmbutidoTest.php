@@ -195,6 +195,41 @@ class FreteEmbutidoTest extends TestCase
         $this->assertEquals(120.0, (float) $order->items->first()->product_price);
         $this->assertEquals(10.0, (float) $order->shipping_cost);
         $this->assertSame('SEDEX (TURBO)', $order->shipping_carrier_name);
+        // Quanto do preço era frete fica guardado no item e no pedido.
+        $this->assertEquals(20.0, (float) $order->items->first()->frete_embutido);
+        $this->assertEquals(20.0, (float) $order->frete_embutido_amount);
+    }
+
+    public function test_estado_pelo_ip_da_cloudflare_vale_na_vitrine_carrinho_e_checkout(): void
+    {
+        $this->comCorreios();
+        config(['app.url' => 'https://kazakora.com']);
+        $produto = $this->produto(100);
+        $ceara = ['CF-IPCountry' => 'BR', 'CF-Region-Code' => 'CE'];
+
+        $this->get("/produtos/{$produto->slug}", $ceara)
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+
+        // No kazakora.com o ?simular_uf= não vale: só o cabeçalho da Cloudflare.
+        // (No teste o serviço "scoped" não zera sozinho entre as requisições.)
+        app()->forgetScopedInstances();
+        $this->get("/produtos/{$produto->slug}?simular_uf=CE")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 130));
+
+        // Fora do Brasil, sem região: valor de segurança.
+        app()->forgetScopedInstances();
+        $this->get("/produtos/{$produto->slug}", ['CF-IPCountry' => 'US', 'CF-Region-Code' => 'CE'])
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 130));
+
+        app()->forgetScopedInstances();
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 1], $ceara);
+        $this->get('/carrinho', $ceara)
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('total', 120));
+
+        // CEP do mesmo estado no checkout: o mesmo preço da vitrine.
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000', $ceara)
+            ->assertOk()
+            ->assertJsonPath('subtotal', 120);
     }
 
     public function test_turbo_nao_cobra_o_valor_que_vem_do_navegador(): void

@@ -119,6 +119,21 @@ class PromocoesDoProduto
         ];
     }
 
+    /**
+     * Miniatura dos livros no e-mail de confirmação (pedido 2026-10-21): a
+     * imagem da Promoção PDFs, senão a do primeiro livro que tiver uma,
+     * senão a padrão. URL absoluta, porque o e-mail abre fora do site.
+     *
+     * @param  iterable<LivroDigital>  $livros
+     */
+    public static function imagemDosLivros(iterable $livros): string
+    {
+        $promocao = Promocao::query()->where('slug', Promocao::PDFS)->first();
+        $livro = collect($livros)->first(fn (LivroDigital $livro) => $livro->imagem_quadro);
+
+        return $promocao?->imagem_url ?? $livro?->imagem_quadro_url ?? asset(self::QUADRO_LIVROS_PADRAO);
+    }
+
     public static function limparCache(): void
     {
         Cache::forever(self::VERSAO, self::versao() + 1);

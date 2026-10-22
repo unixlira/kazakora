@@ -141,7 +141,7 @@ const copyPixCode = async () => {
 
                     <!-- Tarja de confiança, como no topo da finalização. -->
                     <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-b-2xl bg-[#111] px-3 py-2.5 text-[10px] min-[360px]:text-[11px] font-bold uppercase tracking-wide text-white sm:text-xs">
-                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#0FB930]"></i>Frete grátis</span>
+                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#0FB930]"></i>Entrega para todo o Brasil</span>
                         <span class="opacity-40">|</span>
                         <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#0FB930]"></i>Compra 100% segura</span>
                     </div>

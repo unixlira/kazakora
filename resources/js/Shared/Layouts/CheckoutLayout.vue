@@ -55,7 +55,8 @@ const tempo = computed(() => {
         <!-- Tarjas numa linha só também no celular (pedido 2026-10-10): letra menor lá. -->
         <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#E02424] px-2 py-2 text-center text-[11px] font-bold uppercase tracking-tight text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-base sm:tracking-wide md:text-lg">
             <i class="fa-solid fa-stopwatch" :class="{ 'animate-pulse': restante > 0 }"></i>
-            <span>Frete grátis <span class="selo-full selo-full--claro"><i class="fa-solid fa-bolt"></i>FULL</span> por tempo limitado:</span>
+            <!-- Frete grátis só acima de R$ 200 no Sul e Sudeste, sem "FULL" no checkout (pedido 2026-10-21). -->
+            <span class="whitespace-normal">Frete grátis acima de R$ 200 no Sul e Sudeste:</span>
             <span class="inline-block rounded-md bg-white/20 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
         </div>
         <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#0FB930] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">

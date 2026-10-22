@@ -356,10 +356,9 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                     <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
-                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
+                    <!-- Frete grátis só acima de R$ 200 no Sul e Sudeste (pedido 2026-10-21). -->
                     <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
-                        Frete grátis
-                        <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                        <span v-if="Number(product.final_price) >= 200" class="truncate">Frete grátis Sul e Sudeste</span>
                         <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
                         <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
                             <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>

@@ -10,6 +10,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Inventory\Models\StockMovement;
@@ -742,6 +743,11 @@ class OrderController extends Controller
             ])->values(),
             'valores' => [
                 'subtotal' => (float) $order->subtotal,
+                // Pedido do site com frete embutido: parte do subtotal que era
+                // frete (null antes de 22/10 e nos marketplaces). Com TURBO,
+                // shipping_cost é só o que o cliente pagou a mais pelo SEDEX.
+                'frete_embutido' => $order->frete_embutido_amount !== null ? (float) $order->frete_embutido_amount : null,
+                'turbo' => $order->shipping_carrier_name === FreteEmbutido::TURBO,
                 'frete' => (float) $order->shipping_cost,
                 'cupom' => $order->coupon_code,
                 // discount_amount já soma Pix e desconto da plataforma (mesma

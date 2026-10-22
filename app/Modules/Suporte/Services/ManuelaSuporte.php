@@ -194,7 +194,7 @@ TXT;
             $order->invoice ? "Nota fiscal: nº {$order->invoice->numero} ({$order->invoice->status})" : 'Nota fiscal: ainda não emitida',
             $rastreio ? "Código de rastreio: {$rastreio}".($order->shipping_carrier_name ? " ({$order->shipping_carrier_name})" : '') : 'Código de rastreio: ainda não gerado',
             'Entrega para: '.trim(($order->shipping_city ?? '').'/'.($order->shipping_state ?? ''), '/'),
-            'Frete grátis em todos os pedidos. Prazo de envio: até 1 dia útil após o pagamento.',
+            'Frete grátis só para pedidos a partir de R$ 200 com entrega no Sul e Sudeste (SP, RJ, MG, ES, PR, SC, RS); nos demais, o frete dos Correios aparece no checkout pelo CEP. Prazo de envio: até 1 dia útil após o pagamento.',
         ]));
     }
 }

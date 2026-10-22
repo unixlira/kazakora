@@ -26,7 +26,7 @@ const aceitar = () => {
                 <span class="hidden sm:inline">Usamos cookies para a loja funcionar e para melhorar sua experiência, conforme a LGPD.</span>
                 {{ " " }}<Link href="/politica-de-cookies" class="whitespace-nowrap font-semibold text-[#f27a2a] underline-offset-2 hover:underline">Saiba mais</Link>
             </p>
-            <button type="button" class="w-full rounded-full bg-[#f27a2a] px-8 py-2.5 font-bold text-white transition hover:brightness-110 sm:w-auto" @click="aceitar">
+            <button type="button" class="w-full rounded-full bg-store-laranja px-8 py-2.5 font-bold text-white transition hover:bg-store-laranja-hover sm:w-auto" @click="aceitar">
                 OK
             </button>
         </div>

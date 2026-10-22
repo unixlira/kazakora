@@ -125,7 +125,7 @@ const copyPixCode = async () => {
 
                         <button v-if="pixQrCode" type="button"
                             class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition"
-                            :class="copied ? 'bg-slate-900' : 'bg-[#F27A2A] hover:brightness-95'"
+                            :class="copied ? 'bg-slate-900' : 'bg-store-laranja hover:bg-store-laranja-hover'"
                             @click="copyPixCode">
                             <i class="fas" :class="copied ? 'fa-check' : 'fa-copy'"></i>
                             {{ copied ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
@@ -172,7 +172,7 @@ const copyPixCode = async () => {
 
                     <button v-if="boleto?.linhaDigitavel" type="button"
                         class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition"
-                        :class="linhaCopiada ? 'bg-slate-900' : 'bg-[#F27A2A] hover:brightness-95'"
+                        :class="linhaCopiada ? 'bg-slate-900' : 'bg-store-laranja hover:bg-store-laranja-hover'"
                         @click="copiarLinha">
                         <i class="fas" :class="linhaCopiada ? 'fa-check' : 'fa-copy'"></i>
                         {{ linhaCopiada ? 'Linha copiada! Cole no app do banco' : 'Copiar linha digitável' }}
@@ -189,7 +189,7 @@ const copyPixCode = async () => {
                     </ul>
 
                     <Link v-if="successUrl" :href="successUrl"
-                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0FB930] px-4 py-3 text-sm font-bold text-white no-underline shadow-md hover:brightness-95">
+                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0FB930] px-4 py-3 text-sm font-bold text-white no-underline shadow-md hover:bg-store-laranja-hover">
                         <i class="fas fa-receipt"></i> Ver meu pedido
                     </Link>
                     <Link href="/" class="mt-2 block w-full rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">
@@ -233,7 +233,7 @@ const copyPixCode = async () => {
                     </ul>
 
                     <Link v-if="successUrl" :href="successUrl"
-                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#F27A2A] px-4 py-3.5 text-sm font-bold text-white no-underline shadow-md hover:brightness-95">
+                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-store-laranja px-4 py-3.5 text-sm font-bold text-white no-underline shadow-md hover:bg-store-laranja-hover">
                         <i class="fas fa-receipt"></i> Ver minha compra
                     </Link>
                     <Link href="/" class="mt-2 block w-full rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">

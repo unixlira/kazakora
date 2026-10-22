@@ -243,7 +243,7 @@ const REDES = [
                                             <p class="mt-2 text-xl font-bold leading-tight">Frete grátis em todos os produtos</p>
                                             <p class="mt-2 text-sm opacity-80">E com o Full você recebe no mesmo dia.</p>
                                         </div>
-                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-[#f27a2a] hover:text-white">
+                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-store-laranja hover:text-white">
                                             Ver todos os produtos <i class="fa-solid fa-arrow-right text-xs"></i>
                                         </a>
                                     </div>

@@ -802,6 +802,17 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
                         </p>
                     </section>
+
+                    <!-- Celular: selos de confiança debaixo do Finalizar pedido (pedido 2026-10-21). -->
+                    <ul class="space-y-3 lg:hidden">
+                        <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                            <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
+                            <div class="text-sm text-slate-600">
+                                <strong class="block text-slate-900">{{ selo.titulo }}</strong>
+                                {{ selo.texto }}
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </main>
 
@@ -881,8 +892,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                 </div>
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop
-                     adaptados à KazaKora). -->
-                <ul class="mt-4 space-y-3">
+                     adaptados à KazaKora). No celular ficam debaixo do Finalizar pedido (2026-10-21). -->
+                <ul class="mt-4 hidden space-y-3 lg:block">
                     <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">

@@ -8,6 +8,7 @@ use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Bus\Queueable;
@@ -51,10 +52,17 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
 
     public function handle(WhatsAppCloudApiClient $client, WhatsAppSettings $settings): void
     {
-        $template = config('services.whatsapp.templates.pedido_entregue');
         $order = Order::query()->with('user')->find($this->orderId);
 
-        if (! filled($template) || ! $settings->isReadyToSend() || ! $order || $order->origin !== Order::ORIGIN_STORE) {
+        if (! $order || $order->origin !== Order::ORIGIN_STORE) {
+            return;
+        }
+
+        // Pedido do site da FerraKora sai pelo número dela, se estiver ligado.
+        $loja = WhatsAppNumeros::lojaDoPedido($order);
+        $template = WhatsAppNumeros::template($loja, 'pedido_entregue');
+
+        if (! filled($template) || ! $settings->isReadyToSend($loja)) {
             return;
         }
 
@@ -74,13 +82,13 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
 
         $nome = Str::of(trim((string) ($order->shipping_name ?: $order->user?->name)))->explode(' ')->first() ?: 'cliente';
         $recebidoPor = self::recebidoPor($this->recebedor, $this->entregueEm);
-        $imagem = config('services.whatsapp.templates.pedido_entregue_imagem') ?: asset('images/whatsapp/pedido-entregue.jpg');
+        $imagem = WhatsAppNumeros::template($loja, 'pedido_entregue_imagem') ?: asset('images/whatsapp/pedido-entregue.jpg');
 
         try {
-            $response = $client->sendTemplate(
+            $response = $client->paraLoja($loja)->sendTemplate(
                 $phone,
                 $template,
-                (string) config('services.whatsapp.templates.pedido_entregue_idioma', 'pt_BR'),
+                (string) WhatsAppNumeros::template($loja, 'pedido_entregue_idioma', 'pt_BR'),
                 headerMediaType: 'image',
                 bodyParams: [$nome, $order->numero, $recebidoPor],
                 // Botão 0: https://kazakora.com/rastreio/{{1}} no template.
@@ -99,7 +107,7 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
         }
 
         $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $phone],
+            ['wa_id' => $phone, 'loja' => $loja],
             ['phone' => $phone, 'profile_name' => $order->shipping_name, 'last_message_at' => now(), 'unread_count' => 0],
         );
         $message = WhatsAppMessage::query()->create([

@@ -10,11 +10,13 @@ use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class WhatsAppWebhookController extends Controller
@@ -47,8 +49,18 @@ class WhatsAppWebhookController extends Controller
             foreach ($entry['changes'] ?? [] as $change) {
                 $value = $change['value'] ?? [];
 
+                // Vários números no mesmo webhook: a loja sai do número que
+                // recebeu. Número que não é nosso: registra e ignora (200).
+                $phoneNumberId = $value['metadata']['phone_number_id'] ?? null;
+                $loja = WhatsAppNumeros::lojaDoPhoneNumberId($phoneNumberId);
+                if ($loja === null) {
+                    Log::warning('whatsapp_webhook_numero_desconhecido', ['phone_number_id' => $phoneNumberId]);
+
+                    continue;
+                }
+
                 foreach ($value['statuses'] ?? [] as $status) {
-                    $this->storeStatus($status, $payload);
+                    $this->storeStatus($status, $payload, $loja);
                     $handled++;
                 }
 
@@ -60,13 +72,13 @@ class WhatsAppWebhookController extends Controller
                     // 2026-10-09: sem conversa, nem abre chat; com conversa,
                     // avisa o cliente pra mandar de outro jeito.
                     if (($message['type'] ?? null) === 'unsupported') {
-                        $this->handleUnsupported($message, $contact, $payload, $settings);
+                        $this->handleUnsupported($message, $contact, $payload, $settings, $loja);
                         $handled++;
 
                         continue;
                     }
 
-                    [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
+                    [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings, $loja);
                     $handled++;
 
                     // Botão "Falar com Atendente" do aviso de pedido enviado.
@@ -110,13 +122,13 @@ class WhatsAppWebhookController extends Controller
         return response()->json(['status' => 'ok', 'handled' => $handled]);
     }
 
-    private function handleUnsupported(array $message, array $contact, array $payload, WhatsAppSettings $settings): void
+    private function handleUnsupported(array $message, array $contact, array $payload, WhatsAppSettings $settings, string $loja): void
     {
-        if (! WhatsAppConversation::query()->where('wa_id', $message['from'] ?? null)->exists()) {
+        if (! WhatsAppConversation::query()->where('wa_id', $message['from'] ?? null)->where('loja', $loja)->exists()) {
             return;
         }
 
-        [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
+        [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings, $loja);
 
         // Reentrega da Meta não responde de novo, e no máximo um aviso a
         // cada 30 min (trava atômica, vale mesmo com duas chegando juntas):
@@ -143,7 +155,7 @@ class WhatsAppWebhookController extends Controller
     }
 
     /** @return array{0: WhatsAppConversation, 1: WhatsAppMessage} */
-    private function storeInboundMessage(array $message, array $contact, array $payload, WhatsAppSettings $settings): array
+    private function storeInboundMessage(array $message, array $contact, array $payload, WhatsAppSettings $settings, string $loja): array
     {
         $type = $message['type'] ?? 'unknown';
         $body = $message['text']['body']
@@ -156,7 +168,8 @@ class WhatsAppWebhookController extends Controller
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp'], config('app.timezone')) : now();
         $waId = $message['from'];
 
-        $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId]);
+        // Mesmo cliente nos dois números = duas conversas (uma por loja).
+        $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId, 'loja' => $loja]);
         $conversation->fill([
             'phone' => $waId,
             'profile_name' => $contact['profile']['name'] ?? $conversation->profile_name,
@@ -195,7 +208,7 @@ class WhatsAppWebhookController extends Controller
         return [$conversation->fresh(), $stored];
     }
 
-    private function storeStatus(array $status, array $payload): void
+    private function storeStatus(array $status, array $payload, string $loja): void
     {
         $message = WhatsAppMessage::query()->where('wa_message_id', $status['id'] ?? null)->first();
 
@@ -209,7 +222,7 @@ class WhatsAppWebhookController extends Controller
         }
 
         $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $status['recipient_id'] ?? 'unknown'],
+            ['wa_id' => $status['recipient_id'] ?? 'unknown', 'loja' => $loja],
             ['phone' => $status['recipient_id'] ?? null, 'last_message_at' => now()],
         );
 

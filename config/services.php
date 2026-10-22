@@ -414,6 +414,45 @@ return [
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL', rtrim((string) env('APP_URL', ''), '/').'/api/webhooks/whatsapp'),
 
+        // Vários números oficiais no mesmo app Meta e no mesmo webhook
+        // (2026-10-22: FerraKora ganha número próprio, WABA separada no mesmo
+        // portfólio). A loja da conversa sai do metadata.phone_number_id do
+        // webhook e a resposta sai SEMPRE pelo número da loja da conversa.
+        // KazaKora: campos vazios caem nas chaves de cima (WHATSAPP_*), então
+        // o .env atual continua valendo igual. Número sem phone_number_id =
+        // desligado. Ver App\Modules\WhatsApp\Support\WhatsAppNumeros.
+        'numeros' => [
+            'kazakora' => [
+                'nome' => 'KazaKora',
+                'site' => 'https://kazakora.com',
+                'phone_number_id' => null,
+                'business_account_id' => null,
+                'access_token' => null,
+            ],
+            'ferrakora' => [
+                'nome' => 'FerraKora',
+                'site' => env('WHATSAPP_FERRAKORA_SITE', 'https://ferrakora.com'),
+                'phone_number_id' => env('WHATSAPP_FERRAKORA_PHONE_NUMBER_ID'),
+                'business_account_id' => env('WHATSAPP_FERRAKORA_BUSINESS_ACCOUNT_ID'),
+                // Vazio = mesmo token do app (WHATSAPP_ACCESS_TOKEN), se o
+                // usuário do sistema tiver acesso às duas WABAs.
+                'access_token' => env('WHATSAPP_FERRAKORA_ACCESS_TOKEN'),
+                // Templates são da WABA: os da KazaKora não existem na da
+                // FerraKora. Vazio = aviso de pedido da FerraKora não sai.
+                'templates' => [
+                    'pedido_aprovado' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_APROVADO'),
+                    'pedido_aprovado_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
+                    'pedido_aprovado_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_APROVADO_IMAGEM'),
+                    'pedido_enviado' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENVIADO'),
+                    'pedido_enviado_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENVIADO_IDIOMA', 'pt_BR'),
+                    'pedido_enviado_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENVIADO_IMAGEM'),
+                    'pedido_entregue' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE'),
+                    'pedido_entregue_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IDIOMA', 'pt_BR'),
+                    'pedido_entregue_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
+                ],
+            ],
+        ],
+
         // Confirmação dos dados do pedido do site (2026-10-17, modelo Always
         // Fit). Mensagem que a loja inicia precisa de template aprovado na
         // Meta; vazio = não envia. Cabeçalho de imagem; corpo {{1}} = primeiro

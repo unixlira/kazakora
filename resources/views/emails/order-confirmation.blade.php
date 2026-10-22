@@ -12,6 +12,15 @@
             'valor' => $item->subtotal,
             'imagem' => rescue(fn () => $item->product?->images()->orderByDesc('is_primary')->orderBy('position')->first()?->thumb_url, null, false),
         ])->all();
+
+        // Pedido do Lira 2026-10-22: no resumo, depois dos produtos, a Nota Fiscal
+        // e cada livro em PDF aparecem como item de valor zero.
+        if ($notaAnexada ?? $invoiceAuthorized) {
+            $linhas[] = ['nome' => 'Nota Fiscal (PDF em anexo)', 'quantidade' => 1, 'valor' => 0, 'imagem' => null, 'icone' => '🧾'];
+        }
+        foreach (! empty($brindes) ? $brindes : [] as $livro) {
+            $linhas[] = ['nome' => $livro->titulo.' (livro digital em PDF)', 'quantidade' => 1, 'valor' => 0, 'imagem' => $livro->capa_url, 'icone' => '📘'];
+        }
     @endphp
 
     @include('emails.partials.titulo', ['icone' => '🎉', 'texto' => "Pedido {$order->numero} confirmado!"])

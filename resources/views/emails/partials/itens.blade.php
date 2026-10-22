@@ -5,6 +5,8 @@
             <td width="72" style="padding: 10px 12px 10px 0; border-bottom: 1px solid #eef0f3; vertical-align: middle;">
                 @if ($linha['imagem'])
                     <img src="{{ $linha['imagem'] }}" alt="" width="64" height="64" style="display: block; width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid #eef0f3;">
+                @elseif (! empty($linha['icone']))
+                    <div style="width: 64px; height: 64px; line-height: 64px; text-align: center; font-size: 30px; border-radius: 10px; background-color: #f3f4f6;">{{ $linha['icone'] }}</div>
                 @else
                     <div style="width: 64px; height: 64px; border-radius: 10px; background-color: #f3f4f6;"></div>
                 @endif

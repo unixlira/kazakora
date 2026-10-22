@@ -88,6 +88,37 @@ class PromocoesDoProduto
         return $dados;
     }
 
+    /**
+     * Miniatura dos livros no checkout (pedido 2026-10-21): os livros de brinde
+     * dos produtos do carrinho, pela mesma regra (e cache) da página do
+     * produto. Null quando nenhum produto dá livro.
+     *
+     * @param  iterable<Product>  $produtos
+     * @return array{imagem: string, quantidade: int, titulos: list<string>}|null
+     */
+    public static function livrosDoCarrinho(iterable $produtos): ?array
+    {
+        $livros = [];
+        $imagem = null;
+        foreach ($produtos as $produto) {
+            $dados = self::paraPagina($produto);
+            foreach ($dados['livrosDigitais'] as $livro) {
+                $livros[$livro['id']] = $livro['titulo'];
+            }
+            $imagem ??= $dados['livrosQuadro'];
+        }
+
+        if ($livros === []) {
+            return null;
+        }
+
+        return [
+            'imagem' => $imagem ?? '/'.self::QUADRO_LIVROS_PADRAO,
+            'quantidade' => count($livros),
+            'titulos' => array_values($livros),
+        ];
+    }
+
     public static function limparCache(): void
     {
         Cache::forever(self::VERSAO, self::versao() + 1);

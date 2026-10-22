@@ -51,8 +51,12 @@ class SendOrderReceiptEmailJobTest extends TestCase
 
         SendOrderReceiptEmailJob::dispatchSync($order->id);
 
-        // PDF + XML da nota (pedido 2026-10-10).
-        Mail::assertSent(OrderConfirmation::class, fn (OrderConfirmation $mail) => count($mail->attachments()) === 2);
+        // Só o PDF da nota, sem o XML (pedido 2026-10-22).
+        Mail::assertSent(OrderConfirmation::class, function (OrderConfirmation $mail) {
+            $anexos = $mail->attachments();
+
+            return count($anexos) === 1 && $anexos[0]->as === "nfe-pedido-{$mail->order->id}.pdf";
+        });
         $this->assertDatabaseHas('order_email_logs', [
             'order_id' => $order->id,
             'status' => OrderEmailLog::STATUS_SENT,

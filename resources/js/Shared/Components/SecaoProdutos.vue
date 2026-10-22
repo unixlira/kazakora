@@ -3,7 +3,7 @@
 // e grade de cards — 2 por linha no celular, 4 no computador.
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     titulo: { type: String, required: true },
@@ -21,6 +21,15 @@ const props = defineProps({
 
 const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
+
+// Com `slider`, os cards eram montados duas vezes (slide do celular e grade
+// do computador, uma escondida por CSS): 16 cards para 8 ofertas logo abaixo
+// do banner (PageSpeed 2026-10-21). Agora só a versão da tela atual monta.
+const consultaCelular = typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)') : null;
+const celular = ref(consultaCelular?.matches ?? false);
+const aoMudarTela = (e) => { celular.value = e.matches; };
+onMounted(() => consultaCelular?.addEventListener('change', aoMudarTela));
+onBeforeUnmount(() => consultaCelular?.removeEventListener('change', aoMudarTela));
 
 const trilho = ref(null);
 const atual = ref(0);
@@ -50,7 +59,7 @@ const irPara = (indice) => {
             </slot>
         </div>
         <!-- Slide do celular: 1 card por tela, arrasta com o dedo, setas e bolinhas. -->
-        <div v-if="slider" class="relative md:hidden">
+        <div v-if="slider && celular" class="relative md:hidden">
             <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
                 <div v-for="product in produtos" :key="product.id" class="w-full shrink-0 snap-center px-1">
                     <ProductCard :product="product" estrelas
@@ -71,7 +80,7 @@ const irPara = (indice) => {
                     @click="irPara(indice)"></button>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco, 'max-md:hidden': slider }">
+        <div v-if="!slider || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco, 'max-md:hidden': slider }">
             <ProductCard v-for="product in produtos" :key="product.id" :product="product"
                 :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                 :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />

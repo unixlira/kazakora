@@ -7,6 +7,7 @@ import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // e rodapé continuam os da loja (AppLayout). Ficou de fora o que a KazaKora
 // não oferece (desconto no Pix, boleto, sorteio, brindes). A v1
 // (ProductDetail.vue) segue no código; o CatalogController escolhe qual mostrar.
+import '../../../css/fontes-poppins.css';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
@@ -457,11 +458,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 </script>
 
 <template>
-    <Head :title="product.name">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    </Head>
+    <Head :title="product.name" />
 
     <AppLayout>
         <div class="pd2">

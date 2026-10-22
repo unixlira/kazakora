@@ -246,6 +246,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
 });
+// Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link assinado do
+// e-mail e da página do pedido, abre sem login.
+Route::get('/pedidos/{order}/livros/{livro}', [CheckoutController::class, 'livroDoPedido'])
+    ->whereNumber(['order', 'livro'])
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('pedidos.livro.baixar');
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.

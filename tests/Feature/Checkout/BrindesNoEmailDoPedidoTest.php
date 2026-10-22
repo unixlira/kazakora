@@ -5,17 +5,22 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Promocao;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /**
  * Chave da promoção (pedido 2026-10-21): ligada, o e-mail de confirmação do
  * pedido do kazakora.com leva a frase de presente e os PDFs dos livros
- * ativos dos produtos comprados; desligada, sai sem os livros.
+ * ativos dos produtos comprados; desligada, só o link. O link de download
+ * (e-mail e página do pedido) vale para os livros gravados no pedido.
  */
 class BrindesNoEmailDoPedidoTest extends TestCase
 {
@@ -83,14 +88,79 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $mail->assertSeeInHtml('Sono &amp; Saúde', false);
     }
 
-    public function test_chave_desligada_nao_manda_os_livros(): void
+    public function test_chave_desligada_manda_so_o_link_dos_livros(): void
     {
         LivroDigital::ligarEmailPedido(false);
 
-        $mail = new OrderConfirmation($this->pedido());
+        $order = $this->pedido();
+        $mail = new OrderConfirmation($order);
 
         $this->assertCount(0, $mail->attachments());
+        $mail->assertSeeInHtml('Um presente para você!');
+        $mail->assertSeeInHtml('/pedidos/'.$order->id.'/livros/', false);
+    }
+
+    public function test_promocao_pdfs_fora_da_pagina_do_produto_nao_da_livro(): void
+    {
+        Promocao::query()->where('slug', Promocao::PDFS)->update(['na_pagina_produto' => false]);
+        PromocoesDoProduto::limparCache();
+
+        $mail = new OrderConfirmation($this->pedido());
+
+        $this->assertCount(0, $mail->brindes);
         $mail->assertDontSeeInHtml('Um presente para você!');
+    }
+
+    public function test_livro_gravado_na_compra_continua_com_o_cliente(): void
+    {
+        $order = $this->pedido();
+        $this->assertCount(3, LivroDigital::garantirParaPedido($order));
+
+        // A promoção acaba e um livro é desativado depois da compra.
+        Promocao::query()->where('slug', Promocao::PDFS)->update(['na_pagina_produto' => false]);
+        LivroDigital::query()->where('titulo', 'Mais Saúde')->update(['ativo' => false]);
+        PromocoesDoProduto::limparCache();
+
+        $this->assertCount(3, LivroDigital::doPedido($order));
+        $this->assertCount(3, (new OrderConfirmation($order))->brindes);
+    }
+
+    public function test_link_assinado_baixa_o_pdf_do_pedido_pago(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+
+        $this->get($livro->urlDoPedido($order))
+            ->assertOk()
+            ->assertDownload();
+
+        $this->assertSame(1, (int) DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->value('downloads'));
+    }
+
+    public function test_link_sem_assinatura_sem_pagamento_ou_de_outro_pedido_nao_baixa(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+
+        $this->get("/pedidos/{$order->id}/livros/{$livro->id}")->assertForbidden();
+
+        $outro = $this->pedido();
+        $this->get(URL::signedRoute('pedidos.livro.baixar', ['order' => $outro->id, 'livro' => $livro->id]))->assertNotFound();
+
+        $order->update(['status' => Order::STATUS_AWAITING_PAYMENT]);
+        $this->get($livro->urlDoPedido($order))->assertForbidden();
+    }
+
+    public function test_pagina_do_pedido_mostra_os_livros(): void
+    {
+        $order = $this->pedido();
+        LivroDigital::garantirParaPedido($order);
+
+        $this->withoutVite()->actingAs($order->user)->get("/pedidos/{$order->id}")
+            ->assertInertia(fn ($page) => $page
+                ->where('pedido.livros.liberados', true)
+                ->has('pedido.livros.itens', 3)
+                ->where('pedido.livros.itens.2.titulo', 'Sono & Saúde'));
     }
 
     public function test_livro_desativado_e_pedido_de_marketplace_ficam_fora(): void

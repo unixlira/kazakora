@@ -3,7 +3,6 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Catalog\Models\LivroDigital;
-use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
@@ -62,7 +61,6 @@ class OrderConfirmation extends Mailable
                 'notaAnexada' => $this->notaAnexada(),
                 'brindes' => $this->brindes,
                 'livrosAnexados' => $this->livrosAnexados,
-                'livrosImagem' => $this->brindes->isNotEmpty() ? PromocoesDoProduto::imagemDosLivros($this->brindes) : null,
             ]);
     }
 

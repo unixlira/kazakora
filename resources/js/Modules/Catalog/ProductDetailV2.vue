@@ -7,6 +7,7 @@ import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // e rodapé continuam os da loja (AppLayout). Ficou de fora o que a KazaKora
 // não oferece (desconto no Pix, boleto, sorteio, brindes). A v1
 // (ProductDetail.vue) segue no código; o CatalogController escolhe qual mostrar.
+import '../../../css/fontes-poppins.css';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
@@ -420,11 +421,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 </script>
 
 <template>
-    <Head :title="product.name">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    </Head>
+    <Head :title="product.name" />
 
     <AppLayout>
         <div class="pd2">
@@ -563,7 +560,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-else class="esgotado">Produto esgotado</p>
 
                             <div class="bandeiras">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
                             </div>
 
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
@@ -690,7 +687,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Pagamento Seguro</h2>
                             <div class="bandeiras esquerda">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
                             </div>
                             <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>

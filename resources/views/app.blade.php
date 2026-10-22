@@ -71,9 +71,26 @@
         <link rel="icon" type="{{ $marca['faviconTipo'] }}" href="{{ $marca['favicon'] }}">
         <link rel="apple-touch-icon" href="{{ str_starts_with($marca['favicon'], '/images/marca/') ? '/images/marca/favicon-180.png' : $marca['favicon'] }}">
 
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+        {{-- Fontes do Google servidas pelo próprio site, dentro do app.css (resources/css/fontes-google.css).
+             A da loja (IBM Plex Sans) é pedida já aqui, sem esperar o CSS chegar. --}}
+        @unless (request()->is('admin*'))
+            <link rel="preload" as="font" type="font/woff2" crossorigin href="{{ \Illuminate\Support\Facades\Vite::asset('resources/fonts/google/ibm-plex-sans-variavel-latin.woff2') }}">
+            {{-- Desempenho (pedido 2026-10-21, PageSpeed): na loja, o CSS não trava
+                 a primeira pintura. A tela de abertura (estilo próprio, abaixo) cobre a página
+                 até a loja montar, e o app.js só a tira depois que o CSS chegou: o visual
+                 não muda, só aparece mais cedo. --}}
+            @php(\Illuminate\Support\Facades\Vite::useStyleTagAttributes(['media' => 'print', 'onload' => "this.media='all'", 'data-adiado' => true]))
+            {{-- 1º banner da home pedido já no HTML, sem esperar o JavaScript montar a vitrine. --}}
+            @php($bannerTopo = ($page['component'] ?? '') === 'Catalog/Home' && ! empty($page['props']['vitrine']) ? (json_decode(json_encode($page['props']['banners'] ?? []), true)[0] ?? null) : null)
+            @if ($bannerTopo)
+                <link rel="preload" as="image" fetchpriority="high" media="(max-width: 767px)"
+                    href="{{ $bannerTopo['image_url_mobile'] ?? $bannerTopo['image_url'] }}"
+                    @if (! empty($bannerTopo['image_srcset_mobile'])) imagesrcset="{{ $bannerTopo['image_srcset_mobile'] }}" imagesizes="100vw" @endif>
+                <link rel="preload" as="image" fetchpriority="high" media="(min-width: 768px)"
+                    href="{{ $bannerTopo['image_url'] }}"
+                    @if (! empty($bannerTopo['image_srcset'])) imagesrcset="{{ $bannerTopo['image_srcset'] }}" imagesizes="100vw" @endif>
+            @endif
+        @endunless
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
     </head>
@@ -92,7 +109,7 @@
                     @keyframes abertura-pulsa { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .75; transform: scale(.97); } }
                     @media (prefers-reduced-motion: reduce) { #tela-abertura img, #tela-abertura .abertura-barra::after { animation: none; } }
                 </style>
-                <img src="{{ rescue(fn () => \App\Support\Marca::url('logo_nav'), '/images/marca/logo-nav.png', false) }}" alt="KazaKora" width="190" height="34">
+                <img src="{{ rescue(fn () => \App\Support\Marca::url('logo_nav'), '/images/marca/logo-nav.png', false) }}" alt="KazaKora" width="190" height="34" fetchpriority="high">
                 <div class="abertura-barra"></div>
             </div>
             <script>

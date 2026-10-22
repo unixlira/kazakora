@@ -59,12 +59,23 @@ function ajustarLink() {
     return true;
 }
 
+let adiarScript = null;
+const aoCarregar = () => { adiarScript = setTimeout(injetarScript, 300); };
+
 onMounted(() => {
     if (!alvo.value) return;
 
     observador = new MutationObserver(() => ajustarLink());
     observador.observe(alvo.value, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
 
+    // Desempenho (pedido 2026-10-21): o script do Reclame AQUI só entra depois
+    // que a página terminou de carregar; até lá fica a imagem local do selo.
+    if (document.readyState === 'complete') adiarScript = setTimeout(injetarScript, 300);
+    else window.addEventListener('load', aoCarregar, { once: true });
+});
+
+function injetarScript() {
+    if (!alvo.value) return;
     script = document.createElement('script');
     script.type = 'text/javascript';
     script.id = 'ra-embed-verified-seal';
@@ -79,9 +90,11 @@ onMounted(() => {
     desistir = setTimeout(() => {
         if (!carregado.value) observador?.disconnect();
     }, 15000);
-});
+}
 
 onBeforeUnmount(() => {
+    window.removeEventListener('load', aoCarregar);
+    clearTimeout(adiarScript);
     observador?.disconnect();
     observador = null;
     clearTimeout(desistir);
@@ -97,7 +110,7 @@ onBeforeUnmount(() => {
         <a v-if="!carregado" :href="link" target="_blank" rel="noopener"
             class="absolute inset-0 flex items-center justify-center rounded-[8px] bg-white transition hover:opacity-90"
             title="Verificada por Reclame AQUI">
-            <img src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI" width="294" height="88"
+            <img src="/images/selos/reclame-aqui-verificada-qrcode.webp" alt="Verificada por Reclame AQUI" width="294" height="88"
                 class="h-[90%] w-auto">
         </a>
         <div class="selo-ra-escala absolute left-0 top-0" :class="{ invisible: !carregado }"

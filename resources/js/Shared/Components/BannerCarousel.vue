@@ -105,8 +105,23 @@ const cliqueBanner = (event) => {
     }
 };
 
-onMounted(start);
-onUnmounted(stop);
+// Desempenho (pedido 2026-10-21): só o 1º banner baixa junto com a página;
+// os outros esperam ela terminar de carregar (bem antes da 1ª troca, aos 5 s)
+// para não disputar a internet do celular com o banner que aparece.
+const carregarTodos = ref(false);
+let esperaTodos = null;
+const liberarTodos = () => { esperaTodos = setTimeout(() => { carregarTodos.value = true; }, 300); };
+
+onMounted(() => {
+    start();
+    if (document.readyState === 'complete') liberarTodos();
+    else window.addEventListener('load', liberarTodos, { once: true });
+});
+onUnmounted(() => {
+    stop();
+    clearTimeout(esperaTodos);
+    window.removeEventListener('load', liberarTodos);
+});
 </script>
 
 <template>
@@ -138,13 +153,15 @@ onUnmounted(stop);
                 >
                     <!-- <picture>: o navegador baixa só a imagem do tamanho de tela certo. -->
                     <picture class="block h-full">
-                        <source media="(min-width: 768px)" :srcset="banner.image_url">
+                        <source media="(min-width: 768px)" :srcset="banner.image_srcset || banner.image_url"
+                            :sizes="banner.image_srcset ? '100vw' : undefined">
                         <img :src="banner.image_url_mobile || banner.image_url"
                             :srcset="banner.image_srcset_mobile || undefined"
                             :sizes="banner.image_srcset_mobile ? '100vw' : undefined"
                             :alt="banner.title || 'Banner promocional'"
                             class="img-fluid md:object-cover" decoding="async" draggable="false"
-                            loading="eager" :fetchpriority="index === 0 ? 'high' : 'low'">
+                            :loading="index === 0 || carregarTodos ? 'eager' : 'lazy'"
+                            :fetchpriority="index === 0 ? 'high' : 'low'">
                     </picture>
                     <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'md:pb-20': reservaBase }">
                         <p class="font-display text-lg font-semibold text-white sm:text-2xl">{{ banner.title }}</p>

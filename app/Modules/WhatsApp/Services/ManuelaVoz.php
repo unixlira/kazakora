@@ -2,6 +2,7 @@
 
 namespace App\Modules\WhatsApp\Services;
 
+use App\Modules\WhatsApp\Support\Ffmpeg;
 use RuntimeException;
 
 /**
@@ -26,7 +27,7 @@ class ManuelaVoz
 
         $comando = sprintf(
             '%s -y -loglevel error -f s16le -ar 24000 -ac 1 -i %s -c:a libopus -b:a 32k -application voip %s 2>&1',
-            escapeshellcmd($this->ffmpeg()),
+            escapeshellcmd(Ffmpeg::binario()),
             escapeshellarg($entrada),
             escapeshellarg($saida),
         );
@@ -41,17 +42,5 @@ class ManuelaVoz
         }
 
         return $saida;
-    }
-
-    /**
-     * Na VPS o ffmpeg está no PATH; na hospedagem compartilhada (homolog) ele
-     * fica em ~/bin, fora do PATH do PHP. FFMPEG_BIN no .env tem prioridade.
-     */
-    private function ffmpeg(): string
-    {
-        $configurado = (string) env('FFMPEG_BIN', '');
-        $emHome = rtrim((string) getenv('HOME'), '/').'/bin/ffmpeg';
-
-        return $configurado !== '' ? $configurado : (is_executable($emHome) ? $emHome : 'ffmpeg');
     }
 }

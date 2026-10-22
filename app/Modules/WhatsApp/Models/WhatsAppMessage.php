@@ -67,4 +67,15 @@ class WhatsAppMessage extends Model
 
         return $payload[$this->type]['id'] ?? null;
     }
+
+    /** Cópia local (storage/app/private) do que o atendente mandou pela tela. */
+    public function localMediaPath(): ?string
+    {
+        return $this->payload['local_path'] ?? null;
+    }
+
+    public function hasMedia(): bool
+    {
+        return $this->mediaId() !== null || $this->localMediaPath() !== null;
+    }
 }

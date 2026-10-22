@@ -266,7 +266,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
 <template>
     <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
          com estilo próprio (página do produto, pedido 2026-10-22). -->
-    <article class="card-produto group flex font-store h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
+    <article class="card-produto group flex font-store text-store-fg h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
         <div class="relative aspect-square cursor-pointer bg-white"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">

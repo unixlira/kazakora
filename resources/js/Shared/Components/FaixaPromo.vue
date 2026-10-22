@@ -51,7 +51,7 @@ const fechar = () => {
                     <strong class="text-base font-black tracking-tight text-[#f6c343] sm:text-lg">{{ desconto }}% OFF</strong>
                 </template>
                 <template v-else>
-                    Aproveite a maior oferta do ano com <strong class="font-black text-[#f6c343]">frete grátis</strong> acima de R$ 200 no Sul e Sudeste
+                    Aproveite a maior oferta do ano com <strong class="font-black text-[#f6c343]">frete grátis</strong>
                 </template>
             </p>
         </a>

@@ -1,7 +1,7 @@
 @extends('emails.layout')
 
 @section('title', 'Seu carrinho está te esperando')
-@section('preheader', 'Seus produtos continuam no carrinho.')
+@section('preheader', 'Seus produtos continuam no carrinho, com frete grátis.')
 
 @section('content')
     @include('emails.partials.titulo', ['icone' => '🛒', 'texto' => $nome ? "{$nome}, seu carrinho está te esperando!" : 'Seu carrinho está te esperando!'])
@@ -10,7 +10,7 @@
         @if ($ultimo)
             Este é o nosso último lembrete. Guardamos seus produtos, mas o estoque é limitado.
         @else
-            Você deixou estes produtos no carrinho. Eles continuam guardados para você, com <strong>frete grátis</strong> acima de R$ 200 no Sul e Sudeste.
+            Você deixou estes produtos no carrinho. Eles continuam guardados para você — e com <strong>frete grátis</strong>.
         @endif
     </p>
 
@@ -22,7 +22,7 @@
             <td style="padding: 10px 0 0; text-align: right; font-size: 18px; font-weight: 800; color: #111827;">R$ {{ number_format((float) $total, 2, ',', '.') }}</td>
         </tr>
         <tr>
-            <td colspan="2" style="padding: 2px 0 0; text-align: right; font-size: 12px; color: #0a8a23; font-weight: 700;">Frete grátis acima de R$ 200 (Sul e Sudeste) &middot; desconto extra pagando no Pix</td>
+            <td colspan="2" style="padding: 2px 0 0; text-align: right; font-size: 12px; color: #0a8a23; font-weight: 700;">Frete grátis &middot; desconto extra pagando no Pix</td>
         </tr>
     </table>
 

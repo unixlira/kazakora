@@ -50,7 +50,7 @@ const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
-    ['O frete é grátis?', 'Para pedidos a partir de R$ 200 com entrega no Sul e no Sudeste. Nos demais casos, o frete dos Correios aparece no checkout pelo seu CEP.'],
+    ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
@@ -427,7 +427,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <div class="pd2">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
-                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS ACIMA DE R$ 200 NO SUL E SUDESTE</span>
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></span>
                 <span class="sep">|</span>
                 <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
             </div>
@@ -582,7 +582,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <ul class="fretefundo">
                                 <li>
                                     <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> acima de R$ 200 no Sul e Sudeste.<br>O prazo é calculado pelo seu CEP no checkout.</span>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
                                 </li>
                                 <li>
@@ -778,7 +778,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- FAIXA DE CONFIANÇA -->
                 <div class="confianca">
-                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis</strong>Acima de R$ 200 no Sul e Sudeste</span></div>
+                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></strong>Entrega em todo Brasil</span></div>
                     <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
                     <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>
                     <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>

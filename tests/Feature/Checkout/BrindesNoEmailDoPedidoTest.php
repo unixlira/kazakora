@@ -139,11 +139,38 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $order = $this->pedido();
         $livro = LivroDigital::garantirParaPedido($order)->first();
 
-        $this->get($livro->urlDoPedido($order))
+        $url = $livro->urlDoPedido($order);
+
+        // O link abre os termos de uso; o PDF só sai no "Concordar e baixar".
+        $this->withoutVite()->get($url)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Checkout/LivroTermos', false)
+                ->where('livro.titulo', $livro->titulo)
+                ->where('aceitarUrl', $url));
+        $this->assertSame(0, (int) DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->value('downloads'));
+
+        $this->post($url)->assertSessionHasErrors('aceite');
+
+        $this->post($url, ['aceite' => '1'])
             ->assertOk()
             ->assertDownload();
 
-        $this->assertSame(1, (int) DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->value('downloads'));
+        $linha = DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->first();
+        $this->assertSame(1, (int) $linha->downloads);
+        $this->assertNotNull($linha->termos_aceitos_em);
+        $this->assertSame('127.0.0.1', $linha->termos_aceitos_ip);
+    }
+
+    public function test_aceite_sem_assinatura_ou_sem_pagamento_nao_baixa(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+
+        $this->post("/pedidos/{$order->id}/livros/{$livro->id}", ['aceite' => '1'])->assertForbidden();
+
+        $order->update(['status' => Order::STATUS_AWAITING_PAYMENT]);
+        $this->post($livro->urlDoPedido($order), ['aceite' => '1'])->assertForbidden();
     }
 
     public function test_link_sem_assinatura_sem_pagamento_ou_de_outro_pedido_nao_baixa(): void

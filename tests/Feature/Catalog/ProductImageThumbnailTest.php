@@ -66,6 +66,28 @@ class ProductImageThumbnailTest extends TestCase
         );
     }
 
+    public function test_a_new_product_image_is_born_with_a_small_version_for_the_gallery(): void
+    {
+        $product = Product::factory()->create();
+        $this->putJpeg("products/{$product->id}/foto.jpg");
+
+        $image = $product->images()->create([
+            'path' => "products/{$product->id}/foto.jpg",
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $this->assertNotNull($image->mini_path);
+        Storage::disk('public')->assertExists($image->mini_path);
+        [$miniWidth] = getimagesize(Storage::disk('public')->path($image->mini_path));
+        $this->assertSame(320, $miniWidth);
+        $this->assertStringContainsString('/minis/', $image->mini_url);
+
+        // Sem a versão pequena, a miniatura usa a de 512px, como antes.
+        $image->mini_path = null;
+        $this->assertSame($image->thumb_url, $image->mini_url);
+    }
+
     public function test_thumb_url_falls_back_to_the_original_when_there_is_no_thumbnail(): void
     {
         $product = Product::factory()->create();

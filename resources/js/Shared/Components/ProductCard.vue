@@ -324,12 +324,15 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
                  todo card (pedidos 2026-10-20 e 2026-10-22). Sem avaliação: estrelas
                  vazias e "(0)", na mesma altura. -->
-            <!-- No celular, fonte um ponto menor: no card de 149 px, "★★★★★ 4,8 (735)" cabe certo. -->
-            <div class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
-                :aria-label="totalAvaliacoes ? `Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações'">
-                <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
-                <span v-if="nota > 0" class="ml-1 text-[11px] font-bold text-store-fg md:text-xs" aria-hidden="true">{{ notaTexto }}</span>
-                <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
+            <!-- No celular, fonte um ponto menor: no card de 149 px, "★★★★★ 4,8 (735)" cabe certo.
+                 Card mais estreito (tela de 320 px): a nota sai e ficam estrelas e quantidade. -->
+            <div class="@container">
+                <div class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
+                    :aria-label="totalAvaliacoes ? `Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações'">
+                    <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
+                    <span v-if="nota > 0" class="ml-1 hidden text-[11px] font-bold text-store-fg @[7rem]:inline md:text-xs" aria-hidden="true">{{ notaTexto }}</span>
+                    <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
+                </div>
             </div>
             <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
                  computador), laterais inclinadas "/ texto /", parte cinza do caminhão

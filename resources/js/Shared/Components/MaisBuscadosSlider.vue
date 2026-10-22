@@ -56,10 +56,10 @@ const foto = (product) => {
                     class="absolute right-0 top-1/2 flex h-10 w-10 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-white text-black shadow-lg"
                     @click="rolar(1)"><i class="fas fa-angle-right"></i></button>
 
-                <div v-if="paginas > 1" class="mt-4 flex justify-center gap-2">
+                <div v-if="paginas > 1" class="mt-4 flex justify-center">
                     <button v-for="indice in paginas" :key="indice" type="button" :aria-label="`Ir para ${indice}`"
-                        class="h-2 rounded-full transition-all" :class="pagina === indice - 1 ? 'w-6 bg-white' : 'w-2 bg-white/40'"
-                        @click="irPara(indice - 1)"></button>
+                        class="flex h-6 min-w-6 items-center justify-center"
+                        @click="irPara(indice - 1)"><span class="h-2 rounded-full transition-all" :class="pagina === indice - 1 ? 'w-6 bg-white' : 'w-2 bg-white/40'"></span></button>
                 </div>
             </div>
         </div>

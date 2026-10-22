@@ -69,9 +69,9 @@ const mediaItems = computed(() => {
     // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
     // a foto da variação escolhida só ganha borda, não muda de lugar.
     if (props.galeria?.length) {
-        for (const image of props.galeria) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, variantId: image.variant_id });
+        for (const image of props.galeria) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id });
     } else {
-        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url });
+        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, mini: image.mini_url });
     }
     return items;
 });
@@ -201,9 +201,9 @@ onUnmounted(() => {
 
 const variantThumbnail = (item) => {
     const images = item?.images ?? [];
-    // Miniatura leve (a foto cheia de 2048 px pesa até 700 KB).
+    // Miniatura leve (a foto cheia de 2048 px pesa até 700 KB); a de 320 px quando existe.
     const image = images.find((i) => i.is_variant) ?? images.find((i) => i.is_primary) ?? images[0];
-    return image?.thumb_url ?? image?.url ?? null;
+    return image?.mini_url ?? image?.thumb_url ?? image?.url ?? null;
 };
 
 
@@ -472,7 +472,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             <video v-else :src="item.src" muted preload="metadata"></video>
                                             <span class="play"><i class="fas fa-play"></i></span>
                                         </template>
-                                        <img v-else :src="item.thumb || item.src" alt="" loading="lazy">
+                                        <img v-else :src="item.mini || item.thumb || item.src" alt="" loading="lazy">
                                     </button>
                                 </div>
                             </div>

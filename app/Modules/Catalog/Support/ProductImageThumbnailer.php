@@ -36,6 +36,20 @@ class ProductImageThumbnailer
      */
     private const MEDIUM_DIMENSION = 1200;
 
+    /**
+     * Foto pequena (PageSpeed 2026-10-21): as miniaturas da galeria do
+     * produto (~64px) e as fotos das variações baixavam a miniatura de
+     * 512px (~64 KB cada, 10 por página). 320px cobre a miniatura em tela 3x
+     * e o card da vitrine no celular (~180px em tela 1,75x).
+     */
+    private const MINI_DIMENSION = 320;
+
+    /** @return string|null caminho relativo da foto pequena (`<pasta>/minis/`) */
+    public static function generateMini(string $path, string $disk = 'public'): ?string
+    {
+        return self::generate($path, $disk, self::MINI_DIMENSION, 'minis');
+    }
+
     /** @return string|null caminho relativo da foto média (`<pasta>/medias/`) */
     public static function generateMedium(string $path, string $disk = 'public'): ?string
     {

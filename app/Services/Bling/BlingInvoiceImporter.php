@@ -618,10 +618,13 @@ class BlingInvoiceImporter
      * Campos confirmados no payload REAL de GET /nfe/{id} (nota 26759176098,
      * 2026-09-02): a própria nota traz `xml`, `linkDanfe` e `linkPDF` —
      * não precisa da rota /nfe/documento/{chave}, que fica só de reserva
-     * pro caso de `xml` vir vazio numa nota já autorizada. O PDF vem do
-     * `linkPDF` do Bling (é o DANFE oficial daquela nota); gerar o nosso a
-     * partir do XML é o plano B, e só funciona se o XML for um nfeProc
-     * completo, com protocolo.
+     * pro caso de `xml` vir vazio numa nota já autorizada.
+     *
+     * O PDF é SEMPRE o nosso DANFE (NFeDanfeService, layout e logo da
+     * KazaKora), gerado do XML autorizado: pedido do Lira em 22/10/2026
+     * para a série 3 (notas do Bling) sair igual à série 2. O `linkPDF` do
+     * Bling não é baixado nem guardado; sem XML a nota fica sem PDF.
+     * Notas antigas: `nfe:danfe-kazakora`.
      *
      * Best-effort: nota sem arquivo disponível continua registrada
      * (número, série, chave, situação), só sem XML/PDF.
@@ -641,9 +644,9 @@ class BlingInvoiceImporter
             $atualizacao['xml_path'] = $xmlPath;
         }
 
-        $pdf = $this->baixarLink($nota['linkPDF'] ?? null);
+        $pdf = null;
 
-        if ($pdf === null && $xml !== null) {
+        if ($xml !== null) {
             try {
                 $pdf = $this->danfe->generate($xml);
             } catch (Throwable $exception) {

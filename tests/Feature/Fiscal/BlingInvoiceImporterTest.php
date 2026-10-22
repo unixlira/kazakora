@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Notifications\FiscalAlertNotification;
 use App\Services\Bling\BlingInvoiceImporter;
 use App\Services\NFe\NFeCertificateService;
+use App\Services\NFe\NFeDanfeService;
 use App\Services\NFe\NFeWebserviceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -118,6 +119,51 @@ class BlingInvoiceImporterTest extends TestCase
         $this->assertSame("invoices/{$order->id}/nfe-".self::CHAVE.'.xml', $invoice->xml_path);
         Storage::disk('local')->assertExists($invoice->xml_path);
         $this->assertSame($xml, Storage::disk('local')->get($invoice->xml_path));
+    }
+
+    /**
+     * Pedido do Lira em 22/10/2026: a série 3 (notas do Bling) usa o mesmo
+     * DANFE da KazaKora que a série 2. O PDF do Bling nem é baixado.
+     */
+    public function test_pdf_of_bling_invoice_is_our_danfe_not_blings(): void
+    {
+        $xml = '<?xml version="1.0"?><nfeProc><NFe><infNFe Id="NFe'.self::CHAVE.'"></infNFe></NFe></nfeProc>';
+
+        $this->mock(NFeDanfeService::class)
+            ->shouldReceive('generate')->once()->with($xml)->andReturn('%PDF-danfe-kazakora');
+
+        Http::fake([
+            '*/pedidos/vendas/26759086886' => Http::response(['data' => [
+                'id' => 26759086886,
+                'numeroLoja' => '585846882986263720',
+                'notaFiscal' => ['id' => 55501],
+                'situacao' => ['id' => 894762],
+            ]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [[
+                'id' => 26759086886,
+                'numeroLoja' => '585846882986263720',
+            ]]]),
+            '*/nfe/55501' => Http::response(['data' => [
+                'id' => 55501,
+                'numero' => '1795',
+                'serie' => '3',
+                'situacao' => 5,
+                'chaveAcesso' => self::CHAVE,
+                'valorNota' => 100.0,
+                'xml' => $xml,
+                'linkPDF' => 'https://bling.test/pdf/55501',
+            ]]),
+            'bling.test/pdf/*' => Http::response('%PDF-do-bling'),
+        ]);
+
+        $order = $this->makeOrder();
+
+        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+        $this->assertSame(3, $invoice->serie);
+        $this->assertSame("invoices/{$order->id}/danfe-".self::CHAVE.'.pdf', $invoice->danfe_path);
+        $this->assertSame('%PDF-danfe-kazakora', Storage::disk('local')->get($invoice->danfe_path));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'bling.test/pdf'));
     }
 
     /**

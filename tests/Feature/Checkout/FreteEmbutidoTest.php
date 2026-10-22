@@ -31,8 +31,7 @@ class FreteEmbutidoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Regra antiga da KazaKora, desligada em 2026-10-21 (FreteGratisSulSudesteTest).
-        config(['frete_embutido.ativo' => true, 'frete_embutido.embutido_kazakora' => true]);
+        config(['frete_embutido.ativo' => true]);
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
         $this->frete = ShippingMethod::factory()->create(['price' => 0, 'is_active' => true]);
     }

@@ -140,27 +140,17 @@ class CheckoutController extends Controller
         [$coupon] = $this->cupomDoRascunho($request->session()->get(self::SESSION_KEY) ?? [], $subtotal, $request->user());
         $expressa = $entregaExpressa->consultar($cep);
         $entrega = $frete->entregaDoCarrinho($cartItems);
-        $desconto = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
-        // KazaKora sem frete no preço (2026-10-21): grátis só acima de R$ 200 no Sul e Sudeste.
-        $cobrado = $frete->ligado() ? null : $frete->freteDoCheckout($cartItems, $cep, $subtotal - $desconto);
 
         return response()->json([
             'items' => $cartItems,
             'subtotal' => $subtotal,
-            'discount_amount' => $desconto,
+            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'entrega_expressa' => $expressa,
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
-            'desconto_plataforma' => $frete->ligado() ? $entrega['desconto_plataforma'] : 0.0,
-            // Na entrega expressa (Grande SP) já é a mais rápida: sem TURBO.
+            'desconto_plataforma' => $entrega['desconto_plataforma'],
+            // Na área FULL a entrega já é a mais rápida: sem TURBO.
             'turbo' => $expressa ? null : $entrega['turbo'],
-            'frete' => $cobrado ? [
-                'gratis' => $cobrado['gratis'],
-                'preco' => $cobrado['preco'],
-                'regiao_gratis' => $cobrado['regiao_gratis'],
-                'minimo' => $cobrado['minimo'],
-                'falta' => $cobrado['falta'],
-            ] : null,
         ]);
     }
 
@@ -1646,32 +1636,10 @@ class CheckoutController extends Controller
      */
     private function resolveShipping(array $draft, $cartItems = null, ?string $cep = null): array
     {
-        $frete = app(FreteEmbutido::class);
-
-        // KazaKora sem frete no preço (2026-10-21): o frete do checkout é
-        // recalculado aqui (nunca o valor do navegador): grátis só acima de
-        // R$ 200 no Sul e Sudeste; fora disso, o da caixa pelos Correios.
-        if (! $frete->ligado() && empty($draft['shipping_quote']) && $cartItems && $cep
-            && (string) ($draft['shipping_method_id'] ?? '') === (string) ShippingMethod::freteGratis()->id) {
-            $subtotal = round($cartItems->sum('subtotal'), 2);
-            [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-            $desconto = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
-            $cobrado = $frete->freteDoCheckout($cartItems, $cep, $subtotal - $desconto);
-            $turbo = ! empty($draft['turbo']) && ! app(EntregaExpressa::class)->atende($cep) ? $cobrado['turbo'] : null;
-
-            if ($turbo) {
-                return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => round($cobrado['preco'] + (float) $turbo['preco'], 2)];
-            }
-
-            return $cobrado['gratis']
-                ? ['method_id' => ShippingMethod::freteGratis()->id, 'carrier_name' => ShippingMethod::freteGratis()->name, 'cost' => 0.0]
-                : ['method_id' => null, 'carrier_name' => FreteEmbutido::FRETE_PAGO, 'cost' => $cobrado['preco']];
-        }
-
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
-        if ($frete->ligado() && ! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
-            $turbo = $frete->entregaDoCarrinho($cartItems)['turbo'];
+        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+            $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
             if ($turbo) {
                 return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];
             }

@@ -50,6 +50,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
+import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
 const props = defineProps({
     product: {
@@ -217,7 +218,8 @@ let montado = true;
 const medirSeMontado = () => montado && ajustarTitulo();
 onMounted(() => {
     // Foto que já estava no cache do navegador pode terminar antes do @load.
-    if (fotoEl.value?.complete) fotoCarregada.value = true;
+    // Sem src (antes de imagensLiberadas) o `complete` também é true: confere o src.
+    if (fotoEl.value?.complete && fotoEl.value.currentSrc) fotoCarregada.value = true;
     // Vários cards montam juntos: a medida entra numa fila que roda em partes,
     // sem travar a página (antes eram ~400 medidas seguidas na home).
     nextTick(() => medirNaFila(medirSeMontado));
@@ -266,7 +268,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
                 <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
-                <img ref="fotoEl" :src="primaryImage(product)" :alt="product.name" loading="lazy" decoding="async"
+                <img ref="fotoEl" :src="imagensLiberadas ? primaryImage(product) : undefined" :alt="product.name" loading="lazy" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
                     :class="secondImageVisible || !fotoCarregada ? 'opacity-0' : 'opacity-100'"
                     @load="fotoCarregada = true" @error="fotoCarregada = true">

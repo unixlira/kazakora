@@ -836,7 +836,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </span>
                             <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
                             <!-- No celular só o número, para caber na linha do "Alterar itens". -->
-                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only"> {{ avaliacaoItens.total === 1 ? 'avaliação' : 'avaliações' }}</span>)</span>
+                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? '\u00a0avaliação' : '\u00a0avaliações' }}</span>)</span>
                         </span>
                     </div>
 

@@ -1,22 +1,25 @@
 <script setup>
 // Termos de uso do livro digital (pedido do Lira 2026-10-22): o link do e-mail
 // e da página do pedido cai aqui; o modal abre sozinho e o PDF só sai no
-// "Concordar e baixar" (POST no mesmo link assinado, que registra o aceite).
+// "Concordar e baixar" (POST no mesmo link com token, que registra o aceite).
+// Desde 2026-10-22 o link vale para um download só: gasto, a página mostra
+// o motivo (`esgotado`) no lugar do botão.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { onMounted, ref } from 'vue';
 
-defineProps({
+const props = defineProps({
     livro: { type: Object, required: true },
     pedido: { type: [String, Number], required: true },
     aceitarUrl: { type: String, required: true },
-    csrfToken: { type: String, required: true },
+    csrfToken: { type: String, default: '' },
+    esgotado: { type: String, default: null },
 });
 
 const aberto = ref(false);
 const baixando = ref(false);
 
-onMounted(() => { aberto.value = true; });
+onMounted(() => { aberto.value = !props.esgotado; });
 
 // O download é resposta do POST nativo: a página continua aqui.
 const concordar = () => {
@@ -44,11 +47,12 @@ const concordar = () => {
                 <img v-if="livro.capa" :src="livro.capa" alt="" class="h-20 w-14 flex-none rounded object-cover shadow">
                 <div class="min-w-0 flex-1">
                     <p class="font-bold">{{ livro.titulo }}</p>
-                    <p v-if="baixando" class="mt-1 text-sm text-[#047857]"><i class="fas fa-circle-check mr-1"></i> Download iniciado. Confira a pasta de downloads.</p>
+                    <p v-if="esgotado" class="mt-1 text-sm text-[#b91c1c]"><i class="fas fa-lock mr-1"></i> {{ esgotado }}</p>
+                    <p v-else-if="baixando" class="mt-1 text-sm text-[#047857]"><i class="fas fa-circle-check mr-1"></i> Download iniciado. Confira a pasta de downloads e guarde o PDF: este link vale para um download só.</p>
                     <p v-else class="mt-1 text-sm text-store-fg-muted">Para baixar, leia e aceite os termos de uso.</p>
                 </div>
-                <button type="button" class="flex-none rounded-lg bg-[#c2450c] px-3 py-2 text-xs font-bold text-white hover:brightness-95" @click="aberto = true">
-                    <i class="fas fa-download mr-1"></i> {{ baixando ? 'Baixar de novo' : 'Baixar PDF' }}
+                <button v-if="!esgotado && !baixando" type="button" class="flex-none rounded-lg bg-[#c2450c] px-3 py-2 text-xs font-bold text-white hover:brightness-95" @click="aberto = true">
+                    <i class="fas fa-download mr-1"></i> Baixar PDF
                 </button>
             </div>
         </div>
@@ -70,7 +74,7 @@ const concordar = () => {
                     <li class="flex gap-2"><i class="fas fa-check mt-0.5 text-[#c2450c]"></i> Uso pessoal, só para você.</li>
                     <li class="flex gap-2"><i class="fas fa-check mt-0.5 text-[#c2450c]"></i> Não compartilhar o arquivo nem este link.</li>
                     <li class="flex gap-2"><i class="fas fa-check mt-0.5 text-[#c2450c]"></i> Não vender, copiar ou publicar o conteúdo.</li>
-                    <li class="flex gap-2"><i class="fas fa-check mt-0.5 text-[#c2450c]"></i> O link é exclusivo do seu pedido e cada download fica registrado.</li>
+                    <li class="flex gap-2"><i class="fas fa-check mt-0.5 text-[#c2450c]"></i> O link é exclusivo do seu pedido e vale para um download só.</li>
                 </ul>
 
                 <button type="submit" class="mt-6 w-full rounded-xl bg-[#0FB930] px-5 py-3 text-sm font-bold text-white shadow hover:brightness-95">

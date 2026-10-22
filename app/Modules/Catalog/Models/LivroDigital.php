@@ -11,7 +11,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\URL;
 
 /**
  * Entregáveis › Livros Digitais (pedido 2026-10-20): PDF de brinde que
@@ -164,10 +163,18 @@ class LivroDigital extends Model
         return self::doPedido($order);
     }
 
-    /** Link de download do livro no pedido (assinado: abre do e-mail sem login). */
+    /**
+     * Link de download do livro no pedido: token único gravado no banco
+     * (2026-10-22), abre do e-mail sem login e vale para um download só.
+     */
     public function urlDoPedido(Order $order): string
     {
-        return URL::signedRoute('pedidos.livro.baixar', ['order' => $order->id, 'livro' => $this->id]);
+        return $this->tokenDoPedido($order)->url();
+    }
+
+    public function tokenDoPedido(Order $order): LivroDownloadToken
+    {
+        return LivroDownloadToken::doPedido($order, $this);
     }
 
     /** Download liberado: pedido pago (ou já enviado/entregue), nunca pendente ou cancelado. */

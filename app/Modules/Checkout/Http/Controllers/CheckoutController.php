@@ -8,6 +8,7 @@ use App\Rules\CpfValido;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\LivroDigital;
+use App\Modules\Catalog\Models\LivroDownloadToken;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
@@ -1182,11 +1183,18 @@ class CheckoutController extends Controller
                 // o link só funciona com o pedido pago.
                 'livros' => [
                     'liberados' => LivroDigital::pedidoLiberado($order),
-                    'itens' => LivroDigital::doPedido($order)->map(fn (LivroDigital $livro) => [
-                        'titulo' => $livro->titulo,
-                        'capa' => $livro->capa_url,
-                        'url' => $livro->urlDoPedido($order),
-                    ])->values(),
+                    // Link com token de uso único (2026-10-22): gasto, a página
+                    // mostra a data do download no lugar do botão.
+                    'itens' => LivroDigital::doPedido($order)->map(function (LivroDigital $livro) use ($order) {
+                        $acesso = $livro->tokenDoPedido($order);
+
+                        return [
+                            'titulo' => $livro->titulo,
+                            'capa' => $livro->capa_url,
+                            'url' => $acesso->esgotado() ? null : $acesso->url(),
+                            'baixado_em' => $acesso->usado_em?->toIso8601String(),
+                        ];
+                    })->values(),
                 ],
                 'entrega' => [
                     'nome' => $order->shipping_name,
@@ -1240,34 +1248,49 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Livro digital ganho no pedido (pedido 2026-10-21). Link assinado
-     * (middleware `signed`), que abre do e-mail sem login; só com o livro
-     * gravado no pedido e o pedido pago. Desde 2026-10-22 o link abre a página
-     * dos termos de uso: o PDF só sai depois do "Concordar e baixar".
+     * Livro digital ganho no pedido (pedido 2026-10-21). Desde 2026-10-22 o
+     * link do e-mail e da página do pedido tem um token único gravado no
+     * banco (LivroDownloadToken): abre sem login, só com o livro gravado no
+     * pedido e o pedido pago. Cada abertura conta uma tentativa; o PDF só sai
+     * depois do "Concordar e baixar", uma vez só.
      */
-    public function livroDoPedido(Request $request, Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
+    public function livroDoPedido(Request $request, string $token): \Symfony\Component\HttpFoundation\Response
     {
-        if ($bloqueio = $this->bloqueioDoLivro($order, $livro)) {
+        $acesso = $this->tokenDoLivro($token);
+
+        if ($bloqueio = $this->bloqueioDoLivro($acesso->order, $acesso->livro)) {
             return $bloqueio;
         }
 
+        if (! $acesso->registrarTentativa()) {
+            return $this->linkDoLivroEsgotado($request, $acesso);
+        }
+
         return Inertia::render('Checkout/LivroTermos', [
-            'livro' => ['titulo' => $livro->titulo, 'capa' => $livro->capa_url],
-            'pedido' => $order->numero ?? $order->id,
-            // Mesmo endereço assinado: o POST do botão passa pela mesma assinatura.
-            'aceitarUrl' => $request->fullUrl(),
+            'livro' => ['titulo' => $acesso->livro->titulo, 'capa' => $acesso->livro->capa_url],
+            'pedido' => $acesso->order->numero ?? $acesso->order->id,
+            'aceitarUrl' => route('livros.download.aceitar', $acesso->token),
             'csrfToken' => csrf_token(),
+            'esgotado' => null,
         ])->toResponse($request);
     }
 
-    /** "Concordar e baixar": registra o aceite dos termos e entrega o PDF. */
-    public function aceitarLivroDoPedido(Request $request, Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
+    /** "Concordar e baixar": gasta o token, registra o aceite dos termos e entrega o PDF. */
+    public function aceitarLivroDoPedido(Request $request, string $token): \Symfony\Component\HttpFoundation\Response
     {
+        $acesso = $this->tokenDoLivro($token);
+        $order = $acesso->order;
+        $livro = $acesso->livro;
+
         if ($bloqueio = $this->bloqueioDoLivro($order, $livro)) {
             return $bloqueio;
         }
 
         $request->validate(['aceite' => ['accepted']]);
+
+        if (! $acesso->consumir((string) $request->ip())) {
+            return $this->linkDoLivroEsgotado($request, $acesso);
+        }
 
         $linha = fn () => DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id);
         $linha()->update(['downloads' => DB::raw('downloads + 1'), 'ultimo_download_em' => now(), 'updated_at' => now()]);
@@ -1275,6 +1298,41 @@ class CheckoutController extends Controller
         $linha()->whereNull('termos_aceitos_em')->update(['termos_aceitos_em' => now(), 'termos_aceitos_ip' => $request->ip()]);
 
         return Storage::disk('local')->download($livro->arquivo, $livro->nome_arquivo, ['Content-Type' => 'application/pdf']);
+    }
+
+    /** Link assinado dos primeiros e-mails (até 2026-10-22): segue para o link com token. */
+    public function livroDoLinkAntigo(Order $order, LivroDigital $livro): RedirectResponse
+    {
+        abort_unless(DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->exists(), 404);
+
+        return redirect()->to($livro->urlDoPedido($order));
+    }
+
+    private function tokenDoLivro(string $token): LivroDownloadToken
+    {
+        $acesso = LivroDownloadToken::query()->with(['order', 'livro'])->where('token', $token)->first();
+
+        abort_unless($acesso?->order && $acesso->livro, 404);
+
+        return $acesso;
+    }
+
+    /** Link já usado, revogado ou aberto vezes demais: 410 com o motivo. */
+    private function linkDoLivroEsgotado(Request $request, LivroDownloadToken $acesso): \Symfony\Component\HttpFoundation\Response
+    {
+        $motivo = match (true) {
+            $acesso->usado_em !== null => 'Este link já foi usado para baixar o livro em '.$acesso->usado_em->timezone('America/Sao_Paulo')->format('d/m/Y \à\s H:i').'. Por segurança, cada link vale para um download só.',
+            $acesso->revogado_em !== null => 'Este link foi substituído por um novo. Use o link mais recente que enviamos para você.',
+            default => 'Este link foi aberto vezes demais e foi bloqueado por segurança.',
+        };
+
+        return Inertia::render('Checkout/LivroTermos', [
+            'livro' => ['titulo' => $acesso->livro->titulo, 'capa' => $acesso->livro->capa_url],
+            'pedido' => $acesso->order->numero ?? $acesso->order->id,
+            'aceitarUrl' => '',
+            'csrfToken' => '',
+            'esgotado' => $motivo.' Se precisar baixar de novo, fale com a gente pelo atendimento do pedido.',
+        ])->toResponse($request)->setStatusCode(410);
     }
 
     /** Livro que não é do pedido, pedido sem pagamento ou arquivo sumido. */

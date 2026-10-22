@@ -36,10 +36,10 @@ class WhatsAppInboxMidiaTest extends TestCase
         Storage::fake('local');
     }
 
-    private function conversa(): WhatsAppConversation
+    private function conversa(bool $manuela = true): WhatsAppConversation
     {
         return WhatsAppConversation::create([
-            'wa_id' => '5511999990000', 'phone' => '5511999990000', 'ai_enabled' => true,
+            'wa_id' => '5511999990000', 'phone' => '5511999990000', 'ai_enabled' => $manuela,
             'needs_human' => true, 'status' => 'needs_human', 'last_customer_message_at' => now(),
         ]);
     }
@@ -108,7 +108,7 @@ class WhatsAppInboxMidiaTest extends TestCase
     public function test_gravacao_vira_nota_de_voz_ogg(): void
     {
         $this->fakeMeta();
-        $conversa = $this->conversa();
+        $conversa = $this->conversa(manuela: false);
 
         $ogg = tempnam(sys_get_temp_dir(), 'teste-ogg-');
         file_put_contents($ogg, 'OggS-fake');
@@ -132,7 +132,7 @@ class WhatsAppInboxMidiaTest extends TestCase
     public function test_conversao_que_falha_avisa_e_nao_envia(): void
     {
         $this->fakeMeta();
-        $conversa = $this->conversa();
+        $conversa = $this->conversa(manuela: false);
         $conversor = Mockery::mock(ConversorDeVoz::class);
         $conversor->shouldReceive('paraOgg')->andThrow(new \RuntimeException('sem ffmpeg'));
         $this->app->instance(ConversorDeVoz::class, $conversor);
@@ -144,6 +144,24 @@ class WhatsAppInboxMidiaTest extends TestCase
 
         Http::assertSentCount(0);
         $this->assertSame(0, WhatsAppMessage::count());
+    }
+
+    public function test_gravacao_com_a_manuela_atendendo_e_recusada(): void
+    {
+        $this->fakeMeta();
+        $conversa = $this->conversa();
+        $conversor = Mockery::mock(ConversorDeVoz::class);
+        $conversor->shouldNotReceive('paraOgg');
+        $this->app->instance(ConversorDeVoz::class, $conversor);
+
+        $this->actingAs($this->admin())
+            ->post("/admin/whatsapp/conversas/{$conversa->id}/midia", ['arquivo' => UploadedFile::fake()->createWithContent('g.webm', 'x'), 'gravacao' => '1'], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.arquivo.0', 'Áudio gravado só no modo humano: desligue a chave da Manuela para gravar.');
+
+        Http::assertSentCount(0);
+        $this->assertSame(0, WhatsAppMessage::count());
+        $this->assertTrue($conversa->fresh()->ai_enabled);
     }
 
     public function test_arquivo_grande_demais_responde_json_com_o_motivo(): void

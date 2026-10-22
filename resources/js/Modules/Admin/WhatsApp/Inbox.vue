@@ -138,6 +138,15 @@ const composerBlocked = computed(() => {
     return null;
 });
 
+// Manuela voltou a atender (chave ligada aqui ou em outra aba) no meio da
+// gravação: o áudio é descartado, porque gravar é só no modo humano.
+watch(() => active.value?.aiEnabled, (aiEnabled) => {
+    if (aiEnabled && recording.value) {
+        stopRecording(false);
+        actionError.value = `Gravação descartada: a ${attendant} voltou a atender. Áudio só no modo humano.`;
+    }
+});
+
 watch(totalUnread, (count) => {
     document.title = count ? `(${count}) ${originalTitle}` : originalTitle;
 });
@@ -433,7 +442,7 @@ function attachmentIcon(file) {
 // Gravação no navegador (precisa de HTTPS e permissão do microfone). O
 // servidor converte para ogg/opus, que o cliente recebe como nota de voz.
 async function startRecording() {
-    if (recording.value || sending.value || !active.value) return;
+    if (recording.value || sending.value || !active.value || active.value.aiEnabled) return;
     actionError.value = null;
     emojiOpen.value = false;
 
@@ -1096,7 +1105,9 @@ function linkify(text) {
                             v-else
                             type="button"
                             class="wa-send mb-[1px] flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full"
-                            title="Gravar áudio"
+                            :class="{ 'opacity-40 cursor-not-allowed': active.aiEnabled }"
+                            :disabled="active.aiEnabled"
+                            :title="active.aiEnabled ? `Áudio só no modo humano: desligue a chave da ${attendant} para gravar` : 'Gravar áudio'"
                             @click="startRecording"
                         >
                             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>

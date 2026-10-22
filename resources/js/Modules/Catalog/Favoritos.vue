@@ -59,7 +59,7 @@ const hasReviewed = (productId) => props.reviewedProductIds.includes(productId);
                 <Link href="/#produtos" class="mt-3 block font-medium text-store-accent hover:underline">Ver catálogo</Link>
             </p>
 
-            <div v-else class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
+            <div v-else class="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4">
                 <ProductCard v-for="product in products.data" :key="product.id" :product="product"
                     :is-favorite="isFavorite(product.id)" :is-authenticated="!visitante"
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />

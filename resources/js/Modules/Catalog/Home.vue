@@ -222,7 +222,7 @@ onBeforeUnmount(() => observador?.disconnect());
         <template v-if="vitrine">
             <!-- Âncora da faixa promocional do topo. -->
             <span id="ofertas" class="block scroll-mt-28"></span>
-            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" cinco slider
+            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" slider
                 subtitulo="Oferta Relâmpago: preço baixo por tempo limitado."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
                 <template #acao>

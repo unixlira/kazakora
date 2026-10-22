@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -60,5 +61,48 @@ class OrderDetalheCompletoTest extends TestCase
                 ->where('detalhe.envio.rastreio_url', 'https://rastreamento.correios.com.br/app/index.php?objetos=AP000000001BR')
                 ->where('detalhe.envio.pre_postagens.0.qr_payload', 'AP000000001BR')
                 ->where('detalhe.envio.pre_postagens.0.peso_gramas', 300));
+    }
+
+    public function test_valores_separam_frete_embutido_e_extra_do_turbo(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $order = Order::create([
+            'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_STORE,
+            'shipping_name' => 'Ana', 'shipping_email' => 'ana@exemplo.com', 'shipping_phone' => '85999999999',
+            'shipping_zip' => '60000-000', 'shipping_street' => 'Rua A', 'shipping_number' => '1',
+            'shipping_neighborhood' => 'Centro', 'shipping_city' => 'Fortaleza', 'shipping_state' => 'CE',
+            'subtotal' => 150, 'frete_embutido_amount' => 30, 'shipping_cost' => 18.5,
+            'shipping_carrier_name' => FreteEmbutido::TURBO,
+            'discount_amount' => 7.5, 'pix_discount_amount' => 7.5, 'total' => 161,
+        ]);
+
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('detalhe.valores.subtotal', 150)
+                ->where('detalhe.valores.frete_embutido', 30)
+                ->where('detalhe.valores.turbo', true)
+                ->where('detalhe.valores.frete', 18.5)
+                ->where('detalhe.valores.desconto_pix', 7.5)
+                ->etc());
+    }
+
+    public function test_pedido_sem_frete_embutido_guardado_manda_null(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $order = Order::create([
+            'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_STORE,
+            'shipping_name' => 'Ana', 'shipping_email' => 'ana@exemplo.com', 'shipping_phone' => '85999999999',
+            'shipping_zip' => '60000-000', 'shipping_street' => 'Rua A', 'shipping_number' => '1',
+            'shipping_neighborhood' => 'Centro', 'shipping_city' => 'Fortaleza', 'shipping_state' => 'CE',
+            'subtotal' => 100, 'shipping_cost' => 0, 'total' => 100,
+        ]);
+
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('detalhe.valores.frete_embutido', null)
+                ->where('detalhe.valores.turbo', false)
+                ->etc());
     }
 }

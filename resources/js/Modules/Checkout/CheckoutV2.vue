@@ -678,6 +678,12 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
                             </button>
                         </div>
+
+                        <!-- Miniatura dos livros de brinde embaixo do endereço, no celular e no computador (pedido do Lira 2026-10-21; antes ficava ao lado dos bullets do pagamento). -->
+                        <figure v-if="livrosBrinde" class="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
+                            <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-36 shrink-0 rounded-lg border border-slate-200 bg-white">
+                            <figcaption class="text-sm font-bold text-[#00843f]">{{ livrosBrindeTexto }}</figcaption>
+                        </figure>
                     </section>
 
                     <!-- 3. Entrega -->
@@ -774,33 +780,19 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <p v-if="descontoPix > 0" class="flex items-center gap-2 font-bold text-emerald-700">
                                 <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixPercentualTexto }}% ativado: você economiza {{ formatPrice(descontoPix) }}
                             </p>
-                            <div class="mt-2 flex items-center gap-4">
-                                <ul class="min-w-0 flex-1 space-y-1 text-emerald-800">
-                                    <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
-                                    <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
-                                    <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
-                                </ul>
-                                <!-- Miniatura dos livros de brinde à direita dos bullets; no celular vai para o fim do resumo (pedido 2026-10-21). -->
-                                <figure v-if="livrosBrinde" class="hidden w-36 shrink-0 text-center lg:block">
-                                    <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-full rounded-lg border border-slate-200 bg-white">
-                                    <figcaption class="mt-1 text-[11px] font-bold leading-tight">{{ livrosBrindeTexto }}</figcaption>
-                                </figure>
-                            </div>
+                            <ul class="mt-2 space-y-1 text-emerald-800">
+                                <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
+                                <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
+                                <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
+                            </ul>
                         </div>
 
                         <div v-else-if="metodo === 'boleto'" class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-                            <div class="flex items-center gap-4">
-                                <ul class="min-w-0 flex-1 space-y-1">
-                                    <li><i class="fa-solid fa-barcode mr-2 w-4"></i>O boleto aparece assim que você finalizar e também vai para o seu e-mail.</li>
-                                    <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
-                                    <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
-                                </ul>
-                                <!-- Miniatura dos livros de brinde à direita dos bullets; no celular vai para o fim do resumo (pedido 2026-10-21). -->
-                                <figure v-if="livrosBrinde" class="hidden w-36 shrink-0 text-center lg:block">
-                                    <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-full rounded-lg border border-slate-200 bg-white">
-                                    <figcaption class="mt-1 text-[11px] font-bold leading-tight">{{ livrosBrindeTexto }}</figcaption>
-                                </figure>
-                            </div>
+                            <ul class="space-y-1">
+                                <li><i class="fa-solid fa-barcode mr-2 w-4"></i>O boleto aparece assim que você finalizar e também vai para o seu e-mail.</li>
+                                <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
+                                <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
+                            </ul>
                             <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixPercentualTexto }}% vale só no Pix.</p>
                         </div>
 
@@ -908,12 +900,6 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </div>
                         <p v-if="metodo === 'card' && !order" class="text-right text-xs text-slate-500">ou até 12x de {{ formatPrice(parcela12) }} no cartão</p>
                     </dl>
-
-                    <!-- Celular: miniatura dos livros de brinde no fim do resumo (no computador fica ao lado dos bullets do pagamento). -->
-                    <figure v-if="livrosBrinde" class="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4 lg:hidden">
-                        <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-36 shrink-0 rounded-lg border border-slate-200 bg-white">
-                        <figcaption class="text-sm font-bold text-[#00843f]">{{ livrosBrindeTexto }}</figcaption>
-                    </figure>
                 </div>
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop

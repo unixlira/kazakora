@@ -31,21 +31,6 @@
         </table>
     @endif
 
-    @if (! empty($brindes) && $brindes->isNotEmpty())
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
-            <tr>
-                <td style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
-                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido:
-                    <ul style="margin: 8px 0 0; padding-left: 18px;">
-                        @foreach ($brindes as $livro)
-                            <li style="margin: 4px 0;">{{ $livro->titulo }}: <a href="{{ $livro->urlDoPedido($order) }}" style="color: #c2450c; font-weight: 700;">baixar PDF</a></li>
-                        @endforeach
-                    </ul>
-                </td>
-            </tr>
-        </table>
-    @endif
-
     @include('emails.partials.itens', ['linhas' => $linhas])
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px; color: #374151;">
@@ -82,4 +67,27 @@
             </td>
         </tr>
     </table>
+
+    {{-- Presente embaixo do endereço (pedido do Lira 2026-10-21), com as capas dos livros em miniatura. --}}
+    @if (! empty($brindes) && $brindes->isNotEmpty())
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 12px 0 0; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
+            <tr>
+                <td style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
+                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido:
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 10px 0 0;">
+                        @foreach ($brindes as $livro)
+                            <tr>
+                                <td style="padding: 0 10px 8px 0; vertical-align: middle;">
+                                    @if ($livro->capa_url)
+                                        <img src="{{ $livro->capa_url }}" alt="" width="36" height="48" style="display: block; width: 36px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid #fed7aa;">
+                                    @endif
+                                </td>
+                                <td style="padding: 0 0 8px; vertical-align: middle; font-size: 13px; color: #7c2d12;">{{ $livro->titulo }}: <a href="{{ $livro->urlDoPedido($order) }}" style="color: #c2450c; font-weight: 700;">baixar PDF</a></td>
+                            </tr>
+                        @endforeach
+                    </table>
+                </td>
+            </tr>
+        </table>
+    @endif
 @endsection

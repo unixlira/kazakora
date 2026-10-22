@@ -20,12 +20,13 @@
         Olá, {{ $order->shipping_name }}! Recebemos seu pagamento e seu pedido já está sendo preparado com carinho.
     </p>
 
-    @if ($invoiceAuthorized)
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #ecfdf3; border: 1px solid #b7ebc6; border-radius: 10px;">
+    @if ($notaAnexada ?? $invoiceAuthorized)
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #ecfdf3; border: 2px solid #0FB930; border-radius: 10px;">
             <tr>
-                <td style="padding: 14px 18px; font-size: 13px; color: #065f46;">
-                    <strong>&#128206; Nota fiscal em anexo.</strong> A NF-e do seu pedido está anexada a este e-mail em PDF e XML.<br>
-                    <span style="font-size: 11px; color: #4b7a63; word-break: break-all;">Chave de acesso: {{ $order->invoice->chave_acesso }}</span>
+                <td style="padding: 16px 18px; color: #065f46;">
+                    <div style="font-size: 16px; font-weight: 800; margin: 0 0 4px;">&#128206; A Nota Fiscal do seu pedido está em anexo</div>
+                    <div style="font-size: 13px;">Enviamos a NF-e (DANFE) em PDF anexada a este e-mail. É só abrir o anexo para ver, salvar ou imprimir.</div>
+                    <div style="font-size: 11px; color: #4b7a63; word-break: break-all; margin-top: 6px;">Chave de acesso: {{ $order->invoice->chave_acesso }}</div>
                 </td>
             </tr>
         </table>
@@ -68,12 +69,11 @@
         </tr>
     </table>
 
-    {{-- Presente embaixo do endereço (pedido do Lira 2026-10-21), com as capas dos livros em miniatura. --}}
+    {{-- Presente embaixo do endereço (pedido do Lira 2026-10-21); sem a miniatura à direita e o "+ 3 livros digitais GRÁTIS" (pedido 2026-10-22). --}}
     @if (! empty($brindes) && $brindes->isNotEmpty())
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 12px 0 0; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
             <tr>
-                {{-- Miniatura dos livros à direita da lista; no celular desce para baixo do texto (pedido 2026-10-21). --}}
-                <td class="coluna-celular" valign="middle" style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
+                <td valign="middle" style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
                     <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido. Cada link é exclusivo do seu pedido e vale para um download, então guarde o PDF depois de baixar:
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 10px 0 0;">
                         @foreach ($brindes as $livro)
@@ -88,12 +88,6 @@
                         @endforeach
                     </table>
                 </td>
-                @if (! empty($livrosImagem))
-                    <td class="coluna-celular livros-miniatura" width="150" valign="middle" align="center" style="width: 150px; padding: 14px 18px 14px 0; text-align: center;">
-                        <img src="{{ $livrosImagem }}" alt="Livros digitais de presente: {{ $brindes->pluck('titulo')->join(', ') }}" width="150" style="display: block; width: 150px; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #fed7aa; border-radius: 8px; background-color: #ffffff;">
-                        <div style="margin-top: 4px; font-size: 11px; font-weight: 700; line-height: 1.3; color: #c2450c;">+ {{ $brindes->count() === 1 ? '1 livro digital GRÁTIS' : $brindes->count().' livros digitais GRÁTIS' }}</div>
-                    </td>
-                @endif
             </tr>
         </table>
     @endif

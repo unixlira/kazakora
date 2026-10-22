@@ -3,7 +3,6 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Catalog\Models\LivroDigital;
-use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
@@ -59,34 +58,37 @@ class OrderConfirmation extends Mailable
             ->subject("Pedido {$this->order->numero} confirmado - {$marca['nome']}")
             ->view('emails.order-confirmation', [
                 'marcaEmail' => $marca,
+                'notaAnexada' => $this->notaAnexada(),
                 'brindes' => $this->brindes,
                 'livrosAnexados' => $this->livrosAnexados,
-                'livrosImagem' => $this->brindes->isNotEmpty() ? PromocoesDoProduto::imagemDosLivros($this->brindes) : null,
             ]);
     }
 
+    /** O PDF da nota existe e vai anexado: só então o aviso aparece no e-mail. */
+    public function notaAnexada(): bool
+    {
+        $invoice = $this->order->invoice;
+
+        return (bool) ($invoice?->danfe_path && Storage::disk('local')->exists($invoice->danfe_path));
+    }
+
     /**
-     * Anexa o DANFE em PDF (e o XML) ao e-mail de confirmação quando a NF-e do pedido
-     * já foi emitida (autorizada pela SEFAZ) e o PDF já foi gerado — ver
-     * App\Modules\Fiscal\Services\InvoiceService.
+     * Anexa o DANFE em PDF ao e-mail de confirmação quando a NF-e do pedido
+     * já foi emitida (autorizada pela SEFAZ) e o PDF já foi gerado (ver
+     * App\Modules\Fiscal\Services\InvoiceService).
      */
     public function attachments(): array
     {
         $invoice = $this->order->invoice;
         $anexos = [];
 
-        if ($invoice?->danfe_path && Storage::disk('local')->exists($invoice->danfe_path)) {
+        if ($this->notaAnexada()) {
             $anexos[] = Attachment::fromStorageDisk('local', $invoice->danfe_path)
                 ->as("nfe-pedido-{$this->order->id}.pdf")
                 ->withMime('application/pdf');
         }
 
-        // Pedido 2026-10-10: a nota vai também em XML (o arquivo oficial).
-        if ($invoice?->xml_path && Storage::disk('local')->exists($invoice->xml_path)) {
-            $anexos[] = Attachment::fromStorageDisk('local', $invoice->xml_path)
-                ->as("nfe-pedido-{$this->order->id}.xml")
-                ->withMime('application/xml');
-        }
+        // Pedido 2026-10-22: só o PDF da nota; o XML não vai mais ao cliente.
 
         // Pedido 2026-10-21: com a chave da promoção ligada, os livros de brinde.
         foreach ($this->livrosAnexados ? $this->brindes : [] as $livro) {

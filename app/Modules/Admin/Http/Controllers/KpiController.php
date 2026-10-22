@@ -23,8 +23,11 @@ class KpiController extends Controller
      * Abas (2026-10-19): o que era o Gerenciador veio para cá quando /admin
      * virou o Fluxo de Caixa. Cada aba manda só as próprias props; trocar
      * de aba é uma visita nova com ?aba= e calcula só aquela aba.
+     *
+     * 'acessos' é a aba Visitas KazaKora (a chave antiga fica pelos links
+     * salvos) e 'visitas-ferrakora' a Visitas FerraKora (pedido 2026-10-22).
      */
-    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos', 'acessos'];
+    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos', 'acessos', 'visitas-ferrakora'];
 
     public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem, PainelGerencial $gerencial): Response
     {
@@ -36,6 +39,7 @@ class KpiController extends Controller
             'caue-diego' => ['diagnosticos' => fn () => $gerencial->diagnosticos()],
             'produtos' => ['produtos' => fn () => $gerencial->produtos()],
             'acessos' => ['visitantes' => fn () => $gerencial->visitantes((string) $request->query('mes', ''))],
+            'visitas-ferrakora' => ['visitantes' => fn () => $gerencial->visitantes((string) $request->query('mes', ''), 'ferrakora')],
             default => $this->visaoGeral($request, $painel, $serie, $margem),
         };
 

@@ -295,13 +295,17 @@ class BrindesNoEmailDoPedidoTest extends TestCase
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->patch('/admin/entregaveis/livros-digitais/email-pedido')->assertRedirect();
+        // Sem nada gravado, a chave vem ligada.
         $this->assertTrue(LivroDigital::emailPedidoLigado());
-
-        $this->actingAs($admin)->get('/admin/entregaveis/livros-digitais')
-            ->assertInertia(fn ($page) => $page->where('emailPedido', true));
+        $this->assertCount(3, (new OrderConfirmation($this->pedido()))->attachments());
 
         $this->actingAs($admin)->patch('/admin/entregaveis/livros-digitais/email-pedido')->assertRedirect();
         $this->assertFalse(LivroDigital::emailPedidoLigado());
+
+        $this->actingAs($admin)->get('/admin/entregaveis/livros-digitais')
+            ->assertInertia(fn ($page) => $page->where('emailPedido', false));
+
+        $this->actingAs($admin)->patch('/admin/entregaveis/livros-digitais/email-pedido')->assertRedirect();
+        $this->assertTrue(LivroDigital::emailPedidoLigado());
     }
 }

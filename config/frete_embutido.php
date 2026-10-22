@@ -16,6 +16,15 @@
 return [
     'ativo' => env('FRETE_EMBUTIDO_ATIVO', true),
 
+    // KazaKora (pedido do Lira em 2026-10-21): o preço volta a ser o de
+    // cadastro, sem frete somado pela região (CEP/IP). O checkout cobra o
+    // frete dos Correios do contrato, grátis só para pedido acima de
+    // gratis_acima_de com entrega em gratis_ufs (Sul e Sudeste). Os outros
+    // sites (FerraKora, Beauty Kora) continuam com o frete embutido.
+    'embutido_kazakora' => env('FRETE_EMBUTIDO_KAZAKORA', false),
+    'gratis_acima_de' => 200.0,
+    'gratis_ufs' => ['SP', 'RJ', 'MG', 'ES', 'PR', 'SC', 'RS'],
+
     // Sem região ou com a API dos Correios fora do ar.
     'fallback_pac' => 30.0,
     'fallback_sedex' => 60.0,

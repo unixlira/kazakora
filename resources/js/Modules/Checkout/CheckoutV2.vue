@@ -91,15 +91,17 @@ const enderecoSelecionado = computed(() => props.addresses.find((address) => add
 const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (enderecoSelecionado.value?.zip ?? '')));
 
 // ---------- 3. Entrega ----------
-// Frete grátis com o frete embutido (pedido 2026-10-12): o preço dos produtos
-// já tem o frete da região. Quando o CEP muda, o servidor devolve itens e
-// subtotal com o frete exato desse CEP, a entrega FULL (Grande SP) ou a opção
-// TURBO (SEDEX pagando só a diferença).
+// Frete (pedido 2026-10-21): o preço dos produtos não tem mais frete somado.
+// Quando o CEP (ou o cupom) muda, o servidor devolve o frete dos Correios:
+// grátis só acima de R$ 200 no Sul e Sudeste; fora disso, o valor da caixa.
+// Também a entrega expressa (Grande SP) ou a opção TURBO (SEDEX pela diferença).
 const freteCarregando = ref(false);
 const entregaExpressa = ref(null);
 const prazoGratis = ref(null);
 const turbo = ref(null);
-// A tela nasce sempre no frete grátis (pedido 2026-10-12).
+// { gratis, preco, regiao_gratis, minimo, falta } do servidor; null = sem CEP.
+const frete = ref(null);
+// A tela nasce sempre na entrega normal (pedido 2026-10-12).
 const turboEscolhido = ref(false);
 const itens = ref(props.items);
 const subtotalAtual = ref(Number(props.subtotal) || 0);
@@ -109,12 +111,13 @@ const descontoPlataforma = ref(0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
-watch(cepEfetivo, async (zip) => {
+const recalcularFrete = async (zip) => {
     const cep = (zip ?? '').replace(/\D/g, '');
     if (cep.length !== 8) {
         entregaExpressa.value = null;
         turbo.value = null;
         prazoGratis.value = null;
+        frete.value = null;
         return;
     }
     freteCarregando.value = true;
@@ -125,6 +128,7 @@ watch(cepEfetivo, async (zip) => {
         entregaExpressa.value = data.entrega_expressa ?? null;
         prazoGratis.value = data.prazo ?? null;
         turbo.value = data.turbo ?? null;
+        frete.value = data.frete ?? null;
         descontoPlataforma.value = Number(data.desconto_plataforma) || 0;
         if (!turbo.value) turboEscolhido.value = false;
         itens.value = data.items ?? itens.value;
@@ -133,14 +137,18 @@ watch(cepEfetivo, async (zip) => {
     } catch {
         entregaExpressa.value = null;
         turbo.value = null;
+        frete.value = null;
         descontoPlataforma.value = 0;
     } finally {
         freteCarregando.value = false;
     }
-}, { immediate: true });
+};
+watch(cepEfetivo, recalcularFrete, { immediate: true });
 
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
-const valorFrete = computed(() => (turboEscolhido.value && turbo.value ? Number(turbo.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
+// Frete da entrega normal (0 = grátis) + a diferença do TURBO, se escolhido.
+const freteBase = computed(() => Number(frete.value?.preco ?? entregaEscolhida.value?.price ?? 0));
+const valorFrete = computed(() => round2(freteBase.value + (turboEscolhido.value && turbo.value ? Number(turbo.value.preco) : 0)));
 const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
 
 // ---------- Cupom (pedido 2026-10-10) ----------
@@ -189,6 +197,8 @@ const aplicarCupom = async () => {
         descontoCupom.value = Number(data.discount_amount) || 0;
         cupomDescricao.value = data.descricao;
         cupom.value = '';
+        // O cupom muda o valor do pedido: pode ganhar ou perder o frete grátis.
+        recalcularFrete(cepEfetivo.value);
         mostrarCupom.value = false;
     } catch {
         cupomErro.value = 'Sem conexão. Tente de novo.';
@@ -204,6 +214,7 @@ const removerCupom = async () => {
         cupomAplicado.value = null;
         descontoCupom.value = 0;
         cupomDescricao.value = null;
+        recalcularFrete(cepEfetivo.value);
     } finally {
         cupomCarregando.value = false;
     }
@@ -377,6 +388,14 @@ const finalizar = async () => {
         erroGeral.value = 'Confira os campos destacados.';
         irParaErro();
         return;
+    }
+    // Sem o frete calculado o total da tela não bate com o cobrado (2026-10-21).
+    if (cepEfetivo.value.replace(/\D/g, '').length === 8 && !frete.value) {
+        await recalcularFrete(cepEfetivo.value);
+        if (!frete.value) {
+            erroGeral.value = 'Não conseguimos calcular o frete agora. Tente de novo em instantes.';
+            return;
+        }
     }
 
     processando.value = true;
@@ -682,7 +701,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </header>
 
                         <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                            <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
+                            <i class="fa-solid fa-bolt"></i> {{ entregaExpressa.mensagem }}
                         </p>
 
                         <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
@@ -695,19 +714,26 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
                         </div>
 
-                        <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): duas opções com caixinha,
-                             uma exclui a outra; a tela nasce no grátis e dá para voltar para ele clicando nele. -->
-                        <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
+                        <!-- Entrega normal ou TURBO (2026-10-12): duas opções com caixinha, uma exclui a
+                             outra; a tela nasce na normal. Grátis só acima de R$ 200 no Sul e Sudeste (2026-10-21). -->
+                        <p v-if="!frete" class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                            <i class="fa-solid fa-truck-fast mr-1 text-slate-500"></i> Informe o CEP para calcular o frete. Frete grátis acima de R$ 200 para o Sul e o Sudeste.
+                        </p>
+                        <label v-else class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
                             :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
                             <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-600"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-600"></i> {{ frete.gratis ? 'Frete GRÁTIS' : 'Correios' }}</strong>
                                 <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                             </span>
-                            <span class="text-sm font-bold text-emerald-600">Grátis</span>
+                            <span class="text-sm font-bold" :class="frete.gratis ? 'text-emerald-600' : 'text-slate-900'">{{ frete.gratis ? 'Grátis' : formatPrice(frete.preco) }}</span>
                         </label>
+                        <p v-if="frete && !frete.gratis" class="mt-2 text-xs text-slate-500">
+                            <template v-if="frete.regiao_gratis">Faltam <strong class="text-emerald-700">{{ formatPrice(frete.falta) }}</strong> em produtos para o frete ficar grátis.</template>
+                            <template v-else>Frete grátis acima de R$ 200 só para o Sul e o Sudeste.</template>
+                        </p>
 
-                        <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
+                        <!-- TURBO: fora da entrega expressa, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
                         <label v-if="turbo && !entregaExpressa"
                             class="mt-2 flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
                             :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
@@ -848,8 +874,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
-                            <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
+                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida && frete ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}</dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
                             <dt>Total</dt>
                             <dd class="text-xl">{{ formatPrice(totalAPagar) }}</dd>

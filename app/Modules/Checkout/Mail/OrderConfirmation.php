@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Catalog\Models\LivroDigital;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
@@ -56,7 +57,12 @@ class OrderConfirmation extends Mailable
             // Remetente com o nome do site só no FerraKora; KazaKora segue o MAIL_FROM_NAME.
             ->when($this->order->site_origem === Order::SITE_FERRAKORA, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
             ->subject("Pedido {$this->order->numero} confirmado - {$marca['nome']}")
-            ->view('emails.order-confirmation', ['marcaEmail' => $marca, 'brindes' => $this->brindes, 'livrosAnexados' => $this->livrosAnexados]);
+            ->view('emails.order-confirmation', [
+                'marcaEmail' => $marca,
+                'brindes' => $this->brindes,
+                'livrosAnexados' => $this->livrosAnexados,
+                'livrosImagem' => $this->brindes->isNotEmpty() ? PromocoesDoProduto::imagemDosLivros($this->brindes) : null,
+            ]);
     }
 
     /**

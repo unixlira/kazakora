@@ -88,6 +88,52 @@ class PromocoesDoProduto
         return $dados;
     }
 
+    /**
+     * Miniatura dos livros no checkout (pedido 2026-10-21): os livros de brinde
+     * dos produtos do carrinho, pela mesma regra (e cache) da página do
+     * produto. Null quando nenhum produto dá livro.
+     *
+     * @param  iterable<Product>  $produtos
+     * @return array{imagem: string, quantidade: int, titulos: list<string>}|null
+     */
+    public static function livrosDoCarrinho(iterable $produtos): ?array
+    {
+        $livros = [];
+        $imagem = null;
+        foreach ($produtos as $produto) {
+            $dados = self::paraPagina($produto);
+            foreach ($dados['livrosDigitais'] as $livro) {
+                $livros[$livro['id']] = $livro['titulo'];
+            }
+            $imagem ??= $dados['livrosQuadro'];
+        }
+
+        if ($livros === []) {
+            return null;
+        }
+
+        return [
+            'imagem' => $imagem ?? '/'.self::QUADRO_LIVROS_PADRAO,
+            'quantidade' => count($livros),
+            'titulos' => array_values($livros),
+        ];
+    }
+
+    /**
+     * Miniatura dos livros no e-mail de confirmação (pedido 2026-10-21): a
+     * imagem da Promoção PDFs, senão a do primeiro livro que tiver uma,
+     * senão a padrão. URL absoluta, porque o e-mail abre fora do site.
+     *
+     * @param  iterable<LivroDigital>  $livros
+     */
+    public static function imagemDosLivros(iterable $livros): string
+    {
+        $promocao = Promocao::query()->where('slug', Promocao::PDFS)->first();
+        $livro = collect($livros)->first(fn (LivroDigital $livro) => $livro->imagem_quadro);
+
+        return $promocao?->imagem_url ?? $livro?->imagem_quadro_url ?? asset(self::QUADRO_LIVROS_PADRAO);
+    }
+
     public static function limparCache(): void
     {
         Cache::forever(self::VERSAO, self::versao() + 1);

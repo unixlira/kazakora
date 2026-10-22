@@ -20,11 +20,6 @@ class WhatsAppSettings
         // Vazio = endereço deste ambiente (APP_URL) — ver get().
         'store_base_url' => '',
         'welcome_message' => 'Oi! Eu sou a Manuela do KazaKora. Como posso te ajudar hoje?',
-        // Acompanhamento (2026-10-20): cliente sem responder por X minutos
-        // depois da Manuela recebe esta mensagem, uma vez. {nome} = primeiro nome.
-        'followup_enabled' => '1',
-        'followup_minutes' => '30',
-        'followup_message' => 'Oi{nome}, tudo bem? Passando só pra saber se você ainda tem alguma dúvida ou se posso te ajudar com mais alguma coisa. 😊',
         'outside_hours_message' => 'Agora estamos fora do horário, mas já deixei sua mensagem registrada. Assim que possível seguimos por aqui.',
         'closing_template' => 'Pelo que você me contou, esse modelo parece o caminho mais seguro. Quer que eu te mande o link certo pra compra?',
         'handoff_keywords' => 'reclamação,atrasou,defeito,garantia,troca,cancelar,reembolso,processo,procon,humano,atendente,pessoa',
@@ -52,7 +47,6 @@ class WhatsAppSettings
 
         $settings['enabled'] = $this->asBool($settings['enabled']);
         $settings['auto_reply_enabled'] = $this->asBool($settings['auto_reply_enabled']);
-        $settings['followup_enabled'] = $this->asBool($settings['followup_enabled']);
         $settings['sandbox_mode'] = $this->asBool($settings['sandbox_mode']);
         $settings['max_questions_before_close'] = max(1, min(3, (int) $settings['max_questions_before_close']));
 

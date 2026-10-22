@@ -182,13 +182,13 @@ onUnmounted(() => {
                 <i class="fas fa-chevron-right text-sm"></i>
             </button>
 
-            <div class="absolute inset-x-0 flex justify-center gap-2" :class="reservaBase ? 'bottom-3 md:bottom-16' : 'bottom-3'">
+            <!-- Botão de 24px (alvo de toque mínimo do PageSpeed) com a bolinha de sempre dentro. -->
+            <div class="absolute inset-x-0 flex justify-center" :class="reservaBase ? 'bottom-1 md:bottom-14' : 'bottom-1'">
                 <button v-for="(banner, index) in banners" :key="banner.id" type="button"
                     :aria-label="`Ir para o banner ${index + 1}`"
-                    class="h-2 rounded-full bg-store-accent transition-all"
-                    :class="index === ativo ? 'w-6 opacity-100' : 'w-2 opacity-50'"
+                    class="flex h-6 min-w-6 items-center justify-center"
                     @click="goTo(index)"
-                />
+                ><span class="h-2 rounded-full bg-store-accent transition-all" :class="index === ativo ? 'w-6 opacity-100' : 'w-2 opacity-50'"></span></button>
             </div>
         </template>
     </section>

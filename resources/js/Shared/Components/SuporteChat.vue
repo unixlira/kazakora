@@ -98,7 +98,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <p v-if="m.autor === 'sistema'" class="mx-auto my-1 rounded-full bg-slate-200 px-3 py-1 text-center text-[11px] text-slate-600 dark:bg-slate-700 dark:text-slate-200">{{ m.conteudo }}</p>
                 <div v-else class="flex" :class="m.autor === 'cliente' ? 'justify-end' : 'justify-start'">
                     <div class="max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm"
-                        :class="m.autor === 'cliente' ? 'rounded-br-md bg-[#F27A2A] text-white' : (m.autor === 'atendente' ? 'rounded-bl-md bg-sky-100 text-sky-950' : 'rounded-bl-md bg-white text-slate-800')">
+                        :class="m.autor === 'cliente' ? 'rounded-br-md bg-store-laranja text-white' : (m.autor === 'atendente' ? 'rounded-bl-md bg-sky-100 text-sky-950' : 'rounded-bl-md bg-white text-slate-800')">
                         <p v-if="m.autor !== 'cliente'" class="mb-0.5 text-[11px] font-bold" :class="m.autor === 'atendente' ? 'text-sky-700' : 'text-[#0FB930]'">
                             {{ m.autor === 'atendente' ? 'Equipe KazaKora' : 'Manuela' }}
                         </p>

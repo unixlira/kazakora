@@ -61,7 +61,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     <div v-for="(cena, i) in cenas" :key="cena.etiqueta"
                         class="absolute inset-0 transition-opacity duration-700"
                         :class="i === atual ? 'opacity-100' : 'opacity-0'">
-                        <span class="inline-block rounded-full bg-[#f27a2a] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                        <span class="inline-block rounded-full bg-store-laranja px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                             {{ cena.etiqueta }}
                         </span>
                         <p class="mb-0 mt-2 text-base text-white/90">{{ cena.frase }}</p>

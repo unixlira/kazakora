@@ -106,13 +106,13 @@ onBeforeUnmount(() => {
 
 // Botão da faixa: branco com borda; ligado fica laranja com texto branco.
 const botao = (ativo) => ativo
-    ? 'border-[#f27a2a] bg-[#f27a2a] text-white'
-    : 'border-store-border-strong bg-store-bg-raised text-store-fg hover:border-[#f27a2a]';
+    ? 'border-store-laranja bg-store-laranja text-white'
+    : 'border-store-border-strong bg-store-bg-raised text-store-fg hover:border-store-laranja';
 // Opção da lista: a marcada leva o check laranja.
 const opcao = (ativo) => ativo ? 'font-semibold text-store-fg' : 'text-store-fg-muted';
 // Opção do painel do celular: a marcada fica com borda e texto laranja.
 const chip = (ativo) => ativo
-    ? 'border-[#f27a2a] bg-[#f27a2a]/10 font-semibold text-[#f27a2a]'
+    ? 'border-store-laranja bg-store-laranja/10 font-semibold text-store-laranja-texto'
     : 'border-store-border-strong bg-store-bg-raised text-store-fg';
 </script>
 
@@ -120,11 +120,11 @@ const chip = (ativo) => ativo
     <div ref="barra" class="mb-6">
         <!-- Celular: botão FILTRAR que abre o painel, com a contagem ao lado. -->
         <div class="flex items-center justify-between gap-3 lg:hidden">
-            <button type="button" class="inline-flex items-center gap-2 rounded-lg bg-[#f27a2a] px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-white shadow-sm active:bg-[#d9661c]"
+            <button type="button" class="inline-flex items-center gap-2 rounded-lg bg-store-laranja px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-white shadow-sm active:bg-store-laranja-hover"
                 aria-haspopup="dialog" :aria-expanded="painelAberto" @click="abrirPainel">
                 <i class="fa-solid fa-sliders" aria-hidden="true"></i>
                 Filtrar
-                <span v-if="ligados" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs text-[#f27a2a]">{{ ligados }}</span>
+                <span v-if="ligados" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs text-store-laranja-texto">{{ ligados }}</span>
             </button>
             <span class="text-sm text-store-fg-muted">{{ contagem }}</span>
         </div>
@@ -143,7 +143,7 @@ const chip = (ativo) => ativo
                         <span class="truncate">{{ op.label }}</span>
                         <span class="flex shrink-0 items-center gap-2 text-xs text-store-fg-faint">
                             <template v-if="op.total != null">{{ op.total }}</template>
-                            <i v-if="valorAtual(g.chave) === op.valor" class="fa-solid fa-check text-[#f27a2a]" aria-hidden="true"></i>
+                            <i v-if="valorAtual(g.chave) === op.valor" class="fa-solid fa-check text-store-laranja-texto" aria-hidden="true"></i>
                         </span>
                     </Link>
                 </div>
@@ -168,7 +168,7 @@ const chip = (ativo) => ativo
                     <Link v-for="op in ordens" :key="op.label" :href="filtroHref({ ordenar: op.valor })" preserve-scroll
                         class="flex items-center justify-between gap-4 px-4 py-2 text-sm no-underline transition-colors hover:bg-store-bg-sunken" :class="opcao(ordemAtual === op)">
                         {{ op.label }}
-                        <i v-if="ordemAtual === op" class="fa-solid fa-check text-xs text-[#f27a2a]" aria-hidden="true"></i>
+                        <i v-if="ordemAtual === op" class="fa-solid fa-check text-xs text-store-laranja-texto" aria-hidden="true"></i>
                     </Link>
                 </div>
             </div>
@@ -176,11 +176,11 @@ const chip = (ativo) => ativo
 
         <div v-if="etiquetas.length" class="mt-3 flex flex-wrap items-center gap-2">
             <Link v-for="e in etiquetas" :key="e.label" :href="e.href" preserve-scroll
-                class="inline-flex items-center gap-2 rounded-full bg-store-accent px-3 py-1 text-sm font-semibold text-store-accent-contrast no-underline hover:bg-[#f27a2a] hover:text-white">
+                class="inline-flex items-center gap-2 rounded-full bg-store-accent px-3 py-1 text-sm font-semibold text-store-accent-contrast no-underline hover:bg-store-laranja hover:text-white">
                 {{ e.label }}
                 <i class="fa-solid fa-xmark text-xs opacity-70" aria-label="Tirar filtro"></i>
             </Link>
-            <Link :href="limparHref" class="ml-1 text-sm font-semibold text-store-fg underline decoration-[#f27a2a] underline-offset-4 hover:text-[#f27a2a]">Limpar tudo</Link>
+            <Link :href="limparHref" class="ml-1 text-sm font-semibold text-store-fg underline decoration-store-laranja underline-offset-4 hover:text-store-laranja-texto">Limpar tudo</Link>
         </div>
 
         <!-- Celular: painel de filtros que entra pela direita -->
@@ -192,7 +192,7 @@ const chip = (ativo) => ativo
                 leave-active-class="transition duration-200 ease-in" leave-from-class="translate-x-0" leave-to-class="translate-x-full">
                 <div v-if="painelAberto" role="dialog" aria-modal="true" aria-labelledby="painel-filtro-titulo"
                     class="fixed inset-y-0 right-0 z-[91] flex w-[88vw] max-w-sm flex-col bg-store-bg-raised text-store-fg shadow-2xl lg:hidden">
-                    <div class="flex items-center justify-between bg-[#f27a2a] px-4 py-3 text-white">
+                    <div class="flex items-center justify-between bg-store-laranja px-4 py-3 text-white">
                         <h2 id="painel-filtro-titulo" class="flex items-center gap-2 text-base font-bold uppercase tracking-wide">
                             <i class="fa-solid fa-sliders" aria-hidden="true"></i> Filtrar
                         </h2>
@@ -240,8 +240,8 @@ const chip = (ativo) => ativo
                     </div>
 
                     <div class="grid grid-cols-2 gap-3 border-t border-store-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                        <button type="button" class="rounded-lg border-2 border-[#f27a2a] bg-store-bg-raised px-4 py-3 text-sm font-bold text-[#f27a2a]" @click="limparPainel">Limpar</button>
-                        <button type="button" class="rounded-lg bg-[#f27a2a] px-4 py-3 text-sm font-bold text-white active:bg-[#d9661c]" @click="confirmar">Confirmar</button>
+                        <button type="button" class="rounded-lg border-2 border-store-laranja bg-store-bg-raised px-4 py-3 text-sm font-bold text-store-laranja-texto" @click="limparPainel">Limpar</button>
+                        <button type="button" class="rounded-lg bg-store-laranja px-4 py-3 text-sm font-bold text-white active:bg-store-laranja-hover" @click="confirmar">Confirmar</button>
                     </div>
                 </div>
             </Transition>

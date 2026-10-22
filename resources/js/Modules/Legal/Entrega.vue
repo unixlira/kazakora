@@ -54,17 +54,17 @@ const regioes = computed(() => {
                     </p>
                     <ul class="flex flex-col gap-2.5">
                         <li class="flex items-start gap-2.5">
-                            <i class="fas fa-bolt mt-0.5 shrink-0 text-[#00a650]"></i>
+                            <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Pagamento aprovado <strong class="text-store-fg">até as {{ full.horario_corte }}</strong>:
                                 você <strong class="text-store-fg">recebe no mesmo dia, até as {{ full.horario_entrega }}</strong>.</span>
                         </li>
                         <li class="flex items-start gap-2.5">
-                            <i class="fas fa-bolt mt-0.5 shrink-0 text-[#00a650]"></i>
+                            <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Pagamento aprovado <strong class="text-store-fg">depois das {{ full.horario_corte }}</strong>:
                                 você <strong class="text-store-fg">recebe no dia seguinte</strong>.</span>
                         </li>
                         <li class="flex items-start gap-2.5">
-                            <i class="fas fa-bolt mt-0.5 shrink-0 text-[#00a650]"></i>
+                            <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>O Full não tem custo extra: vale o mesmo frete do checkout.</span>
                         </li>
                     </ul>

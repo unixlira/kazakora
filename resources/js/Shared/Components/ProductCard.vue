@@ -315,7 +315,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
-                <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
+                <h3 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Estrelas da média e a nota em negrito ao lado, em todo card (pedido
@@ -348,7 +348,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <span v-if="aPartirDe" class="shrink-0 text-[11px] text-store-fg-muted md:text-xs">A partir de</span>
                     <template v-if="precoAntes">
                         <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
-                        <span class="shrink-0 whitespace-nowrap rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
+                        <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
                         <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
                     </template>
                 </div>
@@ -363,7 +363,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                     <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
                     <!-- Frete grátis só acima de R$ 200 no Sul e Sudeste (pedido 2026-10-21). -->
-                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 truncate whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 truncate whitespace-nowrap text-xs font-semibold text-store-verde-texto md:text-sm">
                         <template v-if="Number(product.final_price) >= 200">Frete grátis Sul e Sudeste</template>
                     </p>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
@@ -372,12 +372,12 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          do card); no celular vira a última linha do card. Menor no computador
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-[#f27a2a] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-store-laranja px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-store-laranja-hover md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
+                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-store-laranja px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-store-laranja-hover md:hidden">
                     Ver detalhes
                 </Link>
             </div>

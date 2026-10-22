@@ -1775,7 +1775,7 @@ class CheckoutController extends Controller
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
-            // Miniatura dos livros de brinde ao lado dos bullets do pagamento (2026-10-21).
+            // Livros de brinde como linha GRÁTIS no resumo do pedido (2026-10-21).
             'livrosBrinde' => PromocoesDoProduto::livrosDoCarrinho(
                 Product::query()->whereIn('id', $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique())->get()
             ),

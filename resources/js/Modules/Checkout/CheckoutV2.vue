@@ -108,7 +108,7 @@ const turboEscolhido = ref(false);
 const itens = ref(props.items);
 // Estrelas do resumo (pedido 2026-10-21): cada estrela preenche a fração da
 // média que cabe nela (4,8 = 4 cheias e 80% da 5ª), como no StarRating.
-const livrosBrindeTexto = computed(() => (props.livrosBrinde?.quantidade === 1 ? '+ 1 livro digital GRÁTIS' : `+ ${props.livrosBrinde?.quantidade} livros digitais GRÁTIS`));
+const livrosBrindeNome = computed(() => (props.livrosBrinde?.quantidade === 1 ? 'Livro digital (PDF) de presente' : `${props.livrosBrinde?.quantidade} livros digitais (PDF) de presente`));
 const livrosBrindeAlt = computed(() => `Livros digitais grátis com a compra: ${(props.livrosBrinde?.titulos ?? []).join(', ')}`);
 const notaItens = computed(() => Math.max(0, Math.min(5, Number(props.avaliacaoItens?.media) || 0)));
 const preenchimentoEstrela = (estrela) => Math.max(0, Math.min(100, (notaItens.value - (estrela - 1)) * 100));
@@ -679,11 +679,6 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </button>
                         </div>
 
-                        <!-- Miniatura dos livros de brinde embaixo do endereço, no celular e no computador (pedido do Lira 2026-10-21; antes ficava ao lado dos bullets do pagamento). -->
-                        <figure v-if="livrosBrinde" class="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
-                            <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-36 shrink-0 rounded-lg border border-slate-200 bg-white">
-                            <figcaption class="text-sm font-bold text-[#00843f]">{{ livrosBrindeTexto }}</figcaption>
-                        </figure>
                     </section>
 
                     <!-- 3. Entrega -->
@@ -840,6 +835,15 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </span>
                             <span class="min-w-0 flex-1 text-sm text-slate-600">{{ item.product.name }}</span>
                             <span class="text-sm font-medium text-slate-800">{{ formatPrice(item.subtotal) }}</span>
+                        </li>
+                        <!-- Livros de brinde como uma linha de produto, com GRÁTIS no lugar do valor (pedido do Lira 2026-10-21; antes ficava embaixo do endereço). -->
+                        <li v-if="livrosBrinde" class="flex items-center gap-3 py-3">
+                            <span class="relative shrink-0">
+                                <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 rounded-lg border border-slate-200 bg-white object-cover">
+                                <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ livrosBrinde.quantidade }}</span>
+                            </span>
+                            <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
+                            <span class="text-2xl font-extrabold tracking-tight text-[#00843f]">GRÁTIS</span>
                         </li>
                     </ul>
                     <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). Cores

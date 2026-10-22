@@ -74,7 +74,7 @@
             <tr>
                 {{-- Miniatura dos livros à direita da lista; no celular desce para baixo do texto (pedido 2026-10-21). --}}
                 <td class="coluna-celular" valign="middle" style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
-                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido:
+                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido. Cada link é exclusivo do seu pedido e vale para um download, então guarde o PDF depois de baixar:
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 10px 0 0;">
                         @foreach ($brindes as $livro)
                             <tr>

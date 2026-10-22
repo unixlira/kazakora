@@ -4,6 +4,7 @@ namespace Tests\Feature\Checkout;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\LivroDigital;
+use App\Modules\Catalog\Models\LivroDownloadToken;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Promocao;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
@@ -106,7 +107,8 @@ class BrindesNoEmailDoPedidoTest extends TestCase
 
         $this->assertCount(0, $mail->attachments());
         $mail->assertSeeInHtml('Um presente para você!');
-        $mail->assertSeeInHtml('/pedidos/'.$order->id.'/livros/', false);
+        $mail->assertSeeInHtml('/livros/baixar/', false);
+        $mail->assertSeeInHtml('vale para um download');
     }
 
     public function test_promocao_pdfs_fora_da_pagina_do_produto_nao_da_livro(): void
@@ -134,12 +136,19 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $this->assertCount(3, (new OrderConfirmation($order))->brindes);
     }
 
-    public function test_link_assinado_baixa_o_pdf_do_pedido_pago(): void
+    public function test_link_com_token_baixa_o_pdf_uma_vez_so(): void
     {
         $order = $this->pedido();
         $livro = LivroDigital::garantirParaPedido($order)->first();
 
         $url = $livro->urlDoPedido($order);
+        $acesso = LivroDownloadToken::query()->sole();
+
+        // Token gravado no banco, ligado ao pedido e ao arquivo; o mesmo link
+        // no e-mail e na página do pedido.
+        $this->assertStringEndsWith('/livros/baixar/'.$acesso->token, $url);
+        $this->assertSame([$order->id, $livro->id], [$acesso->order_id, $acesso->livro_digital_id]);
+        $this->assertSame($url, $livro->urlDoPedido($order));
 
         // O link abre os termos de uso; o PDF só sai no "Concordar e baixar".
         $this->withoutVite()->get($url)
@@ -147,6 +156,7 @@ class BrindesNoEmailDoPedidoTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Checkout/LivroTermos', false)
                 ->where('livro.titulo', $livro->titulo)
+                ->where('esgotado', null)
                 ->where('aceitarUrl', $url));
         $this->assertSame(0, (int) DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->value('downloads'));
 
@@ -160,31 +170,83 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $this->assertSame(1, (int) $linha->downloads);
         $this->assertNotNull($linha->termos_aceitos_em);
         $this->assertSame('127.0.0.1', $linha->termos_aceitos_ip);
+        $this->assertNotNull($acesso->fresh()->usado_em);
+
+        // Segundo download (ou outra pessoa com o link): bloqueado.
+        $this->post($url, ['aceite' => '1'])->assertStatus(410);
+        $this->withoutVite()->get($url)
+            ->assertStatus(410)
+            ->assertInertia(fn ($page) => $page->where('esgotado', fn ($motivo) => str_contains($motivo, 'já foi usado')));
+        $this->assertSame(1, (int) DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->value('downloads'));
+
+        // Recarregar a página do pedido não gera link novo.
+        $this->assertSame($url, $livro->urlDoPedido($order));
+        $this->assertSame(1, LivroDownloadToken::query()->count());
     }
 
-    public function test_aceite_sem_assinatura_ou_sem_pagamento_nao_baixa(): void
+    public function test_link_bloqueia_depois_do_limite_de_tentativas(): void
     {
         $order = $this->pedido();
         $livro = LivroDigital::garantirParaPedido($order)->first();
+        $url = $livro->urlDoPedido($order);
 
-        $this->post("/pedidos/{$order->id}/livros/{$livro->id}", ['aceite' => '1'])->assertForbidden();
+        for ($i = 0; $i < LivroDownloadToken::MAX_TENTATIVAS; $i++) {
+            $this->withoutVite()->get($url)->assertOk();
+        }
 
+        $this->withoutVite()->get($url)->assertStatus(410);
+        $this->assertSame(LivroDownloadToken::MAX_TENTATIVAS, LivroDownloadToken::query()->sole()->tentativas);
+    }
+
+    public function test_token_invalido_sem_pagamento_ou_link_antigo(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+        $url = $livro->urlDoPedido($order);
+
+        $this->get('/livros/baixar/'.str_repeat('a', 64))->assertNotFound();
+        $this->post('/livros/baixar/'.str_repeat('a', 64), ['aceite' => '1'])->assertNotFound();
+
+        // Sem pagamento: não abre nem gasta tentativa.
         $order->update(['status' => Order::STATUS_AWAITING_PAYMENT]);
-        $this->post($livro->urlDoPedido($order), ['aceite' => '1'])->assertForbidden();
-    }
+        $this->get($url)->assertForbidden();
+        $this->post($url, ['aceite' => '1'])->assertForbidden();
+        $this->assertSame(0, LivroDownloadToken::query()->sole()->tentativas);
+        $order->update(['status' => Order::STATUS_PAID]);
 
-    public function test_link_sem_assinatura_sem_pagamento_ou_de_outro_pedido_nao_baixa(): void
-    {
-        $order = $this->pedido();
-        $livro = LivroDigital::garantirParaPedido($order)->first();
-
+        // Link assinado dos primeiros e-mails leva ao link com token; sem assinatura, nada.
         $this->get("/pedidos/{$order->id}/livros/{$livro->id}")->assertForbidden();
-
+        $this->get(URL::signedRoute('pedidos.livro.baixar', ['order' => $order->id, 'livro' => $livro->id]))->assertRedirect($url);
         $outro = $this->pedido();
         $this->get(URL::signedRoute('pedidos.livro.baixar', ['order' => $outro->id, 'livro' => $livro->id]))->assertNotFound();
+    }
 
-        $order->update(['status' => Order::STATUS_AWAITING_PAYMENT]);
-        $this->get($livro->urlDoPedido($order))->assertForbidden();
+    public function test_novo_link_revoga_o_antigo(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+        $antigo = $livro->urlDoPedido($order);
+        $this->post($antigo, ['aceite' => '1'])->assertDownload();
+
+        $this->artisan('livros:novo-link', ['pedido' => $order->id, '--livro' => $livro->id])->assertSuccessful();
+
+        $novo = $livro->urlDoPedido($order);
+        $this->assertNotSame($antigo, $novo);
+        $this->post($novo, ['aceite' => '1'])->assertDownload();
+        $this->withoutVite()->post($antigo, ['aceite' => '1'])->assertStatus(410);
+    }
+
+    public function test_pagina_do_pedido_mostra_baixado_no_lugar_do_link(): void
+    {
+        $order = $this->pedido();
+        $livro = LivroDigital::garantirParaPedido($order)->first();
+        $this->post($livro->urlDoPedido($order), ['aceite' => '1'])->assertDownload();
+
+        $this->withoutVite()->actingAs($order->user)->get("/pedidos/{$order->id}")
+            ->assertInertia(fn ($page) => $page
+                ->where('pedido.livros.itens.0.url', null)
+                ->whereType('pedido.livros.itens.0.baixado_em', 'string')
+                ->whereType('pedido.livros.itens.1.url', 'string'));
     }
 
     public function test_pagina_do_pedido_mostra_os_livros(): void

@@ -246,17 +246,24 @@ Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
 });
-// Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link assinado do
-// e-mail e da página do pedido, abre sem login. O GET mostra os termos de uso
-// (2026-10-22); o PDF só sai no POST do "Concordar e baixar", com a mesma assinatura.
-Route::get('/pedidos/{order}/livros/{livro}', [CheckoutController::class, 'livroDoPedido'])
+// Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link com token
+// único do e-mail e da página do pedido, abre sem login (2026-10-22). O GET
+// mostra os termos de uso e conta a tentativa; o PDF sai no POST do
+// "Concordar e baixar", uma vez só (LivroDownloadToken).
+Route::get('/livros/baixar/{token}', [CheckoutController::class, 'livroDoPedido'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('livros.download');
+Route::post('/livros/baixar/{token}', [CheckoutController::class, 'aceitarLivroDoPedido'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:30,1')
+    ->name('livros.download.aceitar');
+// Link assinado antigo (e-mails de 21 e 22/10): leva ao link com token do
+// livro, que continua valendo para um download só.
+Route::get('/pedidos/{order}/livros/{livro}', [CheckoutController::class, 'livroDoLinkAntigo'])
     ->whereNumber(['order', 'livro'])
     ->middleware(['signed', 'throttle:30,1'])
     ->name('pedidos.livro.baixar');
-Route::post('/pedidos/{order}/livros/{livro}', [CheckoutController::class, 'aceitarLivroDoPedido'])
-    ->whereNumber(['order', 'livro'])
-    ->middleware(['signed', 'throttle:30,1'])
-    ->name('pedidos.livro.aceitar');
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.

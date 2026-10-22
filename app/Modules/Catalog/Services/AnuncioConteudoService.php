@@ -60,7 +60,7 @@ class AnuncioConteudoService
      */
     private const POLITICAS = [
         'KazaKora' => [
-            'frete grátis acima de R$ 200 no Sul e Sudeste, até a sua casa',
+            'frete grátis até a sua casa',
             '7 dias após o recebimento para desistir da compra',
             '30 dias para trocar produto com defeito',
             'compra segura: recebe o produto ou o dinheiro volta',

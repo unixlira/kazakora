@@ -8,6 +8,7 @@ use App\Rules\CpfValido;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -36,6 +37,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -140,27 +142,17 @@ class CheckoutController extends Controller
         [$coupon] = $this->cupomDoRascunho($request->session()->get(self::SESSION_KEY) ?? [], $subtotal, $request->user());
         $expressa = $entregaExpressa->consultar($cep);
         $entrega = $frete->entregaDoCarrinho($cartItems);
-        $desconto = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
-        // KazaKora sem frete no preço (2026-10-21): grátis só acima de R$ 200 no Sul e Sudeste.
-        $cobrado = $frete->ligado() ? null : $frete->freteDoCheckout($cartItems, $cep, $subtotal - $desconto);
 
         return response()->json([
             'items' => $cartItems,
             'subtotal' => $subtotal,
-            'discount_amount' => $desconto,
+            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'entrega_expressa' => $expressa,
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
-            'desconto_plataforma' => $frete->ligado() ? $entrega['desconto_plataforma'] : 0.0,
-            // Na entrega expressa (Grande SP) já é a mais rápida: sem TURBO.
+            'desconto_plataforma' => $entrega['desconto_plataforma'],
+            // Na área FULL a entrega já é a mais rápida: sem TURBO.
             'turbo' => $expressa ? null : $entrega['turbo'],
-            'frete' => $cobrado ? [
-                'gratis' => $cobrado['gratis'],
-                'preco' => $cobrado['preco'],
-                'regiao_gratis' => $cobrado['regiao_gratis'],
-                'minimo' => $cobrado['minimo'],
-                'falta' => $cobrado['falta'],
-            ] : null,
         ]);
     }
 
@@ -1646,32 +1638,10 @@ class CheckoutController extends Controller
      */
     private function resolveShipping(array $draft, $cartItems = null, ?string $cep = null): array
     {
-        $frete = app(FreteEmbutido::class);
-
-        // KazaKora sem frete no preço (2026-10-21): o frete do checkout é
-        // recalculado aqui (nunca o valor do navegador): grátis só acima de
-        // R$ 200 no Sul e Sudeste; fora disso, o da caixa pelos Correios.
-        if (! $frete->ligado() && empty($draft['shipping_quote']) && $cartItems && $cep
-            && (string) ($draft['shipping_method_id'] ?? '') === (string) ShippingMethod::freteGratis()->id) {
-            $subtotal = round($cartItems->sum('subtotal'), 2);
-            [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-            $desconto = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
-            $cobrado = $frete->freteDoCheckout($cartItems, $cep, $subtotal - $desconto);
-            $turbo = ! empty($draft['turbo']) && ! app(EntregaExpressa::class)->atende($cep) ? $cobrado['turbo'] : null;
-
-            if ($turbo) {
-                return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => round($cobrado['preco'] + (float) $turbo['preco'], 2)];
-            }
-
-            return $cobrado['gratis']
-                ? ['method_id' => ShippingMethod::freteGratis()->id, 'carrier_name' => ShippingMethod::freteGratis()->name, 'cost' => 0.0]
-                : ['method_id' => null, 'carrier_name' => FreteEmbutido::FRETE_PAGO, 'cost' => $cobrado['preco']];
-        }
-
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
-        if ($frete->ligado() && ! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
-            $turbo = $frete->entregaDoCarrinho($cartItems)['turbo'];
+        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+            $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
             if ($turbo) {
                 return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];
             }
@@ -1747,6 +1717,7 @@ class CheckoutController extends Controller
 
         return [
             'items' => $cartItems,
+            'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
@@ -1760,6 +1731,37 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
+    }
+
+    /**
+     * Estrelas do resumo do checkout (pedido 2026-10-21): média das avaliações
+     * dos produtos do carrinho, cada um com o anúncio pai e as variações (mesma
+     * regra da página do produto). Null quando nenhum tem avaliação.
+     *
+     * @return array{media: float, total: int}|null
+     */
+    private function avaliacaoDosItens(Collection $cartItems): ?array
+    {
+        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $grupos = Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
+            ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)
+            ->unique()
+            ->all();
+
+        $avaliacao = Review::query()
+            ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
+            ->selectRaw('avg(rating) as media, count(*) as total')
+            ->first();
+
+        if (! $avaliacao || (int) $avaliacao->total === 0) {
+            return null;
+        }
+
+        return ['media' => round((float) $avaliacao->media, 1), 'total' => (int) $avaliacao->total];
     }
 
     private function wantsJsonDelivery(Request $request): bool

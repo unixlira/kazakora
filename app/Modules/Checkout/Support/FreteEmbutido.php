@@ -38,24 +38,6 @@ class FreteEmbutido
     /** shipping_carrier_name do pedido com TURBO (ContributionMargin abate do frete). */
     public const TURBO = 'SEDEX (TURBO)';
 
-    /** shipping_carrier_name do pedido da KazaKora com frete pago pelo cliente (2026-10-21). */
-    public const FRETE_PAGO = 'Correios (frete pago)';
-
-    /** Pedidos em que o cliente pagou frete: ContributionMargin abate do frete da loja. */
-    public const COBRADOS = [self::TURBO, self::FRETE_PAGO];
-
-    /** Primeiros 5 dígitos do CEP => UF (faixas dos Correios). */
-    private const FAIXAS_CEP = [
-        [1000, 19999, 'SP'], [20000, 28999, 'RJ'], [29000, 29999, 'ES'], [30000, 39999, 'MG'],
-        [40000, 48999, 'BA'], [49000, 49999, 'SE'], [50000, 56999, 'PE'], [57000, 57999, 'AL'],
-        [58000, 58999, 'PB'], [59000, 59999, 'RN'], [60000, 63999, 'CE'], [64000, 64999, 'PI'],
-        [65000, 65999, 'MA'], [66000, 68899, 'PA'], [68900, 68999, 'AP'], [69000, 69299, 'AM'],
-        [69300, 69399, 'RR'], [69400, 69899, 'AM'], [69900, 69999, 'AC'], [70000, 72799, 'DF'],
-        [72800, 72999, 'GO'], [73000, 73699, 'DF'], [73700, 76799, 'GO'], [76800, 76999, 'RO'],
-        [77000, 77999, 'TO'], [78000, 78899, 'MT'], [79000, 79999, 'MS'], [80000, 87999, 'PR'],
-        [88000, 89999, 'SC'], [90000, 99999, 'RS'],
-    ];
-
     private bool $ligado = false;
 
     private ?string $cepForcado = null;
@@ -269,57 +251,6 @@ class FreteEmbutido
             'custo' => round($real, 2),
             'peso_g' => $peso,
         ];
-    }
-
-    /**
-     * Frete do checkout da KazaKora (pedido do Lira em 2026-10-21): grátis só
-     * com o pedido (produtos, já com cupom) acima de frete_embutido.gratis_acima_de
-     * e entrega no Sul ou Sudeste; fora disso, o cliente paga o frete da caixa
-     * (o mais barato entre PAC e SEDEX do contrato).
-     *
-     * @param  Collection<int, array{product: Product, quantity: int}>  $itens
-     * @return array{gratis: bool, preco: float, prazo: ?int, uf: ?string, regiao_gratis: bool, minimo: float, falta: float, turbo: ?array, estimado: bool}
-     */
-    public function freteDoCheckout(Collection $itens, ?string $cep, float $valorPedido): array
-    {
-        $this->usarCep($cep);
-        $entrega = $this->entregaDoCarrinho($itens);
-        $uf = self::ufDoCep($cep);
-        $minimo = (float) config('frete_embutido.gratis_acima_de', 200);
-        $regiaoGratis = $uf !== null && in_array($uf, (array) config('frete_embutido.gratis_ufs'), true);
-        // "Acima de R$ 200": a partir de 200,00 já é grátis (o "falta" fecha a conta exata).
-        $gratis = $regiaoGratis && round($valorPedido, 2) >= $minimo;
-
-        return [
-            'gratis' => $gratis,
-            'preco' => $gratis ? 0.0 : (float) ($entrega['custo'] ?? 0),
-            'prazo' => $entrega['prazo'],
-            'uf' => $uf,
-            'regiao_gratis' => $regiaoGratis,
-            'minimo' => $minimo,
-            // Quanto falta para o grátis (só no Sul e Sudeste).
-            'falta' => $regiaoGratis && ! $gratis ? round($minimo - $valorPedido, 2) : 0.0,
-            'turbo' => $entrega['turbo'],
-            'estimado' => $entrega['estimado'],
-        ];
-    }
-
-    /** UF do CEP pelas faixas dos Correios (null = CEP inválido). */
-    public static function ufDoCep(?string $cep): ?string
-    {
-        $cep = self::digitos($cep);
-        if (strlen($cep) !== 8) {
-            return null;
-        }
-
-        $prefixo = (int) substr($cep, 0, 5);
-        foreach (self::FAIXAS_CEP as [$de, $ate, $uf]) {
-            if ($prefixo >= $de && $prefixo <= $ate) {
-                return $uf;
-            }
-        }
-
-        return null;
     }
 
     /** TURBO acima de frete_embutido.turbo_max some do checkout (pedido 2026-10-12). */

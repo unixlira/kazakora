@@ -55,8 +55,8 @@ const tempo = computed(() => {
         <!-- Tarjas numa linha só também no celular (pedido 2026-10-10): letra menor lá. -->
         <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#E02424] px-2 py-2 text-center text-[11px] font-bold uppercase tracking-tight text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-base sm:tracking-wide md:text-lg">
             <i class="fa-solid fa-stopwatch" :class="{ 'animate-pulse': restante > 0 }"></i>
-            <!-- Frete grátis só acima de R$ 200 no Sul e Sudeste, sem "FULL" no checkout (pedido 2026-10-21). -->
-            <span class="whitespace-normal">Frete grátis acima de R$ 200 no Sul e Sudeste:</span>
+            <!-- Sem "FULL" e sem raio na tarja (pedido 2026-10-21); o FULL segue na entrega. -->
+            <span>Frete grátis por tempo limitado:</span>
             <span class="inline-block rounded-md bg-white/20 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
         </div>
         <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#0FB930] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">
@@ -123,7 +123,7 @@ const tempo = computed(() => {
                 <li class="font-bold"><i class="fa-solid fa-lock mr-2 text-[#0FB930]"></i>Criptografia SSL</li>
                 <li><i class="fa-solid fa-cart-shopping mr-2 text-[#0FB930]"></i>Compra segura</li>
                 <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados protegidos</li>
-                <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega garantida</li>
+                <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega gratuita</li>
             </ul>
         </footer>
     </div>

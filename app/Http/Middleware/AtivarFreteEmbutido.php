@@ -17,10 +17,7 @@ class AtivarFreteEmbutido
     public function handle(Request $request, Closure $next): Response
     {
         if (! $request->is('admin', 'admin/*', 'api/*', 'webhooks/*', 'horizon', 'horizon/*')) {
-            // KazaKora sem frete no preço desde 2026-10-21 (frete_embutido.embutido_kazakora).
-            if (config('frete_embutido.embutido_kazakora')) {
-                app(FreteEmbutido::class)->ligar();
-            }
+            app(FreteEmbutido::class)->ligar();
             // Mesmas telas = loja KazaKora: vale a Oferta Relâmpago dela (2026-10-14).
             app(SiteAtual::class)->definir(SiteAtual::KAZAKORA);
         }

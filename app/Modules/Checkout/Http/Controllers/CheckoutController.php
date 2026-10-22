@@ -10,6 +10,7 @@ use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -1768,13 +1769,16 @@ class CheckoutController extends Controller
         return [
             'items' => $cartItems,
             'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
-            'brindes' => $this->brindesDoCarrinho($cartItems),
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
+            // Miniatura dos livros de brinde ao lado dos bullets do pagamento (2026-10-21).
+            'livrosBrinde' => PromocoesDoProduto::livrosDoCarrinho(
+                Product::query()->whereIn('id', $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique())->get()
+            ),
             'addresses' => $user ? $user->addresses : [],
             'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],
             'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,
@@ -1782,25 +1786,6 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
-    }
-
-    /**
-     * Presente no checkout (pedido 2026-10-21): livros digitais que o e-mail
-     * de confirmação vai levar, com a capa em miniatura, embaixo do endereço.
-     *
-     * @return list<array{id: int, titulo: string, capa_url: ?string}>
-     */
-    private function brindesDoCarrinho(Collection $cartItems): array
-    {
-        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
-        if ($ids->isEmpty()) {
-            return [];
-        }
-
-        return LivroDigital::doCarrinho(Product::query()->whereIn('id', $ids)->get())
-            ->map(fn (LivroDigital $livro) => ['id' => $livro->id, 'titulo' => $livro->titulo, 'capa_url' => $livro->capa_url])
-            ->values()
-            ->all();
     }
 
     /**

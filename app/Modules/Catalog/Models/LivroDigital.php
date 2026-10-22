@@ -164,25 +164,6 @@ class LivroDigital extends Model
         return self::doPedido($order);
     }
 
-    /**
-     * Presente no checkout (pedido 2026-10-21): os livros que o pedido vai
-     * ganhar, com a mesma regra de garantirParaPedido(), a partir dos
-     * produtos do carrinho. Só o checkout do kazakora.com passa por aqui (os
-     * outros sites usam CheckoutOutroSite).
-     *
-     * @param  iterable<?Product>  $produtos
-     */
-    public static function doCarrinho(iterable $produtos): Collection
-    {
-        $ids = collect($produtos)
-            ->filter()
-            ->flatMap(fn (Product $produto) => array_column(PromocoesDoProduto::paraPagina($produto)['livrosDigitais'], 'id'))
-            ->unique()
-            ->values();
-
-        return $ids->isEmpty() ? new Collection : self::query()->whereIn('id', $ids)->orderBy('id')->get();
-    }
-
     /** Link de download do livro no pedido (assinado: abre do e-mail sem login). */
     public function urlDoPedido(Order $order): string
     {

@@ -836,7 +836,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                          fixas do checkout; link em sky-700 para passar no contraste. -->
                     <div class="mt-1 flex items-center justify-between gap-2">
                         <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
-                        <span v-if="avaliacaoItens" class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
+                        <span v-if="avaliacaoItens" class="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
                             <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
                                 <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
                                     <i class="fa-regular fa-star text-slate-400"></i>

@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\Schema;
  *   receita das vendas
  *   − custo dos produtos
  *   − taxa da plataforma (comissão)
- *   − frete pago pela loja (pré-postagem dos Correios menos o frete que o
- *     cliente do site pagou, TURBO ou frete pago, Flex)
+ *   − frete pago pela loja (pré-postagem dos Correios menos o TURBO que o
+ *     cliente do site pagou, Flex)
  *   − ADS (Shopee/ML Ads e o GMV Max do TikTok, cobrado no extrato)
  *   = margem
  *   − imposto (Simples Nacional sobre o valor da nota)
@@ -109,9 +109,7 @@ class ContributionMargin
 
     /**
      * TURBO do site (2026-10-12): o cliente paga só a diferença SEDEX − PAC e
-     * a loja paga o SEDEX inteiro na pré-postagem. Desde 2026-10-21 também o
-     * frete pago pelo cliente abaixo de R$ 200 ou fora do Sul/Sudeste
-     * (FreteEmbutido::FRETE_PAGO). O que o cliente pagou NÃO
+     * a loja paga o SEDEX inteiro na pré-postagem. O que o cliente pagou NÃO
      * é receita: abate o frete do pedido. Só de pedido com pré-postagem
      * gerada, para o frete não ficar negativo antes da etiqueta.
      *
@@ -120,7 +118,7 @@ class ContributionMargin
     public static function turboCobrado(?Carbon $desde, ?Carbon $ate = null): array
     {
         return DB::table('orders')
-            ->whereIn('orders.shipping_carrier_name', FreteEmbutido::COBRADOS)
+            ->where('orders.shipping_carrier_name', FreteEmbutido::TURBO)
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->when($desde, fn ($q) => $q->where('orders.created_at', '>=', $desde))
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
@@ -298,8 +296,8 @@ class ContributionMargin
                 '.self::receitaSql().' as receita_pedido,
                 CASE WHEN order_items.id IS NULL THEN 0 ELSE '.self::custoSql().' END as custo,
                 COALESCE(taxa_pedido.total, 0) as taxa_pedido,
-                COALESCE(correios_pedido.total, 0) - CASE WHEN correios_pedido.total IS NOT NULL AND orders.shipping_carrier_name IN (?, ?)
-                    THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_pedido', FreteEmbutido::COBRADOS)
+                COALESCE(correios_pedido.total, 0) - CASE WHEN correios_pedido.total IS NOT NULL AND orders.shipping_carrier_name = ?
+                    THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_pedido', [FreteEmbutido::TURBO])
             ->orderBy('orders.id')->orderBy('order_items.id')
             ->get()
             ->groupBy('order_id')

@@ -18,7 +18,7 @@ class CarrinhoAbandonado extends Mailable
     public const ASSUNTOS = [
         'Esqueceu algo no carrinho? 🛒',
         'Seus produtos ainda estão te esperando',
-        'Frete grátis acima de R$ 200 no Sul e Sudeste 🚚',
+        'O frete grátis do seu carrinho continua valendo 🚚',
         'Ainda pensando? Seu carrinho está guardado',
         'Pague no Pix e economize no seu carrinho 💸',
         'Os produtos do seu carrinho estão saindo rápido',

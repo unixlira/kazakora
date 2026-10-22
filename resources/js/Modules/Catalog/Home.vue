@@ -128,7 +128,7 @@ const gruposFiltro = computed(() => [
 ]);
 
 const BENEFICIOS = [
-    { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Acima de R$ 200 no Sul e Sudeste' },
+    { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Entrega em todo Brasil' },
     { icone: 'fa-credit-card', titulo: 'Parcelamento', texto: 'Em 12x nos cartões' },
     { icone: 'fa-lock', titulo: 'Compra Segura', texto: 'Ambiente seguro para pagamentos online' },
     { icone: 'fa-face-smile', titulo: 'Satisfação Garantida', texto: 'Você 100% feliz ou seu reembolso garantido' },

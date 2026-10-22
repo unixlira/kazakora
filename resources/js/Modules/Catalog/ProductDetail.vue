@@ -473,7 +473,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="flex items-start gap-3">
                                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-store-accent-soft text-store-accent-strong"><i class="fas fa-truck-fast"></i></span>
                                 <div class="min-w-0 flex-1">
-                                    <p v-if="isFreeShipping" class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Frete grátis acima de R$ 200 no Sul e Sudeste</p>
+                                    <p v-if="isFreeShipping" class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Frete grátis para sua casa</p>
                                     <p v-else class="text-sm font-semibold text-store-fg">Chegará em {{ cheapestShipping.estimated_days }} dia{{ cheapestShipping.estimated_days === 1 ? '' : 's' }} por {{ formatPrice(cheapestShipping.price) }}</p>
                                     <button type="button" class="mt-1 text-sm font-semibold text-store-accent hover:underline" @click="showAllShipping = !showAllShipping">Calcular frete e ver entregas</button>
                                 </div>

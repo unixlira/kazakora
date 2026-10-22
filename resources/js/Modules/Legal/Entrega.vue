@@ -33,11 +33,10 @@ const regioes = computed(() => {
             <h1 class="mt-2 font-display text-3xl font-semibold">Política de Entrega</h1>
 
             <div class="mt-8 flex flex-col gap-6">
-                <LegalCard title="Frete grátis acima de R$ 200 no Sul e Sudeste">
+                <LegalCard title="Frete grátis para todo o Brasil">
                     <p>
-                        Pedidos a partir de <strong class="text-store-fg">R$ 200</strong> em produtos com entrega nos estados do
-                        <strong class="text-store-fg">Sul e do Sudeste</strong> (SP, RJ, MG, ES, PR, SC e RS) têm frete grátis.
-                        Nos demais pedidos, o frete dos Correios é calculado pelo CEP e aparece no checkout antes de você pagar.
+                        Todas as compras na KazaKora têm <strong class="text-store-fg">frete grátis</strong>. O valor do frete
+                        nunca é cobrado no checkout, qualquer que seja o CEP.
                     </p>
                     <p>
                         A entrega é feita pelos <strong class="text-store-fg">Correios ou por transportadora</strong> em até
@@ -65,7 +64,7 @@ const regioes = computed(() => {
                         </li>
                         <li class="flex items-start gap-2.5">
                             <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
-                            <span>O Full não tem custo extra: vale o mesmo frete do checkout.</span>
+                            <span>Continua com <strong class="text-store-fg">frete grátis</strong>: o Full não tem custo extra.</span>
                         </li>
                     </ul>
                     <p>Quando o seu CEP é atendido, o "⚡FULL Receba hoje" ou "Receba amanhã" aparece na página do produto e no resumo do pedido.</p>

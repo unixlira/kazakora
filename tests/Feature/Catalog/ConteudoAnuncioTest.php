@@ -276,7 +276,7 @@ class ConteudoAnuncioTest extends TestCase
             $partes = $request->data()['contents'][0]['parts'];
             $prompt = end($partes)['text'];
 
-            return str_contains($prompt, 'Minhas Compras') && str_contains($prompt, 'frete grátis acima de R$ 200 no Sul e Sudeste');
+            return str_contains($prompt, 'Minhas Compras') && str_contains($prompt, 'frete grátis para todo o Brasil');
         });
     }
 

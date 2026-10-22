@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,6 +66,30 @@ class FerraKoraCatalogoController extends Controller
         $resposta->setVary(['CF-Region-Code', 'CF-IPCountry'], false);
 
         return $resposta;
+    }
+
+    /**
+     * Prazo pelo CEP na página do produto do site, igual ao do KazaKora:
+     * Full na área da entrega expressa, Flex quando os Correios entregam em
+     * até 3 dias úteis, senão só o prazo normal. Só produto publicado no site.
+     */
+    public function prazo(Request $request, string $id): JsonResponse
+    {
+        $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
+
+        if (strlen($cep) !== 8) {
+            return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
+        }
+
+        $produto = $this->catalogo->produto($id);
+
+        if ($produto === null) {
+            return response()->json(['message' => 'Produto não encontrado.'], 404);
+        }
+
+        $pai = Product::query()->with('fiscalData')->find((int) Str::after($produto['id'], CatalogoFerraKora::PREFIXO_PRODUTO));
+
+        return $this->semCache(response()->json(app(PrazoPorCep::class)->consultar($cep, $pai)));
     }
 
     public function sincronizar(Request $request): JsonResponse

@@ -10,6 +10,7 @@ use App\Modules\WhatsApp\Services\ConversorDeVoz;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -370,6 +371,9 @@ class WhatsAppInboxController extends Controller
         return [
             'id' => $c->id,
             'waId' => $c->wa_id,
+            // Número que atende a conversa (KazaKora ou FerraKora).
+            'loja' => $c->loja ?? WhatsAppNumeros::KAZAKORA,
+            'lojaNome' => WhatsAppNumeros::nome($c->loja),
             'name' => $c->profile_name,
             'phone' => $c->phone ?? $c->wa_id,
             'status' => $c->status,

@@ -99,10 +99,10 @@ class WhatsAppSettings
         return $token;
     }
 
-    public function isReadyToSend(): bool
+    /** Sem loja = número da KazaKora (o de sempre). */
+    public function isReadyToSend(?string $loja = null): bool
     {
-        return filled(config('services.whatsapp.access_token'))
-            && filled(config('services.whatsapp.phone_number_id'));
+        return WhatsAppNumeros::ativo($loja ?? WhatsAppNumeros::KAZAKORA);
     }
 
     private function asBool(mixed $value): bool

@@ -8,6 +8,7 @@ use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Bus\Queueable;
@@ -51,21 +52,26 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
     /** Pedido do site com a confirmação ligada: a NF-e espera a resposta do cliente. */
     public static function seguraNota(Order $order): bool
     {
+        $loja = WhatsAppNumeros::lojaDoPedido($order);
+
         return $order->origin === Order::ORIGIN_STORE
-            && filled(config('services.whatsapp.templates.pedido_aprovado'))
-            && app(WhatsAppSettings::class)->isReadyToSend();
+            && filled(WhatsAppNumeros::template($loja, 'pedido_aprovado'))
+            && app(WhatsAppSettings::class)->isReadyToSend($loja);
     }
 
     public function handle(WhatsAppCloudApiClient $client, WhatsAppSettings $settings): void
     {
-        $template = config('services.whatsapp.templates.pedido_aprovado');
         $order = Order::query()->with('user')->find($this->orderId);
 
         if (! $order || $order->origin !== Order::ORIGIN_STORE) {
             return;
         }
 
-        if (! filled($template) || ! $settings->isReadyToSend()) {
+        // Pedido do site da FerraKora sai pelo número dela, se estiver ligado.
+        $loja = WhatsAppNumeros::lojaDoPedido($order);
+        $template = WhatsAppNumeros::template($loja, 'pedido_aprovado');
+
+        if (! filled($template) || ! $settings->isReadyToSend($loja)) {
             FaturarPedidoSemResposta::emitir($order->id);
 
             return;
@@ -89,13 +95,13 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
         $nomeCompleto = trim((string) ($order->shipping_name ?: $order->user?->name)) ?: 'cliente';
         $nome = Str::of($nomeCompleto)->explode(' ')->first();
         $email = $order->shipping_email ?: $order->user?->email ?: 'não informado';
-        $imagem = config('services.whatsapp.templates.pedido_aprovado_imagem') ?: asset('images/whatsapp/confirmacao-pedido.jpg');
+        $imagem = WhatsAppNumeros::template($loja, 'pedido_aprovado_imagem') ?: asset('images/whatsapp/confirmacao-pedido.jpg');
 
         try {
-            $response = $client->sendTemplate(
+            $response = $client->paraLoja($loja)->sendTemplate(
                 $phone,
                 $template,
-                (string) config('services.whatsapp.templates.pedido_aprovado_idioma', 'pt_BR'),
+                (string) WhatsAppNumeros::template($loja, 'pedido_aprovado_idioma', 'pt_BR'),
                 headerMediaType: 'image',
                 bodyParams: [$nome, $order->numero, $nomeCompleto, $email, self::endereco($order)],
                 quickReplyPayloads: [
@@ -126,7 +132,7 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
 
         // Aparece no histórico da conversa no painel do WhatsApp.
         $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $phone],
+            ['wa_id' => $phone, 'loja' => $loja],
             ['phone' => $phone, 'profile_name' => $order->shipping_name, 'last_message_at' => now(), 'unread_count' => 0],
         );
         $message = WhatsAppMessage::query()->create([

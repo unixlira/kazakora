@@ -14,8 +14,14 @@ class WhatsAppConversation extends Model
     // WhatsApp. As migrations e o banco usam o prefixo operacional "whatsapp_*".
     protected $table = 'whatsapp_conversations';
 
+    /** Loja dona do número (kazakora/ferrakora): a conversa responde sempre por ele. */
+    protected $attributes = [
+        'loja' => 'kazakora',
+    ];
+
     protected $fillable = [
         'wa_id',
+        'loja',
         'phone',
         'profile_name',
         'status',

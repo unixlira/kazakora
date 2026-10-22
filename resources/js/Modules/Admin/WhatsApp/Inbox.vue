@@ -861,6 +861,7 @@ function linkify(text) {
                                 <span class="truncate">{{ conversation.preview }}</span>
                             </span>
                             <span class="flex shrink-0 items-center gap-2">
+                                <span v-if="conversation.loja && conversation.loja !== 'kazakora'" class="wa-loja-badge" :class="'wa-loja-' + conversation.loja" :title="'Conversa no número da ' + conversation.lojaNome">{{ conversation.lojaNome }}</span>
                                 <span v-if="conversation.needsHuman" class="wa-human-badge" title="A conversa precisa que uma pessoa responda"><i class="fas fa-hand"></i>Humano</span>
                                 <span v-if="conversation.unread" class="wa-unread">{{ conversation.unread }}</span>
                                 <button
@@ -901,6 +902,7 @@ function linkify(text) {
                         <span class="min-w-0">
                             <span class="wa-head-name block truncate">{{ displayName(active) }}</span>
                             <span class="wa-head-sub block truncate">
+                                <span v-if="active.lojaNome" class="wa-loja-badge mr-1.5 align-middle" :class="'wa-loja-' + active.loja" :title="'Conversa no número da ' + active.lojaNome">{{ active.lojaNome }}</span>
                                 <span v-if="active.needsHuman" class="wa-human-badge mr-1.5 align-middle"><i class="fas fa-hand"></i>Precisa de humano</span>
                                 <template v-if="active.status === 'resolved'">encerrada · </template>
                                 clique para mostrar os dados do contato
@@ -1262,6 +1264,8 @@ function linkify(text) {
 /* Precisa de humano: badge vermelha + anel de stories em volta da foto */
 .wa-human-badge { display: inline-flex; height: 20px; align-items: center; gap: 4px; border-radius: 9999px; background: #ea0038; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #fff; white-space: nowrap; }
 .wa-human-badge i { font-size: 10px; }
+.wa-loja-badge { display: inline-flex; height: 20px; align-items: center; border-radius: 9999px; background: #e9edef; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #3b4a54; white-space: nowrap; }
+.wa-loja-badge.wa-loja-ferrakora { background: #f97316; color: #fff; }
 .wa-human-count { margin-left: 6px; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9999px; background: #ea0038; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; }
 .wa-story { position: relative; }
 .wa-story::before {

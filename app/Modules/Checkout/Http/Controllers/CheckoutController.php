@@ -16,7 +16,6 @@ use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
-use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
@@ -24,6 +23,7 @@ use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Services\Meta\ConversoesMeta;
@@ -42,7 +42,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -181,7 +180,7 @@ class CheckoutController extends Controller
      * CEP tem entrega expressa ("Receba hoje até as 21h" / "Receba amanhã").
      * Fora da área, entrega_expressa vem null e a tela mostra o prazo normal.
      */
-    public function deliveryEstimate(Request $request, EntregaExpressa $entregaExpressa, CorreiosFreightQuoteService $correios): JsonResponse
+    public function deliveryEstimate(Request $request, PrazoPorCep $prazoPorCep): JsonResponse
     {
         $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
 
@@ -189,36 +188,18 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
         }
 
-        $expressa = $entregaExpressa->consultar($cep);
-
         // Frete embutido (2026-10-12): o CEP digitado no produto passa a valer
         // para o preço em toda a loja.
         $this->guardarCep($request, $cep);
         app(FreteEmbutido::class)->usarCep($cep);
 
-        // Fora da entrega expressa (pedido 2026-10-10): prazo mais rápido dos
-        // Correios para esse CEP e produto. Até 3 dias úteis = "Flex"; mais
-        // que isso, sem selo. Em cache por 1 dia (a consulta é lenta).
-        $prazoDias = null;
-        $product = $expressa ? null : Product::query()->with('fiscalData')->find((int) $request->query('produto'));
-        if ($product) {
-            $prazoDias = Cache::remember("prazo-cep:{$cep}:{$product->id}", now()->addDay(), function () use ($correios, $product, $cep) {
-                $dias = collect(rescue(fn () => $correios->quote(collect([['product' => $product, 'quantity' => 1, 'subtotal' => (float) $product->final_price]]), $cep), [], false))
-                    ->pluck('estimated_days')->filter(fn ($dias) => $dias > 0);
-
-                return $dias->isEmpty() ? 0 : (int) $dias->min();
-            }) ?: null;
-        }
-
-        $produto = $product ?? Product::query()->find((int) $request->query('produto'));
+        $produto = Product::query()->with('fiscalData')->find((int) $request->query('produto'));
 
         return response()->json([
             'final_price' => $produto?->final_price,
             'preco_de' => $produto?->preco_de,
             'preco_sem_oferta' => $produto?->preco_sem_oferta,
-            'entrega_expressa' => $expressa,
-            'prazo_dias' => $prazoDias,
-            'modalidade' => $expressa ? 'full' : ($prazoDias !== null && $prazoDias <= 3 ? 'flex' : null),
+            ...$prazoPorCep->consultar($cep, $produto),
         ]);
     }
 

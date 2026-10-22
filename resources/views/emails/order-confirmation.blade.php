@@ -34,7 +34,8 @@
     @if (! empty($brindes) && $brindes->isNotEmpty())
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
             <tr>
-                <td style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
+                {{-- Miniatura dos livros à direita dos bullets; no celular desce para baixo do texto (pedido 2026-10-21). --}}
+                <td class="coluna-celular" valign="middle" style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
                     <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido:
                     <ul style="margin: 8px 0 0; padding-left: 18px;">
                         @foreach ($brindes as $livro)
@@ -42,6 +43,12 @@
                         @endforeach
                     </ul>
                 </td>
+                @if (! empty($livrosImagem))
+                    <td class="coluna-celular livros-miniatura" width="150" valign="middle" align="center" style="width: 150px; padding: 14px 18px 14px 0; text-align: center;">
+                        <img src="{{ $livrosImagem }}" alt="Livros digitais de presente: {{ $brindes->pluck('titulo')->join(', ') }}" width="150" style="display: block; width: 150px; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #fed7aa; border-radius: 8px; background-color: #ffffff;">
+                        <div style="margin-top: 4px; font-size: 11px; font-weight: 700; line-height: 1.3; color: #c2450c;">+ {{ $brindes->count() === 1 ? '1 livro digital GRÁTIS' : $brindes->count().' livros digitais GRÁTIS' }}</div>
+                    </td>
+                @endif
             </tr>
         </table>
     @endif

@@ -88,6 +88,15 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $mail->assertSeeInHtml('Sono &amp; Saúde', false);
     }
 
+    public function test_miniatura_dos_livros_ao_lado_dos_bullets(): void
+    {
+        $mail = new OrderConfirmation($this->pedido());
+
+        $mail->assertSeeInHtml(asset(PromocoesDoProduto::QUADRO_LIVROS_PADRAO), false);
+        $mail->assertSeeInHtml('livros-miniatura', false);
+        $mail->assertSeeInHtml('+ 3 livros digitais GRÁTIS');
+    }
+
     public function test_chave_desligada_manda_so_o_link_dos_livros(): void
     {
         LivroDigital::ligarEmailPedido(false);

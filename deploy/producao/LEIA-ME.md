@@ -15,7 +15,7 @@ Divide a máquina com o **KoraSync** (nginx `korasync`, node `:3101`) e a
     └── storage/                              (uploads, logs, notas)
 ```
 
-- nginx `kazakora.com` → PHP 8.3-FPM (pool `kazakora`, usuário `deploy`) com OPcache.
+- nginx `kazakora.com` → PHP 8.3-FPM com OPcache, usuário `deploy`, um pool por tipo de tráfego (22/10/2026): `kazakora` (loja, até 24), `ferrakora-api` (`/api/ferrakora/*`, até 12), `integracoes` (demais `/api/*`: KoraSync, webhooks, até 10) e `painel` (painel.kazakora.com, até 10). A escolha é por caminho em `nginx-kazakora-pools.conf`, que também limita 10 req/s por IP (rajada 40) na loja e na API da FerraKora. Status: `curl 127.0.0.1:8090/status/<pool>` no servidor.
 - MySQL local, Redis para cache, sessão e fila.
 - Supervisor: 3 workers da fila `default` + 1 da fila `nfe` (grupo `kazakora`).
 - Cron do usuário `deploy`: `schedule:run` a cada minuto.

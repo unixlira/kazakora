@@ -148,6 +148,23 @@ const startVideo = async () => {
 };
 watch(activeIndex, () => { isVideoStarted.value = false; });
 
+// Vídeo que não é o principal (avaliações, capa sem foto) não baixa nada ao
+// abrir a página (pedido 2026-10-21, celular): nasce com preload="none" e só
+// pede o começo do arquivo (1º quadro) quando chega perto da tela.
+const vVideoPreguicoso = {
+    mounted(el) {
+        if (!('IntersectionObserver' in window)) { el.preload = 'metadata'; return; }
+        el._observador = new IntersectionObserver(([entrada]) => {
+            if (!entrada.isIntersecting) return;
+            el._observador.disconnect();
+            el.preload = 'metadata';
+            el.load();
+        }, { rootMargin: '200px' });
+        el._observador.observe(el);
+    },
+    unmounted(el) { el._observador?.disconnect(); },
+};
+
 // A miniatura da foto ativa fica à vista na faixa (as fotos das variações
 // estão no fim). Rola só a faixa, nunca a página.
 const miniaturasEl = ref(null);
@@ -461,7 +478,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
                                         <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
                                             <img v-if="videoPoster" :src="videoPoster" :srcset="videoPosterSrcset" :sizes="videoPosterSrcset ? FOTO_SIZES : null" :alt="`${product.name} — vídeo`" fetchpriority="high">
-                                            <video v-else :src="activeMedia.src" muted playsinline preload="metadata"></video>
+                                            <video v-else v-video-preguicoso :src="activeMedia.src" muted playsinline preload="none"></video>
                                             <span class="play grande"><i class="fas fa-play"></i></span>
                                         </button>
                                     </template>
@@ -479,7 +496,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         :aria-current="index === activeIndex" :class="{ 'da-variacao': escolhida && item.variantId === escolhida.id }" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
                                             <img v-if="videoPoster" :src="videoPoster" alt="">
-                                            <video v-else :src="item.src" muted preload="metadata"></video>
+                                            <video v-else v-video-preguicoso :src="item.src" muted preload="none"></video>
                                             <span class="play"><i class="fas fa-play"></i></span>
                                         </template>
                                         <img v-else :src="item.mini || item.thumb || item.src" alt="" loading="lazy">
@@ -750,7 +767,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <video v-if="ehVideo(image)" :src="image.image_url + '#t=0.1'" muted playsinline preload="metadata"></video>
+                                    <video v-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
                                     <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>

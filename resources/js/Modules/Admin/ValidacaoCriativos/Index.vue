@@ -15,6 +15,8 @@ const props = defineProps({
     produtos: { type: Array, default: () => [] },
     podeAvaliar: { type: Boolean, default: false },
     extensoes: { type: Array, default: () => ['mp4', 'mov', 'm4v', 'webm'] },
+    extensoesImagem: { type: Array, default: () => ['jpg', 'jpeg', 'png'] },
+    maxMbImagem: { type: Number, default: 30 },
     maxMb: { type: Number, default: 1024 },
     tamanhoParte: { type: Number, default: 8 * 1024 * 1024 },
 });
@@ -70,8 +72,10 @@ const extensao = (nome) => (nome.split('.').pop() || '').toLowerCase();
 const adicionarArquivos = (lista) => {
     Array.from(lista ?? []).forEach((arquivo) => {
         let erro = null;
-        if (!props.extensoes.includes(extensao(arquivo.name))) erro = 'Use vídeo MP4, MOV, M4V ou WebM.';
-        else if (arquivo.size > props.maxMb * 1048576) erro = `Passa de ${props.maxMb} MB. Comprima antes de enviar.`;
+        const imagem = props.extensoesImagem.includes(extensao(arquivo.name));
+        const limite = imagem ? props.maxMbImagem : props.maxMb;
+        if (!imagem && !props.extensoes.includes(extensao(arquivo.name))) erro = 'Use vídeo MP4, MOV, M4V ou WebM, ou imagem JPG ou PNG.';
+        else if (arquivo.size > limite * 1048576) erro = `Passa de ${limite} MB. Comprima antes de enviar.`;
         fila.value.push({ arquivo, titulo: tituloDoArquivo(arquivo.name), identificacao: '', progresso: 0, estado: erro ? 'erro' : 'esperando', erro });
     });
 };
@@ -228,7 +232,7 @@ const salvarEdicao = (criativo) => {
 };
 
 const paraLixeira = (criativo) => {
-    if (!window.confirm(`Mover "${criativo.titulo}" para a lixeira? O vídeo fica guardado e dá para restaurar.`)) return;
+    if (!window.confirm(`Mover "${criativo.titulo}" para a lixeira? O arquivo fica guardado e dá para restaurar.`)) return;
     router.delete(`${BASE}/${criativo.id}`, { preserveScroll: true });
 };
 const restaurar = (criativo) => router.patch(`${BASE}/${criativo.id}/restaurar`, {}, { preserveScroll: true });
@@ -248,7 +252,7 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
             <div class="max-w-3xl">
                 <h1 class="mb-1 text-2xl font-bold">Validação de criativos</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Vídeos de anúncio para Meta, TikTok, Google e outras plataformas, guardados no servidor até a validação.
+                    Vídeos e imagens de anúncio para Meta, TikTok, Google e outras plataformas, guardados no servidor até a validação.
                     <template v-if="props.podeAvaliar">Assista e aprove, peça ajuste ou reprove.</template>
                     <template v-else>Só o administrador aprova; o comentário dele aparece no card.</template>
                     Horário de Brasília.
@@ -271,10 +275,10 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
                 @drop.prevent="aoSoltar"
             >
                 <i class="fas fa-film mb-1 text-2xl text-primary" aria-hidden="true"></i>
-                <span class="font-medium">Arraste os vídeos aqui ou clique para escolher</span>
-                <span class="text-xs text-slate-500 dark:text-slate-400">MP4, MOV, M4V ou WebM, até {{ props.maxMb }} MB cada. Pode escolher vários.</span>
+                <span class="font-medium">Arraste os vídeos ou imagens aqui ou clique para escolher</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Vídeo MP4, MOV, M4V ou WebM até {{ props.maxMb }} MB; imagem JPG ou PNG até {{ props.maxMbImagem }} MB. Pode escolher vários.</span>
             </label>
-            <input id="vc-arquivos" type="file" multiple :accept="props.extensoes.map((e) => '.' + e).join(',') + ',video/*'" class="sr-only"
+            <input id="vc-arquivos" type="file" multiple :accept="[...props.extensoes, ...props.extensoesImagem].map((e) => '.' + e).join(',') + ',video/*,image/jpeg,image/png'" class="sr-only"
                 @change="adicionarArquivos($event.target.files); $event.target.value = ''">
 
             <div v-if="fila.length" class="mt-4 space-y-2">
@@ -288,7 +292,7 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
                             <i class="fas fa-xmark" aria-hidden="true"></i>
                         </button>
                     </div>
-                    <label :for="`vc-ident-${i}`" class="sr-only">Identificação do vídeo</label>
+                    <label :for="`vc-ident-${i}`" class="sr-only">Identificação do criativo</label>
                     <input :id="`vc-ident-${i}`" v-model="item.identificacao" type="text" maxlength="255" :disabled="item.estado !== 'esperando'"
                         placeholder="Identificação: do que se trata, qual campanha (opcional)"
                         class="mt-2 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
@@ -367,7 +371,8 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
 
         <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
             <article v-for="c in props.criativos.data" :key="c.id" class="flex flex-col overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                <video :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] w-full bg-black object-contain"></video>
+                <img v-if="c.tipo === 'imagem'" :src="c.url" :alt="c.titulo" loading="lazy" class="aspect-[9/16] w-full bg-black object-contain">
+                <video v-else :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] w-full bg-black object-contain"></video>
 
                 <div class="border-b border-[var(--surface-border)] px-3 pt-2 pb-2">
                     <label :for="`vc-ident-card-${c.id}`" :class="rotulo">Identificação</label>

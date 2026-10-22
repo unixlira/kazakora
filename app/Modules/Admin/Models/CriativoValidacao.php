@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * Marketing › Validação de criativos (2026-10-21): vídeo de anúncio enviado
  * pela equipe para o Lira validar antes de subir na Meta, TikTok, Google etc.
+ * Desde 2026-10-21 aceita também imagem (JPG/PNG), e o aprovado pode virar
+ * anúncio do Meta ADS direto daqui ("Dentro da plataforma"), sem subir de novo.
  * O arquivo fica no disco local (privado) em criativos/AAAA-MM/. Mover para a
  * lixeira não apaga o arquivo (SoftDeletes) e dá para restaurar.
  */
@@ -41,7 +43,12 @@ class CriativoValidacao extends Model
 
     public const EXTENSOES = ['mp4', 'mov', 'm4v', 'webm'];
 
+    public const EXTENSOES_IMAGEM = ['jpg', 'jpeg', 'png'];
+
     public const MAX_MB = 1024;
+
+    /** A Meta recusa imagem acima de 30 MB (adimages). */
+    public const MAX_MB_IMAGEM = 30;
 
     protected $fillable = [
         'titulo',
@@ -92,6 +99,16 @@ class CriativoValidacao extends Model
         return $this->belongsTo(User::class, 'avaliado_por');
     }
 
+    public static function extensaoEhImagem(string $extensao): bool
+    {
+        return in_array(strtolower($extensao), self::EXTENSOES_IMAGEM, true);
+    }
+
+    public function ehImagem(): bool
+    {
+        return self::extensaoEhImagem(pathinfo((string) $this->path, PATHINFO_EXTENSION));
+    }
+
     /** Formato para a tela: 9:16, 1:1, 16:9... ou null sem medida. */
     public function proporcao(): ?string
     {
@@ -118,6 +135,7 @@ class CriativoValidacao extends Model
             'plataforma' => $this->plataforma,
             'produto' => $this->produto ? ['id' => $this->produto->id, 'nome' => $this->produto->name] : null,
             'observacao' => $this->observacao,
+            'tipo' => $this->ehImagem() ? 'imagem' : 'video',
             'nome_original' => $this->nome_original,
             'tamanho_mb' => round($this->tamanho / 1048576, 1),
             'duracao' => $this->duracao_segundos !== null ? (int) round((float) $this->duracao_segundos) : null,

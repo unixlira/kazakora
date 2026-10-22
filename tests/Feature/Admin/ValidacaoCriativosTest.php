@@ -114,7 +114,7 @@ class ValidacaoCriativosTest extends TestCase
 
         $this->actingAs($admin)->postJson(self::BASE, [
             'envio' => (string) Str::uuid(), 'nome_original' => 'a.mp4', 'tamanho' => 100, 'titulo' => 'X', 'plataforma' => 'meta',
-        ])->assertStatus(422)->assertJson(['message' => 'O vídeo não chegou inteiro. Envie de novo.']);
+        ])->assertStatus(422)->assertJson(['message' => 'O arquivo não chegou inteiro. Envie de novo.']);
 
         $this->enviarEmPartes($admin, '<html><script>alert(1)</script></html>', 'falso.mp4')
             ->assertStatus(422);

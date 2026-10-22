@@ -232,6 +232,8 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     Route::get('produtos', [FerraKoraCatalogoController::class, 'index'])->middleware('throttle:120,1')->name('produtos');
     Route::get('produtos/{id}', [FerraKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
+    Route::get('produtos/{id}/prazo', [FerraKoraCatalogoController::class, 'prazo'])
+        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:30,1,fk-prazo')->name('produto.prazo');
     Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
 
     // Checkout próprio do FerraKora (2026-10-14): pedido e Mercado Pago pelo KazaKora.

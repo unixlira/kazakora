@@ -101,6 +101,31 @@ class CheckoutV2Test extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('avaliacaoItens', null));
     }
 
+    public function test_resumo_traz_a_miniatura_dos_livros_de_brinde(): void
+    {
+        $this->noCarrinho();
+        foreach (['Mais Saúde', 'Saúde e Vida', 'Sono & Saúde'] as $i => $titulo) {
+            LivroDigital::query()->create([
+                'titulo' => $titulo, 'arquivo' => "livros-digitais/{$i}.pdf", 'nome_arquivo' => "{$titulo}.pdf",
+                'tamanho' => 13, 'ativo' => true, 'todos_produtos' => true,
+            ]);
+        }
+
+        $this->get('/finalizacao')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('livrosBrinde.quantidade', 3)
+                ->where('livrosBrinde.titulos', ['Mais Saúde', 'Saúde e Vida', 'Sono & Saúde'])
+                ->where('livrosBrinde.imagem', fn ($imagem) => str_ends_with($imagem, '.webp')));
+    }
+
+    public function test_sem_livro_de_brinde_nao_mostra_miniatura(): void
+    {
+        $this->noCarrinho();
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('livrosBrinde', null));
+    }
+
     public function test_tela_unica_preenche_os_dados_do_cliente_logado(): void
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'name' => 'Ana Logada', 'phone' => '11988887777', 'cpf' => '12345678909']);

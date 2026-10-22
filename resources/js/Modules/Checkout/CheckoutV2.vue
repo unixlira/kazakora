@@ -18,8 +18,8 @@ const props = defineProps({
     items: { type: Array, default: () => [] },
     // Média das avaliações dos produtos do carrinho: { media, total } ou null.
     avaliacaoItens: { type: Object, default: null },
-    // Presente (2026-10-21): livros digitais que vão no e-mail de confirmação, embaixo do endereço.
-    brindes: { type: Array, default: () => [] },
+    // Livros de brinde dos produtos do carrinho: { imagem, quantidade, titulos } ou null.
+    livrosBrinde: { type: Object, default: null },
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
@@ -108,6 +108,8 @@ const turboEscolhido = ref(false);
 const itens = ref(props.items);
 // Estrelas do resumo (pedido 2026-10-21): cada estrela preenche a fração da
 // média que cabe nela (4,8 = 4 cheias e 80% da 5ª), como no StarRating.
+const livrosBrindeTexto = computed(() => (props.livrosBrinde?.quantidade === 1 ? '+ 1 livro digital GRÁTIS' : `+ ${props.livrosBrinde?.quantidade} livros digitais GRÁTIS`));
+const livrosBrindeAlt = computed(() => `Livros digitais grátis com a compra: ${(props.livrosBrinde?.titulos ?? []).join(', ')}`);
 const notaItens = computed(() => Math.max(0, Math.min(5, Number(props.avaliacaoItens?.media) || 0)));
 const preenchimentoEstrela = (estrela) => Math.max(0, Math.min(100, (notaItens.value - (estrela - 1)) * 100));
 const subtotalAtual = ref(Number(props.subtotal) || 0);
@@ -677,18 +679,11 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </button>
                         </div>
 
-                        <!-- Presente embaixo do endereço (pedido do Lira 2026-10-21): capas dos livros em miniatura. -->
-                        <div v-if="brindes.length" class="mt-4 flex items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-3">
-                            <div class="flex shrink-0 -space-x-3" aria-hidden="true">
-                                <img v-for="livro in brindes.filter((l) => l.capa_url).slice(0, 3)" :key="livro.id" :src="livro.capa_url" alt=""
-                                    width="36" height="48" loading="lazy" class="h-12 w-9 rounded border-2 border-white object-cover shadow-sm">
-                            </div>
-                            <p class="text-sm text-orange-950">
-                                <strong><i class="fa-solid fa-gift mr-1 text-orange-700" aria-hidden="true"></i>Presente:</strong>
-                                {{ brindes.length === 1 ? '1 livro digital grátis' : `${brindes.length} livros digitais grátis` }} no e-mail de confirmação do pedido.
-                                <span class="block text-xs text-orange-900">{{ brindes.map((l) => l.titulo).join(' · ') }}</span>
-                            </p>
-                        </div>
+                        <!-- Miniatura dos livros de brinde embaixo do endereço, no celular e no computador (pedido do Lira 2026-10-21; antes ficava ao lado dos bullets do pagamento). -->
+                        <figure v-if="livrosBrinde" class="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
+                            <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="1200" height="600" loading="lazy" decoding="async" class="w-36 shrink-0 rounded-lg border border-slate-200 bg-white">
+                            <figcaption class="text-sm font-bold text-[#00843f]">{{ livrosBrindeTexto }}</figcaption>
+                        </figure>
                     </section>
 
                     <!-- 3. Entrega -->

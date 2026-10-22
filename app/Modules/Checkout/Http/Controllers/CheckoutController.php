@@ -10,6 +10,7 @@ use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -1775,6 +1776,10 @@ class CheckoutController extends Controller
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
+            // Miniatura dos livros de brinde ao lado dos bullets do pagamento (2026-10-21).
+            'livrosBrinde' => PromocoesDoProduto::livrosDoCarrinho(
+                Product::query()->whereIn('id', $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique())->get()
+            ),
             'addresses' => $user ? $user->addresses : [],
             'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],
             'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,

@@ -90,6 +90,22 @@ const SITUACAO_CLASSES = {
 };
 const situacaoClasses = computed(() => SITUACAO_CLASSES[situacaoPagamento.value?.tom] ?? SITUACAO_CLASSES.info);
 
+// Valores discriminados (Lira, 2026-10-22): no site o frete convencional vai
+// dentro do preço dos produtos e o TURBO cobra à parte só a diferença do SEDEX.
+const valores = computed(() => {
+    const v = d.value.valores ?? {};
+    const subtotal = Number(v.subtotal ?? 0);
+    const embutido = v.frete_embutido == null ? null : Number(v.frete_embutido);
+    return {
+        produtos: embutido == null ? subtotal : Math.round((subtotal - embutido) * 100) / 100,
+        freteEmbutido: embutido,
+        turbo: !!v.turbo,
+        frete: Number(v.frete ?? 0),
+        // Pedido do site entre 12/10 (frete embutido) e 22/10 (valor guardado).
+        freteNoPreco: embutido == null && props.order.origin === 'loja' && String(props.order.created_at ?? '') >= '2026-10-12',
+    };
+});
+
 const formatDocument = (value) => {
     const digits = String(value ?? '').replace(/\D/g, '');
     if (digits.length === 11) return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
@@ -357,8 +373,22 @@ const cancelInvoice = () => {
                     </div>
 
                     <dl class="mt-4 space-y-1 border-t border-[var(--surface-border)] pt-3 text-sm">
-                        <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd class="tabular-nums">{{ formatPrice(d.valores?.subtotal ?? 0) }}</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Frete</dt><dd class="tabular-nums">{{ (d.valores?.frete ?? 0) > 0 ? formatPrice(d.valores.frete) : 'Grátis / pago pelo canal' }}</dd></div>
+                        <div class="flex justify-between">
+                            <dt class="text-slate-500">{{ valores.freteEmbutido != null ? 'Produtos (sem frete)' : (valores.freteNoPreco ? 'Produtos (frete incluso no preço)' : 'Produtos') }}</dt>
+                            <dd class="tabular-nums">{{ formatPrice(valores.produtos) }}</dd>
+                        </div>
+                        <div v-if="valores.freteEmbutido != null" class="flex justify-between">
+                            <dt class="text-slate-500">Frete convencional <span class="text-xs text-slate-400">(no preço dos produtos)</span></dt>
+                            <dd class="tabular-nums">{{ valores.freteEmbutido > 0 ? formatPrice(valores.freteEmbutido) : 'Grátis' }}</dd>
+                        </div>
+                        <div v-if="valores.turbo" class="flex justify-between">
+                            <dt class="text-slate-500">Extra do frete TURBO <span class="text-xs text-slate-400">(SEDEX)</span></dt>
+                            <dd class="tabular-nums">+ {{ formatPrice(valores.frete) }}</dd>
+                        </div>
+                        <div v-else-if="valores.freteEmbutido == null || valores.frete > 0" class="flex justify-between">
+                            <dt class="text-slate-500">{{ valores.freteEmbutido != null ? 'Frete cobrado à parte' : 'Frete' }}</dt>
+                            <dd class="tabular-nums">{{ valores.frete > 0 ? formatPrice(valores.frete) : 'Grátis / pago pelo canal' }}</dd>
+                        </div>
                         <div v-if="d.valores?.cupom || d.valores?.desconto_cupom > 0" class="flex justify-between">
                             <dt class="text-slate-500">Cupom <span v-if="d.valores?.cupom" class="font-mono text-xs">{{ d.valores.cupom }}</span></dt>
                             <dd class="tabular-nums text-success">− {{ formatPrice(Math.max(d.valores?.desconto_cupom ?? 0, 0)) }}</dd>

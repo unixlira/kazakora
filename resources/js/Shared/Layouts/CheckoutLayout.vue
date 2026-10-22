@@ -55,10 +55,11 @@ const tempo = computed(() => {
         <!-- Tarjas numa linha só também no celular (pedido 2026-10-10): letra menor lá. -->
         <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#E02424] px-2 py-2 text-center text-[11px] font-bold uppercase tracking-tight text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-base sm:tracking-wide md:text-lg">
             <i class="fa-solid fa-stopwatch" :class="{ 'animate-pulse': restante > 0 }"></i>
+            <!-- Sem "FULL" e sem raio na tarja (pedido 2026-10-21); o FULL segue na entrega. -->
             <span>Frete grátis por tempo limitado:</span>
-            <span class="inline-block rounded-md bg-white/20 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
+            <span class="inline-block rounded-md bg-black/25 px-1.5 py-0.5 font-mono text-sm tabular-nums sm:min-w-[4.5rem] sm:px-2 sm:text-xl md:text-2xl">{{ tempo }}</span>
         </div>
-        <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#0FB930] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">
+        <div class="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap bg-[#00843f] px-2 py-2 text-center text-[11px] font-semibold tracking-tight text-white sm:gap-2 sm:px-4 sm:text-sm sm:tracking-wide">
             <span><i class="fa-solid fa-lock mr-1"></i>COMPRA 100% SEGURA</span>
             <span class="opacity-60">·</span>
             <span><i class="fa-solid fa-fingerprint mr-1"></i>DADOS PROTEGIDOS</span>
@@ -102,17 +103,16 @@ const tempo = computed(() => {
                 <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Segurança</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
-                        <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
-                            :style="{ height: `${alturaSelo}px` }"
-                            title="Ver a verificação do Google Safe Browsing">
+                        <!-- Selos sem link no checkout (pedido 2026-10-21): o cliente não sai da tela de pagamento. -->
+                        <div class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2"
+                            :style="{ height: `${alturaSelo}px` }">
                             <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
-                        </a>
+                        </div>
                         <!-- Selo oficial RA Verificada (2026-10-14). Mesma escala do Google: caixa
                              branca da mesma altura, selo com 80% dela como o logo (pedido 2026-10-14). -->
                         <div class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2"
                             :style="{ height: `${alturaSelo}px` }">
-                            <SeloReclameAqui :altura="Math.round(alturaSelo * 0.8)" />
+                            <SeloReclameAqui :altura="Math.round(alturaSelo * 0.8)" sem-link />
                         </div>
                     </div>
                 </div>

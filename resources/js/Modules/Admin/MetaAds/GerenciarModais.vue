@@ -117,7 +117,47 @@ const confirmarExclusao = async () => {
     }
 };
 
-defineExpose({ editar, excluir });
+// Pausar criativo (sugestões do O que fazer, Lira 2026-10-21) ----------------
+
+const pausa = ref(null);
+const entendiPausarUltimo = ref(false);
+const pausaUltimoAtivo = ref(false);
+const pausando = ref(false);
+const erroPausa = ref('');
+
+const pausar = (alvo) => {
+    entendiPausarUltimo.value = false;
+    pausaUltimoAtivo.value = Boolean(alvo.ultimoAtivo);
+    erroPausa.value = '';
+    pausa.value = alvo;
+};
+
+const tituloPausa = computed(() => `Pausar o criativo "${pausa.value?.nome ?? ''}"?`);
+
+const confirmarPausa = async () => {
+    if (!pausa.value || pausando.value || (pausaUltimoAtivo.value && !entendiPausarUltimo.value)) return;
+    pausando.value = true;
+    erroPausa.value = '';
+    try {
+        const resposta = await pedirJson('POST', `${BASE}/anuncio/${pausa.value.id}/pausar`, {
+            sem_ativo: pausaUltimoAtivo.value && entendiPausarUltimo.value,
+        });
+        notifySuccess(resposta?.message ?? 'Criativo pausado na Meta.');
+        pausa.value = null;
+        emit('mudou', { nivel: 'anuncio', acao: 'pausar' });
+    } catch (erro) {
+        if (erro.erros?.sem_ativo) {
+            pausaUltimoAtivo.value = true;
+            erroPausa.value = '';
+        } else {
+            erroPausa.value = erro.message;
+        }
+    } finally {
+        pausando.value = false;
+    }
+};
+
+defineExpose({ editar, excluir, pausar });
 </script>
 
 <template>
@@ -198,6 +238,32 @@ defineExpose({ editar, excluir });
             </button>
             <button type="button" :disabled="excluindo || !podeExcluirDeVez" :class="[botao, 'bg-error text-white hover:opacity-90']" @click="confirmarExclusao">
                 <i v-if="excluindo" class="fas fa-spinner fa-spin" aria-hidden="true"></i> Excluir de vez
+            </button>
+        </template>
+    </ConfirmModal>
+
+    <ConfirmModal :open="pausa !== null" :title="tituloPausa" :loading="pausando" @close="pausa = null">
+        <template v-if="pausa">
+            <p class="text-sm">
+                Este anúncio já gastou <strong>{{ formatarReais(pausa.gasto ?? 0) }}</strong> no período.
+                Pausar para de gastar na hora; dá para ativar de novo depois.
+            </p>
+            <div v-if="pausaUltimoAtivo" class="mt-3 space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200" role="alert">
+                <p>É o último anúncio ativo do conjunto. Sem ele o conjunto para de entregar.</p>
+                <label class="flex items-start gap-2">
+                    <input v-model="entendiPausarUltimo" type="checkbox" class="mt-0.5">
+                    <span>Mesmo assim, quero pausar.</span>
+                </label>
+            </div>
+            <p aria-live="assertive" class="mt-3 text-sm text-red-700" :class="{ 'sr-only': !erroPausa }">{{ erroPausa }}</p>
+        </template>
+
+        <template #actions>
+            <button type="button" :disabled="pausando" :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="pausa = null">
+                Voltar
+            </button>
+            <button type="button" :disabled="pausando || (pausaUltimoAtivo && !entendiPausarUltimo)" :class="[botao, 'bg-amber-600 text-white hover:bg-amber-700']" @click="confirmarPausa">
+                <i :class="pausando ? 'fas fa-spinner fa-spin' : 'fas fa-pause'" aria-hidden="true"></i> Pausar na Meta
             </button>
         </template>
     </ConfirmModal>

@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Models\CriativoValidacao;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
 use App\Modules\Marketplace\Jobs\TrocarCriativoMetaAds;
@@ -382,6 +383,127 @@ class MetaAdsController extends Controller
         ] + ($imagem ? [] : ($formato->medir(Storage::disk('local')->path($path)) ?? [])));
 
         return response()->json(['video' => $this->dadosDoVideo($campanha, $video)], 201);
+    }
+
+    /**
+     * Criativos aprovados em Marketing › Validação de criativos (pedido do
+     * Lira 2026-10-21): a opção "Dentro da plataforma" do anúncio novo. Os da
+     * Meta vêm primeiro; só vídeo e imagem que a Meta aceita.
+     */
+    public function criativosAprovados(Request $request): JsonResponse
+    {
+        $busca = trim((string) ($request->validate(['busca' => ['nullable', 'string', 'max:100']])['busca'] ?? ''));
+
+        $criativos = CriativoValidacao::query()
+            ->with('produto:id,name')
+            ->where('status', CriativoValidacao::APROVADO)
+            ->when($busca !== '', function ($q) use ($busca) {
+                $like = '%'.addcslashes($busca, '\\%_').'%';
+                $q->where(fn ($w) => $w->where('titulo', 'like', $like)
+                    ->orWhere('identificacao', 'like', $like)
+                    ->orWhereHas('produto', fn ($p) => $p->where('name', 'like', $like)));
+            })
+            ->orderByRaw("plataforma = 'meta' desc")
+            ->latest('avaliado_em')->latest('id')
+            ->limit(200)
+            ->get()
+            ->filter(fn (CriativoValidacao $c) => self::criativoServeParaMeta($c))
+            ->map(fn (CriativoValidacao $c) => [
+                'id' => $c->id,
+                'titulo' => $c->titulo,
+                'identificacao' => $c->identificacao,
+                'tipo' => $c->ehImagem() ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
+                'plataforma' => CriativoValidacao::PLATAFORMAS[$c->plataforma] ?? $c->plataforma,
+                'produto_id' => $c->produto_id,
+                'produto' => $c->produto?->name,
+                'tamanho_mb' => round($c->tamanho / 1048576, 1),
+                'proporcao' => $c->proporcao(),
+                'duracao' => $c->duracao_segundos !== null ? (int) round((float) $c->duracao_segundos) : null,
+                'url' => route('admin.publicidade.meta-ads.campanhas.criativos-aprovados.arquivo', $c),
+            ])
+            ->values();
+
+        return response()->json(['criativos' => $criativos]);
+    }
+
+    /** Prévia do criativo aprovado (só aprovado; o resto fica na tela de validação). */
+    public function criativoAprovadoArquivo(CriativoValidacao $criativo): BinaryFileResponse
+    {
+        abort_unless($criativo->status === CriativoValidacao::APROVADO, 404);
+
+        $disco = Storage::disk('local');
+        abort_unless($disco->exists($criativo->path), 404);
+
+        return response()->file($disco->path($criativo->path), ['Cache-Control' => 'private, max-age=3600', 'X-Content-Type-Options' => 'nosniff']);
+    }
+
+    /**
+     * Anúncio novo com um criativo aprovado ("Dentro da plataforma"): copia o
+     * arquivo que já está no servidor para a pasta da campanha, sem subir de
+     * novo. Daí em diante é igual ao arquivo vindo do computador (o envio à
+     * Meta sobe para advideos ou adimages e monta o criativo).
+     */
+    public function videoDaPlataforma(Request $request, MetaAdsCampanha $campanha, FormatoDeVideo $formato): JsonResponse
+    {
+        if (! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id'))) {
+            return response()->json(['message' => 'Campanha já enviada à Meta: os anúncios não mudam mais por aqui.'], 409);
+        }
+
+        $textos = $this->comErrosEmJson($request, function () use ($request) {
+            $request->validate(['criativo_id' => ['required', 'integer']]);
+
+            return $this->validarAnuncio($request);
+        });
+
+        $criativo = CriativoValidacao::query()->find((int) $request->input('criativo_id'));
+        if (! $criativo || $criativo->status !== CriativoValidacao::APROVADO) {
+            return response()->json(['message' => 'Este criativo não está mais aprovado. Escolha outro.'], 422);
+        }
+        if (! self::criativoServeParaMeta($criativo)) {
+            return response()->json(['message' => 'Este arquivo não serve para a Meta (imagem acima de 30 MB ou formato não aceito).'], 422);
+        }
+
+        if ($campanha->videos()->count() >= MetaAdsCampanha::MAX_VIDEOS) {
+            return response()->json(['message' => 'Limite de '.MetaAdsCampanha::MAX_VIDEOS.' anúncios por campanha.'], 422);
+        }
+
+        $disco = Storage::disk('local');
+        if (! $disco->exists($criativo->path)) {
+            return response()->json(['message' => 'O arquivo deste criativo sumiu do servidor. Envie de novo em Validação de criativos.'], 422);
+        }
+
+        $conjunto = $this->conjuntoDoAnuncio($request, $campanha);
+        $extensao = strtolower(pathinfo($criativo->path, PATHINFO_EXTENSION));
+        $path = self::pastaDosVideos($campanha).'/'.Str::random(40).'.'.$extensao;
+        if (! $disco->copy($criativo->path, $path)) {
+            return response()->json(['message' => 'Não consegui copiar o arquivo no servidor.'], 500);
+        }
+
+        $imagem = $criativo->ehImagem();
+        $nome = (Str::limit(trim(str_replace(['/', '\\'], ' ', $criativo->titulo)), 240, '') ?: 'criativo-'.$criativo->id).'.'.$extensao;
+        $video = $campanha->videos()->create($textos + [
+            'conjunto_id' => $conjunto->id,
+            'adicionado_depois' => ! $campanha->podeMexerNosVideos(),
+            'ordem' => $request->filled('ordem') ? (int) $request->input('ordem') : $this->proximaOrdem($campanha),
+            'tipo' => $imagem ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
+            'nome_original' => $nome,
+            'path' => $path,
+            'tamanho' => (int) $disco->size($path),
+            'duracao_segundos' => $criativo->duracao_segundos,
+            'largura' => $criativo->largura,
+            'altura' => $criativo->altura,
+        ] + ($imagem || $criativo->largura ? [] : ($formato->medir($disco->path($path)) ?? [])));
+
+        return response()->json(['video' => $this->dadosDoVideo($campanha, $video)], 201);
+    }
+
+    private static function criativoServeParaMeta(CriativoValidacao $criativo): bool
+    {
+        if ($criativo->ehImagem()) {
+            return $criativo->tamanho <= CriativoValidacao::MAX_MB_IMAGEM * 1048576;
+        }
+
+        return in_array(strtolower(pathinfo((string) $criativo->path, PATHINFO_EXTENSION)), CriativoValidacao::EXTENSOES, true);
     }
 
     /**

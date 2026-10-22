@@ -31,6 +31,15 @@ class NomeOutraLojaTest extends TestCase
         $this->assertSame('Maria J.', $r->reviewer_display_name);
     }
 
+    public function test_importada_sem_nome_nao_cai_no_cliente_kazakora(): void
+    {
+        $semFlag = $this->review(['id' => 24639, 'outra_loja' => 0, 'origem_loja' => 'loja Shopee 1', 'reviewer_name' => null]);
+        $mascarado = $this->review(['id' => 372, 'outra_loja' => 0, 'external_id' => 'shopee:1', 'reviewer_name' => 's***a']);
+
+        $this->assertNotSame('Cliente KazaKora', $semFlag->reviewer_display_name);
+        $this->assertStringNotContainsString('***', $mascarado->reviewer_display_name);
+    }
+
     public function test_avaliacao_da_loja_nao_muda(): void
     {
         $r = $this->review(['id' => 7, 'outra_loja' => 0, 'reviewer_name' => 'Ana']);

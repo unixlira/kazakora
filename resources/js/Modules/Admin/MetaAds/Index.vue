@@ -187,7 +187,7 @@ const columns = [
                     Não deu para ler a Meta agora: {{ props.espelho.erro }}
                 </p>
                 <DiagnosticoMeta v-if="!props.espelho?.erro" :diagnostico="props.espelho?.diagnostico" :periodos="props.periodos"
-                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
+                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @pausar="(alvo) => tabela?.pausar(alvo.id)" @ultimos7="trocarPeriodo('last_7d')" />
                 <p v-if="!props.espelho?.erro && !(props.espelho?.campanhas ?? []).length"
                     class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 text-sm text-slate-500" role="status">
                     Nada com o status "{{ props.statusFiltros[props.status] ?? props.status }}" na Meta neste período.

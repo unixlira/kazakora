@@ -9,6 +9,7 @@ import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import BuscaLocal from './BuscaLocal.vue';
+import EscolherCriativo from './EscolherCriativo.vue';
 import { enviarArquivo, formatarReais, pedirJson } from './metaAds';
 
 const props = defineProps({
@@ -82,7 +83,7 @@ const maxBytes = props.limites.max_mb * 1024 * 1024;
 const semExtensao = (nome) => String(nome ?? '').replace(/\.[^.]+$/, '');
 
 const anuncioSalvo = (v) => ({
-    chave: `s${v.id}`, id: v.id, origemId: null, arquivo: null, tipo: v.tipo, nome: v.nome, previa: v.url,
+    chave: `s${v.id}`, id: v.id, origemId: null, criativoId: null, arquivo: null, tipo: v.tipo, nome: v.nome, previa: v.url,
     tamanho: `${v.tamanho_mb} MB`, formato: v.formato ?? '', vira_vertical: Boolean(v.vira_vertical),
     campos: camposDe(v), estado: 'salvo', progresso: 0, erro: '', aberto: false,
 });
@@ -219,7 +220,7 @@ const adicionarArquivos = (cj, lista) => {
             continue;
         }
         const novo = {
-            chave: novaChave('a'), id: null, origemId: null, arquivo, tipo: TIPOS[arquivo.type], nome: arquivo.name,
+            chave: novaChave('a'), id: null, origemId: null, criativoId: null, arquivo, tipo: TIPOS[arquivo.type], nome: arquivo.name,
             previa: URL.createObjectURL(arquivo), tamanho: `${(arquivo.size / 1048576).toFixed(1)} MB`, formato: '', vira_vertical: false,
             campos: camposDe(), estado: 'esperando', progresso: 0, erro: '', aberto: false,
         };
@@ -233,6 +234,33 @@ const adicionarArquivos = (cj, lista) => {
 };
 
 const escolherArquivos = (cj) => document.getElementById(`arquivos-${cj.chave}`)?.click();
+
+// "Dentro da plataforma": criativo aprovado em Validação de criativos. O
+// servidor copia o arquivo ao salvar; o produto do criativo já vem marcado.
+const escolhendoEm = ref(null);
+const adicionarDaPlataforma = (lista) => {
+    const cj = conjuntos.value.find((x) => x.chave === escolhendoEm.value);
+    if (!cj) return;
+    aviso.value = '';
+    for (const c of lista) {
+        if (vagas() <= 0) {
+            aviso.value = `Limite de ${props.limites.max_videos} anúncios por campanha.`;
+            break;
+        }
+        const novo = {
+            chave: novaChave('a'), id: null, origemId: null, criativoId: c.id, arquivo: null, tipo: c.tipo, nome: c.titulo,
+            previa: c.url, tamanho: `${c.tamanho_mb} MB`, formato: c.tipo === 'imagem' ? (c.proporcao ?? '') : '', vira_vertical: false,
+            campos: camposDe(), estado: 'esperando', progresso: 0, erro: '', aberto: false,
+        };
+        cj.anuncios.push(novo);
+        if (props.produtos.some((p) => p.id === c.produto_id)) {
+            novo.campos.produto_id = c.produto_id;
+            aoEscolherProdutoDoAnuncio(cj.anuncios[cj.anuncios.length - 1]);
+        }
+        emPrevia.value = novo.chave;
+    }
+    cj.aberto = true;
+};
 
 const arrastandoEm = ref(null);
 const aoSoltar = (cj, evento) => {
@@ -465,9 +493,11 @@ const salvar = async (depois = 'ficar') => {
             const extras = { ...a.campos, conjunto_id: cj.id, ordem: o };
             const resposta = a.origemId
                 ? await pedirJson('POST', `${BASE}/${campanhaId.value}/videos/${a.origemId}/duplicar`, extras)
+                : a.criativoId
+                ? await pedirJson('POST', `${BASE}/${campanhaId.value}/videos/da-plataforma`, { ...extras, criativo_id: a.criativoId })
                 : await enviarArquivo(`${BASE}/${campanhaId.value}/videos`, 'video', a.arquivo, (p) => { a.progresso = p; }, extras);
             if (a.arquivo) URL.revokeObjectURL(a.previa);
-            Object.assign(a, { id: resposta.video.id, origemId: null, arquivo: null, previa: resposta.video.url, estado: 'salvo', formato: resposta.video.formato || a.formato, vira_vertical: Boolean(resposta.video.vira_vertical) });
+            Object.assign(a, { id: resposta.video.id, origemId: null, criativoId: null, arquivo: null, previa: resposta.video.url, estado: 'salvo', formato: resposta.video.formato || a.formato, vira_vertical: Boolean(resposta.video.vira_vertical) });
         } catch (erro) {
             a.estado = 'erro';
             a.erro = erro.message;
@@ -822,13 +852,20 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                             @drop.prevent="aoSoltar(cj, $event)"
                         >
                             <p class="text-slate-500">
-                                {{ cj.anuncios.length ? 'Solte vídeos ou imagens aqui. Cada arquivo vira um anúncio.' : 'Solte vídeos ou imagens aqui ou clique em + Anúncio.' }}
+                                {{ cj.anuncios.length ? 'Solte vídeos ou imagens aqui. Cada arquivo vira um anúncio.' : 'Solte vídeos ou imagens aqui ou escolha de onde vem o criativo.' }}
                             </p>
-                            <button type="button" :disabled="totalAnuncios >= props.limites.max_videos || salvando"
-                                class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                @click="escolherArquivos(cj)">
-                                <i class="fas fa-plus text-xs" aria-hidden="true"></i> Anúncio
-                            </button>
+                            <div class="flex flex-wrap justify-center gap-2">
+                                <button type="button" :disabled="totalAnuncios >= props.limites.max_videos || salvando"
+                                    class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                    @click="escolherArquivos(cj)">
+                                    <i class="fas fa-upload text-xs" aria-hidden="true"></i> Do computador
+                                </button>
+                                <button type="button" :disabled="totalAnuncios >= props.limites.max_videos || salvando"
+                                    class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                    @click="escolhendoEm = cj.chave">
+                                    <i class="fas fa-photo-film text-xs" aria-hidden="true"></i> Dentro da plataforma
+                                </button>
+                            </div>
                             <input :id="`arquivos-${cj.chave}`" type="file" accept="video/mp4,video/quicktime,image/jpeg,image/png" multiple class="sr-only"
                                 :aria-label="`Escolher vídeos ou imagens para ${cj.nome}`" tabindex="-1"
                                 @change="adicionarArquivos(cj, $event.target.files); $event.target.value = ''">
@@ -931,5 +968,6 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                 </div>
             </div>
         </form>
+        <EscolherCriativo :open="escolhendoEm !== null" :vagas="Math.max(0, vagas())" @close="escolhendoEm = null" @escolher="adicionarDaPlataforma" />
     </AdminLayout>
 </template>

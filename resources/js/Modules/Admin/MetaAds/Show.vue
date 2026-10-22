@@ -340,7 +340,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     Não deu para ler a Meta agora: {{ espelho.erro }}
                 </p>
                 <DiagnosticoMeta v-if="!espelho?.erro" :diagnostico="espelho?.diagnostico" :periodos="periodos" titulo="O que fazer nesta campanha"
-                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @ultimos7="trocarPeriodo('last_7d')" />
+                    :pode-editar="can('financeiro.create')" @ver="verNaTabela" @editar="editarAlvo" @pausar="(alvo) => tabela?.pausar(alvo.id)" @ultimos7="trocarPeriodo('last_7d')" />
                 <EspelhoMeta v-if="!espelho?.erro" ref="tabela" :campanhas="espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="espelho?.diagnostico" abrir-tudo sem-link-local :editar-anuncios="can('financeiro.create')"
                     :produtos="produtos" :chamadas="chamadas" :class="{ 'opacity-60': carregandoMeta }" @mudou="recarregarTudo" />
             </Deferred>

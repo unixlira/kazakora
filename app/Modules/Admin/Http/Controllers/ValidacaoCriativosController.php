@@ -28,7 +28,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * máximo 64 MB por requisição e vídeo de criativo costuma passar disso. As
  * partes se juntam em criativos/envios/ e, no fim (store), o arquivo vai
  * para criativos/AAAA-MM/ no disco local (privado). Parte esquecida há mais
- * de um dia é limpa quando a tela abre.
+ * de um dia é limpa quando a tela abre. Imagem (JPG/PNG, até 30 MB) entra
+ * pelo mesmo caminho desde 2026-10-21.
  */
 class ValidacaoCriativosController extends Controller
 {
@@ -43,6 +44,9 @@ class ValidacaoCriativosController extends Controller
         'm4v' => 'video/mp4',
         'mov' => 'video/quicktime',
         'webm' => 'video/webm',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
     ];
 
     public function index(Request $request): Response
@@ -66,6 +70,7 @@ class ValidacaoCriativosController extends Controller
             ->when($busca !== '', function (Builder $q) use ($busca) {
                 $like = '%'.addcslashes($busca, '\\%_').'%';
                 $q->where(fn (Builder $w) => $w->where('titulo', 'like', $like)
+                    ->orWhere('identificacao', 'like', $like)
                     ->orWhere('nome_original', 'like', $like)
                     ->orWhere('observacao', 'like', $like)
                     ->orWhereHas('produto', fn (Builder $p) => $p->where('name', 'like', $like)));
@@ -95,7 +100,9 @@ class ValidacaoCriativosController extends Controller
                 ->map(fn (Product $p) => ['id' => $p->id, 'nome' => $p->name]),
             'podeAvaliar' => (bool) $request->user()?->isAdmin(),
             'extensoes' => CriativoValidacao::EXTENSOES,
+            'extensoesImagem' => CriativoValidacao::EXTENSOES_IMAGEM,
             'maxMb' => CriativoValidacao::MAX_MB,
+            'maxMbImagem' => CriativoValidacao::MAX_MB_IMAGEM,
             'tamanhoParte' => self::TAMANHO_PARTE,
         ]);
     }
@@ -149,39 +156,48 @@ class ValidacaoCriativosController extends Controller
         ] + $this->regrasDosDados(), $this->mensagens());
 
         $extensao = strtolower(pathinfo($dados['nome_original'], PATHINFO_EXTENSION));
-        if (! in_array($extensao, CriativoValidacao::EXTENSOES, true)) {
-            return response()->json(['message' => 'Use vídeo MP4, MOV, M4V ou WebM.'], 422);
+        $imagem = CriativoValidacao::extensaoEhImagem($extensao);
+        if (! $imagem && ! in_array($extensao, CriativoValidacao::EXTENSOES, true)) {
+            return response()->json(['message' => 'Use vídeo MP4, MOV, M4V ou WebM, ou imagem JPG ou PNG.'], 422);
         }
 
         $disco = Storage::disk('local');
         $temporario = $this->caminhoDoEnvio($request, $dados['envio']);
         if (! $disco->exists($temporario) || $disco->size($temporario) !== (int) $dados['tamanho']) {
-            return response()->json(['message' => 'O vídeo não chegou inteiro. Envie de novo.'], 422);
+            return response()->json(['message' => 'O arquivo não chegou inteiro. Envie de novo.'], 422);
         }
 
-        if (! $this->pareceVideo($disco->path($temporario))) {
+        if ($imagem && $disco->size($temporario) > CriativoValidacao::MAX_MB_IMAGEM * 1048576) {
             $disco->delete($temporario);
 
-            return response()->json(['message' => 'O arquivo não é um vídeo. Use MP4, MOV, M4V ou WebM.'], 422);
+            return response()->json(['message' => 'A imagem passa de '.CriativoValidacao::MAX_MB_IMAGEM.' MB (limite da Meta). Comprima antes de enviar.'], 422);
+        }
+
+        $medidas = $imagem ? $this->medirImagem($disco->path($temporario)) : null;
+        if ($imagem ? $medidas === null : ! $this->pareceVideo($disco->path($temporario))) {
+            $disco->delete($temporario);
+
+            return response()->json(['message' => $imagem ? 'O arquivo não é uma imagem JPG ou PNG.' : 'O arquivo não é um vídeo. Use MP4, MOV, M4V ou WebM.'], 422);
         }
 
         $final = 'criativos/'.now()->format('Y-m').'/'.Str::uuid().'.'.$extensao;
         if (! $disco->move($temporario, $final)) {
-            return response()->json(['message' => 'Não consegui guardar o vídeo no servidor.'], 500);
+            return response()->json(['message' => 'Não consegui guardar o arquivo no servidor.'], 500);
         }
 
         $absoluto = $disco->path($final);
         $criativo = CriativoValidacao::create([
             'titulo' => $dados['titulo'],
+            'identificacao' => $dados['identificacao'] ?? null,
             'plataforma' => $dados['plataforma'],
             'produto_id' => $dados['produto_id'] ?? null,
             'observacao' => $dados['observacao'] ?? null,
             'nome_original' => mb_substr($dados['nome_original'], 0, 255),
             'path' => $final,
             'tamanho' => $disco->size($final),
-            'duracao_segundos' => $duracao->segundos($absoluto),
+            'duracao_segundos' => $imagem ? null : $duracao->segundos($absoluto),
             'enviado_por' => $request->user()?->id,
-        ] + ($formato->medir($absoluto) ?? []));
+        ] + ($imagem ? $medidas : ($formato->medir($absoluto) ?? [])));
 
         return response()->json(['criativo' => $criativo->load(['produto', 'enviadoPor'])->paraTela()], 201);
     }
@@ -191,6 +207,16 @@ class ValidacaoCriativosController extends Controller
         $criativo->update($request->validate($this->regrasDosDados(), $this->mensagens()));
 
         return back()->with('success', 'Criativo atualizado.');
+    }
+
+    /** Texto embaixo do vídeo (do que se trata, qual campanha), salvo ao sair do campo. */
+    public function identificar(Request $request, CriativoValidacao $criativo): RedirectResponse
+    {
+        $dados = $request->validate(['identificacao' => ['nullable', 'string', 'max:255']]);
+        $texto = trim((string) ($dados['identificacao'] ?? ''));
+        $criativo->update(['identificacao' => $texto !== '' ? $texto : null]);
+
+        return back();
     }
 
     /** Aprovar, pedir ajuste ou reprovar: só administrador (o Lira). */
@@ -242,7 +268,7 @@ class ValidacaoCriativosController extends Controller
     public function arquivo(Request $request, CriativoValidacao $criativo): BinaryFileResponse
     {
         $disco = Storage::disk('local');
-        abort_unless($disco->exists($criativo->path), 404, 'Vídeo não encontrado no servidor.');
+        abort_unless($disco->exists($criativo->path), 404, 'Arquivo não encontrado no servidor.');
 
         $extensao = strtolower(pathinfo($criativo->path, PATHINFO_EXTENSION));
         $cabecalhos = [
@@ -265,6 +291,7 @@ class ValidacaoCriativosController extends Controller
     {
         return [
             'titulo' => ['required', 'string', 'max:150'],
+            'identificacao' => ['nullable', 'string', 'max:255'],
             'plataforma' => ['required', Rule::in(array_keys(CriativoValidacao::PLATAFORMAS))],
             'produto_id' => ['nullable', 'integer', 'exists:products,id'],
             'observacao' => ['nullable', 'string', 'max:2000'],
@@ -292,6 +319,19 @@ class ValidacaoCriativosController extends Controller
         $tipo = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($caminho);
 
         return str_starts_with($tipo, 'video/') || in_array($tipo, ['application/mp4', 'application/octet-stream'], true);
+    }
+
+    /**
+     * Largura e altura da imagem; null quando o conteúdo não é JPG nem PNG.
+     *
+     * @return array{largura: int, altura: int}|null
+     */
+    private function medirImagem(string $caminho): ?array
+    {
+        $tipo = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($caminho);
+        $medida = in_array($tipo, ['image/jpeg', 'image/png'], true) ? @getimagesize($caminho) : false;
+
+        return $medida ? ['largura' => (int) $medida[0], 'altura' => (int) $medida[1]] : null;
     }
 
     private function limparEnviosEsquecidos(): void

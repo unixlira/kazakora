@@ -88,6 +88,7 @@ class LabelFetchService
         private readonly MarketplaceDriverManager $manager,
         private readonly OrderFulfillmentTimeline $timeline,
         private readonly LabelProcessingService $processor,
+        private readonly J3FlexLabel $j3,
     ) {
     }
 
@@ -128,6 +129,20 @@ class LabelFetchService
         }
 
         $contents = $label['contents'];
+
+        // Flex dentro da área da J3 sai com a etiqueta dela (2026-10-21). O
+        // Mercado Livre continua sendo consultado antes: é ele que diz que o
+        // envio está pronto pra sair. Sem etiqueta da J3 (fora da área,
+        // desligada ou erro), segue a etiqueta do ML de sempre.
+        $etiquetaJ3 = $this->j3->emitir($shipment);
+
+        // Pedido do site que saiu pela J3: a etiqueta já veio dela pelo
+        // LojaShippingDriver.
+        $etiquetaJ3DoSite = $shipment->channel === Order::ORIGIN_STORE && filled($shipment->j3_tracking_number);
+
+        if ($etiquetaJ3 !== null) {
+            $contents = $etiquetaJ3;
+        }
 
         // Guarda o arquivo exatamente como o canal devolveu (zip da Shopee,
         // pdf do Mercado Livre), ANTES de qualquer descompactação/conversão
@@ -194,7 +209,7 @@ class LabelFetchService
         // larga que o rolo de 4" — era isso que travava a térmica. Encaixa
         // no papel antes de guardar/imprimir. Se falhar, segue com a
         // original em vez de travar o pedido.
-        if ($isPdf && $shipment->channel === MarketplaceAccount::CHANNEL_TIKTOK_SHOP) {
+        if ($isPdf && ($shipment->channel === MarketplaceAccount::CHANNEL_TIKTOK_SHOP || $etiquetaJ3 !== null || $etiquetaJ3DoSite)) {
             try {
                 $contents = $this->processor->encaixarNaFolha($contents);
             } catch (Throwable $exception) {
@@ -326,7 +341,7 @@ class LabelFetchService
             'label_ready_at' => now(),
         ]);
 
-        $this->timeline->record($shipment->order, OrderFulfillmentEvent::STEP_LABEL_GENERATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Etiqueta baixada do canal');
+        $this->timeline->record($shipment->order, OrderFulfillmentEvent::STEP_LABEL_GENERATED, OrderFulfillmentEvent::STATUS_SUCCESS, $etiquetaJ3 !== null || $etiquetaJ3DoSite ? "Etiqueta da J3 emitida (rastreio {$shipment->j3_tracking_number})" : 'Etiqueta baixada do canal');
 
         // A etiqueta fica PRONTA aqui, mas não sai na impressora aqui —
         // ver queuePrint(). Regra 8 do briefing do Corea SYNC V3.

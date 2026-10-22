@@ -673,6 +673,21 @@ class MetaAdsService
     }
 
     /**
+     * Pausa na Meta pelo id (botão "Pausar criativo" das sugestões, Lira
+     * 2026-10-21). Volta pelo Gerenciador ou pelo Ativar do KazaKora.
+     *
+     * @param  array{id: string, campanha_id: ?string}  $objeto
+     *
+     * @throws MetaAdsException
+     */
+    public function pausarObjeto(array $objeto): void
+    {
+        $this->post($objeto['id'], ['status' => 'PAUSED']);
+        $this->esquecerEspelho($objeto['campanha_id']);
+        $this->esquecerStatusAoVivo();
+    }
+
+    /**
      * É o único conjunto ativo da campanha, ou o único anúncio ativo do
      * conjunto? (sem ele, a campanha ou o conjunto para de entregar)
      *

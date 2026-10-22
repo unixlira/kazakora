@@ -89,17 +89,22 @@ class Review extends Model
             return 'Cliente KazaKora';
         }
 
-        // Avaliação de outra loja sem autor (ou gravada como "Comprador de outra
-        // loja") mostra um nome brasileiro sorteado pelo id: o mesmo para a mesma
-        // avaliação (pedido 2026-10-20). O banco continua com o texto genérico.
-        if ($this->getAttribute('outra_loja')) {
-            $nome = trim((string) $this->reviewer_name);
-
-            return $nome === '' || $nome === 'Comprador de outra loja'
-                ? NomeBrasileiro::gerar($this->getKey() ?? $this->external_id)
-                : $this->reviewer_name;
+        if ($this->user) {
+            return $this->user->name;
         }
 
-        return $this->user?->name ?? $this->reviewer_name ?? 'Cliente KazaKora';
+        // Avaliação importada (de outra loja ou de canal) sem autor, gravada como
+        // "Comprador de outra loja" ou com apelido mascarado ("s***a") mostra um
+        // nome sorteado pelo id: o mesmo para a mesma avaliação (pedidos 20 e
+        // 22/10). Não depende de outra_loja: em 22/10 o campo estava zerado e a
+        // tela caía no "Cliente KazaKora". O banco continua com o texto original.
+        $nome = trim((string) $this->reviewer_name);
+        $importada = $this->getAttribute('outra_loja') || $this->getAttribute('origem_loja') || $this->external_id;
+
+        if ($importada && ($nome === '' || $nome === 'Comprador de outra loja' || str_contains($nome, '***'))) {
+            return NomeBrasileiro::gerar($this->getKey() ?? $this->external_id);
+        }
+
+        return $nome !== '' ? $this->reviewer_name : 'Cliente KazaKora';
     }
 }

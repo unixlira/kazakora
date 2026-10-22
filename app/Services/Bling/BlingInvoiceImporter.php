@@ -10,9 +10,14 @@ use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\FiscalAlertNotification;
 use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Bling\Exceptions\BlingException;
+use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeDanfeService;
+use App\Services\NFe\NFeWebserviceService;
+use NFePHP\NFe\Complements;
+use SimpleXMLElement;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -71,6 +76,8 @@ class BlingInvoiceImporter
         private readonly BlingOrderService $orders,
         private readonly NFeDanfeService $danfe,
         private readonly OrderFulfillmentTimeline $timeline,
+        private readonly NFeCertificateService $certificados,
+        private readonly NFeWebserviceService $sefaz,
     ) {
     }
 
@@ -278,6 +285,20 @@ class BlingInvoiceImporter
             return $order->invoice;
         }
 
+        if ($this->situacaoSemRetorno($nota)) {
+            // Já conferida antes: o Bling continua na situação 0, mas aqui a
+            // nota já tem o protocolo da SEFAZ (e o XML, quando deu para
+            // montar). Regravar com a situação dele apagaria isso.
+            $registrada = $order->invoice()->first();
+
+            if ($registrada?->protocolo_autorizacao
+                && $registrada->chave_acesso === preg_replace('/\D/', '', (string) $nota['chaveAcesso'])) {
+                return $registrada;
+            }
+
+            return $this->recuperarAutorizacaoPerdida($order, $nfeId, $nota) ?? $this->gravarInvoice($order, $nota);
+        }
+
         if ($this->deveTransmitir($nfeId, $nota)) {
             $divergencias = $this->conferirContraNossoCadastro($order, $nota);
 
@@ -296,12 +317,87 @@ class BlingInvoiceImporter
                 return $this->gravarInvoice($order, $nota);
             }
 
-            Cache::put($this->chaveDaUltimaTentativa($nfeId), $this->impressaoDosItens($nota), now()->addDays(30));
-
-            $nota = $this->enviarParaSefaz($nfeId) ?? $nota;
+            $nota = $this->transmitirUmaVez($order, $nfeId, $nota);
         }
 
         return $this->gravarInvoice($order, $nota);
+    }
+
+    /**
+     * BUG REAL 2026-10-13 a 21 (10 pedidos do TikTok, entre eles #3325): a
+     * mesma nota ia ao /enviar mais de uma vez (webhook, webhook reentregue
+     * e a varredura de 5 min rodam juntos, e situação 1 sempre transmitia).
+     * A 1ª autorizava na SEFAZ, mas o Bling ficava sem o retorno, continuava
+     * em 1, e o envio seguinte REGERAVA o XML (dhEmi novo, mesma chave): a
+     * SEFAZ recusava como duplicidade e a nota parava na situação 0, com o
+     * XML guardado diferente do autorizado. Em #3074 os dois envios saíram
+     * com 1 s de diferença; em #3325 o 3º envio foi da varredura das 12:05.
+     *
+     * Por isso: trava por nota (um envio por vez), relê a nota dentro da
+     * trava e, se ela já tem chave, pergunta à SEFAZ antes. Já autorizada
+     * lá = não envia nunca mais.
+     *
+     * @param  array<string, mixed>  $nota
+     * @return array<string, mixed>
+     */
+    private function transmitirUmaVez(Order $order, int $nfeId, array $nota): array
+    {
+        $trava = Cache::lock("bling.invoice.enviar.{$nfeId}", 180);
+
+        if (! $trava->get()) {
+            return $nota;
+        }
+
+        try {
+            $nota = $this->fetchNota($nfeId) ?? $nota;
+
+            if (! $this->deveTransmitir($nfeId, $nota)) {
+                return $nota;
+            }
+
+            $naSefaz = $this->cStatNaSefaz($nota);
+
+            // null = não deu para perguntar (SEFAZ fora): melhor esperar a
+            // próxima rodada do que arriscar a duplicidade.
+            if ($naSefaz === null || in_array($naSefaz, ['100', '150'], true)) {
+                Log::warning('bling.invoice.envio_evitado', ['order_id' => $order->id, 'nfe_id' => $nfeId, 'cStat' => $naSefaz]);
+
+                return $nota;
+            }
+
+            Cache::put($this->chaveDaUltimaTentativa($nfeId), $this->impressaoDosItens($nota), now()->addDays(30));
+
+            return $this->enviarParaSefaz($nfeId) ?? $nota;
+        } finally {
+            $trava->release();
+        }
+    }
+
+    /**
+     * cStat da chave na SEFAZ ('' quando a nota ainda não tem chave, null
+     * quando a consulta falhou).
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function cStatNaSefaz(array $nota): ?string
+    {
+        $chave = preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''));
+
+        if (strlen($chave) !== 44) {
+            return '';
+        }
+
+        try {
+            $retorno = new SimpleXMLElement($this->sefaz->consultarChave($chave, $this->certificados->load()));
+        } catch (Throwable $exception) {
+            Log::warning('bling.invoice.consulta_sefaz_falhou', ['chave' => $chave, 'error' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $retorno->registerXPathNamespace('n', 'http://www.portalfiscal.inf.br/nfe');
+
+        return (string) ($retorno->xpath('//n:protNFe/n:infProt/n:cStat')[0] ?? $retorno->xpath('//n:retConsSitNFe/n:cStat')[0] ?? '');
     }
 
 
@@ -367,6 +463,161 @@ class BlingInvoiceImporter
         }
 
         return Cache::get($this->chaveDaUltimaTentativa($nfeId)) !== $this->impressaoDosItens($nota);
+    }
+
+    /**
+     * BUG REAL 2026-10-21 (pedido #3325, nº 556): o POST /enviar estourou os
+     * 20 s às 11:58 e 11:59, a SEFAZ AUTORIZOU às 11:59:32, mas o Bling
+     * ficou sem o retorno e a nota parou na situação 0 (fora da lista dele),
+     * com chave e sem protocolo. Aqui ela virava "pendente" para sempre: não
+     * retransmite (só 1 e 4), ninguém consulta a SEFAZ, nada avisa. Eram 10
+     * pedidos do TikTok assim desde 13/10, todos autorizados na SEFAZ.
+     *
+     * Situação desconhecida com chave: consulta já. Aguardando recibo /
+     * protocolo / consulta (3, 8, 10): só depois de 15 min, o Bling costuma
+     * resolver sozinho antes disso.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function situacaoSemRetorno(array $nota): bool
+    {
+        if (strlen(preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''))) !== 44) {
+            return false;
+        }
+
+        $situacao = (int) ($nota['situacao'] ?? 0);
+
+        if (! array_key_exists($situacao, self::SITUACAO_PARA_STATUS)) {
+            return true;
+        }
+
+        if (! in_array($situacao, [3, 8, 10], true)) {
+            return false;
+        }
+
+        $emissao = (string) ($nota['dataEmissao'] ?? '');
+
+        return $emissao !== '' && now()->diffInMinutes($emissao, true) >= 15;
+    }
+
+    /**
+     * Pergunta à SEFAZ pela chave. Autorizada: junta o XML assinado que o
+     * Bling guardou com o protocolo da consulta (o mesmo nfeProc que a nossa
+     * emissão grava) e registra a nota como autorizada. Nunca transmite
+     * nada: reenviar uma nota já autorizada é o caminho da duplicidade.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function recuperarAutorizacaoPerdida(Order $order, int $nfeId, array $nota): ?Invoice
+    {
+        // Uma consulta a cada 15 min por nota: a varredura passa de 5 em 5.
+        if (! Cache::add("bling.invoice.consulta_sefaz.{$nfeId}", true, now()->addMinutes(15))) {
+            return null;
+        }
+
+        $chave = preg_replace('/\D/', '', (string) $nota['chaveAcesso']);
+
+        try {
+            $resposta = $this->sefaz->consultarChave($chave, $this->certificados->load());
+            $retorno = new SimpleXMLElement($resposta);
+        } catch (Throwable $exception) {
+            Log::warning('bling.invoice.consulta_sefaz_falhou', ['order_id' => $order->id, 'chave' => $chave, 'error' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $retorno->registerXPathNamespace('n', 'http://www.portalfiscal.inf.br/nfe');
+        $infProt = $retorno->xpath('//n:protNFe/n:infProt')[0] ?? null;
+        $cStat = (string) ($infProt?->cStat ?? $retorno->xpath('//n:retConsSitNFe/n:cStat')[0] ?? '');
+
+        if (! in_array($cStat, ['100', '150'], true)) {
+            $this->avisarNotaSemRetorno($order, $nfeId, $nota, $cStat);
+
+            return null;
+        }
+
+        $assinado = $this->resolveConteudo($nota['xml'] ?? null);
+
+        if ($assinado === null || ! str_contains($assinado, '<Signature')) {
+            $this->avisarNotaSemRetorno($order, $nfeId, $nota, "{$cStat}, mas o Bling não entregou o XML assinado");
+
+            return null;
+        }
+
+        // O Bling devolve um nfeProc sem protNFe; o protocolo entra na NFe.
+        // A biblioteca só junta se o DigestValue do XML for o do protocolo:
+        // nos 10 casos de out/2026 o Bling tinha regerado o XML depois da
+        // autorização (dhEmi posterior), e aí ele NÃO é o documento fiscal.
+        try {
+            $nfeProc = str_contains($assinado, '<protNFe') ? $assinado : Complements::toAuthorize($this->somenteNFe($assinado), $resposta);
+        } catch (Throwable $exception) {
+            Log::warning('bling.invoice.protocolo_nao_anexado', ['order_id' => $order->id, 'chave' => $chave, 'error' => $exception->getMessage()]);
+
+            $invoice = $this->gravarInvoice($order, $nota);
+            $invoice->update([
+                'protocolo_autorizacao' => (string) $infProt->nProt,
+                'motivo_rejeicao' => "Autorizada na SEFAZ (protocolo {$infProt->nProt}), mas o XML que o Bling guardou foi regerado depois e não é o autorizado. Pedir ao Bling o XML original; não reenviar.",
+            ]);
+            $this->avisarNotaSemRetorno($order, $nfeId, $nota, "{$cStat} (autorizada), mas o XML do Bling não é o autorizado");
+
+            return $invoice->fresh();
+        }
+
+        // linkPDF fora: o DANFE do Bling dessa nota não tem protocolo; o
+        // nosso sai do nfeProc montado aqui.
+        $invoice = $this->gravarInvoice($order, ['situacao' => 5, 'xml' => $nfeProc, 'linkPDF' => null] + $nota);
+
+        $invoice->update([
+            'protocolo_autorizacao' => (string) $infProt->nProt,
+            'autorizada_em' => rescue(fn () => \Illuminate\Support\Carbon::parse((string) $infProt->dhRecbto)->timezone(config('app.timezone')), now(), false),
+        ]);
+
+        Log::warning('bling.invoice.autorizacao_recuperada_da_sefaz', [
+            'order_id' => $order->id, 'nfe_id' => $nfeId, 'situacao_bling' => $nota['situacao'] ?? null, 'protocolo' => (string) $infProt->nProt,
+        ]);
+
+        $this->timeline->record(
+            $order,
+            OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+            OrderFulfillmentEvent::STATUS_SUCCESS,
+            "Autorização da NF-e nº {$invoice->numero} conferida direto na SEFAZ (protocolo {$infProt->nProt}): o Bling ficou sem o retorno e a nota parou lá na situação ".($nota['situacao'] ?? '?').'.',
+        );
+
+        return $invoice->fresh();
+    }
+
+    private function somenteNFe(string $xml): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->loadXML($xml);
+        $nfe = $dom->getElementsByTagName('NFe')->item(0);
+
+        return $nfe ? $dom->saveXML($nfe) : $xml;
+    }
+
+    /**
+     * Nota com chave, sem retorno no Bling e não importável: SEFAZ sem a
+     * nota (217) ou autorizada com XML regerado no Bling. Precisa de gente
+     * olhando no Bling. Avisa uma vez.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function avisarNotaSemRetorno(Order $order, int $nfeId, array $nota, string $cStat): void
+    {
+        Log::warning('bling.invoice.sem_retorno', ['order_id' => $order->id, 'nfe_id' => $nfeId, 'situacao_bling' => $nota['situacao'] ?? null, 'cStat' => $cStat]);
+
+        if (! Cache::add("bling.invoice.aviso_sem_retorno.{$nfeId}", true, now()->addDays(7))) {
+            return;
+        }
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            rescue(fn () => Notification::send($admins, new FiscalAlertNotification(
+                "Pedido #{$order->id}: a NF-e nº ".($nota['numero'] ?? '?').' está parada no Bling (situação '.($nota['situacao'] ?? '?').") e a SEFAZ respondeu {$cStat}. Conferir no Bling antes de reenviar, para não duplicar.",
+            )), report: false);
+        }
     }
 
     /**
@@ -579,6 +830,11 @@ class BlingInvoiceImporter
             ]);
 
             return null;
+        } catch (Throwable $exception) {
+            // Tempo esgotado (#3325, 2026-10-21): o Bling segue transmitindo
+            // depois que a conexão cai. Relê a nota em vez de abortar a
+            // sincronização sem registrar nada.
+            Log::warning('bling.invoice.send_timeout', ['nfe_id' => $nfeId, 'error' => $exception->getMessage()]);
         }
 
         Log::info('bling.invoice.sent_to_sefaz', ['nfe_id' => $nfeId]);

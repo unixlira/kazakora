@@ -15,6 +15,8 @@ const props = defineProps({
     produtos: { type: Array, default: () => [] },
     podeAvaliar: { type: Boolean, default: false },
     extensoes: { type: Array, default: () => ['mp4', 'mov', 'm4v', 'webm'] },
+    extensoesImagem: { type: Array, default: () => ['jpg', 'jpeg', 'png'] },
+    maxMbImagem: { type: Number, default: 30 },
     maxMb: { type: Number, default: 1024 },
     tamanhoParte: { type: Number, default: 8 * 1024 * 1024 },
 });
@@ -60,7 +62,7 @@ const contagem = (chave) => (chave ? props.totais[chave] ?? 0 : totalGeral.value
 // Envio ----------------------------------------------------------------------
 const envioAberto = ref(props.criativos.data.length === 0 && !props.filtros.lixeira);
 const novo = reactive({ plataforma: 'meta', produto_id: '', observacao: '' });
-const fila = ref([]); // { arquivo, titulo, progresso, estado: 'esperando'|'enviando'|'pronto'|'erro', erro }
+const fila = ref([]); // { arquivo, titulo, identificacao, progresso, estado: 'esperando'|'enviando'|'pronto'|'erro', erro }
 const enviando = ref(false);
 const arrastando = ref(false);
 
@@ -70,9 +72,11 @@ const extensao = (nome) => (nome.split('.').pop() || '').toLowerCase();
 const adicionarArquivos = (lista) => {
     Array.from(lista ?? []).forEach((arquivo) => {
         let erro = null;
-        if (!props.extensoes.includes(extensao(arquivo.name))) erro = 'Use vídeo MP4, MOV, M4V ou WebM.';
-        else if (arquivo.size > props.maxMb * 1048576) erro = `Passa de ${props.maxMb} MB. Comprima antes de enviar.`;
-        fila.value.push({ arquivo, titulo: tituloDoArquivo(arquivo.name), progresso: 0, estado: erro ? 'erro' : 'esperando', erro });
+        const imagem = props.extensoesImagem.includes(extensao(arquivo.name));
+        const limite = imagem ? props.maxMbImagem : props.maxMb;
+        if (!imagem && !props.extensoes.includes(extensao(arquivo.name))) erro = 'Use vídeo MP4, MOV, M4V ou WebM, ou imagem JPG ou PNG.';
+        else if (arquivo.size > limite * 1048576) erro = `Passa de ${limite} MB. Comprima antes de enviar.`;
+        fila.value.push({ arquivo, titulo: tituloDoArquivo(arquivo.name), identificacao: '', progresso: 0, estado: erro ? 'erro' : 'esperando', erro });
     });
 };
 const aoSoltar = (e) => {
@@ -138,6 +142,7 @@ const enviarUm = async (item) => {
         nome_original: arquivo.name,
         tamanho: arquivo.size,
         titulo: item.titulo || tituloDoArquivo(arquivo.name) || 'Criativo',
+        identificacao: item.identificacao.trim(),
         plataforma: novo.plataforma,
         produto_id: novo.produto_id,
         observacao: novo.observacao,
@@ -169,6 +174,30 @@ const enviarFila = async () => {
     router.reload({ only: ['criativos', 'totais'], preserveScroll: true });
 };
 const temParaEnviar = computed(() => fila.value.some((i) => i.estado === 'esperando'));
+
+// Identificação embaixo do vídeo (do que se trata, qual campanha): edita no
+// próprio card e salva ao sair do campo. O rascunho some depois de salvar e o
+// campo volta a mostrar o que está no servidor.
+const rascunhos = reactive({});
+const salvandoId = reactive({}); // id: 'salvando' | 'salvo' | 'erro'
+const textoIdentificacao = (c) => rascunhos[c.id] ?? c.identificacao ?? '';
+const salvarIdentificacao = (c) => {
+    if (!(c.id in rascunhos)) return;
+    const texto = rascunhos[c.id].trim();
+    if (texto === (c.identificacao ?? '')) { delete rascunhos[c.id]; return; }
+    salvandoId[c.id] = 'salvando';
+    router.patch(`${BASE}/${c.id}/identificacao`, { identificacao: texto }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['criativos'],
+        onSuccess: () => {
+            delete rascunhos[c.id];
+            salvandoId[c.id] = 'salvo';
+            setTimeout(() => { if (salvandoId[c.id] === 'salvo') delete salvandoId[c.id]; }, 2000);
+        },
+        onError: () => { salvandoId[c.id] = 'erro'; },
+    });
+};
 
 // Avaliar, editar, lixeira ---------------------------------------------------
 const avaliando = ref(null); // { id, status }
@@ -203,7 +232,7 @@ const salvarEdicao = (criativo) => {
 };
 
 const paraLixeira = (criativo) => {
-    if (!window.confirm(`Mover "${criativo.titulo}" para a lixeira? O vídeo fica guardado e dá para restaurar.`)) return;
+    if (!window.confirm(`Mover "${criativo.titulo}" para a lixeira? O arquivo fica guardado e dá para restaurar.`)) return;
     router.delete(`${BASE}/${criativo.id}`, { preserveScroll: true });
 };
 const restaurar = (criativo) => router.patch(`${BASE}/${criativo.id}/restaurar`, {}, { preserveScroll: true });
@@ -223,7 +252,7 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
             <div class="max-w-3xl">
                 <h1 class="mb-1 text-2xl font-bold">Validação de criativos</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Vídeos de anúncio para Meta, TikTok, Google e outras plataformas, guardados no servidor até a validação.
+                    Vídeos e imagens de anúncio para Meta, TikTok, Google e outras plataformas, guardados no servidor até a validação.
                     <template v-if="props.podeAvaliar">Assista e aprove, peça ajuste ou reprove.</template>
                     <template v-else>Só o administrador aprova; o comentário dele aparece no card.</template>
                     Horário de Brasília.
@@ -246,10 +275,10 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
                 @drop.prevent="aoSoltar"
             >
                 <i class="fas fa-film mb-1 text-2xl text-primary" aria-hidden="true"></i>
-                <span class="font-medium">Arraste os vídeos aqui ou clique para escolher</span>
-                <span class="text-xs text-slate-500 dark:text-slate-400">MP4, MOV, M4V ou WebM, até {{ props.maxMb }} MB cada. Pode escolher vários.</span>
+                <span class="font-medium">Arraste os vídeos ou imagens aqui ou clique para escolher</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Vídeo MP4, MOV, M4V ou WebM até {{ props.maxMb }} MB; imagem JPG ou PNG até {{ props.maxMbImagem }} MB. Pode escolher vários.</span>
             </label>
-            <input id="vc-arquivos" type="file" multiple :accept="props.extensoes.map((e) => '.' + e).join(',') + ',video/*'" class="sr-only"
+            <input id="vc-arquivos" type="file" multiple :accept="[...props.extensoes, ...props.extensoesImagem].map((e) => '.' + e).join(',') + ',video/*,image/jpeg,image/png'" class="sr-only"
                 @change="adicionarArquivos($event.target.files); $event.target.value = ''">
 
             <div v-if="fila.length" class="mt-4 space-y-2">
@@ -263,6 +292,10 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
                             <i class="fas fa-xmark" aria-hidden="true"></i>
                         </button>
                     </div>
+                    <label :for="`vc-ident-${i}`" class="sr-only">Identificação do criativo</label>
+                    <input :id="`vc-ident-${i}`" v-model="item.identificacao" type="text" maxlength="255" :disabled="item.estado !== 'esperando'"
+                        placeholder="Identificação: do que se trata, qual campanha (opcional)"
+                        class="mt-2 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
                     <div v-if="item.estado === 'enviando' || item.estado === 'pronto'" class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
                         role="progressbar" :aria-valuenow="item.progresso" aria-valuemin="0" aria-valuemax="100" :aria-label="`Envio de ${item.titulo}`">
                         <div class="h-full bg-primary transition-all" :style="{ width: item.progresso + '%' }"></div>
@@ -322,7 +355,7 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
                 </select>
             </div>
             <div class="sm:col-span-2">
-                <label for="vc-busca" :class="rotulo">Nome, arquivo, produto ou observação</label>
+                <label for="vc-busca" :class="rotulo">Nome, identificação, arquivo, produto ou observação</label>
                 <div class="mt-1 flex gap-2">
                     <input id="vc-busca" v-model="filtros.busca" type="search" autocomplete="off" class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm">
                     <button type="submit" class="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
@@ -338,7 +371,24 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
 
         <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
             <article v-for="c in props.criativos.data" :key="c.id" class="flex flex-col overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                <video :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] w-full bg-black object-contain"></video>
+                <img v-if="c.tipo === 'imagem'" :src="c.url" :alt="c.titulo" loading="lazy" class="aspect-[9/16] w-full bg-black object-contain">
+                <video v-else :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] w-full bg-black object-contain"></video>
+
+                <div class="border-b border-[var(--surface-border)] px-3 pt-2 pb-2">
+                    <label :for="`vc-ident-card-${c.id}`" :class="rotulo">Identificação</label>
+                    <textarea v-if="!c.na_lixeira" :id="`vc-ident-card-${c.id}`" :value="textoIdentificacao(c)" rows="2" maxlength="255"
+                        placeholder="Do que se trata, qual campanha..."
+                        class="mt-1 w-full resize-none rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm"
+                        @input="rascunhos[c.id] = $event.target.value"
+                        @blur="salvarIdentificacao(c)"
+                        @keydown.enter.exact.prevent="$event.target.blur()"></textarea>
+                    <p v-else :id="`vc-ident-card-${c.id}`" class="mt-1 text-sm">{{ c.identificacao || '-' }}</p>
+                    <p class="h-4 text-xs" aria-live="polite">
+                        <span v-if="salvandoId[c.id] === 'salvando'" class="text-slate-500">Salvando...</span>
+                        <span v-else-if="salvandoId[c.id] === 'salvo'" class="text-green-700 dark:text-green-400">Salvo</span>
+                        <span v-else-if="salvandoId[c.id] === 'erro'" class="text-red-600" role="alert">Não salvou. Tente de novo.</span>
+                    </p>
+                </div>
 
                 <div class="flex flex-1 flex-col gap-2 p-3">
                     <div class="flex items-start justify-between gap-2">

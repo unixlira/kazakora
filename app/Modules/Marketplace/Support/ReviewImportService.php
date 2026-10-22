@@ -156,10 +156,16 @@ class ReviewImportService
 
         $review->fill([
             'product_id' => $productId,
-            'reviewer_name' => $data['reviewer_name'],
             'rating' => $data['rating'],
             'comment' => $data['comment'],
         ]);
+
+        // Nome já gravado fica: pode ter sido corrigido no admin, e a
+        // reimportação do cron não deve desfazer isso. Só preenche quando
+        // a avaliação é nova ou ainda está sem nome.
+        if (blank($review->reviewer_name)) {
+            $review->reviewer_name = $data['reviewer_name'];
+        }
 
         // Data real da avaliação no canal, só na criação — não fica
         // "pulando" a cada execução do cron se o comentário mudar

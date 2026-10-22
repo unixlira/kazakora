@@ -53,6 +53,7 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
+            --exclude='.env.bkp-*' \
             --exclude='/storage' \
             --exclude='node_modules' \
             --exclude='tests' \
@@ -78,7 +79,7 @@ jobs:
             # Foto média da página de produto (2026-10-15), mesma lógica.
             $PHP artisan catalog:generate-medium-images || true
             # Foto pequena das miniaturas (PageSpeed 2026-10-21), mesma lógica.
-            $PHP artisan catalog:generate-mini-images || true
+            $PHP artisan catalog:generate-mini-images --limit=20000 || true
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache

@@ -68,6 +68,8 @@ const form = useForm({
     model: props.product.model ?? '',
     color: props.product.color ?? '',
     variation: props.product.variation ?? '',
+    grupo_modelos: props.product.grupo_modelos ?? '',
+    rotulo_modelo: props.product.rotulo_modelo ?? '',
     description: props.product.description ?? '',
     price: props.product.price,
     cost_price: props.product.cost_price ?? '',

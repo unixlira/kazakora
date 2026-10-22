@@ -57,12 +57,6 @@ const props = defineProps({
         type: Object,
         required: true,
     },
-    // Estrelas da avaliação ao lado do "Frete grátis FULL" — só no slide das
-    // Ofertas do Dia no celular (pedido 2026-10-10).
-    estrelas: {
-        type: Boolean,
-        default: false,
-    },
     isFavorite: {
         type: Boolean,
         default: false,
@@ -150,6 +144,8 @@ const submitReview = () => {
 
 // Média das avaliações (0 = sem avaliação, aí não mostra estrela nenhuma).
 const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
+const notaTexto = computed(() => nota.value.toFixed(1).replace('.', ','));
+const totalAvaliacoes = computed(() => Number(props.product.reviews_count ?? 0));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
 // Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
@@ -327,6 +323,19 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <h3 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
+            <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
+                 todo card (pedidos 2026-10-20 e 2026-10-22). Sem avaliação: estrelas
+                 vazias e "(0)", na mesma altura. -->
+            <!-- No celular, fonte um ponto menor: no card de 149 px, "★★★★★ 4,8 (735)" cabe certo.
+                 Card mais estreito (tela de 320 px): a nota sai e ficam estrelas e quantidade. -->
+            <div class="@container">
+                <div class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
+                    :aria-label="totalAvaliacoes ? `Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações'">
+                    <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
+                    <span v-if="nota > 0" class="ml-1 hidden text-[11px] font-bold text-store-fg @[7rem]:inline md:text-xs" aria-hidden="true">{{ notaTexto }}</span>
+                    <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
+                </div>
+            </div>
             <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
                  computador), laterais inclinadas "/ texto /", parte cinza do caminhão
                  arredondada à direita e mais larga. -->
@@ -339,17 +348,21 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <div class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
-                     centavos pequenos no alto. Estrelas ficam só na página do produto. -->
+                     centavos pequenos no alto. -->
                 <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
                      desconto, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
-                <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
-                    <span v-if="aPartirDe" class="shrink-0 text-[11px] text-store-fg-muted md:text-xs">A partir de</span>
-                    <template v-if="precoAntes">
-                        <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
-                        <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
-                        <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
-                    </template>
+                <!-- Sem "A partir de" antes do selo (pedido 2026-10-22): quebrava a linha.
+                     Card estreito (celular, 2 por linha): a linha mede a própria largura
+                     (@container) e o riscado só aparece quando cabe; o "X% OFF" fica inteiro. -->
+                <div class="@container">
+                    <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
+                        <template v-if="precoAntes">
+                            <!-- Selo numa linha só (pedido 2026-10-20): no carrossel com 5 cards o "12% OFF" quebrava. -->
+                            <span class="shrink-0 whitespace-nowrap rounded bg-store-verde px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
+                            <s class="hidden min-w-0 truncate whitespace-nowrap text-xs text-store-fg-faint @[7rem]:block">{{ formatPrice(precoAntes) }}</s>
+                        </template>
+                    </div>
                 </div>
                 <div class="flex h-[30px] items-end gap-x-1.5 overflow-hidden">
                     <div class="flex shrink-0 items-start leading-none text-store-fg">
@@ -366,26 +379,21 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto md:text-xs">
                         Frete grátis
                         <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
-                        <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
-                        <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
-                            <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
-                            <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
-                        </span>
                     </p>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL
                          (margem negativa: o botão é mais alto que a linha e não muda a altura
                          do card); no celular vira a última linha do card. Menor no computador
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card.
-                         Laranja vivo #ff9500 com texto branco (pedido 2026-10-22): o #c2450c
-                         era opaco e avermelhado. -->
+                         Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
+                         avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
+                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
+                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
                     Ver detalhes
                 </Link>
             </div>

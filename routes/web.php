@@ -705,11 +705,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
         Route::post('sincronizar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'sincronizar'])->name('sincronizar')->middleware(['permission:financeiro.create', 'throttle:6,1']);
         Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
+        // "Dentro da plataforma" (2026-10-21): criativo aprovado em Validação de criativos vira anúncio.
+        Route::get('criativos-aprovados', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'criativosAprovados'])->name('criativos-aprovados')->middleware('permission:financeiro.create');
+        Route::get('criativos-aprovados/{criativo}/arquivo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'criativoAprovadoArquivo'])->whereNumber('criativo')->name('criativos-aprovados.arquivo')->middleware('permission:financeiro.create');
         Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
         Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');
         Route::put('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'update'])->whereNumber('campanha')->name('atualizar')->middleware('permission:financeiro.create');
         Route::delete('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'destroy'])->whereNumber('campanha')->name('excluir')->middleware('permission:financeiro.create');
         Route::post('{campanha}/videos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoStore'])->whereNumber('campanha')->name('videos.armazenar')->middleware('permission:financeiro.create');
+        Route::post('{campanha}/videos/da-plataforma', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDaPlataforma'])->whereNumber('campanha')->name('videos.da-plataforma')->middleware('permission:financeiro.create');
         Route::put('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoUpdate'])->whereNumber(['campanha', 'video'])->name('videos.atualizar')->middleware('permission:financeiro.create');
         Route::delete('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDestroy'])->whereNumber(['campanha', 'video'])->name('videos.excluir')->middleware('permission:financeiro.create');
         // Editar (PUT acima) e excluir/pausar anúncio que já está na Meta (2026-10-19).
@@ -733,7 +737,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // 2026-10-20), inclusive os criados direto no Gerenciador.
     Route::prefix('publicidade/meta-ads/gerenciar')->name('publicidade.meta-ads.gerenciar.')->group(function () {
         Route::get('status', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'status'])->name('status')->middleware(['permission:financeiro.view', 'throttle:60,1']);
-        Route::put('anuncio/{metaId}/link', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'link'])->whereNumber('metaId')->name('link')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::post('anuncio/{metaId}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'pausar'])->whereNumber('metaId')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::put('anuncio/{metaId}/link',[\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'link'])->whereNumber('metaId')->name('link')->middleware(['permission:financeiro.create', 'throttle:20,1']);
         Route::put('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'update'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('atualizar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
         Route::delete('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'destroy'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('excluir')->middleware(['permission:financeiro.create', 'throttle:20,1']);
     });
@@ -770,6 +775,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('parte', [ValidacaoCriativosController::class, 'enviarParte'])->name('parte')->middleware(['permission:cadastros.create', 'throttle:600,1']);
         Route::post('/', [ValidacaoCriativosController::class, 'store'])->name('armazenar')->middleware(['permission:cadastros.create', 'throttle:30,1']);
         Route::patch('{criativo}', [ValidacaoCriativosController::class, 'update'])->whereNumber('criativo')->name('atualizar')->middleware('permission:cadastros.edit');
+        Route::patch('{criativo}/identificacao', [ValidacaoCriativosController::class, 'identificar'])->whereNumber('criativo')->name('identificar')->middleware('permission:cadastros.edit');
         Route::patch('{criativo}/avaliar', [ValidacaoCriativosController::class, 'avaliar'])->whereNumber('criativo')->name('avaliar')->middleware('permission:cadastros.edit');
         Route::delete('{criativo}', [ValidacaoCriativosController::class, 'destroy'])->whereNumber('criativo')->name('excluir')->middleware('permission:cadastros.delete');
         Route::patch('{criativo}/restaurar', [ValidacaoCriativosController::class, 'restaurar'])->whereNumber('criativo')->withTrashed()->name('restaurar')->middleware('permission:cadastros.delete');

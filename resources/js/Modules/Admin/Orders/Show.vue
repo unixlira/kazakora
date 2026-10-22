@@ -79,6 +79,17 @@ const PAYMENT_METHOD_LABELS = {
 };
 const paymentMethodLabel = (value) => PAYMENT_METHOD_LABELS[value] ?? value ?? '—';
 
+// Resumo do pagamento (SituacaoDoPagamento, 2026-10-20): pago, aguardando ou
+// Pix gerado e não pago que cancelou o pedido por prazo vencido.
+const situacaoPagamento = computed(() => d.value.situacao_pagamento ?? null);
+const SITUACAO_CLASSES = {
+    success: { caixa: 'bg-lightsuccess text-success', icone: 'fa-circle-check' },
+    info: { caixa: 'bg-lightinfo text-info', icone: 'fa-clock' },
+    warning: { caixa: 'bg-lightwarning text-warning', icone: 'fa-triangle-exclamation' },
+    error: { caixa: 'bg-lighterror text-error', icone: 'fa-circle-xmark' },
+};
+const situacaoClasses = computed(() => SITUACAO_CLASSES[situacaoPagamento.value?.tom] ?? SITUACAO_CLASSES.info);
+
 // Valores discriminados (Lira, 2026-10-22): no site o frete convencional vai
 // dentro do preço dos produtos e o TURBO cobra à parte só a diferença do SEDEX.
 const valores = computed(() => {
@@ -318,6 +329,7 @@ const cancelInvoice = () => {
             <StatusBadge :status="originBadge.color" :label="originBadge.label" />
             <StatusBadge :status="order.status" context="order" />
             <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" :title="d.envio?.label" />
+            <StatusBadge v-if="situacaoPagamento" :status="situacaoPagamento.tom" :label="situacaoPagamento.selo" :title="situacaoPagamento.titulo" />
             <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
         </div>
 
@@ -390,6 +402,13 @@ const cancelInvoice = () => {
                 <!-- Pagamento -->
                 <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <h2 class="font-semibold">Pagamento</h2>
+                    <div v-if="situacaoPagamento" class="mt-3 flex items-start gap-3 rounded-lg p-3 text-sm" :class="situacaoClasses.caixa" role="status">
+                        <i class="fas mt-0.5" :class="situacaoClasses.icone" aria-hidden="true"></i>
+                        <div>
+                            <p class="font-semibold">{{ situacaoPagamento.titulo }}</p>
+                            <p v-if="situacaoPagamento.detalhe" class="mt-0.5 opacity-90">{{ situacaoPagamento.detalhe }}</p>
+                        </div>
+                    </div>
                     <ul v-if="d.pagamentos?.length" class="mt-3 space-y-3 text-sm">
                         <li v-for="pagamento in d.pagamentos" :key="pagamento.id" class="rounded-lg border border-[var(--surface-border)] p-3">
                             <div class="flex flex-wrap items-center gap-2">

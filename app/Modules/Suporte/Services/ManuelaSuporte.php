@@ -8,6 +8,7 @@ use App\Modules\Suporte\Models\Chamado;
 use App\Modules\Suporte\Models\MensagemSuporte;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
+use App\Modules\WhatsApp\Support\ManuelaSaudacao;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -111,8 +112,10 @@ class ManuelaSuporte
                 return $semIa;
             }
 
+            $ultima = (string) $historico[array_key_last($historico)]['parts'][0]['text'];
+
             return [
-                'resposta' => mb_substr((string) $json['resposta'], 0, 2000),
+                'resposta' => mb_substr(ManuelaSaudacao::semTudoBem((string) $json['resposta'], $ultima), 0, 2000),
                 'abrir_chamado' => (bool) ($json['abrir_chamado'] ?? false),
                 'assunto' => $json['assunto'] ?? null,
                 'prioridade' => $json['prioridade'] ?? 'normal',
@@ -128,9 +131,12 @@ class ManuelaSuporte
     private function instrucoes(Chamado $chamado): string
     {
         $nome = strtok((string) $chamado->user?->name, ' ') ?: 'cliente';
+        $loja = Order::ROTULOS_SITE[$chamado->order?->site_origem] ?? 'KazaKora';
+        $saudacao = ManuelaSaudacao::regra($loja);
 
         return <<<TXT
-Você é a Manuela, atendente da loja KazaKora (e-commerce). Fale em português do Brasil, com simpatia, frases curtas e no máximo 4 linhas. O cliente se chama {$nome}.
+Você é a Manuela, atendente da loja {$loja} (e-commerce). Fale em português do Brasil, com simpatia, frases curtas e no máximo 4 linhas. O cliente se chama {$nome}.
+{$saudacao}
 Use SOMENTE as informações do pedido abaixo; se não souber, diga que vai verificar com a equipe. Nunca invente prazo, código ou valor.
 CANCELAMENTO: {$this->orientacaoDeCancelamento($chamado->order)}
 Você NÃO pode prometer nem executar troca, devolução, reembolso ou estorno — nesses casos explique que vai abrir um chamado para a equipe resolver.

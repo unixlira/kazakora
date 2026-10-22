@@ -168,6 +168,53 @@ class MetaAdsGerenciarController extends Controller
     }
 
     /**
+     * "Pausar criativo" nas sugestões do O que fazer (pedido do Lira
+     * 2026-10-21): pausa o anúncio na Meta, nascido aqui ou no Gerenciador.
+     * Só anúncio ativo; o último ativo do conjunto pede confirmação a mais.
+     */
+    public function pausar(Request $request, string $metaId, MetaAdsService $meta): JsonResponse
+    {
+        if ($resposta = $this->semMeta($meta)) {
+            return $resposta;
+        }
+
+        try {
+            $objeto = $meta->objeto('anuncio', $metaId);
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'Não deu para ler o anúncio na Meta: '.$erro->getMessage()], 422);
+        }
+
+        if ($objeto['status'] !== 'ACTIVE') {
+            $meta->esquecerEspelho($objeto['campanha_id']);
+
+            return response()->json(['message' => 'O anúncio não está ativo na Meta agora. Nada foi alterado.'], 409);
+        }
+
+        [$campanha] = $this->locais('anuncio', $objeto);
+        $video = MetaAdsVideo::query()->where('meta_ad_id', $objeto['id'])->first();
+        if ($campanha?->status === MetaAdsCampanha::STATUS_ENVIANDO || $video?->temEdicaoPendente()) {
+            return response()->json(['message' => 'Este anúncio está sendo enviado ou editado agora. Espere terminar.'], 409);
+        }
+
+        try {
+            if (! $request->boolean('sem_ativo') && $meta->unicoAtivo('anuncio', $objeto)) {
+                $mensagem = 'É o último anúncio ativo do conjunto. Sem ele o conjunto para de entregar.';
+
+                return response()->json(['message' => $mensagem, 'errors' => ['sem_ativo' => [$mensagem]], 'ultimo_ativo' => true], 422);
+            }
+
+            $meta->pausarObjeto($objeto);
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'A Meta não pausou o anúncio: '.rtrim($erro->getMessage(), '.').'. O anúncio continua como estava.'], 422);
+        }
+
+        // Igual ao MetaAdsService::pausarAnuncio para o anúncio feito aqui.
+        $video?->forceFill(['ativado_em' => null])->save();
+
+        return response()->json(['message' => 'Criativo pausado na Meta.', 'ok' => true]);
+    }
+
+    /**
      * Troca o link de destino de um anúncio direto na tabela (pedido do Lira
      * 2026-10-21). Criativo novo com o link novo; o anúncio volta para a
      * análise da Meta, por isso pede confirmação. Anúncio do KazaKora passa

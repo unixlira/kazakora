@@ -114,7 +114,7 @@ class ValidacaoCriativosTest extends TestCase
 
         $this->actingAs($admin)->postJson(self::BASE, [
             'envio' => (string) Str::uuid(), 'nome_original' => 'a.mp4', 'tamanho' => 100, 'titulo' => 'X', 'plataforma' => 'meta',
-        ])->assertStatus(422)->assertJson(['message' => 'O vídeo não chegou inteiro. Envie de novo.']);
+        ])->assertStatus(422)->assertJson(['message' => 'O arquivo não chegou inteiro. Envie de novo.']);
 
         $this->enviarEmPartes($admin, '<html><script>alert(1)</script></html>', 'falso.mp4')
             ->assertStatus(422);
@@ -164,6 +164,31 @@ class ValidacaoCriativosTest extends TestCase
 
         $this->actingAs($admin)->patch(self::BASE."/{$criativo->id}/restaurar")->assertRedirect();
         $this->assertNotSoftDeleted($criativo);
+    }
+
+    public function test_identificacao_embaixo_do_video_salva_e_entra_na_busca(): void
+    {
+        $admin = $this->admin();
+        $this->enviarEmPartes($admin, $this->conteudoMp4(1500), dados: ['identificacao' => 'Árvore, campanha de Natal'])
+            ->assertCreated()
+            ->assertJsonPath('criativo.identificacao', 'Árvore, campanha de Natal');
+        $criativo = CriativoValidacao::sole();
+
+        $this->actingAs($admin)->patch(self::BASE."/{$criativo->id}/identificacao", ['identificacao' => '  Bike, Black Friday Meta  '])
+            ->assertRedirect();
+        $this->assertSame('Bike, Black Friday Meta', $criativo->fresh()->identificacao);
+
+        $this->actingAs($admin)->get(self::BASE.'?busca=Black+Friday')
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->has('criativos.data', 1)
+                ->where('criativos.data.0.identificacao', 'Bike, Black Friday Meta'));
+
+        $this->actingAs($admin)->patch(self::BASE."/{$criativo->id}/identificacao", ['identificacao' => ''])
+            ->assertRedirect();
+        $this->assertNull($criativo->fresh()->identificacao);
+
+        $this->actingAs($admin)->patch(self::BASE."/{$criativo->id}/identificacao", ['identificacao' => str_repeat('a', 256)])
+            ->assertSessionHasErrors('identificacao');
     }
 
     public function test_cliente_nao_entra(): void

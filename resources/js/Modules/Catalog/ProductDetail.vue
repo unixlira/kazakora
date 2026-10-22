@@ -4,6 +4,7 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
+import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -531,7 +532,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div class="absolute inset-x-0 top-0 h-1.5 bg-store-accent"></div>
                     <div class="mx-auto max-w-3xl text-center">
                         <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-store-accent-soft text-store-accent-strong"><i class="fas fa-sparkles"></i></span>
-                        <p class="mt-4 font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Por que esse produto merece atenção</p>
                         <h2 class="mt-2 font-display text-3xl font-semibold text-store-fg md:text-4xl">Detalhes que fazem diferença no uso diário</h2>
                     </div>
 
@@ -589,7 +589,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-if="review.comment" class="mt-2 text-sm leading-relaxed text-store-fg-muted">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="mt-3 flex flex-wrap gap-2">
                                 <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                    <img :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
+                                    <img :src="miniaturaAvaliacao(image.image_url)" alt="" loading="lazy" class="h-16 w-16 rounded-lg border border-store-border object-cover">
                                 </a>
                             </div>
                         </div>

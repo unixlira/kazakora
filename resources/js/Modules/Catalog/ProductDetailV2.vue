@@ -10,8 +10,9 @@ import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 import '../../../css/fontes-poppins.css';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
-import ProductCard from '@/Shared/Components/ProductCard.vue';
+import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
 import { COMPANY } from '@/Shared/company';
+import { fotoAvaliacaoAmpliada, miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 import { maskCep } from '@/Shared/useCep';
@@ -22,6 +23,8 @@ const props = defineProps({
     product: { type: Object, required: true },
     variations: { type: Array, default: () => [] },
     galeria: { type: Array, default: null },
+    // Modelos ligados (2026-10-21): anúncios separados do mesmo grupo.
+    modelos: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
@@ -140,6 +143,16 @@ const escolherVariacao = (variant) => {
     prazo.value = null;
 };
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
+
+// Modelos ligados (pedido 2026-10-21, Caixa Sanfonada 85/168 peças): cada
+// modelo é outro anúncio. O clique troca na hora a foto grande pela foto
+// principal do outro (nunca o vídeo) e o <Link> leva para a página dele.
+// Clique com Ctrl/Shift/botão do meio abre outra aba: aí a foto não troca.
+const fotoModelo = ref(null);
+const escolherModelo = (modelo, event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (modelo.foto_url) fotoModelo.value = modelo.foto_url;
+};
 const isLightboxOpen = ref(false);
 
 // Vídeo sem autoplay (pedido 2026-10-15): mostra a primeira foto como capa com
@@ -404,6 +417,17 @@ const buyNow = () => {
     });
 };
 
+// Botão do CTA da descrição: sem variação escolhida, leva ao box de compra
+// para escolher (o alerta aparece lá); com variação, compra direto.
+const comprarPeloCta = () => {
+    if (faltaVariacao.value) {
+        document.getElementById('comprar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        exigirVariacao();
+        return;
+    }
+    buyNow();
+};
+
 // Barras por estrela (5 → 1) a partir das avaliações reais.
 const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
     const count = props.reviews.filter((review) => Number(review.rating) === star).length;
@@ -488,7 +512,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                                    <template v-if="activeMedia?.type === 'video'">
+                                    <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
+                                    <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
                                         <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
                                             <img v-if="videoPoster" :src="videoPoster" :srcset="videoPosterSrcset" :sizes="videoPosterSrcset ? FOTO_SIZES : null" :alt="`${product.name} — vídeo`" fetchpriority="high">
@@ -560,6 +585,22 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
+                            <div v-if="modelos.length > 1" class="variacoes modelos">
+                                <span class="subtitulo">Modelo</span>
+                                <div class="opcoes">
+                                    <template v-for="modelo in modelos" :key="modelo.id">
+                                        <span v-if="modelo.atual" class="opcao atual" aria-current="page">
+                                            <img v-if="modelo.thumb_url" :src="modelo.mini_url || modelo.thumb_url" alt="">
+                                            {{ modelo.rotulo }}
+                                        </span>
+                                        <Link v-else :href="modelo.url" class="opcao" @click="escolherModelo(modelo, $event)">
+                                            <img v-if="modelo.thumb_url" :src="modelo.mini_url || modelo.thumb_url" alt="">
+                                            {{ modelo.rotulo }}
+                                        </Link>
+                                    </template>
+                                </div>
+                            </div>
+
                             <div v-if="variations.length" ref="variacoesEl" class="variacoes" :class="{ 'com-alerta': alertaVariacao }">
                                 <span class="subtitulo">Escolha a variação
                                     <span v-if="alertaVariacao" :key="alertaVariacao" class="alerta-variacao" role="alert"><i class="fas fa-circle-exclamation"></i> Escolha a sua variação</span>
@@ -621,10 +662,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo
                                  as frases e o negrito azul daqui. -->
                             <ul class="fretefundo">
+                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
+                                     já fica no campo "Consultar prazo de entrega" logo acima. -->
                                 <li>
                                     <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
-                                    <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
+                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
@@ -646,8 +689,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                              persuasivo, comparativo, benefícios e dúvidas. -->
                         <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
                             <header class="desc-cabecalho">
-                                <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
-                                <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
+                                <!-- Sem "Por que esse produto merece atenção?" (pedido 2026-10-20, definitivo). -->
                                 <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
                             </header>
 
@@ -696,6 +738,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <strong>{{ duvida[0] }}</strong>
                                         <p>{{ duvida[1] }}</p>
                                     </div>
+                                </div>
+
+                                <!-- CTA depois das dúvidas (pedido 2026-10-20): texto do Gemini com
+                                     emojis e as garantias reais da loja para a última objeção. -->
+                                <div v-if="anuncio.cta?.titulo" class="cta-anuncio">
+                                    <h3>{{ anuncio.cta.titulo }}</h3>
+                                    <p>{{ anuncio.cta.texto }}</p>
+                                    <ul v-if="anuncio.cta.garantias?.length">
+                                        <li v-for="(garantia, index) in anuncio.cta.garantias" :key="index">{{ garantia }}</li>
+                                    </ul>
+                                    <button v-if="inStock" type="button" class="btn" :disabled="buyingNow" @click="comprarPeloCta">{{ anuncio.cta.botao }}</button>
                                 </div>
                             </div>
 
@@ -837,7 +890,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
                                     <video v-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
-                                    <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    <img v-else :src="miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
                             </div>
@@ -857,7 +910,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
                         <video v-if="ehVideo(fotoAberta.imagens[fotoAberta.indice])" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" autoplay controls playsinline></video>
-                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
+                        <img v-else :src="fotoAvaliacaoAmpliada(fotoAberta.imagens[fotoAberta.indice].image_url)" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>
@@ -882,11 +935,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <section v-if="relatedProducts.length" class="relacionados">
                     <h2>Você também pode gostar de</h2>
-                    <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4">
-                        <ProductCard v-for="related in relatedProducts" :key="related.id" :product="related"
-                            :is-favorite="relatedFavoriteIds.includes(related.id)" :is-authenticated="isAuthenticated"
-                            :can-review="relatedReviewableIds.includes(related.id)" :has-reviewed="relatedReviewedIds.includes(related.id)" />
-                    </div>
+                    <CarrosselProdutos :produtos="relatedProducts" :favorite-ids="relatedFavoriteIds"
+                        :reviewable-product-ids="relatedReviewableIds" :reviewed-product-ids="relatedReviewedIds" />
                 </section>
             </div>
 
@@ -1037,6 +1087,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .opcao img { width: 34px; height: 34px; border-radius: 2px; object-fit: cover; }
 .pd2 .opcao:hover { border-color: var(--ink); }
 .pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }
+.pd2 span.opcao.atual { cursor: default; }
 .pd2 .opcao.esgotada { opacity: .5; text-decoration: line-through; }
 /* Variação obrigatória (pedido 2026-10-15): alerta vermelho ao lado do título. */
 .pd2 .alerta-variacao { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 600; vertical-align: middle; animation: pd2-tremer .35s; }
@@ -1133,6 +1184,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
+.pd2 .cta-anuncio { margin-top: 28px; padding: 22px 20px; border-radius: 14px; background: var(--soft); border: 1px solid var(--line); text-align: center; }
+.pd2 .cta-anuncio h3 { font-size: 22px; font-weight: 700; margin: 0 0 10px; }
+.pd2 .cta-anuncio p { margin: 0 auto; max-width: 620px; color: var(--ink); font-size: 16px; }
+.pd2 .cta-anuncio ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.pd2 .cta-anuncio li { padding: 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 14px; font-weight: 500; }
+.pd2 .cta-anuncio .btn { margin: 18px auto 0; max-width: 420px; width: 100%; font-size: 20px; text-transform: none; }
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }

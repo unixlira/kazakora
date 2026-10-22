@@ -276,10 +276,10 @@ watch([metodo, totalCartao], ([novoMetodo]) => {
 // ---------- Selos de confiança ----------
 // Textos com a identidade da KazaKora (a izeshop foi só referência de formato).
 const SELOS = [
-    { imagem: '/images/checkout/pagamento-100-seguro-checkout-v4.png', titulo: 'Pagamento 100% Seguro', texto: 'Seu pagamento passa direto pelo Mercado Pago, com criptografia. Seus dados de cartão nunca ficam com a gente.' },
-    { imagem: '/images/checkout/avaliacoes-positivas-checkout-v4.png', titulo: 'Avaliações Positivas', texto: 'Cada produto é escolhido a dedo e avaliado por quem já comprou. Dúvidas? A gente responde no WhatsApp.' },
-    { imagem: '/images/checkout/satisfacao-garantida-checkout-v4.png', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a). Se não gostar, devolvemos todo o seu dinheiro, sem burocracia.' },
-    { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.png', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora, ou no boleto.' },
+    { imagem: '/images/checkout/pagamento-100-seguro-checkout-v4.webp', titulo: 'Pagamento 100% Seguro', texto: 'Seu pagamento passa direto pelo Mercado Pago, com criptografia. Seus dados de cartão nunca ficam com a gente.' },
+    { imagem: '/images/checkout/avaliacoes-positivas-checkout-v4.webp', titulo: 'Avaliações Positivas', texto: 'Cada produto é escolhido a dedo e avaliado por quem já comprou. Dúvidas? A gente responde no WhatsApp.' },
+    { imagem: '/images/checkout/satisfacao-garantida-checkout-v4.webp', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a). Se não gostar, devolvemos todo o seu dinheiro, sem burocracia.' },
+    { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.webp', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora, ou no boleto.' },
 ];
 
 // ---------- Finalizar ----------

@@ -90,6 +90,19 @@
                     href="{{ $bannerTopo['image_url'] }}"
                     @if (! empty($bannerTopo['image_srcset'])) imagesrcset="{{ $bannerTopo['image_srcset'] }}" imagesizes="100vw" @endif>
             @endif
+            {{-- Foto grande do produto (capa do vídeo ou 1ª foto) pedida já no HTML (PageSpeed 2026-10-21,
+                 LCP). srcset e sizes iguais aos da galeria (FOTO_SIZES em ProductDetailV2.vue), senão baixa duas vezes. --}}
+            @php($fotoTopo = ($page['component'] ?? '') === 'Catalog/ProductDetailV2' && $seoProduto
+                ? (empty($seoProduto['video_url']) ? (json_decode(json_encode($page['props']['galeria'] ?? []), true)[0] ?? null) : null) ?? ($seoProduto['images'][0] ?? null)
+                : null)
+            @if ($fotoTopo && ($fotoTopo['media_url'] ?? $fotoTopo['url'] ?? null))
+                <link rel="preload" as="image" fetchpriority="high"
+                    href="{{ $fotoTopo['media_url'] ?? $fotoTopo['url'] }}"
+                    @if (! empty($fotoTopo['thumb_url']) && ! empty($fotoTopo['media_url']) && $fotoTopo['thumb_url'] !== $fotoTopo['media_url'])
+                        imagesrcset="{{ $fotoTopo['thumb_url'] }} 512w, {{ $fotoTopo['media_url'] }} 1200w"
+                        imagesizes="(max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px"
+                    @endif>
+            @endif
         @endunless
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
@@ -109,7 +122,7 @@
                     @keyframes abertura-pulsa { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .75; transform: scale(.97); } }
                     @media (prefers-reduced-motion: reduce) { #tela-abertura img, #tela-abertura .abertura-barra::after { animation: none; } }
                 </style>
-                <img src="{{ rescue(fn () => \App\Support\Marca::url('logo_nav'), '/images/marca/logo-nav.png', false) }}" alt="KazaKora" width="190" height="34" fetchpriority="high">
+                <img src="{{ rescue(fn () => \App\Support\Marca::urlLoja('logo_nav'), '/images/marca/logo-nav.webp', false) }}" alt="KazaKora" width="190" height="34" fetchpriority="high">
                 <div class="abertura-barra"></div>
             </div>
             <script>

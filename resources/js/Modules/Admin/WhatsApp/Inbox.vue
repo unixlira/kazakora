@@ -25,6 +25,10 @@ const { isDark, toggle: toggleTheme } = useDarkMode();
 
 const POLL_VISIBLE_MS = 3000;
 const POLL_HIDDEN_MS = 15000;
+// Limite do servidor (WhatsAppInboxController::DOCUMENT_MAX_KB); a Meta aceita até 100 MB em documento.
+const ATTACHMENT_MAX_BYTES = 60 * 1024 * 1024;
+// Nota de voz: o WhatsApp aceita até 16 MB; 10 min em opus 32k fica bem abaixo.
+const RECORD_MAX_SECONDS = 600;
 
 const conversations = ref([...props.conversations]);
 const activeId = ref(null);
@@ -47,6 +51,14 @@ const toggling = ref(new Set());
 
 const messagesBox = ref(null);
 const composer = ref(null);
+const fileInput = ref(null);
+// Anexo escolhido no clipe (ou colado): vai junto com o texto como legenda.
+const attachment = ref(null);
+const recording = ref(false);
+const recordSeconds = ref(0);
+let recorder = null;
+let recordStream = null;
+let recordTimer = null;
 
 let since = props.serverTime;
 let pollTimer = null;
@@ -141,6 +153,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     clearTimeout(pollTimer);
+    stopRecording(false);
     document.removeEventListener('visibilitychange', onVisibility);
     document.removeEventListener('keydown', onGlobalKey);
     document.title = originalTitle;
@@ -238,10 +251,12 @@ function mergeMessages(incoming) {
 async function openConversation(id) {
     if (activeId.value === id) return;
 
+    stopRecording(false);
     activeId.value = id;
     messages.value = [];
     hasMore.value = false;
     draft.value = '';
+    attachment.value = null;
     actionError.value = null;
     showNewBelow.value = false;
     menuOpen.value = false;
@@ -307,6 +322,17 @@ async function markRead(id) {
 }
 
 async function send() {
+    if (attachment.value) {
+        const file = attachment.value;
+        const legenda = draft.value.trim();
+        if (await sendFile(file, { legenda })) {
+            attachment.value = null;
+            draft.value = '';
+            resizeComposer();
+        }
+        return;
+    }
+
     const body = draft.value.trim();
     if (!body || sending.value || !active.value) return;
 
@@ -329,6 +355,138 @@ async function send() {
         sending.value = false;
         nextTick(() => composer.value?.focus());
     }
+}
+
+// Nota de voz ou anexo. Devolve true quando o servidor gravou a mensagem
+// (mesmo que a Meta tenha recusado: aí aparece o ícone vermelho, como no texto).
+async function sendFile(file, { gravacao = false, legenda = '' } = {}) {
+    if (sending.value || !active.value) return false;
+
+    sending.value = true;
+    actionError.value = null;
+    emojiOpen.value = false;
+    const id = active.value.id;
+    const form = new FormData();
+    form.append('arquivo', file, file.name);
+    if (gravacao) form.append('gravacao', '1');
+    if (legenda) form.append('legenda', legenda);
+
+    try {
+        const data = await request(`/admin/whatsapp/conversas/${id}/midia`, { method: 'POST', body: form });
+        mergeMessages([data.message]);
+        upsertConversation(data.conversation);
+        scrollToBottom();
+        if (data.message.status === 'failed') actionError.value = 'A Meta recusou o arquivo. Passe o mouse no ícone vermelho pra ver o motivo.';
+        return true;
+    } catch (error) {
+        actionError.value = error.message || 'Não foi possível enviar o arquivo.';
+        return false;
+    } finally {
+        sending.value = false;
+        nextTick(() => composer.value?.focus());
+    }
+}
+
+function pickFile() {
+    emojiOpen.value = false;
+    fileInput.value?.click();
+}
+
+function onFilePicked(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) attach(file);
+}
+
+function attach(file) {
+    if (file.size > ATTACHMENT_MAX_BYTES) {
+        actionError.value = `"${file.name}" tem ${formatSize(file.size)}: o limite é 60 MB.`;
+        return;
+    }
+    actionError.value = null;
+    attachment.value = file;
+    nextTick(() => composer.value?.focus());
+}
+
+// Print ou arquivo colado na caixa de texto vira anexo.
+function onComposerPaste(event) {
+    const file = event.clipboardData?.files?.[0];
+    if (!file) return;
+    event.preventDefault();
+    attach(file);
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
+function attachmentIcon(file) {
+    const type = file?.type || '';
+    if (type.startsWith('image/')) return 'fa-image';
+    if (type.startsWith('video/')) return 'fa-film';
+    if (type.startsWith('audio/')) return 'fa-headphones';
+    if (type === 'application/pdf') return 'fa-file-pdf';
+    return 'fa-file-lines';
+}
+
+// Gravação no navegador (precisa de HTTPS e permissão do microfone). O
+// servidor converte para ogg/opus, que o cliente recebe como nota de voz.
+async function startRecording() {
+    if (recording.value || sending.value || !active.value) return;
+    actionError.value = null;
+    emojiOpen.value = false;
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        actionError.value = 'Este navegador não grava áudio. Use o Chrome, o Edge ou o Firefox atualizados.';
+        return;
+    }
+
+    try {
+        recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+        actionError.value = 'Sem acesso ao microfone. Libere o microfone para este site no cadeado da barra de endereço.';
+        return;
+    }
+
+    const mimeType = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t));
+    const chunks = [];
+    const current = new MediaRecorder(recordStream, mimeType ? { mimeType } : undefined);
+    current.ondataavailable = (event) => {
+        if (event.data.size) chunks.push(event.data);
+    };
+    current.onstop = () => {
+        if (!current.shouldSend || !chunks.length) return;
+        const type = current.mimeType || mimeType || 'audio/webm';
+        const extension = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm';
+        sendFile(new File(chunks, `gravacao.${extension}`, { type }), { gravacao: true });
+    };
+    recorder = current;
+    recorder.start(1000);
+
+    recordSeconds.value = 0;
+    recording.value = true;
+    recordTimer = setInterval(() => {
+        recordSeconds.value += 1;
+        if (recordSeconds.value >= RECORD_MAX_SECONDS) stopRecording(true);
+    }, 1000);
+}
+
+function stopRecording(shouldSend) {
+    clearInterval(recordTimer);
+    recordTimer = null;
+    recording.value = false;
+    if (recorder && recorder.state !== 'inactive') {
+        recorder.shouldSend = shouldSend;
+        recorder.stop();
+    }
+    recorder = null;
+    recordStream?.getTracks().forEach((track) => track.stop());
+    recordStream = null;
+}
+
+function formatDuration(seconds) {
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 // Chave seletora de cada conversa: ligada = Manuela responde,
@@ -441,10 +599,11 @@ async function request(url, { method = 'GET', body } = {}) {
         credentials: 'same-origin',
         headers: {
             Accept: 'application/json',
-            ...(body ? { 'Content-Type': 'application/json' } : {}),
+            // FormData (arquivo): o navegador põe o Content-Type com o boundary.
+            ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
             ...(method !== 'GET' ? { 'X-XSRF-TOKEN': cookie('XSRF-TOKEN') } : {}),
         },
-        body: body ? JSON.stringify(body) : undefined,
+        body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     });
 
     if (!response.ok) {
@@ -456,6 +615,7 @@ async function request(url, { method = 'GET', body } = {}) {
             // resposta sem JSON
         }
         if (response.status === 419) message = 'Sessão expirada. Recarregue a página.';
+        if (response.status === 413) message = 'Arquivo grande demais para o servidor.';
         throw new Error(message);
     }
 
@@ -818,7 +978,7 @@ function linkify(text) {
 
                                     <template v-if="item.message.hasMedia">
                                         <a v-if="item.message.type === 'image' || item.message.type === 'sticker'" :href="mediaUrl(item.message)" target="_blank" rel="noopener" class="-mx-1 -mt-0.5 mb-1 block">
-                                            <img :src="mediaUrl(item.message)" loading="lazy" alt="Imagem recebida" class="max-h-[330px] rounded-md object-cover" :class="item.message.type === 'sticker' ? 'w-36' : 'w-[330px] max-w-full'">
+                                            <img :src="mediaUrl(item.message)" loading="lazy" :alt="item.message.direction === 'outbound' ? 'Imagem enviada' : 'Imagem recebida'" class="max-h-[330px] rounded-md object-cover" :class="item.message.type === 'sticker' ? 'w-36' : 'w-[330px] max-w-full'">
                                         </a>
                                         <audio v-else-if="item.message.type === 'audio'" :src="mediaUrl(item.message)" controls preload="none" class="mb-1 h-11 w-[300px] max-w-full"></audio>
                                         <video v-else-if="item.message.type === 'video'" :src="mediaUrl(item.message)" controls preload="metadata" class="-mx-1 mb-1 max-h-[330px] w-[330px] max-w-full rounded-md"></video>
@@ -875,28 +1035,71 @@ function linkify(text) {
                     <p v-else-if="active.aiEnabled" class="wa-muted mb-1 mt-1 text-center text-[12.5px]">
                         <i class="fas fa-robot mr-1"></i>A {{ attendant }} está atendendo. Se você mandar uma mensagem, a chave desliga e os humanos assumem.
                     </p>
-                    <form class="flex min-h-[52px] items-end gap-2 py-[5px]" @submit.prevent="send">
+                    <div v-if="attachment" class="wa-attachment mb-1 mt-1 flex items-center gap-3 rounded-lg px-3 py-2">
+                        <i class="fas text-xl" :class="attachmentIcon(attachment)"></i>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm">{{ attachment.name }}</p>
+                            <p class="wa-muted text-[12px]">{{ formatSize(attachment.size) }} · o texto digitado vai como legenda</p>
+                        </div>
+                        <button type="button" class="wa-icon-btn inline-flex" title="Tirar o anexo" :disabled="sending" @click="attachment = null">
+                            <i class="fas fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+                    <input ref="fileInput" type="file" class="hidden" @change="onFilePicked">
+
+                    <!-- Gravando nota de voz: lixeira cancela, avião envia. -->
+                    <div v-if="recording" class="flex min-h-[52px] items-center justify-end gap-3 py-[5px]">
+                        <button type="button" class="wa-icon-btn inline-flex" title="Descartar a gravação" @click="stopRecording(false)">
+                            <i class="fas fa-trash-can text-lg"></i>
+                        </button>
+                        <span class="wa-rec-dot h-2.5 w-2.5 rounded-full bg-red-500"></span>
+                        <span class="wa-text min-w-[44px] text-[15px] tabular-nums">{{ formatDuration(recordSeconds) }}</span>
+                        <button
+                            type="button"
+                            class="wa-send wa-send-ready flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full"
+                            title="Enviar o áudio"
+                            @click="stopRecording(true)"
+                        >
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3.4 20.4l17.5-7.5a1 1 0 0 0 0-1.8L3.4 3.6a.9.9 0 0 0-1.3 1l1.6 6.3 9.3 1.1-9.3 1.1-1.6 6.3a.9.9 0 0 0 1.3 1z" /></svg>
+                        </button>
+                    </div>
+
+                    <form v-else class="flex min-h-[52px] items-end gap-2 py-[5px]" @submit.prevent="send">
                         <button type="button" class="wa-icon-btn inline-flex mb-[3px]" :class="{ 'wa-icon-btn-on': emojiOpen }" title="Emojis" @click="emojiOpen = !emojiOpen">
                             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9.2" /><path d="M8 14.2c1 1.6 2.4 2.4 4 2.4s3-.8 4-2.4" /><circle cx="9" cy="9.8" r=".6" fill="currentColor" /><circle cx="15" cy="9.8" r=".6" fill="currentColor" /></svg>
+                        </button>
+                        <button type="button" class="wa-icon-btn inline-flex mb-[3px]" title="Anexar documento, foto ou vídeo" :disabled="sending" @click="pickFile">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.3l-8.2 8.2a5.3 5.3 0 0 1-7.5-7.5l8.6-8.6a3.5 3.5 0 0 1 5 5l-8.6 8.6a1.8 1.8 0 0 1-2.5-2.5l7.9-7.9" /></svg>
                         </button>
                         <textarea
                             ref="composer"
                             v-model="draft"
                             rows="1"
-                            placeholder="Digite uma mensagem"
+                            :placeholder="attachment ? 'Legenda (opcional)' : 'Digite uma mensagem'"
                             class="wa-input max-h-[168px] min-h-[42px] flex-1 resize-none rounded-lg border-0 px-3 py-[9px] text-[15px] leading-6 focus:ring-0"
                             @keydown="onComposerKey"
                             @input="resizeComposer"
+                            @paste="onComposerPaste"
                         ></textarea>
                         <button
+                            v-if="draft.trim() || attachment || sending"
                             type="submit"
                             class="wa-send mb-[1px] flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full"
-                            :class="{ 'wa-send-ready': draft.trim() }"
-                            :disabled="!draft.trim() || sending"
+                            :class="{ 'wa-send-ready': draft.trim() || attachment }"
+                            :disabled="sending"
                             title="Enviar (Enter)"
                         >
                             <i v-if="sending" class="fas fa-circle-notch fa-spin"></i>
                             <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3.4 20.4l17.5-7.5a1 1 0 0 0 0-1.8L3.4 3.6a.9.9 0 0 0-1.3 1l1.6 6.3 9.3 1.1-9.3 1.1-1.6 6.3a.9.9 0 0 0 1.3 1z" /></svg>
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            class="wa-send mb-[1px] flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full"
+                            title="Gravar áudio"
+                            @click="startRecording"
+                        >
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
                         </button>
                     </form>
                 </footer>
@@ -1125,6 +1328,9 @@ function linkify(text) {
 .wa-send { color: var(--wa-icon); transition: background-color 0.15s, color 0.15s; }
 .wa-send-ready { background: var(--wa-green); color: #fff; }
 .wa-send-ready:hover { background: #008f72; }
+.wa-attachment { background: var(--wa-input); color: var(--wa-text); }
+.wa-rec-dot { animation: wa-rec-blink 1s ease-in-out infinite; }
+@keyframes wa-rec-blink { 50% { opacity: 0.25; } }
 .wa-emoji-panel { background: var(--wa-panel-head); border-top: 1px solid var(--wa-border); }
 
 .wa-banner { display: flex; align-items: flex-start; gap: 8px; border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 18px; }

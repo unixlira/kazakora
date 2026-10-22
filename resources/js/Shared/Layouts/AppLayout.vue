@@ -477,7 +477,7 @@ const REDES = [
 
                     <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
                                 <li><a href="/?todos=1#produtos" class="hover:opacity-100">Produtos</a></li>
@@ -485,7 +485,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
                                 <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
@@ -493,7 +493,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
                                 <li><Link href="/politica-de-cookies" class="hover:opacity-100">Política de Cookies</Link></li>
@@ -503,7 +503,7 @@ const REDES = [
                             </ul>
                         </div>
                         <div>
-                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
+                            <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <template v-if="!user">
                                     <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
@@ -521,7 +521,7 @@ const REDES = [
 
                 <div class="mt-10 flex flex-col items-center gap-6 text-center lg:mt-12 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
                     <div>
-                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
+                        <h2 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h2>
                         <!-- Celular: bandeiras menores, todas numa linha só (sem arrastar). -->
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
@@ -536,7 +536,7 @@ const REDES = [
                          a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14).
                          Tamanho original (grande), sem a redução de 5px (pedido 2026-10-14). -->
                     <div class="lg:text-right">
-                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
+                        <h2 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h2>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                                 class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"

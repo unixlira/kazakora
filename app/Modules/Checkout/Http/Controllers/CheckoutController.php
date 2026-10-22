@@ -1240,15 +1240,49 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Download do livro digital ganho no pedido (pedido 2026-10-21). Link
-     * assinado (middleware `signed`), que abre do e-mail sem login; só com o
-     * livro gravado no pedido e o pedido pago.
+     * Livro digital ganho no pedido (pedido 2026-10-21). Link assinado
+     * (middleware `signed`), que abre do e-mail sem login; só com o livro
+     * gravado no pedido e o pedido pago. Desde 2026-10-22 o link abre a página
+     * dos termos de uso: o PDF só sai depois do "Concordar e baixar".
      */
-    public function livroDoPedido(Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
+    public function livroDoPedido(Request $request, Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
     {
-        $ganhou = DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id);
+        if ($bloqueio = $this->bloqueioDoLivro($order, $livro)) {
+            return $bloqueio;
+        }
 
-        abort_unless($ganhou->exists(), 404);
+        return Inertia::render('Checkout/LivroTermos', [
+            'livro' => ['titulo' => $livro->titulo, 'capa' => $livro->capa_url],
+            'pedido' => $order->numero ?? $order->id,
+            // Mesmo endereço assinado: o POST do botão passa pela mesma assinatura.
+            'aceitarUrl' => $request->fullUrl(),
+            'csrfToken' => csrf_token(),
+        ])->toResponse($request);
+    }
+
+    /** "Concordar e baixar": registra o aceite dos termos e entrega o PDF. */
+    public function aceitarLivroDoPedido(Request $request, Order $order, LivroDigital $livro): \Symfony\Component\HttpFoundation\Response
+    {
+        if ($bloqueio = $this->bloqueioDoLivro($order, $livro)) {
+            return $bloqueio;
+        }
+
+        $request->validate(['aceite' => ['accepted']]);
+
+        $linha = fn () => DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id);
+        $linha()->update(['downloads' => DB::raw('downloads + 1'), 'ultimo_download_em' => now(), 'updated_at' => now()]);
+        // Guarda o primeiro aceite (quando e de onde), prova se o PDF aparecer por aí.
+        $linha()->whereNull('termos_aceitos_em')->update(['termos_aceitos_em' => now(), 'termos_aceitos_ip' => $request->ip()]);
+
+        return Storage::disk('local')->download($livro->arquivo, $livro->nome_arquivo, ['Content-Type' => 'application/pdf']);
+    }
+
+    /** Livro que não é do pedido, pedido sem pagamento ou arquivo sumido. */
+    private function bloqueioDoLivro(Order $order, LivroDigital $livro): ?\Symfony\Component\HttpFoundation\Response
+    {
+        $ganhou = DB::table(LivroDigital::TABELA_PEDIDO)->where('order_id', $order->id)->where('livro_digital_id', $livro->id)->exists();
+
+        abort_unless($ganhou, 404);
         // Resposta direta, não abort(403): o 403 de visitante vira tela de login (bootstrap/app.php).
         if (! LivroDigital::pedidoLiberado($order)) {
             return response('O livro fica disponível para baixar assim que o pagamento do pedido for confirmado.', 403);
@@ -1256,9 +1290,7 @@ class CheckoutController extends Controller
 
         abort_unless(Storage::disk('local')->exists($livro->arquivo), 404);
 
-        $ganhou->update(['downloads' => DB::raw('downloads + 1'), 'ultimo_download_em' => now(), 'updated_at' => now()]);
-
-        return Storage::disk('local')->download($livro->arquivo, $livro->nome_arquivo, ['Content-Type' => 'application/pdf']);
+        return null;
     }
 
     /**

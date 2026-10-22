@@ -30,6 +30,30 @@ class CartManager
         $this->session->forget(self::COMPRA_DIRETA);
     }
 
+    /**
+     * "Alterar itens do carrinho" no meio de uma compra direta (bug 2026-10-22:
+     * o carrinho abria vazio). O item que estava na finalização passa para o
+     * carrinho de verdade, junto com o que já havia nele. Produto que já
+     * estava lá fica com a maior das duas quantidades, sem somar em dobro.
+     */
+    public function levarCompraDiretaParaCarrinho(): void
+    {
+        $direta = $this->session->get(self::COMPRA_DIRETA);
+
+        if (empty($direta)) {
+            return;
+        }
+
+        $this->encerrarCompraDireta();
+        $items = $this->raw();
+
+        foreach ($direta as $productId => $quantity) {
+            $items[$productId] = max($items[$productId] ?? 0, $quantity);
+        }
+
+        $this->save($items);
+    }
+
     public function emCompraDireta(): bool
     {
         return ! empty($this->session->get(self::COMPRA_DIRETA));

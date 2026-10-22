@@ -12,6 +12,7 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
 import { COMPANY } from '@/Shared/company';
+import { fotoAvaliacaoAmpliada, miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 import { maskCep } from '@/Shared/useCep';
@@ -862,7 +863,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
                                     <video v-if="ehVideo(image)" :src="image.image_url + '#t=0.1'" muted playsinline preload="metadata"></video>
-                                    <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    <img v-else :src="miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
                             </div>
@@ -882,7 +883,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
                         <video v-if="ehVideo(fotoAberta.imagens[fotoAberta.indice])" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" autoplay controls playsinline></video>
-                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
+                        <img v-else :src="fotoAvaliacaoAmpliada(fotoAberta.imagens[fotoAberta.indice].image_url)" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>

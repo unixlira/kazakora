@@ -1,20 +1,28 @@
 <script setup>
 /**
- * Aba "Acessos ao site" de Indicadores (2026-10-19): o bloco de acessos do
- * kazakora.com do antigo Gerenciador, com o seletor de mês (?mes=). Sem
- * equipe e sem robô (PainelGerencial::visitantes()).
+ * Abas "Visitas KazaKora" e "Visitas FerraKora" de Indicadores: o bloco de
+ * acessos do antigo Gerenciador (2026-10-19), com o seletor de mês (?mes=).
+ * Sem equipe e sem robô (PainelGerencial::visitantes()). Desde 2026-10-22
+ * o mesmo bloco serve aos dois sites; $aba diz qual.
  */
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
-import { router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import { formatInt, hojeSaoPaulo, useTemaEscuro } from '@/Shared/graficos';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
+    aba: { type: String, default: 'acessos' },
     visitantes: {
         type: Object,
         default: () => ({ mes: '', meses: [], mesAtual: true, dias: [], visitantesMes: 0, paginasMes: 0, visitantesHoje: 0, paginasHoje: 0, mediaDia: 0, melhorDia: null }),
     },
 });
+
+const SITES = {
+    acessos: { titulo: 'Visitas KazaKora', site: 'kazakora.com', log: '/admin/visitas-site' },
+    'visitas-ferrakora': { titulo: 'Visitas FerraKora', site: 'site FerraKora', log: '/admin/visitas-ferrakora' },
+};
+const site = computed(() => SITES[props.aba] ?? SITES.acessos);
 
 const { tooltip } = useTemaEscuro();
 const baseOptions = computed(() => ({ animation: { duration: 600 }, plugins: { legend: { display: false }, tooltip: tooltip.value } }));
@@ -27,7 +35,7 @@ const visitColors = computed(() => ({ bar: '#a3d9b8', today: '#198754', line: '#
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
-    router.get('/admin/indicadores', { aba: 'acessos', mes: mesVisitas.value }, {
+    router.get('/admin/indicadores', { aba: props.aba, mes: mesVisitas.value }, {
         only: ['visitantes'],
         preserveScroll: true,
         preserveState: true,
@@ -121,7 +129,10 @@ const visitChartOptions = computed(() => ({
             <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#198754] text-white"><i class="fas fa-globe" aria-hidden="true"></i></span>
-                    <h2 id="acessos-titulo" class="text-lg font-semibold">Acessos ao site kazakora.com</h2>
+                    <div>
+                        <h2 id="acessos-titulo" class="text-lg font-semibold">{{ site.titulo }}</h2>
+                        <p class="text-xs text-[#6b7280]">Acessos ao {{ site.site }} · <Link :href="site.log" class="underline hover:text-[#198754]">ver o log de visitas</Link></p>
+                    </div>
                 </div>
                 <label for="acessos-mes" class="flex items-center gap-2 text-sm">
                     <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin" aria-hidden="true"></i>

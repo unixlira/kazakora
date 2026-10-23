@@ -283,9 +283,9 @@ const installmentValue = computed(() => Number(precoBase.value.final_price) / PA
 // ("+1538 vendidos", formato da referência, pedido 2026-10-23); "EXCLUSIVO" e
 // "POR TEMPO LIMITADO!" só com Oferta do Dia
 // ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
-// variação escolhida, só quando for 30 ou menos.
+// variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
 const VENDIDOS_MINIMO = 50;
-const ESTOQUE_BAIXO = 30;
+const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => {
     const total = Number(props.salesCount) || 0;
     if (total < VENDIDOS_MINIMO) return null;
@@ -295,10 +295,10 @@ const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBa
 const estoqueBaixo = computed(() => {
     if (faltaVariacao.value) return null;
     const estoque = Number(selecionada.value.stock) || 0;
-    return estoque > 0 && estoque <= ESTOQUE_BAIXO ? estoque : null;
+    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
 });
 // Barra do "Só N unidades!" (formato da Mavo, pedido 2026-10-23): enche pelo
-// estoque real em relação ao limite de 30, com um mínimo para não sumir.
+// estoque real numa barra de tamanho fixo 50, com um mínimo para não sumir.
 const barraEstoque = computed(() => (estoqueBaixo.value
     ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
     : 0));

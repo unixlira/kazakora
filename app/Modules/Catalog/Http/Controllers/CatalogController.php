@@ -422,7 +422,7 @@ class CatalogController extends Controller
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price'));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix'));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -486,7 +486,8 @@ class CatalogController extends Controller
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
-            'product' => $product->makeHidden('cost_price'),
+            // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
+            'product' => $product->makeHidden('cost_price')->append('preco_pix'),
             'variations' => $variations,
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),

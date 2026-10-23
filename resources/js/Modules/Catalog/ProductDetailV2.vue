@@ -279,17 +279,16 @@ const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
 // Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
-// no lugar de números fixos): vendidos só a partir de 50, com o número exato
-// ("+1538 vendidos", formato da referência, pedido 2026-10-23); "EXCLUSIVO" e
+// no lugar de números fixos): vendidos com o número exato desde a 1ª venda
+// ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
 // "POR TEMPO LIMITADO!" só com Oferta do Dia
 // ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
 // variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
-const VENDIDOS_MINIMO = 50;
 const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => {
     const total = Number(props.salesCount) || 0;
-    if (total < VENDIDOS_MINIMO) return null;
-    return `+${total} vendidos`;
+    if (total < 1) return null;
+    return total === 1 ? '1 vendido' : `+${total} vendidos`;
 });
 const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
 const estoqueBaixo = computed(() => {
@@ -609,6 +608,22 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
                         <aside id="comprar" class="card compra">
+                            <!-- Em cima do título, como na referência da Mavo (pedido 2026-10-23, tarefa 2648):
+                                 "Novo | +N vendidos" amarelo e preto (vendas reais), EXCLUSIVO e
+                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar, e as estrelas. -->
+                            <div class="condicao">
+                                <span class="tag-novo">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
+                                <template v-if="tempoLimitado">
+                                    <span class="tag-exclusivo">EXCLUSIVO</span>
+                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
+                                </template>
+                            </div>
+                            <div v-if="reviewsCount > 0" class="nota">
+                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
+                            </div>
+
                             <div class="titulo">
                                 <h1>{{ selecionada.name }}</h1>
                                 <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
@@ -616,23 +631,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click="toggleFavorite(product.id)">
                                     <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                 </button>
-                            </div>
-
-                            <!-- "Novo | +N vendidos" (reais, a partir de 50) e, ao lado, as tags EXCLUSIVO e
-                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar (pedido 2026-10-23). -->
-                            <div class="condicao">
-                                <span class="vendidos">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
-                                <template v-if="tempoLimitado">
-                                    <span class="tag-exclusivo">EXCLUSIVO</span>
-                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
-                                </template>
-                            </div>
-
-                            <!-- Estrelas em destaque. -->
-                            <div v-if="reviewsCount > 0" class="nota">
-                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
-                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
                             </div>
 
                             <ul v-if="highlights.length" class="checks">
@@ -1164,12 +1162,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fav.favorito-ativo { background: #f2540d; border-color: #f2540d; color: #fff; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
-.pd2 .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; color: var(--text); }
-.pd2 .condicao .vendidos { color: var(--text); margin-right: 2px; }
-/* Tags da referência (pedido 2026-10-23): EXCLUSIVO preto com amarelo, TEMPO LIMITADO amarelo com preto. */
-.pd2 .tag-exclusivo, .pd2 .tag-tempo { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: 800; letter-spacing: .3px; line-height: 1.3; }
+.pd2 .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 14px; color: var(--text); }
+.pd2 .condicao + .nota { margin: 4px 0 8px; }
+/* Tags da referência (tarefa 2648): Novo | vendidos e TEMPO LIMITADO amarelo com preto, EXCLUSIVO preto com amarelo. */
+.pd2 .tag-novo, .pd2 .tag-exclusivo, .pd2 .tag-tempo { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: 800; letter-spacing: .3px; line-height: 1.3; }
 .pd2 .tag-exclusivo { background: #000; color: #ffd400; }
-.pd2 .tag-tempo { background: #ffd400; color: #000; }
+.pd2 .tag-novo, .pd2 .tag-tempo { background: #ffd400; color: #000; }
 /* "Só N unidades!" no formato da Mavo com as cores da loja (azul e marinho). */
 .pd2 .estoque-baixo { margin: 12px 0 0; }
 .pd2 .estoque-baixo p { margin: 0 0 6px; font-size: 15px; color: var(--navy); }

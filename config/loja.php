@@ -14,6 +14,14 @@ return [
     | da chave LOJA_SELO_RA_VERIFICADA (mantida só por compatibilidade).
     | reclame_aqui_url é o link do selo (página RA Verificada da loja).
     */
+    /*
+    | Checkout no subdomínio seguro (pedido 2026-10-23): lojas cujo botão de
+    | compra leva para https://seguro.<loja>/pagamento. Separadas por vírgula
+    | ("kazakora.com" em produção, "kazakora.devlira.com.br" no homolog).
+    | Só ligar depois que o DNS e o SSL do seguro.* estiverem no ar.
+    */
+    'checkout_seguro_hosts' => array_filter(array_map('trim', explode(',', (string) env('CHECKOUT_SEGURO_HOSTS', '')))),
+
     'selo_ra_verificada' => (bool) env('LOJA_SELO_RA_VERIFICADA', false),
     'reclame_aqui_url' => env('LOJA_RECLAME_AQUI_URL', 'https://www.reclameaqui.com.br/rav/F68R'),
 

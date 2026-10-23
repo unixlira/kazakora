@@ -59,6 +59,8 @@ return Application::configure(basePath: dirname(__DIR__))
             PreventBrowserCaching::class,
             ExpireStaleSession::class,
             GuardarCupomDaUrl::class,
+            // Depois do cupom da URL: ele já entra no rascunho que a passagem leva.
+            \App\Http\Middleware\RedirecionarCheckoutSeguro::class,
             BloquearIndexacaoForaDoDominio::class,
         ]);
 

@@ -27,6 +27,12 @@ return [
     // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
     'turbo_max' => 60.0,
 
+    // Tabela de entrega da página do produto (pedido do Lira em 2026-10-23):
+    // "em até (prazo dos Correios + folga) dias úteis (mas geralmente chega
+    // no prazo dos Correios)". Sem prazo dos Correios, vale o padrão.
+    'folga_dias' => 2,
+    'prazo_padrao_dias' => 7,
+
     // Checkout dos outros sites (Beauty Kora, pedido do Lira em 2026-10-14):
     // além dos Correios do contrato, as opções destas transportadoras no
     // Melhor Envio, cobrando só o que passar do frete já embutido no preço.

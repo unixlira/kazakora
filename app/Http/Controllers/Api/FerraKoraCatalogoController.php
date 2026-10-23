@@ -94,7 +94,7 @@ class FerraKoraCatalogoController extends Controller
         // mesma conta do checkout, como na página do produto do KazaKora.
         $frete = app(FreteEmbutido::class);
         $frete->usarCep($cep);
-        $entrega = $pai && ! $prazo['entrega_expressa']
+        $entrega = $pai
             ? rescue(fn () => $frete->entregaDoCarrinho(collect([['product' => $pai, 'quantity' => 1]])), null, false)
             : null;
 

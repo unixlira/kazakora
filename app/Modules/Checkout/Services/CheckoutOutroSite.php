@@ -184,7 +184,7 @@ abstract class CheckoutOutroSite
      * Valores da compra, em reais. desconto_pix só vale pagando tudo no Pix,
      * sobre o total do pedido, frete pago (TURBO, Loggi) incluído (pedido do Lira
      * 2026-10-14; na KazaKora o Pix não desconta do frete). Entrega como no checkout da KazaKora: FULL na Grande SP
-     * (sem TURBO, já é a mais rápida); fora dela grátis ou TURBO (SEDEX),
+     * (com TURBO também, pedido 2026-10-23); fora dela grátis ou TURBO (SEDEX),
      * cobrando só a diferença, sempre recalculada aqui.
      *
      * Opções de entrega (pedido do Lira em 2026-10-14, "Correios ou Loggi"):
@@ -204,7 +204,7 @@ abstract class CheckoutOutroSite
         $subtotal = round($itens->sum('subtotal'), 2);
         $entrega = app(FreteEmbutido::class)->entregaDoCarrinho($itens);
         $full = $cep ? app(EntregaExpressa::class)->consultar($cep) : null;
-        $opcaoTurbo = $full ? null : $entrega['turbo'];
+        $opcaoTurbo = $full ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'];
         $opcoes = $this->opcoesDeEntrega($entrega, $full, $opcaoTurbo, $cep, $subtotal);
         $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
         $valorDoFrete = round((float) $escolhida['preco'], 2);

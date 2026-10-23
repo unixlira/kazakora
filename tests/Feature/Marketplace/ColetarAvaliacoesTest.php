@@ -8,6 +8,7 @@ use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\AnonimizaAvaliacao;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -76,5 +77,33 @@ class ColetarAvaliacoesTest extends TestCase
         $this->artisan('reviews:coletar')->assertSuccessful();
         $this->assertSame($nome, $antiga->refresh()->reviewer_name);
         $this->assertArrayNotHasKey('nome_original', $antiga->toArray());
+    }
+
+    public function test_coleta_manual_so_do_produto_escolhido_e_sem_agendamento(): void
+    {
+        $escolhido = Product::factory()->create();
+        $outro = Product::factory()->create();
+        ProductChannelListing::query()->create(['product_id' => $escolhido->id, 'channel' => 'shopee', 'external_id' => '111', 'is_enabled' => true]);
+        ProductChannelListing::query()->create(['product_id' => $outro->id, 'channel' => 'shopee', 'external_id' => '222', 'is_enabled' => true]);
+
+        $shopee = Mockery::mock(MarketplaceChannelDriver::class);
+        $shopee->shouldReceive('fetchReviews')->with('111')->once()->andReturn([[
+            'external_id' => 's-1', 'rating' => 5, 'comment' => 'Muito bom', 'reviewer_name' => 'ana_1',
+            'images' => [], 'model_ids' => [], 'created_at' => null,
+        ]]);
+        $shopee->shouldNotReceive('fetchReviews')->with('222');
+
+        $manager = Mockery::mock(MarketplaceDriverManager::class);
+        $manager->shouldReceive('driver')->andReturn($shopee);
+        $this->app->instance(MarketplaceDriverManager::class, $manager);
+
+        $this->artisan('reviews:coletar', ['--produto' => [$escolhido->id]])->assertSuccessful();
+
+        $this->assertSame(1, Review::query()->where('product_id', $escolhido->id)->count());
+        $this->assertSame(0, Review::query()->where('product_id', $outro->id)->count());
+
+        $agendados = collect(app(Schedule::class)->events())
+            ->map(fn ($evento) => $evento->command);
+        $this->assertFalse($agendados->contains(fn ($comando) => str_contains((string) $comando, 'reviews:coletar')));
     }
 }

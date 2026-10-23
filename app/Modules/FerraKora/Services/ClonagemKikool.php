@@ -25,12 +25,13 @@ use Throwable;
  * houver); o Gemini completa o resto a partir do nome e da foto: título de
  * venda, descrição, categoria, NCM, peso e medidas da embalagem.
  *
- * Regras do pedido: preço = custo (preço da Kikool) + 35%, estoque 10, e não
+ * Regras do pedido: preço = custo (preço da Kikool) + 40% (markup do site
+ * aprovado pelo Lira em 23/10/2026; era 35%), estoque 10, e não
  * clonar o que já existe (mesmo SKU KIC-... ou mesmo nome no banco).
  */
 class ClonagemKikool
 {
-    public const MARKUP = 1.35;
+    public const MARKUP = 1.40;
 
     public const ESTOQUE = 10;
 

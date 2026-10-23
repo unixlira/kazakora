@@ -61,6 +61,14 @@ return [
     | esse tanto de dias DEPOIS do vencimento (compensação leva até 3 dias
     | úteis), a loja cancela o boleto e o pedido e devolve o estoque.
     */
+    /*
+    | Pop-up "Você ganhou um cupom para sua 1ª compra!" no checkout (pedido
+    | 2026-10-23, modelo Yampi). Código de um cupom JÁ cadastrado em Admin >
+    | Cupons. Vazio, inexistente, inativo ou que não vale para o carrinho: o
+    | pop-up não aparece. Aparece uma vez só por navegador (cookie).
+    */
+    'cupom_primeira_compra' => env('LOJA_CUPOM_PRIMEIRA_COMPRA'),
+
     'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
     'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
 

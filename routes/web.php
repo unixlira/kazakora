@@ -183,8 +183,13 @@ Route::get('/avaliar', [ReviewController::class, 'index'])
     ->name('avaliacoes.minhas');
 
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
-    ->middleware('auth')
+    ->middleware(['auth', 'throttle:20,1'])
     ->name('avaliacoes.armazenar');
+
+// Modal "Avalie sua compra" depois do login: fechar sem avaliar (2026-10-23).
+Route::post('/avaliar/dispensar', [ReviewController::class, 'dispensar'])
+    ->middleware('auth')
+    ->name('avaliacoes.dispensar');
 
 // "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
 Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');

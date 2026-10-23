@@ -102,6 +102,10 @@ class HandleInertiaRequests extends Middleware
                 // Pixel da Meta (2026-10-16): o front só carrega depois do OK; ID do admin.
                 'pixelMeta' => \App\Support\PixelMeta::id(),
             ],
+            // Modal "Avalie sua compra" depois do login (2026-10-23): só na loja, só cliente.
+            'avaliacaoModal' => fn () => ! $request->is('admin*') && $request->user() && ! $request->user()->isStaff() && \App\Modules\Catalog\Support\ModalAvaliacao::ativo($request->session())
+                ? rescue(fn () => app(\App\Modules\Catalog\Support\ModalAvaliacao::class)->proximo($request->user(), $request->session()), null, false)
+                : null,
             'cart' => fn () => [
                 // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.
                 'count' => app(CartManager::class)->quantidadeNoCarrinho(),

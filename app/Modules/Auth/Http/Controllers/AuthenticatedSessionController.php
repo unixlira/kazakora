@@ -5,6 +5,7 @@ namespace App\Modules\Auth\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Auth\Http\Requests\LoginRequest;
+use App\Modules\Catalog\Support\ModalAvaliacao;
 use App\Modules\Inventory\Support\LowStockAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,6 +54,11 @@ class AuthenticatedSessionController extends Controller
 
             // Login é POST do Inertia: endereço de outro domínio só com location().
             return Inertia::location(self::PAINEL_URL.$link);
+        }
+
+        // Modal "Avalie sua compra" (2026-10-23): só cliente, na loja.
+        if (! $isAdmin) {
+            ModalAvaliacao::ativar($request->session());
         }
 
         if ($isAdmin) {

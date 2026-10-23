@@ -1,4 +1,5 @@
 <script setup>
+import StatusBadge from '@/Shared/Components/DataTable/StatusBadge.vue';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, Link, usePage } from '@inertiajs/vue3';
@@ -102,7 +103,9 @@ const visibleConversations = computed(() => {
         if (!term) return true;
 
         return (c.name ?? '').toLowerCase().includes(term)
+            || (c.clienteNome ?? '').toLowerCase().includes(term)
             || (digits && (c.phone ?? '').includes(digits))
+            || (digits && String(c.pedidoId ?? '') === digits)
             || (c.preview ?? '').toLowerCase().includes(term);
     });
 });
@@ -691,6 +694,20 @@ function displayName(conversation) {
     return conversation?.name || formatPhone(conversation?.phone);
 }
 
+// Nome do cadastro quando o perfil do WhatsApp é outro (ex.: "Lu" x "Luciana Souza").
+function clienteDiferente(conversation) {
+    const cliente = (conversation?.clienteNome ?? '').trim();
+    return cliente && cliente.toLowerCase() !== (conversation?.name ?? '').trim().toLowerCase() ? cliente : null;
+}
+
+function formatMoney(value) {
+    return Number(value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatDate(iso) {
+    return iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+}
+
 function formatPhone(phone) {
     const digits = String(phone ?? '').replace(/\D/g, '');
     const match = digits.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
@@ -861,6 +878,7 @@ function linkify(text) {
                                 <span class="truncate">{{ conversation.preview }}</span>
                             </span>
                             <span class="flex shrink-0 items-center gap-2">
+                                <span v-if="conversation.pedidoId" class="wa-venda-badge" :title="'Venda #' + conversation.pedidoId + (conversation.clienteNome ? ' · ' + conversation.clienteNome : '')">#{{ conversation.pedidoId }}</span>
                                 <span v-if="conversation.loja && conversation.loja !== 'kazakora'" class="wa-loja-badge" :class="'wa-loja-' + conversation.loja" :title="'Conversa no número da ' + conversation.lojaNome">{{ conversation.lojaNome }}</span>
                                 <span v-if="conversation.needsHuman" class="wa-human-badge" title="A conversa precisa que uma pessoa responda"><i class="fas fa-hand"></i>Humano</span>
                                 <span v-if="conversation.unread" class="wa-unread">{{ conversation.unread }}</span>
@@ -905,10 +923,19 @@ function linkify(text) {
                                 <span v-if="active.lojaNome" class="wa-loja-badge mr-1.5 align-middle" :class="'wa-loja-' + active.loja" :title="'Conversa no número da ' + active.lojaNome">{{ active.lojaNome }}</span>
                                 <span v-if="active.needsHuman" class="wa-human-badge mr-1.5 align-middle"><i class="fas fa-hand"></i>Precisa de humano</span>
                                 <template v-if="active.status === 'resolved'">encerrada · </template>
-                                clique para mostrar os dados do contato
+                                <template v-if="active.pedidoId || clienteDiferente(active)">
+                                    <template v-if="clienteDiferente(active)">Cliente: {{ clienteDiferente(active) }}</template>
+                                    <template v-if="active.pedidoId && clienteDiferente(active)"> · </template>
+                                    <template v-if="active.pedidoId">Venda #{{ active.pedidoId }}</template>
+                                </template>
+                                <template v-else>clique para mostrar os dados do contato</template>
                             </span>
                         </span>
                     </button>
+
+                    <Link v-if="active.pedidoId" :href="`/admin/pedidos/${active.pedidoId}`" class="wa-venda-link hidden shrink-0 sm:inline-flex" :title="'Abrir a venda #' + active.pedidoId">
+                        <i class="fas fa-receipt"></i>Venda #{{ active.pedidoId }}
+                    </Link>
 
                     <!-- Chave seletora da conversa: ligada = Manuela, desligada = humanos -->
                     <label class="wa-agent-toggle flex shrink-0 cursor-pointer select-none items-center gap-2 rounded-full px-3 py-1.5" :title="active.aiEnabled ? `${attendant} está respondendo esta conversa` : 'Só humanos respondem esta conversa'">
@@ -1163,6 +1190,31 @@ function linkify(text) {
                 </section>
 
                 <section class="wa-drawer-card mt-2.5 px-7 py-4">
+                    <p class="wa-muted mb-3 text-sm">Cliente e vendas</p>
+                    <template v-if="active.cliente">
+                        <p class="text-base">
+                            <i class="fas fa-user mr-2 text-[#00a884]"></i>
+                            <Link v-if="active.cliente.documento" :href="`/admin/clientes/${active.cliente.documento}`" class="hover:underline">{{ active.cliente.nome || 'Cliente sem nome' }}</Link>
+                            <template v-else>{{ active.cliente.nome || 'Cliente sem nome' }}</template>
+                        </p>
+                        <ul v-if="active.cliente.pedidos.length" class="mt-3 space-y-2">
+                            <li v-for="pedido in active.cliente.pedidos" :key="pedido.id">
+                                <Link :href="`/admin/pedidos/${pedido.id}`" class="wa-venda-item">
+                                    <span class="min-w-0">
+                                        <span class="block text-[15px] font-medium">Venda #{{ pedido.id }}<span v-if="String(pedido.numero) !== String(pedido.id)" class="wa-muted text-[13px] font-normal"> · {{ pedido.numero }}</span></span>
+                                        <span class="wa-muted block text-[13px]">{{ pedido.canal }} · {{ formatDate(pedido.criadoEm) }} · {{ formatMoney(pedido.total) }}</span>
+                                    </span>
+                                    <StatusBadge :status="pedido.status" context="order" />
+                                </Link>
+                            </li>
+                        </ul>
+                        <p v-else class="wa-muted mt-2 text-[13px]">Cadastro sem nenhuma venda.</p>
+                    </template>
+                    <p v-else-if="loadingMessages" class="wa-muted text-[13px]">Procurando o cliente...</p>
+                    <p v-else class="wa-muted text-[13px]">Nenhum cadastro ou venda com este número.</p>
+                </section>
+
+                <section class="wa-drawer-card mt-2.5 px-7 py-4">
                     <p class="wa-muted mb-3 text-sm">Atendimento</p>
                     <div class="flex items-center justify-between gap-4">
                         <div class="min-w-0">
@@ -1266,6 +1318,11 @@ function linkify(text) {
 .wa-human-badge i { font-size: 10px; }
 .wa-loja-badge { display: inline-flex; height: 20px; align-items: center; border-radius: 9999px; background: #e9edef; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #3b4a54; white-space: nowrap; }
 .wa-loja-badge.wa-loja-ferrakora { background: #f97316; color: #fff; }
+.wa-venda-badge { display: inline-flex; height: 20px; align-items: center; border-radius: 9999px; background: #e7f3ff; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #0044c3; white-space: nowrap; }
+.wa-venda-link { height: 32px; align-items: center; gap: 6px; border-radius: 9999px; padding: 0 12px; font-size: 13px; font-weight: 600; color: #0044c3; }
+.wa-venda-link:hover { background: rgba(0, 68, 195, 0.08); }
+.wa-venda-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-radius: 8px; padding: 8px 10px; margin: 0 -10px; }
+.wa-venda-item:hover { background: rgba(0, 0, 0, 0.04); }
 .wa-human-count { margin-left: 6px; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9999px; background: #ea0038; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; }
 .wa-story { position: relative; }
 .wa-story::before {
@@ -1400,6 +1457,9 @@ function linkify(text) {
 .dark .wa-app .wa-wallpaper::before { filter: invert(1); }
 .dark .wa-app .wa-rail-btn:hover, .dark .wa-app .wa-icon-btn:hover, .dark .wa-app .wa-icon-btn-on, .dark .wa-app .wa-agent-toggle:hover { background: rgba(255, 255, 255, 0.08); }
 .dark .wa-app .wa-rail-btn-active { background: rgba(255, 255, 255, 0.1); }
+.dark .wa-app .wa-venda-badge { background: rgba(83, 189, 235, 0.16); color: #53bdeb; }
+.dark .wa-app .wa-venda-link { color: #53bdeb; }
+.dark .wa-app .wa-venda-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dark .wa-app .wa-sender-bot { color: #25d366; }
 .dark .wa-app .wa-sender-human { color: #a78bfa; }
 .dark .wa-app .wa-text .wa-link { color: #53bdeb; }

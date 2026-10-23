@@ -52,6 +52,10 @@ class FreteEmbutidoTest extends TestCase
 
         // Ceará: PAC R$ 20 em 8 dias, SEDEX R$ 30 em 3. São Paulo: SEDEX mais barato que o PAC.
         Http::fake(function (Request $request) {
+            // Só os Correios: o ViaCEP (rua do CEP) tem fake próprio nos testes que precisam.
+            if (! str_contains($request->url(), 'correios.test')) {
+                return null;
+            }
             $sp = fn ($p) => str_starts_with($p['cepDestino'], '0');
             if (str_contains($request->url(), '/preco/')) {
                 return Http::response(collect($request['parametrosProduto'])->map(fn ($p) => [
@@ -110,6 +114,36 @@ class FreteEmbutidoTest extends TestCase
 
         $this->get("/produtos/{$produto->slug}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+    }
+
+    public function test_cep_no_produto_mostra_rua_e_turbo_fora_do_full(): void
+    {
+        Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Rua Pedro Pereira', 'bairro' => 'Centro', 'localidade' => 'Fortaleza', 'uf' => 'CE'])]);
+        $this->comCorreios();
+        $produto = $this->produto(100);
+
+        // Pedido 2026-10-23: rua depois do CEP e o mesmo TURBO do checkout (SEDEX R$ 30 - PAC R$ 20).
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$produto->id)
+            ->assertOk()
+            ->assertJsonPath('endereco.rua', 'Rua Pedro Pereira')
+            ->assertJsonPath('endereco.cidade', 'Fortaleza')
+            ->assertJsonPath('endereco.uf', 'CE')
+            ->assertJsonPath('entrega_expressa', null)
+            ->assertJsonPath('turbo.preco', 10)
+            ->assertJsonPath('turbo.dias_a_menos', 5);
+    }
+
+    public function test_cep_no_produto_na_area_full_nao_tem_turbo(): void
+    {
+        Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Praça da Sé', 'bairro' => 'Sé', 'localidade' => 'São Paulo', 'uf' => 'SP'])]);
+        $this->comCorreios();
+        $produto = $this->produto(100);
+
+        $this->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)
+            ->assertOk()
+            ->assertJsonPath('endereco.rua', 'Praça da Sé')
+            ->assertJsonPath('turbo', null)
+            ->assertJsonPath('entrega_expressa.local', 'São Paulo');
     }
 
     public function test_checkout_fora_de_sp_tem_frete_gratis_turbo_e_desconto_da_caixa_unica(): void

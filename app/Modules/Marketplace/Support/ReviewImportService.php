@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Support;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -45,18 +46,23 @@ class ReviewImportService
      */
     public const NOTA_MINIMA = 3;
 
-    public function __construct(private readonly MarketplaceDriverManager $drivers) {}
+    public function __construct(
+        private readonly MarketplaceDriverManager $drivers,
+        private readonly AnonimizaAvaliacao $anonimiza = new AnonimizaAvaliacao,
+    ) {}
 
     /**
+     * @param  array<int, string>|null  $canais  só esses canais (null = todos)
      * @return array{products_checked: int, imported: int, updated: int, ambiguous_skipped: int, low_rating_skipped: int, channels_skipped: array<int, string>}
      */
-    public function importAll(): array
+    public function importAll(?array $canais = null): array
     {
         $summary = ['products_checked' => 0, 'imported' => 0, 'updated' => 0, 'ambiguous_skipped' => 0, 'low_rating_skipped' => 0, 'channels_skipped' => []];
 
         $listingsByChannel = ProductChannelListing::query()
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '')
+            ->when($canais, fn ($query) => $query->whereIn('channel', $canais))
             ->get(['product_id', 'channel', 'external_id', 'external_model_id'])
             ->groupBy('channel');
 
@@ -146,7 +152,7 @@ class ReviewImportService
     }
 
     /**
-     * @param  array{external_id: string, rating: int, comment: ?string, reviewer_name: string, images: array<int, string>, created_at: ?\Illuminate\Support\Carbon}  $data
+     * @param  array{external_id: string, rating: int, comment: ?string, reviewer_name: string, images: array<int, string>, created_at: ?Carbon}  $data
      * @return bool true se foi criada agora (nunca vista antes)
      */
     private function upsert(string $channel, int $productId, array $data): bool
@@ -157,14 +163,17 @@ class ReviewImportService
         $review->fill([
             'product_id' => $productId,
             'rating' => $data['rating'],
-            'comment' => $data['comment'],
+            'comment' => AnonimizaAvaliacao::limparTexto($data['comment']),
+            'comentario_original' => $data['comment'],
         ]);
 
         // Nome já gravado fica: pode ter sido corrigido no admin, e a
         // reimportação do cron não deve desfazer isso. Só preenche quando
-        // a avaliação é nova ou ainda está sem nome.
+        // a avaliação é nova ou ainda está sem nome; no lugar do apelido do
+        // comprador vai um nome sorteado (pedido 2026-10-22).
         if (blank($review->reviewer_name)) {
-            $review->reviewer_name = $data['reviewer_name'];
+            $review->reviewer_name = $this->anonimiza->nomeUnico($productId);
+            $review->nome_original = (string) $data['reviewer_name'];
         }
 
         // Data real da avaliação no canal, só na criação — não fica

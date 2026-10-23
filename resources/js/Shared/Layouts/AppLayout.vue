@@ -473,7 +473,7 @@ const REDES = [
                         <ul class="mx-auto mt-5 flex max-w-[30ch] flex-col gap-2.5 text-left text-sm lg:mx-0">
                             <li v-if="entregaFull?.ativa" class="flex items-start gap-2.5">
                                 <span class="selo-full w-16 shrink-0"><i class="fa-solid fa-bolt"></i>FULL</span>
-                                <span class="opacity-80"><strong class="font-semibold text-white">Receba hoje</strong> na Grande SP pagando até as {{ entregaFull.horario_corte }}</span>
+                                <span class="opacity-80"><strong class="font-semibold text-white">Receba hoje</strong> na capital de SP e cidades vizinhas pagando até as {{ entregaFull.horario_corte }}</span>
                             </li>
                             <li class="flex items-start gap-2.5">
                                 <span class="selo-full w-16 shrink-0"><i class="fa-solid fa-bolt"></i>FLEX</span>

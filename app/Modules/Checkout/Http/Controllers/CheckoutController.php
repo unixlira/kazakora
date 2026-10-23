@@ -200,9 +200,12 @@ class CheckoutController extends Controller
 
         // Rua do CEP e opção TURBO na página do produto (pedido 2026-10-23):
         // mesmo TURBO do checkout (SEDEX pela diferença), só fora do Full.
+        // Prazo do grátis e TURBO saem da mesma conta do checkout
+        // (entregaGratis), para a quantidade escolhida na página.
         $viaCep = app(CompletarEnderecoPeloCep::class)->buscar($cep);
-        $turbo = $produto && ! $prazo['entrega_expressa']
-            ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => 1]]))['turbo'], null, false)
+        $quantidade = max(1, min(99, (int) $request->query('quantidade', 1)));
+        $entrega = $produto && ! $prazo['entrega_expressa']
+            ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => $quantidade]])), null, false)
             : null;
 
         return response()->json([
@@ -216,7 +219,8 @@ class CheckoutController extends Controller
                 'cidade' => trim((string) ($viaCep['localidade'] ?? '')),
                 'uf' => strtoupper(trim((string) ($viaCep['uf'] ?? ''))),
             ] : null,
-            'turbo' => $turbo,
+            'prazo_gratis' => $entrega['prazo'] ?? null,
+            'turbo' => $entrega['turbo'] ?? null,
         ]);
     }
 

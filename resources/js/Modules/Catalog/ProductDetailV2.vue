@@ -298,6 +298,17 @@ const estoqueBaixo = computed(() => {
     const estoque = Number(selecionada.value.stock) || 0;
     return estoque > 0 && estoque <= ESTOQUE_BAIXO ? estoque : null;
 });
+// Barra do "Só N unidades!" (formato da Mavo, pedido 2026-10-23): enche pelo
+// estoque real em relação ao limite de 30, com um mínimo para não sumir.
+const barraEstoque = computed(() => (estoqueBaixo.value
+    ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
+    : 0));
+// Só cita o que vale para o produto: frete grátis e desconto do Pix.
+const complementoEstoque = computed(() => {
+    if (isFreeShipping.value && DESCONTO_PIX) return 'Frete grátis + desconto no checkout.';
+    if (isFreeShipping.value) return 'Frete grátis.';
+    return DESCONTO_PIX ? 'Desconto no checkout.' : '';
+});
 
 // Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
 const inStock = computed(() => (faltaVariacao.value
@@ -694,7 +705,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </div>
                                     <button type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
-                                <p v-if="estoqueBaixo" class="estoque-baixo"><i class="fas fa-fire" aria-hidden="true"></i> {{ estoqueBaixo === 1 ? 'Só resta 1 unidade' : `Só restam ${estoqueBaixo} unidades` }}</p>
+                                <div v-if="estoqueBaixo" class="estoque-baixo">
+                                    <p><i class="fas fa-fire" aria-hidden="true"></i> <b>{{ estoqueBaixo === 1 ? 'Só 1 unidade!' : `Só ${estoqueBaixo} unidades!` }}</b> {{ complementoEstoque }}</p>
+                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
+                                        <span :style="{ width: `${barraEstoque}%` }"></span>
+                                    </div>
+                                </div>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
@@ -751,9 +767,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
                                     <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
                                 </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
+                                <!-- Formato da Mavo (pedido 2026-10-23) com os prazos da política de trocas:
+                                     7 dias para desistir (art. 49 CDC) e 30 dias com defeito (art. 26). -->
+                                <li class="devolucao">
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro em até 7 dias após o recebimento, ou 30 dias se o produto vier com defeito.</span>
                                 </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
@@ -1145,9 +1163,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .condicao .vendidos { font-weight: 600; color: var(--ink); }
 .pd2 .selo-tempo { display: inline-flex; align-items: center; gap: 6px; background: #fff4e5; color: #b45309; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 13px; font-weight: 700; line-height: 1.3; }
 .dark .pd2 .selo-tempo { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
-.pd2 .estoque-baixo { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: #c2410c; }
+/* "Só N unidades!" no formato da Mavo com as cores da loja (azul e marinho). */
+.pd2 .estoque-baixo { margin: 12px 0 0; }
+.pd2 .estoque-baixo p { margin: 0 0 6px; font-size: 15px; color: var(--navy); }
+.pd2 .estoque-baixo b { color: var(--blue); font-weight: 700; }
 .pd2 .estoque-baixo i { color: #f97316; }
-.dark .pd2 .estoque-baixo { color: #fb923c; }
+.dark .pd2 .estoque-baixo p { color: var(--text); }
+.pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
+.dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); }
+.dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
@@ -1223,6 +1248,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fretefundo .selo-img { width: 44px; height: 44px; object-fit: contain; }
 .pd2 .fretefundo .selo-icone { display: flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 9999px; background: #e7f8ec; }
 .pd2 .fretefundo .selo-icone i { margin: 0; color: #00a650; }
+.pd2 .fretefundo .escudo { position: relative; }
+.pd2 .fretefundo .escudo .fa-check { position: absolute; font-size: 10px; color: #fff; margin-top: 1px; }
 .pd2 .fretefundo .selo-full i { font-size: 0.9em; margin: 0 1px 0 0; color: inherit; text-align: left; }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
 

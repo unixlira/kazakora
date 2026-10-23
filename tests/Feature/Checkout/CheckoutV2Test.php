@@ -3,6 +3,7 @@
 namespace Tests\Feature\Checkout;
 
 use App\Models\User;
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
@@ -12,6 +13,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -323,6 +325,36 @@ class CheckoutV2Test extends TestCase
                 && $mail->senhaTemporaria !== null
                 && Hash::check($mail->senhaTemporaria, $user->password);
         });
+    }
+
+    public function test_pedido_criado_entra_na_medicao_com_o_mesmo_visitante(): void
+    {
+        Mail::fake();
+        config(['app.url' => 'http://localhost']);
+        $this->noCarrinho(105);
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 78, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        // Com o OK de cookies o visitante é o cookie kazakora_visitor.
+        $this->withCookies([Cookies::COOKIE_OK => Cookies::VERSAO, Cookies::COOKIE_VISITANTE => 'b6a1c1d2-0000-4000-8000-000000000001']);
+
+        $this->call('POST', '/finalizacao/eventos', [], $this->prepareCookiesForRequest(), [], [
+            'CONTENT_TYPE' => 'text/plain', 'HTTP_USER_AGENT' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1',
+        ], json_encode(['pagina' => 'abc123def456', 'eventos' => [['evento' => 'abriu']]]))->assertNoContent();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria2@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
+
+        $abriu = CheckoutEvento::where('evento', 'abriu')->sole();
+        $pedido = CheckoutEvento::where('evento', CheckoutEvento::PEDIDO_CRIADO)->sole();
+        $this->assertSame('b6a1c1d2-0000-4000-8000-000000000001', $abriu->visitor_id);
+        $this->assertSame($abriu->visitor_id, $pedido->visitor_id);
+        $this->assertSame(User::where('email', 'maria2@exemplo.com')->value('id'), $pedido->user_id);
     }
 
     public function test_pedido_grava_latitude_e_longitude_da_cloudflare(): void

@@ -231,6 +231,10 @@ Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->mid
 // Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.
 Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGratis'])->middleware('throttle:30,1')->name('finalizacao.entrega-gratis');
 
+// Medição do checkout (pedido do Lira 2026-10-23): o que a pessoa fez na tela,
+// sem o que ela digitou. Fora do CSRF (sendBeacon); ver CheckoutEventosController.
+Route::post('/finalizacao/eventos', [\App\Modules\Analytics\Http\Controllers\CheckoutEventosController::class, 'store'])->middleware('throttle:60,1')->name('finalizacao.eventos');
+
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');

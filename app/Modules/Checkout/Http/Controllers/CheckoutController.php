@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Rules\CpfValido;
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\LivroDigital;
@@ -665,6 +666,9 @@ class CheckoutController extends Controller
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
         $visitante = ! $request->user();
+        // Medição do checkout (2026-10-23): o código do visitante sai da sessão,
+        // que muda quando o convidado ganha conta e entra; por isso vem antes.
+        $visitanteMedicao = CheckoutEvento::visitante($request);
 
         try {
             [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
@@ -871,6 +875,8 @@ class CheckoutController extends Controller
 
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
+
+        CheckoutEvento::pedidoCriado($request, $visitanteMedicao, $order->user_id);
 
         if ($useMercadoPago) {
             if ($methods[0] === Payment::METHOD_BOLETO) {

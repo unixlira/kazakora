@@ -9,6 +9,7 @@ import { rastrearPurchase } from '@/Shared/pixelMeta';
 import CheckoutLayout from '@/Shared/Layouts/CheckoutLayout.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
+import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCpf, maskPhone } from '@/Shared/useMasks';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -47,6 +48,10 @@ const pixPercentualTexto = computed(() => Number(Number(props.pixDiscountPercent
 const page = usePage();
 const serverErrors = computed(() => page.props.errors ?? {});
 const isLoggedIn = computed(() => !!props.customer);
+
+// Medição da tela (pedido 2026-10-23): o que a pessoa fez, nunca o que digitou.
+const medicao = useMedicaoCheckout();
+const secaoDados = ref(null);
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -136,6 +141,7 @@ watch(cepEfetivo, async (zip) => {
         prazoGratis.value = data.prazo ?? null;
         turbo.value = data.turbo ?? null;
         descontoPlataforma.value = Number(data.desconto_plataforma) || 0;
+        medicao.registrar('cep_respondido', {}, 'cep_respondido');
         if (!turbo.value) turboEscolhido.value = false;
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
@@ -371,6 +377,7 @@ const conferirCpf = () => {
 
 const finalizar = async () => {
     if (freteCarregando.value) return;
+    medicao.finalizarClicado();
     erros.value = {};
     erroGeral.value = null;
     tentouAqui.value = true;
@@ -429,6 +436,7 @@ const finalizar = async () => {
             });
         } catch {
             erroGeral.value = 'Confira os dados do cartão.';
+            medicao.erro('cartao');
             processando.value = false;
             document.getElementById('cartao-brick-v2')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
@@ -536,6 +544,16 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmado) => {
 
 const tentarDeNovo = () => router.visit('/finalizacao');
 
+// ---------- Medição ----------
+// Só na tela de preencher: com o pedido já criado (QR do Pix, cartão) não mede.
+const NOME_PAGAMENTO = { pix: 'pix', card: 'cartao', boleto: 'boleto' };
+watch(metodo, (novo) => medicao.registrar('pagamento', { campo: NOME_PAGAMENTO[novo] ?? 'pix' }, `pagamento:${novo}`));
+watch(erros, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
+watch(serverErrors, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
+watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });
+onMounted(() => { if (!props.order) medicao.iniciar(secaoDados.value); });
+onUnmounted(() => medicao.parar());
+
 // ---------- Resumo ----------
 // Fechado no celular (pedido 2026-10-23, desfaz o de 21/10): só a barra
 // "Ver resumo" no topo e o formulário já na primeira tela. No computador o
@@ -578,7 +596,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
                 <div class="space-y-4">
                     <!-- 1. Dados pessoais -->
-                    <section class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
+                    <section ref="secaoDados" class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
                         <header class="mb-4">
                             <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
                                 <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">1</span>
@@ -593,22 +611,22 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div class="grid gap-3 md:grid-cols-2">
                             <label class="md:col-span-2" :data-erro="erro('guest.name') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Nome completo</span>
-                                <input v-model="pessoa.name" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'bg-slate-50']" placeholder="Seu nome e sobrenome">
+                                <input v-model="pessoa.name" data-medir="nome" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'bg-slate-50']" placeholder="Seu nome e sobrenome">
                                 <small v-if="erro('guest.name')" class="text-xs text-red-600">{{ erro('guest.name') }}</small>
                             </label>
                             <label :data-erro="erro('new_address.phone') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Celular com DDD (WhatsApp)</span>
-                                <input :value="pessoa.phone" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="(11) 99999-9999" @input="pessoa.phone = maskPhone($event.target.value)">
+                                <input :value="pessoa.phone" data-medir="celular" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="(11) 99999-9999" @input="pessoa.phone = maskPhone($event.target.value)">
                                 <small v-if="erro('new_address.phone')" class="text-xs text-red-600">{{ erro('new_address.phone') }}</small>
                             </label>
                             <label v-if="pedirCpf" :data-erro="erro(campoCpf) ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">CPF<template v-if="isLoggedIn"> <span class="font-normal text-red-600">(o do seu cadastro está inválido)</span></template></span>
-                                <input :value="pessoa.cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
+                                <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
                                 <small v-if="erro(campoCpf)" class="text-xs text-red-600">{{ erro(campoCpf) }}</small>
                             </label>
                             <label v-if="!isLoggedIn" class="md:col-span-2" :data-erro="erro('guest.email') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">E-mail</span>
-                                <input v-model="pessoa.email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="seuemail@exemplo.com">
+                                <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="seuemail@exemplo.com">
                                 <small v-if="erro('guest.email')" class="text-xs text-red-600">{{ erro('guest.email') }}</small>
                                 <small v-else class="text-xs text-slate-500">Você recebe a confirmação do pedido e o acesso à sua conta neste e-mail.</small>
                             </label>
@@ -644,34 +662,34 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <label class="col-span-6 md:col-span-2" :data-erro="erro('new_address.zip') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">CEP</span>
                                 <div class="relative">
-                                    <input :value="endereco.zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="00000-000" @input="onCep">
+                                    <input :value="endereco.zip" data-medir="cep" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="00000-000" @input="onCep">
                                     <i v-if="cepLoading" class="fa-solid fa-spinner absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 animate-spin text-slate-400"></i>
                                 </div>
                                 <small v-if="cepError || erro('new_address.zip')" class="text-xs text-red-600">{{ cepError || erro('new_address.zip') }}</small>
                             </label>
                             <label class="col-span-6 md:col-span-4" :data-erro="erro('new_address.street') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Endereço</span>
-                                <input v-model="endereco.street" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Rua, avenida...">
+                                <input v-model="endereco.street" data-medir="endereco" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Rua, avenida...">
                             </label>
                             <label class="col-span-2" :data-erro="erro('new_address.number') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Número</span>
-                                <input ref="numeroInput" v-model="endereco.number" type="text" :class="[inputClass, erro('new_address.number') && inputErroClass]" placeholder="Nº">
+                                <input ref="numeroInput" v-model="endereco.number" data-medir="numero" type="text" :class="[inputClass, erro('new_address.number') && inputErroClass]" placeholder="Nº">
                             </label>
                             <label class="col-span-4">
                                 <span class="text-sm font-medium text-slate-700">Complemento <span class="font-normal text-slate-500">(opcional)</span></span>
-                                <input v-model="endereco.complement" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Apto, bloco, casa...">
+                                <input v-model="endereco.complement" data-medir="complemento" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Apto, bloco, casa...">
                             </label>
                             <label class="col-span-6 md:col-span-2" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Bairro</span>
-                                <input v-model="endereco.neighborhood" type="text" :class="[inputClass, erro('new_address.neighborhood') && inputErroClass]">
+                                <input v-model="endereco.neighborhood" data-medir="bairro" type="text" :class="[inputClass, erro('new_address.neighborhood') && inputErroClass]">
                             </label>
                             <label class="col-span-4 md:col-span-3" :data-erro="erro('new_address.city') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Cidade</span>
-                                <input v-model="endereco.city" type="text" autocomplete="address-level2" :class="[inputClass, erro('new_address.city') && inputErroClass]">
+                                <input v-model="endereco.city" data-medir="cidade" type="text" autocomplete="address-level2" :class="[inputClass, erro('new_address.city') && inputErroClass]">
                             </label>
                             <label class="col-span-2 md:col-span-1" :data-erro="erro('new_address.state') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">UF</span>
-                                <input v-model="endereco.state" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]">
+                                <input v-model="endereco.state" data-medir="uf" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]">
                             </label>
                             <!-- Diz exatamente o que falta (antes era só "Preencha o endereço completo"). -->
                             <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
@@ -886,7 +904,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <i class="fa-solid fa-ticket mr-1"></i> Tem um cupom? Clique aqui
                         </button>
                         <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
-                            <input v-model="cupom" type="text" placeholder="Código do cupom" autocapitalize="characters" :disabled="cupomCarregando"
+                            <input v-model="cupom" data-medir="cupom" type="text" placeholder="Código do cupom" autocapitalize="characters" :disabled="cupomCarregando"
                                 class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm uppercase outline-none focus:border-[#F44D00]"
                                 :class="cupomErro ? 'border-red-400' : 'border-slate-300'" @input="cupomErro = null">
                             <button type="submit" :disabled="!cupom.trim() || cupomCarregando"

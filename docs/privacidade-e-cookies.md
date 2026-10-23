@@ -115,7 +115,25 @@ Cloudflare (regra "Add visitor location headers"). Não é o GPS do aparelho nem
 pede permissão ao navegador. Base legal: execução do contrato e prevenção a
 fraude (art. 7º V e IX). Sem Cloudflare fica nulo.
 
+### Medição do checkout (`checkout_eventos`, pedido 2026-10-23)
+O que a pessoa fez na `/finalizacao`, para entender quem sai sem comprar:
+abriu, viu o formulário, rolagem (25/50/75/100%), primeiro foco em cada
+campo, campo preenchido, CEP respondido, forma de pagamento escolhida,
+clique em Finalizar, erro mostrado (qual campo), saída com tempo ativo e
+rolagem máxima, e o pedido criado (servidor).
+- **Nunca** o que foi digitado: só o NOME do campo. A rota
+  `POST /finalizacao/eventos` aceita uma lista fechada de eventos e campos e
+  recusa o lote inteiro se vier qualquer chave a mais.
+- Sem IP e sem navegador completo. Visitante igual ao `site_visits`
+  (`kazakora_visitor` com OK, senão código da sessão), `user_id` se logado,
+  aparelho e origem da visita.
+- Sem cookie novo e sem terceiros (nada de Pixel aqui).
+- Base legal: legítimo interesse (melhorar a tela de compra), dado mínimo e
+  pseudônimo. Leitura só pelo comando `php artisan checkout:funil --dias=7`
+  (equipe e robôs fora).
+
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
+- Medição do checkout (`checkout_eventos`) com mais de 6 meses: apagada.
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do
   clique (`click_id`) apagados (`visitor_id = anonimo`). A estatística
   (página, dia, origem) fica.

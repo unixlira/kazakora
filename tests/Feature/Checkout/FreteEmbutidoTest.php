@@ -133,6 +133,23 @@ class FreteEmbutidoTest extends TestCase
             ->assertJsonPath('turbo.dias_a_menos', 5);
     }
 
+    public function test_cep_no_produto_tem_o_mesmo_prazo_e_turbo_do_checkout_na_quantidade_escolhida(): void
+    {
+        Http::fake(['viacep.com.br/*' => Http::response([])]);
+        $this->comCorreios();
+        $produto = $this->produto(100);
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 2]);
+        $checkout = $this->getJson('/finalizacao/entrega-gratis?cep=60025000')->json();
+
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$produto->id.'&quantidade=2')
+            ->assertOk()
+            ->assertJsonPath('prazo_gratis', $checkout['prazo'])
+            ->assertJsonPath('turbo.preco', $checkout['turbo']['preco'])
+            ->assertJsonPath('turbo.prazo', $checkout['turbo']['prazo'])
+            ->assertJsonPath('turbo.dias_a_menos', $checkout['turbo']['dias_a_menos']);
+        $this->assertSame(8, $checkout['prazo']);
+    }
+
     public function test_cep_no_produto_na_area_full_nao_tem_turbo(): void
     {
         Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Praça da Sé', 'bairro' => 'Sé', 'localidade' => 'São Paulo', 'uf' => 'SP'])]);

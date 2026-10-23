@@ -383,16 +383,12 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
 // dela, o prazo normal de envio.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade } depois da consulta
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, endereco, turbo, prazoGratis } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
-// Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
-// Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
-const prazoNormal = computed(() => {
-    const ate = Math.max(7, Number(prazo.value?.dias) || 0);
-    const base = `Entrega pelos Correios ou transportadora em até ${ate} dias úteis.`;
-    return prazo.value?.modalidade === 'flex' ? `${base} (Mas geralmente chega em 3)` : base;
-});
+// "Flex" quando a entrega grátis chega em até 3 dias úteis nesse CEP (sem o
+// prazo da tabela, vale o prazo dos Correios da consulta).
+const gratisFlex = computed(() => (prazo.value?.prazoGratis ? prazo.value.prazoGratis <= 3 : prazo.value?.modalidade === 'flex'));
 
 // Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
 // Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
@@ -404,10 +400,17 @@ const enderecoPrazo = computed(() => {
     const local = [endereco.cidade, endereco.uf].filter(Boolean).join('/');
     return [endereco.rua, endereco.bairro, local].filter(Boolean).join(', ');
 });
+// Mesmos textos do checkout (pedido 2026-10-23): grátis "até N dias úteis"
+// pela tabela (sem ela, "1 à 7 dias úteis") e TURBO "chega em até N dias
+// úteis (X antes)".
+const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
+const prazoGratis = computed(() => (prazo.value?.prazoGratis ? `até ${diasUteis(prazo.value.prazoGratis)}` : '1 à 7 dias úteis'));
 const turboPrazo = computed(() => {
     const turbo = prazo.value?.turbo;
     if (!turbo) return null;
-    const quando = turbo.dias_a_menos ? ` · chega ${turbo.dias_a_menos} ${turbo.dias_a_menos === 1 ? 'dia' : 'dias'} antes` : '';
+    const quando = turbo.prazo
+        ? ` · chega em até ${diasUteis(turbo.prazo)}${turbo.dias_a_menos ? ` (${diasUteis(turbo.dias_a_menos)} antes)` : ''}`
+        : ' · entrega mais rápida';
     return { preco: `+ ${formatPrice(turbo.preco)}`, quando };
 });
 
@@ -425,7 +428,7 @@ const consultarPrazo = async () => {
     consultandoPrazo.value = true;
     erroPrazo.value = '';
     try {
-        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}&quantidade=${quantity.value}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
         prazo.value = {
@@ -434,6 +437,7 @@ const consultarPrazo = async () => {
             modalidade: data.modalidade ?? null,
             endereco: data.endereco ?? null,
             turbo: data.turbo ?? null,
+            prazoGratis: data.prazo_gratis ?? null,
         };
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
@@ -446,6 +450,11 @@ const consultarPrazo = async () => {
         consultandoPrazo.value = false;
     }
 };
+
+// Outra variação ou quantidade muda a caixa: refaz a conta do CEP já consultado.
+watch(() => [selecionada.value.id, quantity.value], () => {
+    if (prazo.value && !consultandoPrazo.value) consultarPrazo();
+});
 
 const buyingNow = ref(false);
 
@@ -715,7 +724,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         </li>
                                         <template v-else>
                                             <li>
-                                                <span><i v-if="prazo.modalidade === 'flex'" class="fas fa-bolt" aria-hidden="true"></i> {{ prazo.modalidade === 'flex' ? 'Flex' : 'Normal' }} · {{ prazoNormal }}</span>
+                                                <span><i v-if="gratisFlex" class="fas fa-bolt" aria-hidden="true"></i> {{ gratisFlex ? 'Flex' : 'Normal' }} · {{ prazoGratis }}</span>
                                                 <strong>Grátis</strong>
                                             </li>
                                             <li v-if="turboPrazo">

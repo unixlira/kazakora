@@ -929,8 +929,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'messages'])->whereNumber('conversation')->name('whatsapp.conversas.mensagens');
         Route::get('whatsapp/conversas/midia/{message}', [WhatsAppInboxController::class, 'media'])->whereNumber('message')->name('whatsapp.conversas.midia');
         Route::post('whatsapp/conversas/{conversation}/lida', [WhatsAppInboxController::class, 'markRead'])->whereNumber('conversation')->name('whatsapp.conversas.lida');
+        // Nova conversa pelo "+" (2026-10-23): busca por telefone ou número do pedido.
+        Route::get('whatsapp/conversas/nova/buscar', [WhatsAppInboxController::class, 'buscarContato'])->name('whatsapp.conversas.nova.buscar');
     });
     Route::middleware('permission:pedidos.edit')->group(function () {
+        Route::post('whatsapp/conversas/nova', [WhatsAppInboxController::class, 'iniciar'])->name('whatsapp.conversas.nova');
         Route::post('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'send'])->whereNumber('conversation')->name('whatsapp.conversas.enviar');
         Route::post('whatsapp/conversas/{conversation}/midia', [WhatsAppInboxController::class, 'sendMedia'])->whereNumber('conversation')->name('whatsapp.conversas.enviar-midia');
         Route::post('whatsapp/conversas/{conversation}/manuela', [WhatsAppInboxController::class, 'toggleManuela'])->whereNumber('conversation')->name('whatsapp.conversas.manuela');

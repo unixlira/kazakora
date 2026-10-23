@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -12,6 +13,7 @@ use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use App\Modules\WhatsApp\Support\ClienteDaConversa;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,6 +94,120 @@ class WhatsAppInboxController extends Controller
             'messages' => $messages->map(fn ($m) => $this->messagePayload($m)),
             'hasMore' => $messages->count() === self::MESSAGE_PAGE,
         ]);
+    }
+
+    /**
+     * "Nova conversa" (botão + da lista, pedido do Lira 2026-10-23): acha o
+     * cliente pelo telefone ou pelo número do pedido (ID, número da loja ou
+     * do canal, com ou sem #) e diz de qual loja ele é.
+     */
+    public function buscarContato(Request $request, ClienteDaConversa $clientes): JsonResponse
+    {
+        $termo = trim(ltrim(trim((string) $request->query('q')), '#'));
+        if ($termo === '' || mb_strlen($termo) > 40) {
+            return response()->json(['resultados' => []]);
+        }
+
+        $resultados = collect();
+        $digitos = preg_replace('/\D+/', '', $termo);
+
+        $pedidos = Order::query()
+            ->with('user')
+            ->where(fn ($q) => $q
+                ->where('external_order_id', $termo)
+                ->when($digitos === $termo && strlen($digitos) <= 9, fn ($q) => $q->orWhere('id', (int) $digitos)))
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        foreach ($pedidos as $pedido) {
+            $telefone = WhatsAppPhone::normalize($pedido->shipping_whatsapp)
+                ?? WhatsAppPhone::normalize($pedido->shipping_phone)
+                ?? WhatsAppPhone::normalize($pedido->user?->phone);
+            $resultados->push($this->contato($telefone, $clientes->porTelefone($telefone, $pedido), $pedido));
+        }
+
+        $telefone = WhatsAppPhone::normalize($termo);
+        if ($telefone && ! $resultados->contains(fn ($r) => $r['telefone'] && WhatsAppPhone::mesmoNumero($r['telefone'], [$telefone]))) {
+            $cliente = $clientes->porTelefone($telefone);
+            $principal = isset($cliente['pedidos'][0]) ? Order::query()->find($cliente['pedidos'][0]['id']) : null;
+            $resultados->push($this->contato($telefone, $cliente, $principal));
+        }
+
+        return response()->json(['resultados' => $resultados->values()]);
+    }
+
+    /**
+     * Abre a conversa escolhida na busca: a que já existe com o número (mesmo
+     * sem o nono dígito) ou uma nova, no WhatsApp da loja do pedido.
+     * Começa com humanos atendendo: quem iniciou é a equipe.
+     */
+    public function iniciar(Request $request, ClienteDaConversa $clientes): JsonResponse
+    {
+        $validated = $request->validate([
+            'telefone' => ['required', 'string', 'max:30'],
+            'pedido_id' => ['nullable', 'integer'],
+        ]);
+
+        $telefone = WhatsAppPhone::normalize($validated['telefone']);
+        if (! $telefone) {
+            return response()->json(['message' => 'Telefone inválido: use DDD + número, por exemplo 11 98765-4321.'], 422);
+        }
+
+        $pedido = filled($validated['pedido_id'] ?? null) ? Order::query()->with('user')->find($validated['pedido_id']) : null;
+        $cliente = $clientes->porTelefone($telefone, $pedido);
+        $pedido ??= isset($cliente['pedidos'][0]) ? Order::query()->find($cliente['pedidos'][0]['id']) : null;
+        $loja = $pedido ? WhatsAppNumeros::lojaDoPedido($pedido) : WhatsAppNumeros::KAZAKORA;
+
+        $conversation = $this->conversaExistente($telefone, $loja) ?? WhatsAppConversation::query()->create([
+            'wa_id' => $telefone,
+            'loja' => $loja,
+            'phone' => $telefone,
+            'profile_name' => $cliente['nome'] ?? null,
+            'status' => 'open',
+            'ai_enabled' => false,
+            'unread_count' => 0,
+            'last_message_at' => now(),
+        ]);
+
+        if ($pedido && ! isset($conversation->metadata['pedido_escolhido'])) {
+            $conversation->metadata = array_merge($conversation->metadata ?? [], ['pedido_escolhido' => $pedido->id]);
+            WhatsAppConversation::withoutTimestamps(fn () => $conversation->saveQuietly());
+        }
+        $cliente = $clientes->identificar($conversation);
+        $clientes->lembrar($conversation, $cliente);
+
+        return response()->json([
+            'conversation' => $this->conversationPayload($conversation->fresh()) + ['cliente' => $cliente],
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function contato(?string $telefone, ?array $cliente, ?Order $pedido): array
+    {
+        $loja = $pedido ? WhatsAppNumeros::lojaDoPedido($pedido) : WhatsAppNumeros::KAZAKORA;
+
+        return [
+            'telefone' => $telefone,
+            'pedidoId' => $pedido?->id,
+            'cliente' => $cliente,
+            // WhatsApp que vai falar com o cliente (FerraKora só com o número dela ligado).
+            'numeroLoja' => $loja,
+            'numeroLojaNome' => WhatsAppNumeros::nome($loja),
+            'conversaId' => $telefone ? $this->conversaExistente($telefone, $loja)?->id : null,
+        ];
+    }
+
+    /** Conversa do mesmo número na loja: a Meta grava muito celular sem o nono dígito. */
+    private function conversaExistente(string $telefone, string $loja): ?WhatsAppConversation
+    {
+        return WhatsAppConversation::query()
+            ->where('loja', $loja)
+            ->where('wa_id', 'like', '%'.substr($telefone, -4))
+            ->orderByDesc('last_message_at')
+            ->limit(50)
+            ->get()
+            ->first(fn (WhatsAppConversation $c) => WhatsAppPhone::mesmoNumero($c->wa_id, [$telefone]));
     }
 
     public function updates(Request $request): JsonResponse
@@ -396,6 +512,8 @@ class WhatsAppInboxController extends Controller
             // Venda e nome do cadastro guardados ao abrir a conversa (ClienteDaConversa).
             'pedidoId' => $c->metadata['pedido_id'] ?? null,
             'clienteNome' => $c->metadata['cliente_nome'] ?? null,
+            // Loja do cliente (kazakora.com ou ferrakora.devlira.com.br), pela venda principal.
+            'clienteLoja' => isset($c->metadata['cliente_loja']) ? ClienteDaConversa::loja($c->metadata['cliente_loja']) : null,
         ];
     }
 

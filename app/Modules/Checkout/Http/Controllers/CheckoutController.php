@@ -22,6 +22,7 @@ use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -194,12 +195,27 @@ class CheckoutController extends Controller
         app(FreteEmbutido::class)->usarCep($cep);
 
         $produto = Product::query()->with('fiscalData')->find((int) $request->query('produto'));
+        $prazo = $prazoPorCep->consultar($cep, $produto);
+
+        // Rua do CEP e opção TURBO na página do produto (pedido 2026-10-23):
+        // mesmo TURBO do checkout (SEDEX pela diferença), só fora do Full.
+        $viaCep = app(CompletarEnderecoPeloCep::class)->buscar($cep);
+        $turbo = $produto && ! $prazo['entrega_expressa']
+            ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => 1]]))['turbo'], null, false)
+            : null;
 
         return response()->json([
             'final_price' => $produto?->final_price,
             'preco_de' => $produto?->preco_de,
             'preco_sem_oferta' => $produto?->preco_sem_oferta,
-            ...$prazoPorCep->consultar($cep, $produto),
+            ...$prazo,
+            'endereco' => $viaCep ? [
+                'rua' => trim((string) ($viaCep['logradouro'] ?? '')),
+                'bairro' => trim((string) ($viaCep['bairro'] ?? '')),
+                'cidade' => trim((string) ($viaCep['localidade'] ?? '')),
+                'uf' => strtoupper(trim((string) ($viaCep['uf'] ?? ''))),
+            ] : null,
+            'turbo' => $turbo,
         ]);
     }
 

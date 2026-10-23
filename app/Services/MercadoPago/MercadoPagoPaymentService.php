@@ -23,6 +23,12 @@ use Illuminate\Support\Facades\Log;
  */
 class MercadoPagoPaymentService
 {
+    /**
+     * Validade do QR do Pix (Lira, 2026-10-23: era 10 min, passa a 24 h).
+     * orders:expire-abandoned só cancela o pedido depois desse prazo.
+     */
+    public const PIX_VALIDADE_HORAS = 24;
+
     public function isConfigured(): bool
     {
         return filled(CredenciaisCheckout::accessToken());
@@ -103,7 +109,7 @@ class MercadoPagoPaymentService
             'description' => "Pedido {$externalReference} - KazaKora",
             'external_reference' => $externalReference,
             'payer' => $payer,
-            'date_of_expiration' => now()->addMinutes(10)->format('Y-m-d\TH:i:s.vP'),
+            'date_of_expiration' => now()->addHours(self::PIX_VALIDADE_HORAS)->format('Y-m-d\TH:i:s.vP'),
         ], $idempotencyKey);
     }
 

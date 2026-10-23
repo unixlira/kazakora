@@ -357,6 +357,73 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         return $items;
     }
 
+    /**
+     * Opiniões do anúncio (`/reviews/item/{id}`), paginadas por offset.
+     * Pedido do Lira 2026-10-22: o reviews:coletar das 3h traz as do ML
+     * junto com as da Shopee. A API não devolve nome do comprador nem
+     * variação: o nome é sorteado na importação (AnonimizaAvaliacao) e o
+     * produto sai do anúncio base (ReviewImportService::resolveProductId).
+     *
+     * Falha numa página devolve o que já veio, como na Shopee; a próxima
+     * execução completa.
+     */
+    public function fetchReviews(string $externalId): array
+    {
+        $this->ensureConfigured();
+
+        $reviews = [];
+        $offset = 0;
+        $limite = 50;
+
+        do {
+            try {
+                $page = $this->client->get("reviews/item/{$externalId}", ['limit' => $limite, 'offset' => $offset]);
+            } catch (MercadoLivreException $exception) {
+                Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.reviews.failed', [
+                    'external_id' => $externalId,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                break;
+            }
+
+            $lote = $page['reviews'] ?? [];
+
+            foreach ($lote as $review) {
+                $id = (string) ($review['id'] ?? '');
+                $rating = (int) ($review['rate'] ?? 0);
+
+                if ($id === '' || $rating < 1 || $rating > 5 || ($review['status'] ?? 'published') !== 'published') {
+                    continue;
+                }
+
+                $texto = trim(implode('. ', array_filter([
+                    trim((string) ($review['title'] ?? ''), " \t\n."),
+                    trim((string) ($review['content'] ?? '')),
+                ])));
+
+                $reviews[] = [
+                    'external_id' => $id,
+                    'rating' => $rating,
+                    'comment' => $texto !== '' ? $texto : null,
+                    'reviewer_name' => '',
+                    'images' => array_values(array_filter(array_map(
+                        fn ($foto) => is_array($foto) ? (string) ($foto['secure_url'] ?? $foto['url'] ?? '') : (string) $foto,
+                        (array) ($review['pictures'] ?? []),
+                    ))),
+                    'model_ids' => [],
+                    'created_at' => isset($review['date_created'])
+                        ? Carbon::parse($review['date_created'])->setTimezone(config('app.timezone'))
+                        : null,
+                ];
+            }
+
+            $offset += $limite;
+        } while ($lote !== [] && $offset < (int) ($page['paging']['total'] ?? 0));
+
+        return $reviews;
+    }
+
     /** Anúncio do Mercado Livre com este SKU (filtro seller_sku da busca de itens do vendedor). */
     public function findItemIdBySku(string $sku): ?string
     {

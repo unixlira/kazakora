@@ -56,16 +56,19 @@ class ReviewImportPreservaNomeTest extends TestCase
         $this->assertSame('Maria', Review::query()->where('external_id', 'r-1')->value('reviewer_name'));
     }
 
-    public function test_preenche_nome_quando_avaliacao_esta_sem_nome(): void
+    public function test_preenche_nome_sorteado_quando_avaliacao_esta_sem_nome(): void
     {
         $produto = Product::factory()->create();
 
-        $this->importar($produto, 'Joana');
+        $this->importar($produto, 'joana_123');
         Review::query()->where('external_id', 'r-1')->update(['reviewer_name' => '']);
 
-        $this->importar($produto, 'Joana');
+        $this->importar($produto, 'joana_123');
 
-        $this->assertSame('Joana', Review::query()->where('external_id', 'r-1')->value('reviewer_name'));
+        $review = Review::query()->where('external_id', 'r-1')->first();
+        $this->assertNotSame('', $review->reviewer_name);
+        $this->assertNotSame('joana_123', $review->reviewer_name);
+        $this->assertSame('joana_123', $review->nome_original);
     }
 
     public function test_nao_copia_avaliacao_de_1_ou_2_estrelas(): void

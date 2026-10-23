@@ -15,6 +15,7 @@ class Review extends Model
         'product_id',
         'rating',
         'comment',
+        'comentario_original',
         'ocultar_nome',
         'seller_reply',
         'seller_replied_at',
@@ -46,6 +47,9 @@ class Review extends Model
         'seller_reply_template',
         'seller_reply_error',
         'seller_reply_payload',
+        // Apelido e texto como vieram do canal (ver AnonimizaAvaliacao).
+        'nome_original',
+        'comentario_original',
     ];
 
     protected $appends = ['reviewer_display_name'];

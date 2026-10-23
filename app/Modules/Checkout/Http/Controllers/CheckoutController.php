@@ -1890,7 +1890,104 @@ class CheckoutController extends Controller
             'draft' => $draft ?: null,
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
+            // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais e
+            // pop-up do cupom de 1ª compra (só com cupom cadastrado e válido).
+            'avaliacoesCarrossel' => fn () => $this->avaliacoesDoCarrossel($cartItems),
+            'cupomPrimeiraCompra' => fn () => $coupon ? null : $this->cupomPrimeiraCompra($subtotal, $user),
         ];
+    }
+
+    /**
+     * +/− de quantidade no resumo do checkout (pedido 2026-10-23, modelo
+     * Yampi). Respeita a compra direta e o estoque; nunca tira o item.
+     */
+    public function updateItem(Request $request, int $product): JsonResponse
+    {
+        // Sem validate(): erro de validação aqui vira redirect e a tela de
+        // fetch não segue redirect. Quantidade fora do intervalo é ajustada.
+        $quantidade = (int) $request->input('quantity');
+        if ($quantidade < 1) {
+            return response()->json(['ok' => false, 'message' => 'Quantidade inválida.'], 422);
+        }
+        $this->cart->alterarNaFinalizacao($product, min($quantidade, 999));
+
+        $item = $this->cart->items()->first(fn ($item) => (int) data_get($item, 'product.id') === $product);
+
+        return response()->json(['ok' => (bool) $item, 'quantity' => $item['quantity'] ?? null]);
+    }
+
+    /**
+     * Avaliações do carrossel embaixo do resumo: só as que existem no banco,
+     * nota 4 ou 5 e com texto. Primeiro as dos produtos do carrinho (anúncio
+     * pai e variações), completando com as melhores da loja; com foto antes.
+     * O nome segue a mesma regra da página do produto (reviewer_display_name).
+     *
+     * @return list<array{id: int, nota: int, nome: string, texto: string, foto: ?string}>
+     */
+    private function avaliacoesDoCarrossel(Collection $cartItems): array
+    {
+        $limite = 8;
+        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
+        $grupos = $ids->isEmpty() ? collect() : Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
+            ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)->unique()->values();
+
+        $base = fn () => Review::query()
+            ->where('rating', '>=', 4)
+            ->whereNotNull('comment')
+            ->whereRaw('LENGTH(TRIM(comment)) >= 15')
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->orderByDesc('rating')
+            ->latest()
+            ->orderByDesc('id');
+
+        $avaliacoes = $grupos->isEmpty() ? collect() : $base()
+            ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
+            ->limit($limite)
+            ->get();
+
+        if ($avaliacoes->count() < $limite) {
+            $avaliacoes = $avaliacoes->concat($base()->whereNotIn('id', $avaliacoes->pluck('id'))->limit($limite - $avaliacoes->count())->get());
+        }
+
+        return $avaliacoes->map(function (Review $review) {
+            if ($review->ocultar_nome) {
+                $review->setRelation('user', null);
+            }
+            $foto = $review->images->first(fn ($imagem) => ! preg_match('/\.(mp4|mov|webm|m4v)(\?|$)/i', (string) $imagem->image_url));
+
+            return [
+                'id' => $review->id,
+                'nota' => (int) $review->rating,
+                'nome' => $review->reviewer_display_name,
+                'texto' => Str::limit(trim((string) $review->comment), 220),
+                'foto' => $foto?->image_url,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Cupom do pop-up "Você ganhou um cupom para sua 1ª compra!" (config
+     * loja.cupom_primeira_compra). Null (sem pop-up) quando a chave está
+     * vazia, o cupom não existe, não vale para este carrinho ou o cliente
+     * logado já comprou. Nunca cria cupom.
+     *
+     * @return array{code: string, descricao: string}|null
+     */
+    private function cupomPrimeiraCompra(float $subtotal, ?User $user): ?array
+    {
+        $codigo = (string) config('loja.cupom_primeira_compra');
+        $coupon = $codigo !== '' ? Coupon::buscar($codigo) : null;
+
+        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email)) {
+            return null;
+        }
+        if ($user && $user->orders()->whereIn('status', Coupon::STATUS_USO)->exists()) {
+            return null;
+        }
+
+        return ['code' => $coupon->code, 'descricao' => $coupon->descricaoDesconto()];
     }
 
     /**

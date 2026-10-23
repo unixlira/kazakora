@@ -1,8 +1,9 @@
 <script setup>
 import { rastrearPurchase } from '@/Shared/pixelMeta';
 // Checkout v2 (pedido 2026-10-10): uma tela só, sem topo e rodapé da loja,
-// feita pra fechar a venda — dados, endereço, entrega e pagamento juntos,
-// resumo do pedido ao lado. Pix já mostra os 5% aplicados ao ser escolhido.
+// feita pra fechar a venda, resumo do pedido ao lado. Desde 2026-10-23 no
+// modelo Yampi (referência seguro.mavoloja.com.br): 3 caixas em sequência
+// (Identificação, Entrega, Pagamento), só a etapa atual aberta.
 // Usa o mesmo backend do checkout em 2 etapas: grava a entrega por fetch
 // (JSON) e cria o pagamento por /finalizacao/pagamento; o QR do Pix e a
 // confirmação do cartão chegam nas props desta mesma página.
@@ -11,6 +12,7 @@ import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.v
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCpf, maskPhone } from '@/Shared/useMasks';
+import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -40,6 +42,9 @@ const props = defineProps({
     // Boleto (2026-10-14): { linhaDigitavel, codigoBarras, pdfUrl, vencimento }.
     mercadoPagoBoleto: { type: Object, default: null },
     boletoDiasVencimento: { type: Number, default: 3 },
+    // Modelo Yampi (2026-10-23): avaliações reais do banco e cupom de 1ª compra cadastrado (ou null).
+    avaliacoesCarrossel: { type: Array, default: () => [] },
+    cupomPrimeiraCompra: { type: Object, default: null },
 });
 
 // Desconto Checkout em R$ fixo vira % com casas a mais: mostra no máximo 2 (2026-10-18).
@@ -124,7 +129,7 @@ const descontoPlataforma = ref(0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
-watch(cepEfetivo, async (zip) => {
+const atualizarFrete = async (zip) => {
     const cep = (zip ?? '').replace(/\D/g, '');
     if (cep.length !== 8) {
         entregaExpressa.value = null;
@@ -153,7 +158,40 @@ watch(cepEfetivo, async (zip) => {
     } finally {
         freteCarregando.value = false;
     }
-}, { immediate: true });
+};
+watch(cepEfetivo, atualizarFrete, { immediate: true });
+
+// +/− no resumo (modelo Yampi, 2026-10-23): grava a quantidade, recarrega os
+// itens e o subtotal do servidor e refaz o frete embutido do CEP atual.
+watch(() => props.items, (novos) => { itens.value = novos; });
+watch(() => props.subtotal, (novo) => { subtotalAtual.value = Number(novo) || 0; });
+const alterandoItem = ref(null);
+const alterarQuantidade = async (item, delta) => {
+    const nova = item.quantity + delta;
+    const estoque = Number(item.product?.stock);
+    if (nova < 1 || (Number.isFinite(estoque) && nova > estoque) || alterandoItem.value || props.order) return;
+    alterandoItem.value = item.product.id;
+    try {
+        const resposta = await fetch(`/finalizacao/itens/${item.product.id}`, {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '') },
+            body: JSON.stringify({ quantity: nova }),
+        });
+        if (!resposta.ok) throw new Error();
+        await new Promise((resolve) => router.reload({
+            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: resolve,
+        }));
+        await atualizarFrete(cepEfetivo.value);
+    } catch {
+        erroGeral.value = 'Não foi possível mudar a quantidade agora. Tente de novo.';
+    } finally {
+        alterandoItem.value = null;
+    }
+};
 
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
 const valorFrete = computed(() => (turboEscolhido.value && turbo.value ? Number(turbo.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
@@ -166,7 +204,6 @@ const cupomAplicado = ref(props.couponCode);
 const descontoCupom = ref(Number(props.discountAmount) || 0);
 const cupomDescricao = ref(null);
 const cupom = ref('');
-const mostrarCupom = ref(false);
 const cupomCarregando = ref(false);
 const cupomErro = ref(page.props.errors?.code ?? null);
 
@@ -205,7 +242,6 @@ const aplicarCupom = async () => {
         descontoCupom.value = Number(data.discount_amount) || 0;
         cupomDescricao.value = data.descricao;
         cupom.value = '';
-        mostrarCupom.value = false;
     } catch {
         cupomErro.value = 'Sem conexão. Tente de novo.';
     } finally {
@@ -242,10 +278,26 @@ let brickTimer = null;
 const brickPronto = ref(false);
 const brickErro = ref(null);
 
+const cartaoBin = ref('');
+const BANDEIRAS_BIN = [
+    ['elo', /^(4011(78|79)|43(1274|8935)|45(1416|7393|763(1|2))|50(4175|6699|67[0-7][0-9]|9000)|627780|63(6297|6368)|650(03([^4])|04([0-9])|05(0|1)|4(0[5-9]|3[0-9]|8[5-9]|9[0-9])|5([0-2][0-9]|3[0-8])|9([2-6][0-9]|7[0-8])|541|700|720|901)|651652|655000|655021)/],
+    ['hipercard', /^(606282|3841)/],
+    ['amex', /^3[47]/],
+    ['diners', /^3(0[0-5]|[68])/],
+    ['visa', /^4/],
+    ['mastercard', /^(5[1-5]|2(2[2-9]|[3-6]|7[01]|720))/],
+];
+const cartaoBandeira = computed(() => BANDEIRAS_BIN.find(([, regra]) => regra.test(cartaoBin.value))?.[0] ?? null);
+const cartaoNumeroPrevia = computed(() => {
+    const digitos = cartaoBin.value.padEnd(16, '•');
+    return digitos.replace(/(.{4})/g, '$1 ').trim();
+});
+
 const desmontarBrick = () => {
     brick?.unmount();
     brick = null;
     brickPronto.value = false;
+    cartaoBin.value = '';
 };
 
 const montarBrick = async () => {
@@ -265,6 +317,9 @@ const montarBrick = async () => {
             },
             callbacks: {
                 onReady: () => { brickPronto.value = true; },
+                // Prévia do cartão (modelo Yampi): o Brick só entrega os 6 primeiros
+                // dígitos (BIN); o resto do número nunca sai do campo seguro dele.
+                onBinChange: (bin) => { cartaoBin.value = String(bin ?? '').replace(/\D/g, '').slice(0, 8); },
                 onError: (error) => { brickErro.value = mensagemErroCartao(error); },
                 onSubmit: () => Promise.resolve(),
             },
@@ -331,14 +386,6 @@ const payloadEntrega = () => {
     return data;
 };
 
-// Logado com tudo preenchido (pedido 2026-10-18): a tela já abre no
-// pagamento, sem fazer o cliente rolar por dados que a loja já tem.
-const faltaDadoDoLogado = () => pedirCpf.value || !String(pessoa.phone ?? '').replace(/\D/g, '') || usarNovoEndereco.value;
-onMounted(() => {
-    if (!isLoggedIn.value || props.order || faltaDadoDoLogado() || Object.keys(serverErrors.value).length) return;
-    nextTick(() => document.getElementById('pagamento-v2')?.scrollIntoView({ block: 'start' }));
-});
-
 const irParaErro = () => nextTick(() => {
     document.querySelector('[data-erro="1"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
@@ -383,29 +430,68 @@ const conferirCpf = () => {
     }
 };
 
-const finalizar = async () => {
-    if (freteCarregando.value) return;
-    medicao.finalizarClicado();
-    erros.value = {};
-    erroGeral.value = null;
-    tentouAqui.value = true;
+// ---------- Etapas (modelo Yampi, pedido 2026-10-23) ----------
+// Identificação, Entrega e Pagamento, uma aberta por vez. A etapa feita fecha
+// com o resumo do que foi preenchido e o "Editar". "Ir para Pagamento" já
+// grava a entrega no servidor (mesma validação de sempre, e-mail/CPF em uso
+// voltam para a Identificação); o Finalizar grava de novo e cria o pagamento.
+const etapa = ref(1);
+const salvandoEntrega = ref(false);
+// Celular: obrigatório para visitante e para endereço novo (o servidor pede o
+// mesmo); logado entregando num endereço salvo segue sem, como antes.
+const telefoneValido = () => (isLoggedIn.value && !usarNovoEndereco.value) || String(pessoa.phone ?? '').replace(/\D/g, '').length >= 10;
+const emailValido = () => isLoggedIn.value || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(pessoa.email ?? '').trim());
+const dadosCompletos = () => !nomeCurto() && emailValido() && (!pedirCpf.value || cpfValido(pessoa.cpf)) && telefoneValido();
+const CAMPOS_RUA = ['street', 'number', 'neighborhood', 'city', 'state'];
+const enderecoCompleto = () => (!usarNovoEndereco.value && !!addressId.value)
+    || (endereco.zip.replace(/\D/g, '').length === 8 && CAMPOS_RUA.every((campo) => String(endereco[campo] ?? '').trim()));
+const ehErroDeDados = (chave) => chave.startsWith('guest.') || chave === 'cpf' || chave === 'new_address.phone' || chave === 'session';
+const ehErroDeEntrega = (chave) => chave.startsWith('new_address.') || chave === 'address_id' || chave === 'shipping_method_id';
+const etapaDosErros = (lista) => {
+    const chaves = Object.keys(lista ?? {});
+    if (chaves.some(ehErroDeDados)) return 1;
+    if (chaves.some(ehErroDeEntrega)) return 2;
+    return null;
+};
 
-    const errosLocais = {};
-    if (nomeCurto()) {
-        errosLocais['guest.name'] = [(pessoa.name ?? '').trim() ? MENSAGEM_NOME : 'Digite seu nome completo.'];
-    }
-    if (pedirCpf.value && !cpfValido(pessoa.cpf)) {
-        errosLocais[campoCpf.value] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
-    }
-    if (Object.keys(errosLocais).length) {
-        erros.value = errosLocais;
-        erroGeral.value = 'Confira os campos destacados.';
+// Abre na primeira etapa que falta: logado com tudo no cadastro cai direto
+// no Pagamento (como desde 2026-10-18); visitante volta onde parou.
+etapa.value = (() => {
+    if (props.order) return 3;
+    const comErro = etapaDosErros(serverErrors.value);
+    if (comErro) return comErro;
+    if (!dadosCompletos()) return 1;
+    if (!enderecoCompleto()) return 2;
+    return isLoggedIn.value || props.draft?.new_address ? 3 : 2;
+})();
+
+const irPara = (numero) => {
+    etapa.value = numero;
+    nextTick(() => document.getElementById(`etapa-${numero}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+};
+
+const errosDosDados = () => {
+    const lista = {};
+    if (nomeCurto()) lista['guest.name'] = [(pessoa.name ?? '').trim() ? MENSAGEM_NOME : 'Digite seu nome completo.'];
+    if (!emailValido()) lista['guest.email'] = [String(pessoa.email ?? '').trim() ? 'E-mail inválido. Confira.' : 'Digite seu e-mail.'];
+    if (pedirCpf.value && !cpfValido(pessoa.cpf)) lista[campoCpf.value] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
+    if (!telefoneValido()) lista['new_address.phone'] = ['Informe seu celular com DDD.'];
+    return lista;
+};
+
+const irParaEntrega = () => {
+    tentouAqui.value = true;
+    erroGeral.value = null;
+    erros.value = errosDosDados();
+    if (Object.keys(erros.value).length) {
         irParaErro();
         return;
     }
+    irPara(2);
+};
 
-    processando.value = true;
-
+// Grava dados + entrega no servidor (JSON). Erro 422 reabre a etapa do campo.
+const salvarEntrega = async () => {
     try {
         const resposta = await fetch('/finalizacao/entrega', {
             method: 'POST',
@@ -418,14 +504,60 @@ const finalizar = async () => {
             const corpo = await resposta.json();
             erros.value = corpo.errors ?? {};
             erroGeral.value = corpo.message ?? 'Confira os campos destacados.';
-            processando.value = false;
+            etapa.value = etapaDosErros(erros.value) ?? etapa.value;
             irParaErro();
-            return;
+            return false;
         }
 
         if (!resposta.ok) throw new Error();
+        return true;
     } catch {
         erroGeral.value = 'Não foi possível salvar seus dados agora. Confira sua conexão e tente de novo.';
+        return false;
+    }
+};
+
+const irParaPagamento = async () => {
+    if (freteCarregando.value || salvandoEntrega.value) return;
+    tentouAqui.value = true;
+    erroGeral.value = null;
+    erros.value = errosDosDados();
+    if (Object.keys(erros.value).length) {
+        etapa.value = 1;
+        irParaErro();
+        return;
+    }
+    salvandoEntrega.value = true;
+    const ok = await salvarEntrega();
+    salvandoEntrega.value = false;
+    if (ok) irPara(3);
+};
+
+const enderecoResumo = computed(() => {
+    const a = usarNovoEndereco.value ? endereco : enderecoSelecionado.value;
+    if (!a) return '';
+    return `${a.street}, ${a.number}${a.complement ? ` - ${a.complement}` : ''} · ${a.neighborhood} · ${a.city}/${a.state} · CEP ${a.zip}`;
+});
+
+const finalizar = async () => {
+    if (freteCarregando.value) return;
+    medicao.finalizarClicado();
+    erros.value = {};
+    erroGeral.value = null;
+    tentouAqui.value = true;
+
+    const errosLocais = errosDosDados();
+    if (Object.keys(errosLocais).length) {
+        erros.value = errosLocais;
+        erroGeral.value = 'Confira os campos destacados.';
+        etapa.value = 1;
+        irParaErro();
+        return;
+    }
+
+    processando.value = true;
+
+    if (!(await salvarEntrega())) {
         processando.value = false;
         return;
     }
@@ -562,6 +694,42 @@ watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });
 onMounted(() => { if (!props.order) medicao.iniciar(secaoDados.value); });
 onUnmounted(() => medicao.parar());
 
+// ---------- Pop-up do cupom de 1ª compra (modelo Yampi, 2026-10-23) ----------
+// Só com cupom cadastrado e válido (config loja.cupom_primeira_compra; o
+// servidor manda null se não houver). Uma vez por navegador (cookie).
+const COOKIE_CUPOM = 'kazakora_cupom_1a';
+const popupCupom = ref(false);
+const fecharPopupCupom = () => { popupCupom.value = false; };
+const aplicarCupomDoPopup = async () => {
+    popupCupom.value = false;
+    cupom.value = props.cupomPrimeiraCompra?.code ?? '';
+    await aplicarCupom();
+};
+const fecharComEsc = (evento) => { if (evento.key === 'Escape') fecharPopupCupom(); };
+onMounted(() => {
+    if (!props.cupomPrimeiraCompra || props.order || cupomAplicado.value) return;
+    if (document.cookie.split('; ').some((item) => item.startsWith(`${COOKIE_CUPOM}=`))) return;
+    document.cookie = `${COOKIE_CUPOM}=1; max-age=${60 * 60 * 24 * 365}; path=/; SameSite=Lax`;
+    popupCupom.value = true;
+    window.addEventListener('keydown', fecharComEsc);
+});
+onUnmounted(() => window.removeEventListener('keydown', fecharComEsc));
+
+// ---------- Carrossel de avaliações (só as reais, do banco) ----------
+const avaliacaoAtual = ref(0);
+let carrosselTimer = null;
+const passarAvaliacao = (passo = 1) => {
+    const total = props.avaliacoesCarrossel.length;
+    if (total) avaliacaoAtual.value = (avaliacaoAtual.value + passo + total) % total;
+};
+const pararCarrossel = () => { clearInterval(carrosselTimer); carrosselTimer = null; };
+const iniciarCarrossel = () => {
+    pararCarrossel();
+    if (props.avaliacoesCarrossel.length > 1) carrosselTimer = setInterval(() => passarAvaliacao(1), 6000);
+};
+onMounted(iniciarCarrossel);
+onUnmounted(pararCarrossel);
+
 // ---------- Resumo ----------
 // Fechado no celular (pedido 2026-10-23, desfaz o de 21/10): só a barra
 // "Ver resumo" no topo e o formulário já na primeira tela. No computador o
@@ -573,28 +741,35 @@ const fotoDoItem = (item) => {
 };
 const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item.quantity, 0));
 
-const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200';
-const inputErroClass = 'border-red-500 ring-1 ring-red-200';
+const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
+    ? round2(totalCartao.value - round2((subtotalAtual.value - descontoCupom.value - descontoPlataforma.value) * props.pixDiscountPercentage / 100))
+    : totalCartao.value));
+
+// Campos em pílula com fundo cinza claro (modelo Yampi).
+const inputClass = 'mt-1 w-full rounded-full border border-transparent bg-[#F1F2F4] px-5 py-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-100';
+const inputErroClass = 'border-red-500 bg-red-50 ring-1 ring-red-200';
+const botaoVerde = 'flex w-full items-center justify-center gap-2 rounded-full bg-[#00843f] px-6 py-4 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.28)] transition hover:brightness-105 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60';
+const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-7';
 </script>
 
 <template>
     <Head title="Finalize sua compra" />
 
     <CheckoutLayout>
-        <div class="mx-auto grid w-full max-w-[1160px] gap-6 px-3 py-6 md:px-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:py-9">
-            <!-- Resumo no celular (fechado por padrão, recolhível) -->
-            <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
-                <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <i class="fa-solid fa-cart-shopping text-emerald-700"></i>
-                    {{ resumoAberto ? 'Ocultar resumo' : 'Ver resumo' }} ({{ totalItens }} {{ totalItens === 1 ? 'item' : 'itens' }})
-                    <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }"></i>
-                </span>
-                <span class="text-base font-bold text-slate-900">{{ formatPrice(totalAPagar) }}</span>
-            </button>
+        <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
+        <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
+            :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">
+            <span class="text-sm font-bold text-slate-900">Resumo ({{ totalItens }})</span>
+            <span class="flex items-center gap-2 text-base font-bold text-slate-900">
+                {{ formatPrice(totalAPagar) }}
+                <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }" aria-hidden="true"></i>
+            </span>
+        </button>
 
-            <!-- FORMULÁRIO -->
+        <div class="mx-auto grid w-full max-w-[1200px] gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-8 lg:py-9">
+            <!-- ETAPAS -->
             <main class="order-2 lg:order-1">
-                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
@@ -603,243 +778,292 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                 </div>
 
                 <div class="space-y-4">
-                    <!-- 1. Dados pessoais -->
-                    <section ref="secaoDados" class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
-                        <header class="mb-4">
-                            <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">1</span>
-                                Dados pessoais
-                            </h2>
-                            <!-- Logado (pedido 2026-10-18): sem "Comprando como" nem campo de e-mail; o pedido usa o e-mail da conta. -->
-                            <p v-if="!isLoggedIn" class="mt-0.5 text-sm text-slate-500">
-                                Preencha seus dados corretamente · Já tem conta? <Link href="/entrar" class="font-medium text-sky-700 hover:underline">Entrar</Link>
+                    <!-- 1 de 3: Identificação -->
+                    <section id="etapa-1" ref="secaoDados" :class="caixaClass">
+                        <header class="flex items-baseline justify-between gap-3">
+                            <h2 class="text-xl font-extrabold text-slate-900">Identificação</h2>
+                            <span class="text-xs text-slate-500">1 de 3</span>
+                        </header>
+
+                        <template v-if="etapa === 1">
+                            <p v-if="!isLoggedIn" class="mt-1 text-sm text-slate-500">
+                                Já tem conta? <Link href="/entrar" class="font-semibold text-sky-700 hover:underline">Entrar</Link>
                             </p>
-                        </header>
-
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <label class="md:col-span-2" :data-erro="erro('guest.name') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Nome completo</span>
-                                <input v-model="pessoa.name" data-medir="nome" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'bg-slate-50']" placeholder="Seu nome e sobrenome">
-                                <small v-if="erro('guest.name')" class="text-xs text-red-600">{{ erro('guest.name') }}</small>
-                            </label>
-                            <label :data-erro="erro('new_address.phone') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Celular com DDD (WhatsApp)</span>
-                                <input :value="pessoa.phone" data-medir="celular" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="(11) 99999-9999" @input="pessoa.phone = maskPhone($event.target.value)">
-                                <small v-if="erro('new_address.phone')" class="text-xs text-red-600">{{ erro('new_address.phone') }}</small>
-                            </label>
-                            <label v-if="pedirCpf" :data-erro="erro(campoCpf) ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">CPF<template v-if="isLoggedIn"> <span class="font-normal text-red-600">(o do seu cadastro está inválido)</span></template></span>
-                                <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
-                                <small v-if="erro(campoCpf)" class="text-xs text-red-600">{{ erro(campoCpf) }}</small>
-                            </label>
-                            <label v-if="!isLoggedIn" class="md:col-span-2" :data-erro="erro('guest.email') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">E-mail</span>
-                                <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="seuemail@exemplo.com">
-                                <small v-if="erro('guest.email')" class="text-xs text-red-600">{{ erro('guest.email') }}</small>
-                                <small v-else class="text-xs text-slate-500">Você recebe a confirmação do pedido e o acesso à sua conta neste e-mail.</small>
-                            </label>
-                        </div>
-                    </section>
-
-                    <!-- 2. Endereço -->
-                    <section class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
-                        <header class="mb-4">
-                            <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">2</span>
-                                Endereço de entrega
-                            </h2>
-                            <p class="mt-0.5 text-sm text-slate-500">Onde o produto será entregue</p>
-                        </header>
-
-                        <div v-if="addresses.length && !usarNovoEndereco" class="space-y-2">
-                            <label v-for="address in addresses" :key="address.id"
-                                class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
-                                :class="addressId === address.id ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300'">
-                                <input v-model="addressId" type="radio" :value="address.id" class="mt-1 h-4 w-4 accent-emerald-600">
-                                <span class="text-sm text-slate-700">
-                                    <strong class="block text-slate-900">{{ address.street }}, {{ address.number }}<template v-if="address.complement"> - {{ address.complement }}</template></strong>
-                                    {{ address.neighborhood }} · {{ address.city }}/{{ address.state }} · CEP {{ address.zip }}
-                                </span>
-                            </label>
-                            <button type="button" class="mt-1 text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = true">
-                                <i class="fa-solid fa-plus mr-1"></i> Entregar em outro endereço
-                            </button>
-                        </div>
-
-                        <div v-else class="grid grid-cols-6 gap-3">
-                            <label class="col-span-6 md:col-span-2" :data-erro="erro('new_address.zip') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">CEP</span>
-                                <div class="relative">
-                                    <input :value="endereco.zip" data-medir="cep" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="00000-000" @input="onCep">
-                                    <i v-if="cepLoading" class="fa-solid fa-spinner absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 animate-spin text-slate-400"></i>
+                            <div class="mt-4 space-y-3">
+                                <label class="block" :data-erro="erro('guest.name') ? 1 : 0">
+                                    <span class="sr-only">Nome completo</span>
+                                    <input v-model="pessoa.name" data-medir="nome" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'text-slate-600']" placeholder="Nome completo">
+                                    <small v-if="erro('guest.name')" class="ml-4 text-xs text-red-600">{{ erro('guest.name') }}</small>
+                                </label>
+                                <!-- Logado (pedido 2026-10-18): sem campo de e-mail; o pedido usa o e-mail da conta. -->
+                                <label v-if="!isLoggedIn" class="block" :data-erro="erro('guest.email') ? 1 : 0">
+                                    <span class="sr-only">E-mail</span>
+                                    <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="E-mail">
+                                    <small v-if="erro('guest.email')" class="ml-4 text-xs text-red-600">{{ erro('guest.email') }}</small>
+                                </label>
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                    <label v-if="pedirCpf" class="block" :data-erro="erro(campoCpf) ? 1 : 0">
+                                        <span class="sr-only">CPF</span>
+                                        <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="CPF" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
+                                        <small v-if="isLoggedIn && !erro(campoCpf)" class="ml-4 text-xs text-red-600">O CPF do seu cadastro está inválido.</small>
+                                        <small v-if="erro(campoCpf)" class="ml-4 text-xs text-red-600">{{ erro(campoCpf) }}</small>
+                                    </label>
+                                    <label class="block" :data-erro="erro('new_address.phone') ? 1 : 0">
+                                        <span class="sr-only">WhatsApp ou celular com DDD</span>
+                                        <input :value="pessoa.phone" data-medir="celular" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="WhatsApp/Celular" @input="pessoa.phone = maskPhone($event.target.value)">
+                                        <small v-if="erro('new_address.phone')" class="ml-4 text-xs text-red-600">{{ erro('new_address.phone') }}</small>
+                                    </label>
                                 </div>
-                                <small v-if="cepError || erro('new_address.zip')" class="text-xs text-red-600">{{ cepError || erro('new_address.zip') }}</small>
-                            </label>
-                            <label class="col-span-6 md:col-span-4" :data-erro="erro('new_address.street') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Endereço</span>
-                                <input v-model="endereco.street" data-medir="endereco" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Rua, avenida...">
-                            </label>
-                            <label class="col-span-2" :data-erro="erro('new_address.number') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Número</span>
-                                <input ref="numeroInput" v-model="endereco.number" data-medir="numero" type="text" :class="[inputClass, erro('new_address.number') && inputErroClass]" placeholder="Nº">
-                            </label>
-                            <label class="col-span-4">
-                                <span class="text-sm font-medium text-slate-700">Complemento <span class="font-normal text-slate-500">(opcional)</span></span>
-                                <input v-model="endereco.complement" data-medir="complemento" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Apto, bloco, casa...">
-                            </label>
-                            <label class="col-span-6 md:col-span-2" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Bairro</span>
-                                <input v-model="endereco.neighborhood" data-medir="bairro" type="text" :class="[inputClass, erro('new_address.neighborhood') && inputErroClass]">
-                            </label>
-                            <label class="col-span-4 md:col-span-3" :data-erro="erro('new_address.city') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">Cidade</span>
-                                <input v-model="endereco.city" data-medir="cidade" type="text" autocomplete="address-level2" :class="[inputClass, erro('new_address.city') && inputErroClass]">
-                            </label>
-                            <label class="col-span-2 md:col-span-1" :data-erro="erro('new_address.state') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">UF</span>
-                                <input v-model="endereco.state" data-medir="uf" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]">
-                            </label>
-                            <!-- Diz exatamente o que falta (antes era só "Preencha o endereço completo"). -->
-                            <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
-                                <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ errosEndereco.join(' ') }}
+                            </div>
+                            <button type="button" :class="[botaoVerde, 'mt-5']" @click="irParaEntrega">Ir para Entrega</button>
+                            <p class="mt-3 text-center text-xs text-slate-500">
+                                Ao prosseguir com a compra, você concorda com as
+                                <Link href="/politica-de-privacidade" target="_blank" class="font-bold text-slate-700 hover:underline">Políticas de Privacidade</Link>
                             </p>
-                            <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = false">
-                                <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
-                            </button>
-                        </div>
+                        </template>
 
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
+                            <div class="min-w-0">
+                                <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
+                                <p v-if="!isLoggedIn" class="truncate">{{ pessoa.email }}</p>
+                                <p>{{ [pedirCpf ? pessoa.cpf : null, pessoa.phone].filter(Boolean).join(' · ') }}</p>
+                            </div>
+                            <button v-if="!order" type="button" class="shrink-0 text-sm font-semibold text-sky-700 hover:underline" @click="irPara(1)">Editar</button>
+                        </div>
                     </section>
 
-                    <!-- 3. Entrega -->
-                    <section class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
-                        <header class="mb-4">
-                            <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">3</span>
-                                Forma de entrega
-                                <i v-if="freteCarregando" class="fa-solid fa-spinner animate-spin text-sm text-slate-400"></i>
+                    <!-- 2 de 3: Entrega -->
+                    <section id="etapa-2" :class="[caixaClass, etapa < 2 && 'opacity-60']">
+                        <header class="flex items-baseline justify-between gap-3">
+                            <h2 class="flex items-center gap-2 text-xl font-extrabold" :class="etapa < 2 ? 'text-slate-500' : 'text-slate-900'">
+                                Entrega
+                                <i v-if="freteCarregando && etapa === 2" class="fa-solid fa-spinner animate-spin text-sm text-slate-400"></i>
                             </h2>
-                            <p class="mt-0.5 text-sm text-slate-500">Método de entrega</p>
+                            <span class="text-xs text-slate-500">2 de 3</span>
                         </header>
 
-                        <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                            <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
-                        </p>
+                        <p v-if="etapa < 2" class="mt-2 text-sm text-slate-500">Preencha suas informações pessoais para continuar</p>
 
-                        <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
-                        <div v-if="freteCarregando && totalItens > 1" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
-                            <i class="fa-solid fa-box-open fa-bounce text-lg text-sky-700"></i>
-                            <span>Seus <strong>{{ totalItens }} itens</strong> vão juntos na mesma caixa. Recalculando o frete para você pagar menos…</span>
+                        <template v-else-if="etapa === 2">
+                            <div v-if="addresses.length && !usarNovoEndereco" class="mt-4 space-y-2">
+                                <label v-for="address in addresses" :key="address.id"
+                                    class="flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition"
+                                    :class="addressId === address.id ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300'">
+                                    <input v-model="addressId" type="radio" :value="address.id" class="mt-1 h-4 w-4 accent-emerald-600">
+                                    <span class="text-sm text-slate-700">
+                                        <strong class="block text-slate-900">{{ address.street }}, {{ address.number }}<template v-if="address.complement"> - {{ address.complement }}</template></strong>
+                                        {{ address.neighborhood }} · {{ address.city }}/{{ address.state }} · CEP {{ address.zip }}
+                                    </span>
+                                </label>
+                                <button type="button" class="mt-1 text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = true">
+                                    <i class="fa-solid fa-plus mr-1"></i> Entregar em outro endereço
+                                </button>
+                            </div>
+
+                            <div v-else class="mt-4 grid grid-cols-6 gap-3">
+                                <label class="col-span-6 sm:col-span-3" :data-erro="erro('new_address.zip') ? 1 : 0">
+                                    <span class="sr-only">CEP</span>
+                                    <div class="relative">
+                                        <input :value="endereco.zip" data-medir="cep" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="CEP" @input="onCep">
+                                        <i v-if="cepLoading" class="fa-solid fa-spinner absolute right-4 top-1/2 mt-0.5 -translate-y-1/2 animate-spin text-slate-400"></i>
+                                    </div>
+                                    <small v-if="cepError || erro('new_address.zip')" class="ml-4 text-xs text-red-600">{{ cepError || erro('new_address.zip') }}</small>
+                                </label>
+                                <a href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener" class="col-span-6 self-center text-xs font-medium text-sky-700 hover:underline sm:col-span-3">Não sei meu CEP</a>
+                                <label class="col-span-6" :data-erro="erro('new_address.street') ? 1 : 0">
+                                    <span class="sr-only">Endereço</span>
+                                    <input v-model="endereco.street" data-medir="endereco" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Endereço (rua, avenida...)">
+                                </label>
+                                <label class="col-span-2" :data-erro="erro('new_address.number') ? 1 : 0">
+                                    <span class="sr-only">Número</span>
+                                    <input ref="numeroInput" v-model="endereco.number" data-medir="numero" type="text" :class="[inputClass, erro('new_address.number') && inputErroClass]" placeholder="Número">
+                                </label>
+                                <label class="col-span-4">
+                                    <span class="sr-only">Complemento (opcional)</span>
+                                    <input v-model="endereco.complement" data-medir="complemento" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Complemento (opcional)">
+                                </label>
+                                <label class="col-span-6 sm:col-span-2" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
+                                    <span class="sr-only">Bairro</span>
+                                    <input v-model="endereco.neighborhood" data-medir="bairro" type="text" :class="[inputClass, erro('new_address.neighborhood') && inputErroClass]" placeholder="Bairro">
+                                </label>
+                                <label class="col-span-4 sm:col-span-3" :data-erro="erro('new_address.city') ? 1 : 0">
+                                    <span class="sr-only">Cidade</span>
+                                    <input v-model="endereco.city" data-medir="cidade" type="text" autocomplete="address-level2" :class="[inputClass, erro('new_address.city') && inputErroClass]" placeholder="Cidade">
+                                </label>
+                                <label class="col-span-2 sm:col-span-1" :data-erro="erro('new_address.state') ? 1 : 0">
+                                    <span class="sr-only">UF</span>
+                                    <input v-model="endereco.state" data-medir="uf" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]" placeholder="UF">
+                                </label>
+                                <!-- Diz exatamente o que falta (antes era só "Preencha o endereço completo"). -->
+                                <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
+                                    <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ errosEndereco.join(' ') }}
+                                </p>
+                                <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = false">
+                                    <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
+                                </button>
+                            </div>
+
+                            <!-- Opções de frete -->
+                            <div class="mt-5">
+                                <p class="mb-2 text-sm font-bold text-slate-900">Forma de entrega</p>
+                                <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                                    <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
+                                </p>
+
+                                <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
+                                <div v-if="freteCarregando && totalItens > 1" role="status" class="mb-3 flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                                    <i class="fa-solid fa-box-open fa-bounce text-lg text-sky-700"></i>
+                                    <span>Seus <strong>{{ totalItens }} itens</strong> vão juntos na mesma caixa. Recalculando o frete para você pagar menos…</span>
+                                </div>
+                                <div v-else-if="descontoPlataforma > 0" role="status" class="mb-3 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                    <i class="fa-solid fa-box text-lg text-emerald-700"></i>
+                                    <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
+                                </div>
+
+                                <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): uma exclui a outra; a tela nasce no grátis. -->
+                                <label class="flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
+                                    :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
+                                    <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
+                                    <span class="flex-1 text-sm text-slate-700">
+                                        <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                        <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
+                                    </span>
+                                    <span class="text-sm font-bold text-emerald-700">Grátis</span>
+                                </label>
+
+                                <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
+                                <label v-if="turbo && !entregaExpressa"
+                                    class="mt-2 flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
+                                    :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
+                                    <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
+                                    <span class="flex-1 text-sm text-slate-700">
+                                        <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
+                                        <span class="ml-1 text-slate-500">
+                                            <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
+                                            <template v-else>entrega mais rápida pelo SEDEX</template>
+                                        </span>
+                                    </span>
+                                    <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
+                                </label>
+                                <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
+                            </div>
+
+                            <button type="button" :disabled="salvandoEntrega || freteCarregando" :class="[botaoVerde, 'mt-5']" @click="irParaPagamento">
+                                <i v-if="salvandoEntrega" class="fa-solid fa-spinner animate-spin"></i>
+                                {{ salvandoEntrega ? 'Salvando...' : 'Ir para Pagamento' }}
+                            </button>
+                        </template>
+
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
+                            <div class="min-w-0">
+                                <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ enderecoResumo }}</p>
+                                <p>
+                                    <template v-if="turboEscolhido && turbo">TURBO: + {{ formatPrice(turbo.preco) }}</template>
+                                    <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
+                                </p>
+                            </div>
+                            <button v-if="!order" type="button" class="shrink-0 text-sm font-semibold text-sky-700 hover:underline" @click="irPara(2)">Editar</button>
                         </div>
-                        <div v-else-if="descontoPlataforma > 0" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
-                            <i class="fa-solid fa-box text-lg text-emerald-700"></i>
-                            <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
-                        </div>
-
-                        <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): duas opções com caixinha,
-                             uma exclui a outra; a tela nasce no grátis e dá para voltar para ele clicando nele. -->
-                        <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
-                            :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
-                            <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
-                            <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
-                                <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
-                            </span>
-                            <span class="text-sm font-bold text-emerald-700">Grátis</span>
-                        </label>
-
-                        <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
-                        <label v-if="turbo && !entregaExpressa"
-                            class="mt-2 flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
-                            :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
-                            <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
-                            <span class="flex-1 text-sm text-slate-700">
-                                <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
-                                <span class="ml-1 text-slate-500">
-                                    <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
-                                    <template v-else>entrega mais rápida pelo SEDEX</template>
-                                </span>
-                            </span>
-                            <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
-                        </label>
-                        <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                     </section>
 
-                    <!-- 4. Pagamento -->
-                    <section id="pagamento-v2" class="scroll-mt-4 rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
-                        <header class="mb-4">
-                            <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">4</span>
-                                Forma de pagamento
-                            </h2>
-                            <p class="mt-0.5 text-sm text-slate-500">Escolha a melhor forma de pagamento para você</p>
+                    <!-- 3 de 3: Pagamento. O conteúdo fica montado (v-show) para o campo seguro do cartão não se perder ao editar outra etapa. -->
+                    <section id="etapa-3" :class="[caixaClass, etapa < 3 && 'opacity-60']">
+                        <header class="flex items-baseline justify-between gap-3">
+                            <h2 class="text-xl font-extrabold" :class="etapa < 3 ? 'text-slate-500' : 'text-slate-900'">Pagamento</h2>
+                            <span class="text-xs text-slate-500">3 de 3</span>
                         </header>
+                        <p v-if="etapa < 3" class="mt-2 text-sm text-slate-500">Preencha suas informações de entrega para continuar</p>
 
-                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário. -->
-                            <button type="button" class="relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
-                                :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                @click="metodo = 'pix'">
-                                <span v-if="pixDiscountPercentage > 0" class="absolute -top-2.5 right-2 rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold text-white shadow">-{{ pixPercentualTexto }}%</span>
-                                <i class="fa-brands fa-pix text-2xl text-[#32BCAD]"></i>
-                                <span class="text-sm font-semibold text-slate-900">Pix</span>
-                                <span class="text-xs text-slate-500">Aprovação na hora</span>
-                            </button>
-                            <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
-                                :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                @click="metodo = 'card'">
-                                <i class="fa-solid fa-credit-card text-2xl text-slate-700"></i>
-                                <span class="text-sm font-semibold text-slate-900">Cartão de Crédito</span>
-                                <span class="text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
-                            </button>
-                            <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
-                                :class="metodo === 'boleto' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                @click="metodo = 'boleto'">
-                                <i class="fa-solid fa-barcode text-2xl text-slate-700"></i>
-                                <span class="text-sm font-semibold text-slate-900">Boleto Bancário</span>
-                                <span class="text-xs text-slate-500">Vence em {{ boletoDiasVencimento }} dias</span>
-                            </button>
-                        </div>
+                        <div v-show="etapa === 3" id="pagamento-v2">
+                            <p class="mt-1 text-sm text-slate-500">Escolha a melhor forma de pagamento para você</p>
 
-                        <div v-if="metodo === 'pix'" class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
-                            <p v-if="descontoPix > 0" class="flex items-center gap-2 font-bold text-emerald-700">
-                                <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixPercentualTexto }}% ativado: você economiza {{ formatPrice(descontoPix) }}
+                            <div class="mt-4 space-y-2.5">
+                                <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário. -->
+                                <button type="button" class="relative flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
+                                    :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                    :aria-pressed="metodo === 'pix'" @click="metodo = 'pix'">
+                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'pix' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'pix'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
+                                    <i class="fa-brands fa-pix text-xl text-[#32BCAD]"></i>
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-slate-900">Pix <span class="font-normal text-slate-500">· aprovação na hora</span></span>
+                                        <span v-if="pixDiscountPercentage > 0" class="block text-sm font-extrabold text-[#00843f]">{{ formatPrice(totalNoPix) }} no Pix</span>
+                                    </span>
+                                    <span v-if="pixDiscountPercentage > 0" class="rounded-full bg-[#00843f] px-2.5 py-1 text-xs font-bold text-white">-{{ pixPercentualTexto }}%</span>
+                                </button>
+                                <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
+                                    :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                    :aria-pressed="metodo === 'card'" @click="metodo = 'card'">
+                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'card' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'card'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
+                                    <i class="fa-solid fa-credit-card text-xl text-slate-700"></i>
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-slate-900">Cartão de Crédito</span>
+                                        <span class="block text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
+                                    </span>
+                                </button>
+                                <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
+                                    :class="metodo === 'boleto' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                    :aria-pressed="metodo === 'boleto'" @click="metodo = 'boleto'">
+                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'boleto' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'boleto'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
+                                    <i class="fa-solid fa-barcode text-xl text-slate-700"></i>
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-slate-900">Boleto Bancário</span>
+                                        <span class="block text-xs text-slate-500">Vence em {{ boletoDiasVencimento }} dias</span>
+                                    </span>
+                                </button>
+                            </div>
+
+                            <div v-if="metodo === 'pix'" class="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
+                                <p v-if="descontoPix > 0" class="flex items-center gap-2 font-bold text-emerald-700">
+                                    <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixPercentualTexto }}% ativado: você economiza {{ formatPrice(descontoPix) }}
+                                </p>
+                                <ul class="mt-2 space-y-1 text-emerald-800">
+                                    <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
+                                    <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
+                                    <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
+                                </ul>
+                            </div>
+
+                            <div v-else-if="metodo === 'boleto'" class="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                                <ul class="space-y-1">
+                                    <li><i class="fa-solid fa-barcode mr-2 w-4"></i>O boleto aparece assim que você finalizar e também vai para o seu e-mail.</li>
+                                    <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
+                                    <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
+                                </ul>
+                                <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixPercentualTexto }}% vale só no Pix.</p>
+                            </div>
+
+                            <div v-else class="mt-4">
+                                <!-- Prévia do cartão (modelo Yampi): bandeira e 6 primeiros dígitos, que é o que o Mercado Pago libera. -->
+                                <div class="relative mx-auto mb-4 aspect-[1.586] w-full max-w-[300px] overflow-hidden rounded-2xl bg-gradient-to-br from-[#1f2937] via-[#111827] to-[#00843f] p-5 text-white shadow-lg" aria-hidden="true">
+                                    <div class="flex items-start justify-between">
+                                        <span class="block h-7 w-10 rounded-md bg-gradient-to-br from-amber-200 to-amber-400"></span>
+                                        <span class="text-sm font-extrabold uppercase tracking-wide">{{ cartaoBandeira ?? '' }}</span>
+                                    </div>
+                                    <p class="mt-6 font-mono text-lg tracking-[0.14em] tabular-nums">{{ cartaoNumeroPrevia }}</p>
+                                    <div class="mt-4 flex items-end justify-between text-[10px] uppercase text-white/70">
+                                        <span>Nome do titular</span>
+                                        <span>Validade</span>
+                                    </div>
+                                </div>
+                                <div id="cartao-brick-v2"></div>
+                                <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
+                                <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>
+                            </div>
+
+                            <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
+                                :class="[botaoVerde, 'mt-5 text-xl']" @click="finalizar">
+                                <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
+                                {{ processando ? 'Processando...' : 'Finalizar pedido' }}
+                            </button>
+                            <p class="mt-3 text-center text-xs text-slate-500">
+                                Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
                             </p>
-                            <ul class="mt-2 space-y-1 text-emerald-800">
-                                <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
-                                <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
-                                <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
-                            </ul>
                         </div>
-
-                        <div v-else-if="metodo === 'boleto'" class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-                            <ul class="space-y-1">
-                                <li><i class="fa-solid fa-barcode mr-2 w-4"></i>O boleto aparece assim que você finalizar e também vai para o seu e-mail.</li>
-                                <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
-                                <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
-                            </ul>
-                            <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixPercentualTexto }}% vale só no Pix.</p>
-                        </div>
-
-                        <div v-else class="mt-4">
-                            <div id="cartao-brick-v2"></div>
-                            <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
-                            <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>
-                        </div>
-
-                        <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
-                            class="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-[#00843f] px-6 py-4 text-xl font-bold text-white shadow-[0_4px_0_#006631] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#006631] disabled:cursor-not-allowed disabled:opacity-60 md:text-2xl"
-                            @click="finalizar">
-                            <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
-                            {{ processando ? 'Processando...' : 'Finalizar pedido' }}
-                        </button>
-                        <p class="mt-2 text-center text-xs text-slate-500">
-                            Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
-                        </p>
                     </section>
 
-                    <!-- Celular: selos de confiança debaixo do Finalizar pedido (pedido 2026-10-21). -->
+                    <!-- Celular: selos de confiança debaixo das etapas (pedido 2026-10-21). -->
                     <ul class="space-y-3 lg:hidden">
-                        <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                        <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
                             <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                             <div class="text-sm text-slate-600">
                                 <strong class="block text-slate-900">{{ selo.titulo }}</strong>
@@ -850,25 +1074,82 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                 </div>
             </main>
 
-            <!-- RESUMO -->
-            <aside class="order-1 lg:order-2 lg:sticky lg:top-6" :class="{ 'hidden lg:block': !resumoAberto }">
-                <div class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
-                    <h2 class="mb-4 text-xl font-semibold text-slate-800">Resumo do seu pedido</h2>
+            <!-- RESUMO DA COMPRA (fixo ao rolar no computador) -->
+            <aside id="resumo-compra" class="order-1 lg:sticky lg:top-6 lg:order-2" :class="{ 'hidden lg:block': !resumoAberto }">
+                <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6">
+                    <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
-                    <ul class="divide-y divide-slate-100">
-                        <li v-for="item in itens" :key="item.product.id" class="flex items-center gap-3 py-3">
-                            <span class="relative shrink-0">
-                                <img v-if="fotoDoItem(item)" :src="fotoDoItem(item)" :alt="item.product.name" class="h-16 w-16 rounded-lg border border-slate-200 object-cover">
-                                <span v-else class="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
-                                <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ item.quantity }}</span>
+                    <!-- Cupom sempre à mostra (modelo Yampi). -->
+                    <div class="mt-4">
+                        <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+                            <span class="text-emerald-800">
+                                <i class="fa-solid fa-ticket mr-1"></i> Cupom <strong>{{ cupomAplicado }}</strong> aplicado
+                                <span v-if="cupomDescricao" class="block text-xs text-emerald-700">{{ cupomDescricao }}</span>
                             </span>
-                            <span class="min-w-0 flex-1 text-sm text-slate-600">{{ item.product.name }}</span>
-                            <span class="text-sm font-medium text-slate-800">{{ formatPrice(item.subtotal) }}</span>
+                            <button type="button" :disabled="cupomCarregando || !!order" class="text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
+                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
+                            </button>
+                        </div>
+                        <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
+                            <label class="min-w-0 flex-1">
+                                <span class="sr-only">Cupom de desconto</span>
+                                <input v-model="cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters" :disabled="cupomCarregando"
+                                    class="w-full rounded-full border bg-[#F1F2F4] px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case focus:border-slate-300 focus:bg-white"
+                                    :class="cupomErro ? 'border-red-400' : 'border-transparent'" @input="cupomErro = null">
+                            </label>
+                            <button type="submit" :disabled="!cupom.trim() || cupomCarregando"
+                                class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
+                                <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
+                                {{ cupomCarregando ? 'Buscando' : 'Adicionar' }}
+                            </button>
+                        </form>
+                        <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
+                    </div>
+
+                    <dl class="mt-4 space-y-2 text-sm text-slate-600">
+                        <div class="flex justify-between"><dt>Produtos ({{ totalItens }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
+                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
+                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
+                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
+                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
+                            <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
+                        <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
+                            <dt class="text-base font-extrabold">Total</dt>
+                            <dd class="text-right">
+                                <span class="block text-xl font-extrabold">{{ formatPrice(totalAPagar) }}</span>
+                                <span v-if="!order" class="block text-xs font-semibold text-slate-600">em até 12x no cartão</span>
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <ul class="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+                        <li v-for="item in itens" :key="item.product.id" class="flex gap-3 py-4">
+                            <img v-if="fotoDoItem(item)" :src="fotoDoItem(item)" :alt="item.product.name" width="64" height="64" class="h-16 w-16 shrink-0 rounded-xl border border-slate-200 object-cover">
+                            <span v-else class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm leading-snug text-slate-700">{{ item.product.name }}</p>
+                                <p v-if="item.product.variation && !item.product.name.includes(item.product.variation)" class="text-xs text-slate-500">{{ item.product.variation }}</p>
+                                <p class="mt-1 text-sm font-bold text-slate-900">{{ formatPrice(item.subtotal) }}</p>
+                                <div class="mt-2 inline-flex items-center rounded-full border border-slate-200" role="group" :aria-label="`Quantidade de ${item.product.name}`">
+                                    <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
+                                        :disabled="item.quantity <= 1 || !!alterandoItem || !!order" aria-label="Diminuir quantidade" @click="alterarQuantidade(item, -1)">
+                                        <i class="fa-solid fa-minus text-xs"></i>
+                                    </button>
+                                    <span class="min-w-8 text-center text-sm font-semibold tabular-nums" aria-live="polite">
+                                        <i v-if="alterandoItem === item.product.id" class="fa-solid fa-spinner animate-spin text-xs text-slate-400"></i>
+                                        <template v-else>{{ item.quantity }}</template>
+                                    </span>
+                                    <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
+                                        :disabled="item.quantity >= Number(item.product.stock ?? Infinity) || !!alterandoItem || !!order" aria-label="Aumentar quantidade" @click="alterarQuantidade(item, 1)">
+                                        <i class="fa-solid fa-plus text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </li>
-                        <!-- Livros de brinde como uma linha de produto, com GRÁTIS no lugar do valor (pedido do Lira 2026-10-21; antes ficava embaixo do endereço). -->
-                        <li v-if="livrosBrinde" class="flex items-center gap-3 py-3">
+                        <!-- Livros de brinde como uma linha de produto, com GRÁTIS no lugar do valor (pedido do Lira 2026-10-21). -->
+                        <li v-if="livrosBrinde" class="flex items-center gap-3 py-4">
                             <span class="relative shrink-0">
-                                <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 rounded-lg border border-slate-200 bg-white object-cover">
+                                <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 rounded-xl border border-slate-200 bg-white object-cover">
                                 <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ livrosBrinde.quantidade }}</span>
                             </span>
                             <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
@@ -879,9 +1160,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </span>
                         </li>
                     </ul>
-                    <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). Cores
-                         fixas do checkout; link em sky-700 para passar no contraste. -->
-                    <div class="mt-1 flex items-center justify-between gap-2">
+                    <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). -->
+                    <div class="flex items-center justify-between gap-2">
                         <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
                         <span v-if="avaliacaoItens" class="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
                             <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
@@ -893,52 +1173,11 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 </span>
                             </span>
                             <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
-                            <!-- No celular só o número, para caber na linha do "Alterar itens". -->
-                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? '\u00a0avaliação' : '\u00a0avaliações' }}</span>)</span>
+                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? ' avaliação' : ' avaliações' }}</span>)</span>
                         </span>
                     </div>
 
-                    <div class="mt-3 border-t border-slate-100 pt-3">
-                        <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
-                            <span class="text-emerald-800">
-                                <i class="fa-solid fa-ticket mr-1"></i> Cupom <strong>{{ cupomAplicado }}</strong> aplicado
-                                <span v-if="cupomDescricao" class="block text-xs text-emerald-700">{{ cupomDescricao }}</span>
-                            </span>
-                            <button type="button" :disabled="cupomCarregando" class="text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
-                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
-                            </button>
-                        </div>
-                        <button v-else-if="!mostrarCupom" type="button" class="text-sm font-medium text-[#c2450c] hover:underline" @click="mostrarCupom = true">
-                            <i class="fa-solid fa-ticket mr-1"></i> Tem um cupom? Clique aqui
-                        </button>
-                        <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
-                            <input v-model="cupom" data-medir="cupom" type="text" placeholder="Código do cupom" autocapitalize="characters" :disabled="cupomCarregando"
-                                class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm uppercase outline-none focus:border-[#F44D00]"
-                                :class="cupomErro ? 'border-red-400' : 'border-slate-300'" @input="cupomErro = null">
-                            <button type="submit" :disabled="!cupom.trim() || cupomCarregando"
-                                class="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg bg-[#c2450c] px-4 py-2 text-sm font-semibold text-white hover:bg-[#a83a0a] disabled:opacity-50">
-                                <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
-                                {{ cupomCarregando ? 'Buscando' : 'Aplicar' }}
-                            </button>
-                        </form>
-                        <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
-                    </div>
-
-                    <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-700">
-                        <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
-                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
-                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
-                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
-                            <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
-                        <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
-                            <dt>Total</dt>
-                            <dd class="text-xl">{{ formatPrice(totalAPagar) }}</dd>
-                        </div>
-                        <p v-if="metodo === 'card' && !order" class="text-right text-xs text-slate-500">ou até 12x de {{ formatPrice(parcela12) }} no cartão</p>
-                    </dl>
-
-                    <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora). -->
+                    <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974). -->
                     <div class="mt-4 border-t border-slate-100 pt-4">
                         <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
                             <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
@@ -954,10 +1193,31 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </div>
                 </div>
 
-                <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop
-                     adaptados à KazaKora). No celular ficam debaixo do Finalizar pedido (2026-10-21). -->
+                <!-- Carrossel de avaliações reais (modelo Yampi): estrelas, nome, texto e foto. -->
+                <section v-if="avaliacoesCarrossel.length" class="mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
+                    aria-roledescription="carrossel" aria-label="Avaliações de clientes" @mouseenter="pararCarrossel" @mouseleave="iniciarCarrossel">
+                    <template v-for="(avaliacao, indice) in avaliacoesCarrossel" :key="avaliacao.id">
+                        <article v-show="indice === avaliacaoAtual" class="flex min-h-[132px] gap-3" :aria-label="`Avaliação ${indice + 1} de ${avaliacoesCarrossel.length}`">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-amber-500" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
+                                    <i v-for="estrela in 5" :key="estrela" class="text-sm" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
+                                </p>
+                                <p class="mt-1 text-xs font-bold text-slate-900">{{ avaliacao.nome }}</p>
+                                <p class="mt-2 text-sm leading-relaxed text-slate-700">{{ avaliacao.texto }}</p>
+                            </div>
+                            <img v-if="avaliacao.foto" :src="miniaturaAvaliacao(avaliacao.foto)" alt="Foto enviada pelo cliente" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 shrink-0 rounded-xl object-cover">
+                        </article>
+                    </template>
+                    <div v-if="avaliacoesCarrossel.length > 1" class="mt-3 flex items-center justify-center gap-1.5">
+                        <button v-for="(avaliacao, indice) in avaliacoesCarrossel" :key="`ponto-${avaliacao.id}`" type="button"
+                            class="h-2 rounded-full transition-all" :class="indice === avaliacaoAtual ? 'w-5 bg-slate-800' : 'w-2 bg-slate-300 hover:bg-slate-400'"
+                            :aria-label="`Ver avaliação ${indice + 1}`" :aria-current="indice === avaliacaoAtual" @click="avaliacaoAtual = indice"></button>
+                    </div>
+                </section>
+
+                <!-- Selos de confiança com imagem (pedido 2026-10-10). No celular ficam debaixo das etapas (2026-10-21). -->
                 <ul class="mt-4 hidden space-y-3 lg:block">
-                    <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                    <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">
                             <strong class="block text-slate-900">{{ selo.titulo }}</strong>
@@ -966,6 +1226,20 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </li>
                 </ul>
             </aside>
+        </div>
+
+        <!-- Pop-up do cupom de 1ª compra: só com cupom cadastrado (loja.cupom_primeira_compra), uma vez por navegador. -->
+        <div v-if="popupCupom && cupomPrimeiraCompra" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="fecharPopupCupom">
+            <div role="dialog" aria-modal="true" aria-labelledby="popup-cupom-titulo" class="relative w-full max-w-[440px] rounded-2xl bg-white px-6 pb-8 pt-10 text-center shadow-2xl">
+                <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100" aria-label="Fechar" @click="fecharPopupCupom">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+                <i class="fa-solid fa-ticket text-5xl text-slate-800" aria-hidden="true"></i>
+                <h2 id="popup-cupom-titulo" class="mt-5 text-2xl font-extrabold leading-tight text-slate-700">Você ganhou um cupom para sua 1ª compra!</h2>
+                <p class="mt-2 text-sm text-slate-600">Cupom <strong>{{ cupomPrimeiraCompra.code }}</strong>: {{ cupomPrimeiraCompra.descricao }}</p>
+                <button type="button" class="mx-auto mt-6 block w-full max-w-[240px] rounded-full bg-[#00843f] px-6 py-3.5 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.3)] hover:brightness-105" @click="aplicarCupomDoPopup">Aplicar desconto</button>
+                <button type="button" class="mx-auto mt-4 block rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-[#00843f] hover:bg-emerald-100" @click="fecharPopupCupom">Não gosto de descontos</button>
+            </div>
         </div>
 
         <PaymentProcessingModal

@@ -245,6 +245,7 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');
     Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
+    Route::patch('/itens/{product}', [CheckoutController::class, 'updateItem'])->whereNumber('product')->middleware('throttle:60,1')->name('itens.atualizar');
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/cupom', [CheckoutController::class, 'applyCouponJson'])->middleware('throttle:20,1')->name('cupom.aplicar');
     Route::delete('/cupom', [CheckoutController::class, 'removeCouponJson'])->name('cupom.remover');

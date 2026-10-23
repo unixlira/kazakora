@@ -91,6 +91,32 @@ class CartManager
         $this->save($items);
     }
 
+    /**
+     * +/− do resumo do checkout (pedido 2026-10-23, modelo Yampi): muda a
+     * quantidade sem tirar o cliente da compra direta, se ele estiver nela
+     * (update() encerraria a compra direta e mexeria no carrinho de verdade).
+     * Nunca tira o item: o mínimo é 1. Produto fora da finalização é ignorado.
+     */
+    public function alterarNaFinalizacao(int $productId, int $quantity): void
+    {
+        $quantity = max(1, $quantity);
+
+        if ($direta = $this->session->get(self::COMPRA_DIRETA)) {
+            if (isset($direta[$productId])) {
+                $direta[$productId] = $quantity;
+                $this->session->put(self::COMPRA_DIRETA, $direta);
+            }
+
+            return;
+        }
+
+        $items = $this->raw();
+        if (isset($items[$productId])) {
+            $items[$productId] = $quantity;
+            $this->save($items);
+        }
+    }
+
     public function remove(int $productId): void
     {
         $this->encerrarCompraDireta();

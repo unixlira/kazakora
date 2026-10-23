@@ -279,8 +279,9 @@ const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
 // Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
-// no lugar de números fixos): vendidos só a partir de 50, arredondado para baixo
-// no degrau (50, 100, 250, 500, 1.000...); "tempo limitado" só com Oferta do Dia
+// no lugar de números fixos): vendidos só a partir de 50, com o número exato
+// ("+1538 vendidos", formato da referência, pedido 2026-10-23); "EXCLUSIVO" e
+// "POR TEMPO LIMITADO!" só com Oferta do Dia
 // ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
 // variação escolhida, só quando for 30 ou menos.
 const VENDIDOS_MINIMO = 50;
@@ -288,9 +289,7 @@ const ESTOQUE_BAIXO = 30;
 const vendidosLegenda = computed(() => {
     const total = Number(props.salesCount) || 0;
     if (total < VENDIDOS_MINIMO) return null;
-    const degraus = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
-    const degrau = total >= 10000 ? Math.floor(total / 10000) * 10000 : degraus.filter((d) => d <= total).pop();
-    return `Mais de ${degrau.toLocaleString('pt-BR')} vendidos`;
+    return `+${total} vendidos`;
 });
 const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
 const estoqueBaixo = computed(() => {
@@ -619,10 +618,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </button>
                             </div>
 
-                            <!-- "Novo" e vendidos reais (pedido 2026-10-23: volta só aqui, a partir de 50). -->
+                            <!-- "Novo | +N vendidos" (reais, a partir de 50) e, ao lado, as tags EXCLUSIVO e
+                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar (pedido 2026-10-23). -->
                             <div class="condicao">
-                                <span class="selo-novo">Novo</span>
-                                <span v-if="vendidosLegenda" class="vendidos">{{ vendidosLegenda }}</span>
+                                <span class="vendidos">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
+                                <template v-if="tempoLimitado">
+                                    <span class="tag-exclusivo">EXCLUSIVO</span>
+                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
+                                </template>
                             </div>
 
                             <!-- Estrelas em destaque. -->
@@ -651,7 +654,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <div class="por">{{ formatPrice(precoPor) }}</div>
                                     <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
-                                    <span v-if="tempoLimitado" class="selo-tempo"><i class="fas fa-clock" aria-hidden="true"></i> Exclusivo por tempo limitado</span>
                                     <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
                                 </div>
                             </div>
@@ -1162,11 +1164,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fav.favorito-ativo { background: #f2540d; border-color: #f2540d; color: #fff; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
-.pd2 .condicao { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 14px; color: var(--text); }
-.pd2 .selo-novo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 2px 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
-.pd2 .condicao .vendidos { font-weight: 600; color: var(--ink); }
-.pd2 .selo-tempo { display: inline-flex; align-items: center; gap: 6px; background: #fff4e5; color: #b45309; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 13px; font-weight: 700; line-height: 1.3; }
-.dark .pd2 .selo-tempo { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
+.pd2 .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; color: var(--text); }
+.pd2 .condicao .vendidos { color: var(--text); margin-right: 2px; }
+/* Tags da referência (pedido 2026-10-23): EXCLUSIVO preto com amarelo, TEMPO LIMITADO amarelo com preto. */
+.pd2 .tag-exclusivo, .pd2 .tag-tempo { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: 800; letter-spacing: .3px; line-height: 1.3; }
+.pd2 .tag-exclusivo { background: #000; color: #ffd400; }
+.pd2 .tag-tempo { background: #ffd400; color: #000; }
 /* "Só N unidades!" no formato da Mavo com as cores da loja (azul e marinho). */
 .pd2 .estoque-baixo { margin: 12px 0 0; }
 .pd2 .estoque-baixo p { margin: 0 0 6px; font-size: 15px; color: var(--navy); }
@@ -1191,11 +1194,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .de { color: var(--text); font-size: 22px; font-weight: 600; text-decoration: line-through; }
 .pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-/* Selo do Pix logo abaixo do preço, no azul padrão da loja (pedido 2026-10-20). */
-.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #eff4ff; color: var(--navy); border: 1px solid var(--blue); border-radius: 6px; padding: 5px 10px; font-size: 13px; line-height: 1.3; }
-.pd2 .selo-pix i { color: var(--blue); font-size: 16px; }
+/* Selo do Pix logo abaixo do preço: verde escuro, cantos retos (padrão Mavo, pedido 2026-10-23). */
+.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #0b6b3a; color: #fff; border: 0; border-radius: 0; padding: 7px 12px; font-size: 13px; line-height: 1.3; }
+.pd2 .selo-pix i { color: #fff; font-size: 16px; }
 .pd2 .selo-pix strong { font-weight: 800; }
-.dark .pd2 .selo-pix { background: rgba(122, 162, 255, 0.14); color: var(--blue); }
 .pd2 .parc { color: var(--ink); font-size: 18px; }
 .pd2 .parc i { color: var(--navy); margin-right: 4px; }
 .dark .pd2 .parc i { color: var(--blue); }

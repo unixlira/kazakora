@@ -10,6 +10,7 @@ use App\Modules\WhatsApp\Services\ConversorDeVoz;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\ClienteDaConversa;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
@@ -65,7 +66,7 @@ class WhatsAppInboxController extends Controller
         ]);
     }
 
-    public function messages(Request $request, WhatsAppConversation $conversation): JsonResponse
+    public function messages(Request $request, WhatsAppConversation $conversation, ClienteDaConversa $clientes): JsonResponse
     {
         $query = $conversation->messages()
             ->whereIn('direction', ['inbound', 'outbound'])
@@ -78,8 +79,16 @@ class WhatsAppInboxController extends Controller
 
         $messages = $query->get()->reverse()->values();
 
+        // Cliente e vendas só ao abrir a conversa (não a cada página de mensagens antigas).
+        $extra = [];
+        if (! $request->filled('before')) {
+            $cliente = $clientes->identificar($conversation);
+            $clientes->lembrar($conversation, $cliente);
+            $extra['cliente'] = $cliente;
+        }
+
         return response()->json([
-            'conversation' => $this->conversationPayload($conversation),
+            'conversation' => $this->conversationPayload($conversation) + $extra,
             'messages' => $messages->map(fn ($m) => $this->messagePayload($m)),
             'hasMore' => $messages->count() === self::MESSAGE_PAGE,
         ]);
@@ -384,6 +393,9 @@ class WhatsAppInboxController extends Controller
             'previewDirection' => $c->last_message_direction,
             'lastMessageAt' => $c->last_message_at?->toISOString(),
             'insideWindow' => $c->insideServiceWindow(),
+            // Venda e nome do cadastro guardados ao abrir a conversa (ClienteDaConversa).
+            'pedidoId' => $c->metadata['pedido_id'] ?? null,
+            'clienteNome' => $c->metadata['cliente_nome'] ?? null,
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Modules\Suporte\Models\MensagemSuporte;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Support\ManuelaSaudacao;
+use App\Modules\WhatsApp\Support\ManuelaTom;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -133,10 +134,12 @@ class ManuelaSuporte
         $nome = strtok((string) $chamado->user?->name, ' ') ?: 'cliente';
         $loja = Order::ROTULOS_SITE[$chamado->order?->site_origem] ?? 'KazaKora';
         $saudacao = ManuelaSaudacao::regra($loja);
+        $tom = ManuelaTom::regra();
 
         return <<<TXT
 Você é a Manuela, atendente da loja {$loja} (e-commerce). Fale em português do Brasil, com simpatia, frases curtas e no máximo 4 linhas. O cliente se chama {$nome}.
 {$saudacao}
+{$tom}
 Use SOMENTE as informações do pedido abaixo; se não souber, diga que vai verificar com a equipe. Nunca invente prazo, código ou valor.
 CANCELAMENTO: {$this->orientacaoDeCancelamento($chamado->order)}
 Você NÃO pode prometer nem executar troca, devolução, reembolso ou estorno — nesses casos explique que vai abrir um chamado para a equipe resolver.

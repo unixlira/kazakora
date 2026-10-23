@@ -41,6 +41,8 @@ const props = defineProps({
     livrosQuadro: { type: String, default: null },
     // Condições e botão de cada quadro, definidos em Promoções (2026-10-21): { airfryer: {condicoes, botao}, pdfs: {...} }.
     quadrosPromocao: { type: Object, default: () => ({}) },
+    // Unidades vendidas de verdade, todos os canais (pedido 2026-10-23).
+    salesCount: { type: Number, default: 0 },
 });
 
 const page = usePage();
@@ -276,6 +278,27 @@ const precoDe = computed(() => {
 const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((1 - precoPor.value / precoDe.value) * 100)) : 0));
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
+// Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
+// no lugar de números fixos): vendidos só a partir de 50, arredondado para baixo
+// no degrau (50, 100, 250, 500, 1.000...); "tempo limitado" só com Oferta do Dia
+// ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
+// variação escolhida, só quando for 30 ou menos.
+const VENDIDOS_MINIMO = 50;
+const ESTOQUE_BAIXO = 30;
+const vendidosLegenda = computed(() => {
+    const total = Number(props.salesCount) || 0;
+    if (total < VENDIDOS_MINIMO) return null;
+    const degraus = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
+    const degrau = total >= 10000 ? Math.floor(total / 10000) * 10000 : degraus.filter((d) => d <= total).pop();
+    return `Mais de ${degrau.toLocaleString('pt-BR')} vendidos`;
+});
+const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
+const estoqueBaixo = computed(() => {
+    if (faltaVariacao.value) return null;
+    const estoque = Number(selecionada.value.stock) || 0;
+    return estoque > 0 && estoque <= ESTOQUE_BAIXO ? estoque : null;
+});
+
 // Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
 const inStock = computed(() => (faltaVariacao.value
     ? opcoesVariacao.value.some((variant) => variant.stock > 0)
@@ -558,7 +581,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </button>
                             </div>
 
-                            <!-- Estrelas em destaque. Total de vendidos saiu da loja (pedido 2026-10-20). -->
+                            <!-- "Novo" e vendidos reais (pedido 2026-10-23: volta só aqui, a partir de 50). -->
+                            <div class="condicao">
+                                <span class="selo-novo">Novo</span>
+                                <span v-if="vendidosLegenda" class="vendidos">{{ vendidosLegenda }}</span>
+                            </div>
+
+                            <!-- Estrelas em destaque. -->
                             <div v-if="reviewsCount > 0" class="nota">
                                 <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
                                 <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
@@ -584,6 +613,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <div class="por">{{ formatPrice(precoPor) }}</div>
                                     <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
+                                    <span v-if="tempoLimitado" class="selo-tempo"><i class="fas fa-clock" aria-hidden="true"></i> Exclusivo por tempo limitado</span>
                                     <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
                                 </div>
                             </div>
@@ -640,6 +670,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </div>
                                     <button type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
+                                <p v-if="estoqueBaixo" class="estoque-baixo"><i class="fas fa-fire" aria-hidden="true"></i> {{ estoqueBaixo === 1 ? 'Só resta 1 unidade' : `Só restam ${estoqueBaixo} unidades` }}</p>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
@@ -672,13 +703,24 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
+                                <!-- Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
+                                <li v-if="isFreeShipping">
+                                    <span class="selo-icone"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
+                                    <span><b>Frete Grátis com entrega expressa</b> para São Paulo/SP e região. Consulte seu CEP acima.</span>
+                                </li>
+                                <li v-if="isFreeShipping || DESCONTO_PIX">
+                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping && DESCONTO_PIX"><b>Frete Grátis + desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                    <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
+                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
                                 </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
+                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
                                 </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
@@ -1061,6 +1103,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fav.favorito-ativo { background: #f2540d; border-color: #f2540d; color: #fff; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
+.pd2 .condicao { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 14px; color: var(--text); }
+.pd2 .selo-novo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 2px 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.pd2 .condicao .vendidos { font-weight: 600; color: var(--ink); }
+.pd2 .selo-tempo { display: inline-flex; align-items: center; gap: 6px; background: #fff4e5; color: #b45309; border: 1px solid #f59e0b; border-radius: 6px; padding: 5px 10px; font-size: 13px; font-weight: 700; line-height: 1.3; }
+.dark .pd2 .selo-tempo { background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
+.pd2 .estoque-baixo { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: #c2410c; }
+.pd2 .estoque-baixo i { color: #f97316; }
+.dark .pd2 .estoque-baixo { color: #fb923c; }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
@@ -1110,8 +1160,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .qtd button:disabled { opacity: .4; cursor: not-allowed; }
 .pd2 .qtd input { width: 44px; border: 0; background: transparent; text-align: center; font: inherit; color: var(--ink); -moz-appearance: textfield; }
 .pd2 .qtd input::-webkit-inner-spin-button, .pd2 .qtd input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.pd2 .btn { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--yellow); color: #000; font: 600 24px Poppins, sans-serif; text-transform: uppercase; border: 0; border-bottom: 2px solid var(--yellow-edge); border-radius: 10px; min-height: 54px; padding: 0 20px; cursor: pointer; transition: all .2s; }
-.pd2 .btn:hover { background: var(--green); border-color: var(--green-edge); color: #fff; }
+.pd2 .btn { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--green); color: #fff; font: 600 24px Poppins, sans-serif; text-transform: uppercase; border: 0; border-bottom: 2px solid var(--green-edge); border-radius: 10px; min-height: 54px; padding: 0 20px; cursor: pointer; transition: all .2s; }
+.pd2 .btn:hover { background: var(--green-edge); border-color: #004f10; color: #fff; }
 .pd2 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .pd2 .btn-sec { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; color: var(--ink); border: 1px solid #b9b9b9; border-radius: 10px; min-height: 44px; font: 500 15px Poppins, sans-serif; cursor: pointer; }
 .pd2 .btn-sec:hover { background: var(--soft); }

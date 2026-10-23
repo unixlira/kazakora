@@ -208,7 +208,7 @@ const startPixCountdown = (expiresAtUnixSeconds) => {
 
         // Expira localmente assim que o contador zera, sem esperar o
         // próximo poll confirmar — evita ficar preso na tela de QR code
-        // depois do prazo (10 minutos) já ter passado.
+        // depois do prazo do Pix já ter passado.
         if (secondsLeft === 0 && paymentState.value === 'awaiting_pix') {
             clearTimers();
             failureMessage.value = 'O tempo para pagar esse Pix acabou.';

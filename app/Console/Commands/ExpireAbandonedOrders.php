@@ -16,12 +16,13 @@ class ExpireAbandonedOrders extends Command
 {
     protected $signature = 'orders:expire-abandoned';
 
-    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos e devolve o estoque';
+    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos (Pix: 30 min depois do vencimento de 24 h) e devolve o estoque';
 
     /**
-     * 30 min: folga confortável acima da janela do Pix (10 min, ver
-     * MercadoPagoPaymentService::createPixPayment) e de qualquer checkout
-     * de cartão, que é síncrono e nunca fica "preso" por muito tempo.
+     * 30 min: folga para o checkout de cartão, que é síncrono e nunca fica
+     * "preso" por muito tempo. Pix pendente vale 24 h desde 2026-10-23
+     * (MercadoPagoPaymentService::PIX_VALIDADE_HORAS): o pedido só cai 30 min
+     * depois do vencimento do QR; antes disso só se confere se foi pago.
      */
     private const ABANDONED_AFTER_MINUTES = 30;
 
@@ -103,9 +104,10 @@ class ExpireAbandonedOrders extends Command
             // ligado). Quem pagava e fechava a aba tinha o pedido cancelado
             // aqui com o dinheiro já recebido. Antes de cancelar, pergunta ao
             // Mercado Pago; na dúvida (API fora), não cancela nesta rodada.
-            $situacao = $this->conferirNoMercadoPago($fresh, $finalizer, $mercadoPago);
+            $pixNoPrazo = $this->temPixNoPrazo($fresh);
+            $situacao = $this->conferirNoMercadoPago($fresh, $finalizer, $mercadoPago, cancelarPix: ! $pixNoPrazo);
 
-            if ($situacao !== self::LIVRE_PARA_CANCELAR) {
+            if ($situacao !== self::LIVRE_PARA_CANCELAR || $pixNoPrazo) {
                 continue;
             }
 
@@ -166,12 +168,30 @@ class ExpireAbandonedOrders extends Command
     }
 
     /**
+     * Pix do Mercado Pago ainda aguardando e dentro do vencimento (+ folga):
+     * o cliente pode pagar o QR até lá, então o pedido não pode cair antes.
+     */
+    private function temPixNoPrazo(Order $order): bool
+    {
+        return $order->payments->contains(function (Payment $payment) {
+            if ($payment->method_type !== Payment::METHOD_PIX || $payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+                return false;
+            }
+
+            $vence = SituacaoDoPagamento::vencimentoDoPix($payment);
+
+            return $vence !== null && $vence->copy()->addMinutes(self::ABANDONED_AFTER_MINUTES)->isFuture();
+        });
+    }
+
+    /**
      * Atualiza os pagamentos do Mercado Pago ainda "aguardando confirmação"
      * pelo status real lá (mesmo vocabulário de CheckoutController::status()).
      * Pix ainda pendente é cancelado no Mercado Pago antes de o pedido ser
-     * cancelado aqui, para ninguém pagar um pedido que já não existe.
+     * cancelado aqui, para ninguém pagar um pedido que já não existe; com o
+     * Pix ainda no prazo ($cancelarPix false) só se lê o status.
      */
-    private function conferirNoMercadoPago(Order $order, OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago): string
+    private function conferirNoMercadoPago(Order $order, OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago, bool $cancelarPix = true): string
     {
         $pendentes = $order->payments->filter(fn (Payment $payment) => $payment->provider === Payment::PROVIDER_MERCADOPAGO
             && $payment->status === Payment::STATUS_REQUIRES_CONFIRMATION);
@@ -185,7 +205,7 @@ class ExpireAbandonedOrders extends Command
                 $mpOrder = $payment->mercadopago_order_id ? $mercadoPago->retrieveOrder($payment->mercadopago_order_id) : null;
                 $novoStatus = $mpOrder !== null
                     ? $this->statusDoCartao($mpOrder)
-                    : $this->statusDoPix($payment, $mercadoPago);
+                    : $this->statusDoPix($payment, $mercadoPago, $cancelarPix);
 
                 if ($novoStatus === Payment::STATUS_CANCELED && $mpOrder !== null) {
                     // Cartão recusado: o motivo fica na tela do pedido.
@@ -227,7 +247,7 @@ class ExpireAbandonedOrders extends Command
     }
 
     /** Pix — API de Payments clássica. Pendente é cancelado lá antes de cancelar o pedido. */
-    private function statusDoPix(Payment $payment, MercadoPagoPaymentService $mercadoPago): ?string
+    private function statusDoPix(Payment $payment, MercadoPagoPaymentService $mercadoPago, bool $cancelar = true): ?string
     {
         if (! $payment->mercadopago_payment_id) {
             return null;
@@ -235,7 +255,7 @@ class ExpireAbandonedOrders extends Command
 
         $status = $mercadoPago->retrievePayment($payment->mercadopago_payment_id)['status'] ?? null;
 
-        if (in_array($status, ['pending', 'in_process', 'authorized'], true)) {
+        if ($cancelar && in_array($status, ['pending', 'in_process', 'authorized'], true)) {
             // Se o cliente pagou no último segundo, o cancelamento falha ou
             // volta "approved": a resposta decide.
             $status = $mercadoPago->cancelPayment($payment->mercadopago_payment_id)['status'] ?? null;

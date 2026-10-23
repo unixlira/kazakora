@@ -292,6 +292,14 @@ const SELOS = [
     { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.webp', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora, ou no boleto.' },
 ];
 
+// Selos e checks verdes do padrão KazaKora (mesmos da página de produto,
+// 2026-10-19), abaixo do resumo (pedido 2026-10-23). Só fatos de toda compra.
+const SELOS_VERIFICADOS = [
+    ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
+    ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
+];
+const CHECKS_LOJA = ['Frete grátis para a sua casa', 'Nota fiscal em todo pedido', '7 dias para desistir da compra após receber'];
+
 // ---------- Finalizar ----------
 const erros = ref({});
 const processando = ref(false);
@@ -929,6 +937,21 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </div>
                         <p v-if="metodo === 'card' && !order" class="text-right text-xs text-slate-500">ou até 12x de {{ formatPrice(parcela12) }} no cartão</p>
                     </dl>
+
+                    <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora). -->
+                    <div class="mt-4 border-t border-slate-100 pt-4">
+                        <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
+                            <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
+                                <svg class="h-[18px] w-[18px] fill-[#1d9bf0] stroke-white" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
+                                </svg>
+                                {{ rotulo }}
+                            </li>
+                        </ul>
+                        <ul class="mt-3 space-y-1 text-sm text-slate-700">
+                            <li v-for="item in CHECKS_LOJA" :key="item"><i class="fas fa-check mr-1.5 text-[1.1em] text-[#00a650] [-webkit-text-stroke:0.8px_#00a650]" aria-hidden="true"></i>{{ item }}</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop

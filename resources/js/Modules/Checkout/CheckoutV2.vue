@@ -766,9 +766,9 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
             </span>
         </button>
 
-        <div class="mx-auto grid w-full max-w-[1200px] gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-8 lg:py-9">
+        <div class="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-8 lg:py-9">
             <!-- ETAPAS -->
-            <main class="order-2 lg:order-1">
+            <main class="order-2 min-w-0 lg:order-1">
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>

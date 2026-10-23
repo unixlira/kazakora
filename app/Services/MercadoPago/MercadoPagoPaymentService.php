@@ -23,6 +23,12 @@ use Illuminate\Support\Facades\Log;
  */
 class MercadoPagoPaymentService
 {
+    /**
+     * Validade do QR do Pix (Lira, 2026-10-23: era 10 min, passa a 24 h).
+     * orders:expire-abandoned só cancela o pedido depois desse prazo.
+     */
+    public const PIX_VALIDADE_HORAS = 24;
+
     public function isConfigured(): bool
     {
         return filled(CredenciaisCheckout::accessToken());
@@ -96,10 +102,10 @@ class MercadoPagoPaymentService
      * é o mecanismo usado de qualquer forma enquanto o QR não é pago.
      */
     /**
-     * $validadeMinutos: 10 no checkout (padrão); o novo Pix oferecido pela
-     * Manuela a quem perdeu o prazo vale 24 h (`pedidos:novo-pix`, 2026-10-23).
+     * $validadeMinutos: padrão PIX_VALIDADE_HORAS (24 h desde 2026-10-23, era
+     * 10 min); o novo Pix oferecido pela Manuela também vale 24 h (`pedidos:novo-pix`).
      */
-    public function createPixPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey, int $validadeMinutos = 10): array
+    public function createPixPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey, int $validadeMinutos = self::PIX_VALIDADE_HORAS * 60): array
     {
         return $this->request('POST', 'v1/payments', [
             'transaction_amount' => $amount,

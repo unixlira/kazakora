@@ -29,9 +29,13 @@ const formatPrice = (value) =>
 
 const pixCountdown = computed(() => {
     if (props.pixSecondsLeft === null) return null;
-    const minutes = Math.floor(Math.max(0, props.pixSecondsLeft) / 60);
-    const seconds = Math.max(0, props.pixSecondsLeft) % 60;
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    const total = Math.max(0, props.pixSecondsLeft);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    const mmss = `${String(minutes).padStart(hours ? 2 : 1, '0')}:${String(seconds).padStart(2, '0')}`;
+    // Pix do Mercado Pago vale 24 h (2026-10-23): "23:59:59" em vez de "1439:59".
+    return hours ? `${hours}:${mmss}` : mmss;
 });
 
 const copied = ref(false);

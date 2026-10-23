@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Support;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -18,9 +19,6 @@ use Illuminate\Support\Collection;
  */
 class SituacaoDoPagamento
 {
-    /** Janela do QR do Mercado Pago (MercadoPagoPaymentService::createPixPayment). */
-    private const PIX_MERCADOPAGO_MINUTOS = 10;
-
     /** Motivo gravado pelo orders:expire-abandoned quando o pedido tinha Pix. */
     public const MOTIVO_PIX_EXPIRADO = 'Pix gerado e não pago: cancelado automaticamente, prazo do Pix expirado';
 
@@ -64,7 +62,7 @@ class SituacaoDoPagamento
 
             return $vence?->isPast()
                 ? self::montar('pix_vencido', 'warning', 'Pix vencido', 'Pix gerado e não pago; o prazo venceu às '.self::hora($vence).'.',
-                    'O pedido é cancelado sozinho em até 30 min do pedido, depois de conferir no Mercado Pago.')
+                    'O pedido é cancelado sozinho em até 15 min depois do vencimento, depois de conferir no Mercado Pago.')
                 : self::montar('pix_aguardando', 'info', 'Aguardando Pix', 'Pix gerado, aguardando o cliente pagar.',
                     $vence ? 'Gerado em '.self::data($pix->created_at).', vence às '.self::hora($vence).'.' : null);
         }
@@ -113,7 +111,7 @@ class SituacaoDoPagamento
             : self::montar('aguardando', 'warning', 'Aguardando pagamento', self::meio($pagamentos->first()).' aguardando confirmação.', null);
     }
 
-    private static function vencimentoDoPix(Payment $pix): ?CarbonInterface
+    public static function vencimentoDoPix(Payment $pix): ?CarbonInterface
     {
         if ($pix->expira_em) {
             return $pix->expira_em;
@@ -121,7 +119,7 @@ class SituacaoDoPagamento
 
         return $pix->created_at?->copy()->addSeconds($pix->provider === Payment::PROVIDER_STRIPE
             ? StripePaymentService::PIX_EXPIRES_AFTER_SECONDS
-            : self::PIX_MERCADOPAGO_MINUTOS * 60);
+            : MercadoPagoPaymentService::PIX_VALIDADE_HORAS * 3600);
     }
 
     private static function meio(Payment $payment): string

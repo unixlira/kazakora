@@ -53,9 +53,10 @@ class ReviewImportService
 
     /**
      * @param  array<int, string>|null  $canais  só esses canais (null = todos)
+     * @param  array<int, int>|null  $produtos  só os anúncios desses produtos (null = todos)
      * @return array{products_checked: int, imported: int, updated: int, ambiguous_skipped: int, low_rating_skipped: int, channels_skipped: array<int, string>}
      */
-    public function importAll(?array $canais = null): array
+    public function importAll(?array $canais = null, ?array $produtos = null): array
     {
         $summary = ['products_checked' => 0, 'imported' => 0, 'updated' => 0, 'ambiguous_skipped' => 0, 'low_rating_skipped' => 0, 'channels_skipped' => []];
 
@@ -63,6 +64,12 @@ class ReviewImportService
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '')
             ->when($canais, fn ($query) => $query->whereIn('channel', $canais))
+            // Filtra pelo anúncio, não pelo produto: o mesmo anúncio pode ter
+            // outras variações vinculadas, e o resolveProductId() precisa de
+            // todas para não jogar a avaliação no produto errado.
+            ->when($produtos, fn ($query) => $query->whereIn('external_id', ProductChannelListing::query()
+                ->whereIn('product_id', $produtos)
+                ->select('external_id')))
             ->get(['product_id', 'channel', 'external_id', 'external_model_id'])
             ->groupBy('channel');
 

@@ -161,7 +161,7 @@ class TrackSiteVisit
         return is_string($valor) && $valor !== '' ? Str::limit(strip_tags($valor), $limite, '') : null;
     }
 
-    private static function dispositivo(string $userAgent): string
+    public static function dispositivo(string $userAgent): string
     {
         return match (true) {
             (bool) preg_match('/ipad|tablet|kindle|playbook|silk/i', $userAgent) => 'tablet',
@@ -179,8 +179,7 @@ class TrackSiteVisit
         // Só o site da loja (pedido 2026-10-11: "é somente o kazakora.com,
         // não misturar com nenhuma plataforma"): acesso pelo IP, pelo
         // homolog ou por outro domínio apontado pra cá não conta.
-        $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
-        if ($dominio !== '' && preg_replace('/^www\./', '', $request->getHost()) !== $dominio) {
+        if (! self::dominioDaLoja($request)) {
             return false;
         }
 
@@ -195,12 +194,20 @@ class TrackSiteVisit
         return ! self::naoENavegador($request);
     }
 
+    /** A requisição veio pelo domínio da loja (APP_URL), não pelo IP nem por outro domínio. */
+    public static function dominioDaLoja(Request $request): bool
+    {
+        $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+        return $dominio === '' || preg_replace('/^www\./', '', $request->getHost()) === $dominio;
+    }
+
     /**
      * Todo navegador de verdade se apresenta como "Mozilla/..." e, quando
      * manda Referer http(s), manda com caminho ("https://site.com/"). Referer
      * sem caminho ("http://kazakora.com") é robô fingindo que veio da loja.
      */
-    private static function naoENavegador(Request $request): bool
+    public static function naoENavegador(Request $request): bool
     {
         $userAgent = (string) $request->userAgent();
 

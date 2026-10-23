@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Analytics\Models\ConsentimentoCookie;
 use App\Modules\Analytics\Models\FerraKoraVisit;
 use App\Modules\Analytics\Models\SiteVisit;
@@ -15,12 +16,13 @@ use Illuminate\Console\Command;
  *   origem) continua, sem identificar ninguém.
  * - OK dos cookies: prova guardada por 5 anos, depois apagada.
  * - orders.meta_rastreio (API de Conversões da Meta): 30 dias.
+ * - Medição do checkout (checkout_eventos, 2026-10-23): 6 meses, apagada.
  */
 class LimparDadosDePrivacidade extends Command
 {
     protected $signature = 'privacidade:limpar';
 
-    protected $description = 'Apaga IP/navegador/cookies de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos';
+    protected $description = 'Apaga IP/navegador/cookies de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos e eventos do checkout com mais de 6 meses';
 
     public function handle(): int
     {
@@ -42,9 +44,12 @@ class LimparDadosDePrivacidade extends Command
             ->where('created_at', '<', now()->subDays(30))
             ->update(['meta_rastreio' => null]);
 
+        // Medição do checkout (2026-10-23): estatística de curto prazo, 6 meses.
+        $eventosCheckout = CheckoutEvento::query()->where('created_at', '<', now()->subMonths(6)->subDay())->delete();
+
         $consentimentos = ConsentimentoCookie::query()->where('aceito_em', '<', now()->subYears(5))->delete();
 
-        $this->info("Visitas anonimizadas: {$visitas}. OKs de cookies apagados: {$consentimentos}. Rastreios da Meta apagados: {$rastreios}.");
+        $this->info("Visitas anonimizadas: {$visitas}. OKs de cookies apagados: {$consentimentos}. Rastreios da Meta apagados: {$rastreios}. Eventos do checkout apagados: {$eventosCheckout}.");
 
         return self::SUCCESS;
     }

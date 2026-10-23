@@ -24,15 +24,7 @@ class CompletarEnderecoPeloCep
             return $endereco;
         }
 
-        $dados = Cache::remember("viacep.{$cep}", now()->addDays(30), function () use ($cep) {
-            try {
-                $resposta = Http::timeout(5)->get("https://viacep.com.br/ws/{$cep}/json/");
-            } catch (\Throwable) {
-                return null;
-            }
-
-            return $resposta->successful() && ! ($resposta->json('erro') ?? false) ? $resposta->json() : null;
-        });
+        $dados = $this->buscar($cep);
 
         if (! $dados) {
             return $endereco;
@@ -52,5 +44,25 @@ class CompletarEnderecoPeloCep
         }
 
         return $endereco;
+    }
+
+    /**
+     * Resposta do ViaCEP para o CEP (8 números), em cache por 30 dias; null
+     * se o CEP não existe ou o ViaCEP não respondeu. Também usada pela página
+     * do produto para mostrar a rua depois do CEP (pedido 2026-10-23).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function buscar(string $cep): ?array
+    {
+        return Cache::remember("viacep.{$cep}", now()->addDays(30), function () use ($cep) {
+            try {
+                $resposta = Http::timeout(5)->get("https://viacep.com.br/ws/{$cep}/json/");
+            } catch (\Throwable) {
+                return null;
+            }
+
+            return $resposta->successful() && ! ($resposta->json('erro') ?? false) ? $resposta->json() : null;
+        });
     }
 }

@@ -394,6 +394,23 @@ const prazoNormal = computed(() => {
     return prazo.value?.modalidade === 'flex' ? `${base} (Mas geralmente chega em 3)` : base;
 });
 
+// Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
+// Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
+// amanhã); fora dela, a entrega grátis com o prazo e o TURBO (SEDEX) pelo
+// mesmo valor da diferença cobrado no checkout.
+const enderecoPrazo = computed(() => {
+    const endereco = prazo.value?.endereco;
+    if (!endereco) return '';
+    const local = [endereco.cidade, endereco.uf].filter(Boolean).join('/');
+    return [endereco.rua, endereco.bairro, local].filter(Boolean).join(', ');
+});
+const turboPrazo = computed(() => {
+    const turbo = prazo.value?.turbo;
+    if (!turbo) return null;
+    const quando = turbo.dias_a_menos ? ` · chega ${turbo.dias_a_menos} ${turbo.dias_a_menos === 1 ? 'dia' : 'dias'} antes` : '';
+    return { preco: `+ ${formatPrice(turbo.preco)}`, quando };
+});
+
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
     prazo.value = null;
@@ -411,7 +428,13 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
+        prazo.value = {
+            expressa: data.entrega_expressa ?? null,
+            dias: data.prazo_dias ?? null,
+            modalidade: data.modalidade ?? null,
+            endereco: data.endereco ?? null,
+            turbo: data.turbo ?? null,
+        };
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
         if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
@@ -683,11 +706,25 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'OK' }}</button>
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
-                                <p v-else-if="prazo?.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}</p>
-                                <p v-else-if="prazo" class="normal">
-                                    <span v-if="prazo.modalidade === 'flex'" class="full"><i class="fas fa-bolt"></i> Flex</span>
-                                    {{ prazoNormal }}
-                                </p>
+                                <template v-else-if="prazo">
+                                    <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
+                                    <ul class="opcoes-entrega">
+                                        <li v-if="prazo.expressa">
+                                            <span><i class="fas fa-bolt" aria-hidden="true"></i> Full ({{ prazo.expressa.tipo === 'hoje' ? `até ${page.props.entregaFull?.horario_entrega ?? '21h'}` : 'amanhã' }})</span>
+                                            <strong>Grátis</strong>
+                                        </li>
+                                        <template v-else>
+                                            <li>
+                                                <span><i v-if="prazo.modalidade === 'flex'" class="fas fa-bolt" aria-hidden="true"></i> {{ prazo.modalidade === 'flex' ? 'Flex' : 'Normal' }} · {{ prazoNormal }}</span>
+                                                <strong>Grátis</strong>
+                                            </li>
+                                            <li v-if="turboPrazo">
+                                                <span><i class="fas fa-bolt" aria-hidden="true"></i> Turbo · SEDEX{{ turboPrazo.quando }}</span>
+                                                <strong>{{ turboPrazo.preco }}</strong>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </template>
                             </form>
 
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo
@@ -1198,6 +1235,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
 .pd2 .prazo-cep .expressa .full { font-weight: 800; }
 .pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
+/* Rua e opções de entrega depois do CEP, fonte azul-claro (pedido 2026-10-23). */
+.pd2 .prazo-cep .rua { color: var(--ink); font-weight: 500; }
+.pd2 .prazo-cep .rua i { color: var(--blue); margin-right: 4px; }
+.pd2 .opcoes-entrega { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pd2 .opcoes-entrega li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; color: #1e88e5; font-size: 14px; font-weight: 600; border: 1px solid #cfe3fb; border-radius: 8px; padding: 8px 10px; }
+.pd2 .opcoes-entrega strong { white-space: nowrap; font-weight: 800; }
+.dark .pd2 .opcoes-entrega li { color: #7cc0ff; border-color: rgba(124, 192, 255, .3); }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }

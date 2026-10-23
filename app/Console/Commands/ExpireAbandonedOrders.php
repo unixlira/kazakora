@@ -16,13 +16,13 @@ class ExpireAbandonedOrders extends Command
 {
     protected $signature = 'orders:expire-abandoned';
 
-    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos (Pix: 30 min depois do vencimento de 24 h) e devolve o estoque';
+    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos (Pix: 15 min depois do vencimento de 24 h) e devolve o estoque';
 
     /**
      * 30 min: folga para o checkout de cartão, que é síncrono e nunca fica
      * "preso" por muito tempo. Pix pendente vale 24 h desde 2026-10-23
-     * (MercadoPagoPaymentService::PIX_VALIDADE_HORAS): o pedido só cai 30 min
-     * depois do vencimento do QR; antes disso só se confere se foi pago.
+     * (MercadoPagoPaymentService::PIX_VALIDADE_HORAS): o pedido só cai
+     * FOLGA_PIX_LONGO_MINUTOS depois do vencimento do QR; antes disso só se confere se foi pago.
      */
     private const ABANDONED_AFTER_MINUTES = 30;
 
@@ -174,13 +174,14 @@ class ExpireAbandonedOrders extends Command
     private function temPixNoPrazo(Order $order): bool
     {
         return $order->payments->contains(function (Payment $payment) {
-            if ($payment->method_type !== Payment::METHOD_PIX || $payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+            if ($payment->method_type !== Payment::METHOD_PIX || $payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION
+                || $payment->substituido_em !== null) {
                 return false;
             }
 
             $vence = SituacaoDoPagamento::vencimentoDoPix($payment);
 
-            return $vence !== null && $vence->copy()->addMinutes(self::ABANDONED_AFTER_MINUTES)->isFuture();
+            return $vence !== null && $vence->copy()->addMinutes(self::FOLGA_PIX_LONGO_MINUTOS)->isFuture();
         });
     }
 

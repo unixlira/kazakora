@@ -45,4 +45,43 @@ class PrazoPorCep
             'modalidade' => $expressa ? 'full' : ($prazoDias !== null && $prazoDias <= self::DIAS_FLEX ? 'flex' : null),
         ];
     }
+
+    /**
+     * Linhas da tabela de entrega da página do produto (pedido 2026-10-23),
+     * na ordem: Full, Flex (ou Padrão, quando passa de 3 dias úteis) e Turbo.
+     * Flex e Padrão: "em até X dias úteis (mas geralmente chega em Y)", com Y
+     * = prazo dos Correios do serviço que o preço já paga (o mesmo do
+     * checkout) e X = Y + folga de postagem. Sem prazo, X = prazo_padrao_dias.
+     *
+     * @param  array{entrega_expressa: ?array, prazo_dias: ?int}  $prazo  resultado de consultar()
+     * @param  array{prazo: ?int, turbo: ?array}|null  $entrega  FreteEmbutido::entregaDoCarrinho()
+     * @return list<array<string, mixed>>
+     */
+    public static function opcoes(array $prazo, ?array $entrega): array
+    {
+        if ($prazo['entrega_expressa']) {
+            return [[
+                'tipo' => 'full',
+                'quando' => $prazo['entrega_expressa']['tipo'],
+                'horario' => (string) config('entrega_expressa.horario_entrega', '21h'),
+                'preco' => 0.0,
+            ]];
+        }
+
+        $geralmente = ($entrega['prazo'] ?? null) ?: $prazo['prazo_dias'];
+        $opcoes = [[
+            'tipo' => $geralmente !== null && $geralmente <= self::DIAS_FLEX ? 'flex' : 'padrao',
+            'ate' => $geralmente !== null
+                ? $geralmente + (int) config('frete_embutido.folga_dias', 2)
+                : (int) config('frete_embutido.prazo_padrao_dias', 7),
+            'geralmente' => $geralmente,
+            'preco' => 0.0,
+        ]];
+
+        if ($turbo = $entrega['turbo'] ?? null) {
+            $opcoes[] = ['tipo' => 'turbo', 'ate' => $turbo['prazo'], 'dias_a_menos' => $turbo['dias_a_menos'], 'preco' => (float) $turbo['preco']];
+        }
+
+        return $opcoes;
+    }
 }

@@ -383,12 +383,9 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
 // dela, o prazo normal de envio.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, endereco, turbo, prazoGratis } depois da consulta
+const prazo = ref(null); // null = não consultado; { endereco, opcoes } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
-// "Flex" quando a entrega grátis chega em até 3 dias úteis nesse CEP (sem o
-// prazo da tabela, vale o prazo dos Correios da consulta).
-const gratisFlex = computed(() => (prazo.value?.prazoGratis ? prazo.value.prazoGratis <= 3 : prazo.value?.modalidade === 'flex'));
 
 // Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
 // Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
@@ -400,19 +397,21 @@ const enderecoPrazo = computed(() => {
     const local = [endereco.cidade, endereco.uf].filter(Boolean).join('/');
     return [endereco.rua, endereco.bairro, local].filter(Boolean).join(', ');
 });
-// Mesmos textos do checkout (pedido 2026-10-23): grátis "até N dias úteis"
-// pela tabela (sem ela, "1 à 7 dias úteis") e TURBO "chega em até N dias
-// úteis (X antes)".
+// Tabela de entrega (pedido 2026-10-23): o servidor manda as opções na ordem
+// Full, Flex (ou Padrão) e Turbo. Flex não cita Correios nem transportadora:
+// "Entrega em até X dias úteis. (Mas geralmente chega em Y)".
+const NOME_ENTREGA = { full: 'Full', flex: 'Flex', turbo: 'Turbo' };
 const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
-const prazoGratis = computed(() => (prazo.value?.prazoGratis ? `até ${diasUteis(prazo.value.prazoGratis)}` : '1 à 7 dias úteis'));
-const turboPrazo = computed(() => {
-    const turbo = prazo.value?.turbo;
-    if (!turbo) return null;
-    const quando = turbo.prazo
-        ? ` · chega em até ${diasUteis(turbo.prazo)}${turbo.dias_a_menos ? ` (${diasUteis(turbo.dias_a_menos)} antes)` : ''}`
-        : ' · entrega mais rápida';
-    return { preco: `+ ${formatPrice(turbo.preco)}`, quando };
-});
+const prazoDaOpcao = (opcao) => {
+    if (opcao.tipo === 'full') return opcao.quando === 'hoje' ? `Hoje, até ${opcao.horario}` : 'Amanhã';
+    if (opcao.tipo === 'turbo') {
+        if (!opcao.ate) return 'Entrega mais rápida';
+        return `Chega em até ${diasUteis(opcao.ate)}${opcao.dias_a_menos ? ` (${diasUteis(opcao.dias_a_menos)} antes)` : ''}`;
+    }
+    const geralmente = opcao.geralmente && opcao.geralmente < opcao.ate ? ` (Mas geralmente chega em ${opcao.geralmente})` : '';
+    const quem = opcao.tipo === 'padrao' ? ' pelos Correios ou transportadora' : '';
+    return `Entrega${quem} em até ${diasUteis(opcao.ate)}.${geralmente}`;
+};
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
@@ -432,12 +431,8 @@ const consultarPrazo = async () => {
         if (!response.ok) throw new Error();
         const data = await response.json();
         prazo.value = {
-            expressa: data.entrega_expressa ?? null,
-            dias: data.prazo_dias ?? null,
-            modalidade: data.modalidade ?? null,
             endereco: data.endereco ?? null,
-            turbo: data.turbo ?? null,
-            prazoGratis: data.prazo_gratis ?? null,
+            opcoes: data.opcoes ?? [],
         };
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
@@ -720,22 +715,21 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
                                 <template v-else-if="prazo">
                                     <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
-                                    <ul class="opcoes-entrega">
-                                        <li v-if="prazo.expressa">
-                                            <span><i class="fas fa-bolt" aria-hidden="true"></i> Full ({{ prazo.expressa.tipo === 'hoje' ? `até ${page.props.entregaFull?.horario_entrega ?? '21h'}` : 'amanhã' }})</span>
-                                            <strong>Grátis</strong>
-                                        </li>
-                                        <template v-else>
-                                            <li>
-                                                <span><i v-if="gratisFlex" class="fas fa-bolt" aria-hidden="true"></i> {{ gratisFlex ? 'Flex' : 'Normal' }} · {{ prazoGratis }}</span>
-                                                <strong>Grátis</strong>
-                                            </li>
-                                            <li v-if="turboPrazo">
-                                                <span><i class="fas fa-bolt" aria-hidden="true"></i> Turbo · SEDEX{{ turboPrazo.quando }}</span>
-                                                <strong>{{ turboPrazo.preco }}</strong>
-                                            </li>
-                                        </template>
-                                    </ul>
+                                    <table class="tabela-entrega">
+                                        <thead>
+                                            <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="opcao in prazo.opcoes" :key="opcao.tipo" :class="opcao.tipo">
+                                                <td class="nome">
+                                                    <template v-if="opcao.tipo === 'padrao'">Padrão</template>
+                                                    <template v-else><i class="fas fa-bolt" aria-hidden="true"></i> <em>{{ NOME_ENTREGA[opcao.tipo] }}</em></template>
+                                                </td>
+                                                <td>{{ prazoDaOpcao(opcao) }}</td>
+                                                <td class="preco">{{ opcao.preco > 0 ? `+ ${formatPrice(opcao.preco)}` : 'Grátis' }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </template>
                             </form>
 
@@ -1251,10 +1245,25 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* Rua e opções de entrega depois do CEP, fonte azul-claro (pedido 2026-10-23). */
 .pd2 .prazo-cep .rua { color: var(--ink); font-weight: 500; }
 .pd2 .prazo-cep .rua i { color: var(--blue); margin-right: 4px; }
-.pd2 .opcoes-entrega { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.pd2 .opcoes-entrega li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; color: #1e88e5; font-size: 14px; font-weight: 600; border: 1px solid #cfe3fb; border-radius: 8px; padding: 8px 10px; }
-.pd2 .opcoes-entrega strong { white-space: nowrap; font-weight: 800; }
-.dark .pd2 .opcoes-entrega li { color: #7cc0ff; border-color: rgba(124, 192, 255, .3); }
+/* Tabela de entrega (pedido 2026-10-23): cinza, cabeçalhos pretos; Flex e
+   Full em verde com o raio, como o selo Flex do pedido. */
+.pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d4d8; border-radius: 10px; overflow: hidden; background: #f4f4f5; font-size: 14px; }
+.pd2 .tabela-entrega th { background: #e4e4e7; color: #111; font-weight: 700; padding: 9px 10px; text-align: center; }
+.pd2 .tabela-entrega td { padding: 10px; text-align: center; color: #27272a; border-top: 1px solid #d4d4d8; vertical-align: middle; }
+.pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d4d8; }
+.pd2 .tabela-entrega .nome { font-weight: 700; white-space: nowrap; }
+.pd2 .tabela-entrega .nome em { font-style: italic; font-weight: 800; }
+.pd2 .tabela-entrega .full .nome, .pd2 .tabela-entrega .flex .nome, .pd2 .tabela-entrega .flex td:nth-child(2) { color: #00801a; }
+.pd2 .tabela-entrega .flex td:nth-child(2) { font-weight: 600; }
+.pd2 .tabela-entrega .turbo .nome { color: #c2410c; }
+.pd2 .tabela-entrega .preco { font-weight: 800; white-space: nowrap; color: #00801a; }
+.pd2 .tabela-entrega .turbo .preco { color: #111; }
+.dark .pd2 .tabela-entrega { background: #27272a; border-color: #3f3f46; }
+.dark .pd2 .tabela-entrega th { background: #18181b; color: #f4f4f5; }
+.dark .pd2 .tabela-entrega td { color: #e4e4e7; border-color: #3f3f46; }
+.dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
+.dark .pd2 .tabela-entrega .full .nome, .dark .pd2 .tabela-entrega .flex .nome, .dark .pd2 .tabela-entrega .flex td:nth-child(2), .dark .pd2 .tabela-entrega .preco { color: #4ade80; }
+.dark .pd2 .tabela-entrega .turbo .preco { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }

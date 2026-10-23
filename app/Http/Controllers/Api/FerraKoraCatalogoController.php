@@ -88,8 +88,17 @@ class FerraKoraCatalogoController extends Controller
         }
 
         $pai = Product::query()->with('fiscalData')->find((int) Str::after($produto['id'], CatalogoFerraKora::PREFIXO_PRODUTO));
+        $prazo = app(PrazoPorCep::class)->consultar($cep, $pai);
 
-        return $this->semCache(response()->json(app(PrazoPorCep::class)->consultar($cep, $pai)));
+        // Tabela de entrega (pedido 2026-10-23): prazo do grátis e TURBO pela
+        // mesma conta do checkout, como na página do produto do KazaKora.
+        $frete = app(FreteEmbutido::class);
+        $frete->usarCep($cep);
+        $entrega = $pai && ! $prazo['entrega_expressa']
+            ? rescue(fn () => $frete->entregaDoCarrinho(collect([['product' => $pai, 'quantity' => 1]])), null, false)
+            : null;
+
+        return $this->semCache(response()->json([...$prazo, 'opcoes' => PrazoPorCep::opcoes($prazo, $entrega)]));
     }
 
     public function sincronizar(Request $request): JsonResponse

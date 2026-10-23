@@ -50,6 +50,18 @@ const menuOpen = ref(false);
 const emojiOpen = ref(false);
 const toggling = ref(new Set());
 
+// Nova conversa (botão +, pedido do Lira 2026-10-23): busca por telefone ou
+// pelo número do pedido e já mostra o cliente e a loja dele.
+const novaAberta = ref(false);
+const novaBusca = ref('');
+const novaResultados = ref([]);
+const novaCarregando = ref(false);
+const novaErro = ref(null);
+const iniciando = ref(null);
+const novaInput = ref(null);
+let novaTimer = null;
+let novaSeq = 0;
+
 const messagesBox = ref(null);
 const composer = ref(null);
 const fileInput = ref(null);
@@ -181,6 +193,7 @@ function onVisibility() {
 function onGlobalKey(event) {
     if (event.key !== 'Escape') return;
     if (emojiOpen.value) emojiOpen.value = false;
+    else if (novaAberta.value) fecharNova();
     else if (menuOpen.value) menuOpen.value = false;
     else if (drawerOpen.value) drawerOpen.value = false;
     else if (active.value) closeConversation();
@@ -532,6 +545,78 @@ async function toggleManuela(conversation) {
     }
 }
 
+function abrirNova() {
+    novaAberta.value = true;
+    novaErro.value = null;
+    nextTick(() => novaInput.value?.focus());
+}
+
+function fecharNova() {
+    novaAberta.value = false;
+    novaBusca.value = '';
+    novaResultados.value = [];
+    novaErro.value = null;
+    clearTimeout(novaTimer);
+}
+
+watch(novaBusca, (termo) => {
+    clearTimeout(novaTimer);
+    novaErro.value = null;
+    if (termo.trim().replace(/^#/, '').length < 2) {
+        novaResultados.value = [];
+        novaCarregando.value = false;
+        return;
+    }
+    novaCarregando.value = true;
+    novaTimer = setTimeout(() => buscarContato(termo.trim()), 350);
+});
+
+async function buscarContato(termo) {
+    const seq = ++novaSeq;
+    try {
+        const data = await request(`/admin/whatsapp/conversas/nova/buscar?${new URLSearchParams({ q: termo })}`);
+        if (seq !== novaSeq) return;
+        novaResultados.value = data.resultados;
+    } catch (error) {
+        if (seq === novaSeq) novaErro.value = error.message || 'Não consegui buscar agora.';
+    } finally {
+        if (seq === novaSeq) novaCarregando.value = false;
+    }
+}
+
+async function iniciarConversa(resultado) {
+    if (!resultado.telefone || iniciando.value) return;
+    iniciando.value = resultado.telefone + (resultado.pedidoId ?? '');
+    novaErro.value = null;
+    try {
+        const data = await request('/admin/whatsapp/conversas/nova', {
+            method: 'POST',
+            body: { telefone: resultado.telefone, pedido_id: resultado.pedidoId },
+        });
+        upsertConversation(data.conversation);
+        fecharNova();
+        filter.value = 'all';
+        search.value = '';
+        activeId.value = null;
+        openConversation(data.conversation.id);
+    } catch (error) {
+        novaErro.value = error.message || 'Não consegui abrir a conversa.';
+    } finally {
+        iniciando.value = null;
+    }
+}
+
+// Loja que aparece na conversa: a do cliente (pela venda) ou, sem venda, a do número.
+function lojaDaConversa(conversation) {
+    if (conversation?.cliente?.loja) return conversation.cliente.loja;
+    if (conversation?.clienteLoja) return conversation.clienteLoja;
+    return null;
+}
+
+function lojaClass(loja) {
+    return `wa-loja-${loja?.chave ?? 'kazakora'}`;
+}
+
 async function deleteConversation() {
     const target = active.value;
     menuOpen.value = false;
@@ -801,7 +886,7 @@ function linkify(text) {
 
         <!-- Lista de conversas -->
         <aside
-            class="wa-side min-w-0 flex-col md:flex md:w-[30%] md:min-w-[340px] md:max-w-[460px] md:shrink-0"
+            class="wa-side relative min-w-0 flex-col md:flex md:w-[30%] md:min-w-[340px] md:max-w-[460px] md:shrink-0"
             :class="active ? 'hidden' : 'flex w-full'"
         >
             <header class="flex h-16 shrink-0 items-center justify-between pl-5 pr-3">
@@ -810,6 +895,9 @@ function linkify(text) {
                     <h1 class="wa-title truncate">Conversas</h1>
                 </div>
                 <div class="flex items-center gap-1">
+                    <button v-if="can('pedidos.edit')" type="button" class="wa-icon-btn inline-flex" title="Nova conversa (telefone ou número do pedido)" aria-label="Nova conversa" @click="abrirNova">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                    </button>
                     <button type="button" class="wa-icon-btn inline-flex md:hidden" :title="isDark ? 'Tema claro' : 'Tema escuro'" @click="toggleTheme">
                         <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
                     </button>
@@ -818,6 +906,68 @@ function linkify(text) {
                     </span>
                 </div>
             </header>
+
+            <!-- Nova conversa: cobre a lista, igual ao WhatsApp Web -->
+            <div v-if="novaAberta" class="wa-nova absolute inset-0 z-20 flex flex-col">
+                <header class="wa-nova-head flex h-[108px] shrink-0 items-end gap-6 px-5 pb-4">
+                    <button type="button" class="wa-icon-btn inline-flex -ml-2" title="Voltar" @click="fecharNova">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <span class="pb-2 text-[19px] font-medium">Nova conversa</span>
+                </header>
+                <div class="shrink-0 px-3 py-3">
+                    <label class="wa-search flex h-10 items-center gap-4 rounded-full px-4">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="shrink-0 opacity-70"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M20 20l-4.8-4.8" /></svg>
+                        <input ref="novaInput" v-model="novaBusca" type="search" inputmode="search" placeholder="Telefone ou número do pedido" class="w-full border-0 bg-transparent p-0 text-[15px] focus:ring-0">
+                    </label>
+                    <p class="wa-muted mt-2 px-1 text-[12.5px]">Ex.: 11 98765-4321, #3274 ou o número da Shopee/ML.</p>
+                </div>
+                <div class="wa-list min-h-0 flex-1 overflow-y-auto">
+                    <p v-if="novaErro" class="wa-banner wa-banner-error mx-3 mb-2"><i class="fas fa-circle-exclamation"></i><span>{{ novaErro }}</span></p>
+                    <p v-if="novaCarregando" class="wa-muted px-8 py-8 text-center text-sm"><i class="fas fa-circle-notch fa-spin mr-1"></i> Procurando…</p>
+                    <template v-else>
+                        <div v-for="resultado in novaResultados" :key="(resultado.telefone ?? 'sem') + '-' + (resultado.pedidoId ?? '')" class="wa-nova-item mx-3 mb-2 rounded-lg px-4 py-3">
+                            <div class="flex items-start gap-3">
+                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[15px] font-medium text-white" :class="'wa-avatar-' + (resultado.cliente?.loja?.chave ?? 'kazakora')">
+                                    <template v-if="resultado.cliente?.nome">{{ initials({ name: resultado.cliente.nome }) }}</template>
+                                    <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><circle cx="12" cy="8" r="4.2" /><path d="M3.5 21c.6-4.6 4.2-7 8.5-7s7.9 2.4 8.5 7z" /></svg>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-[16px]">{{ resultado.cliente?.nome || 'Sem cadastro com este número' }}</p>
+                                    <p class="wa-muted text-[13px]">{{ resultado.telefone ? formatPhone(resultado.telefone) : 'Pedido sem telefone de WhatsApp' }}</p>
+                                    <span v-if="resultado.cliente?.loja" class="wa-loja-site mt-1.5" :class="lojaClass(resultado.cliente.loja)">
+                                        <strong>{{ resultado.cliente.loja.nome }}</strong><span>{{ resultado.cliente.loja.site }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <ul v-if="resultado.cliente?.pedidos?.length" class="mt-2.5 space-y-1 pl-14">
+                                <li v-for="pedido in resultado.cliente.pedidos.slice(0, 3)" :key="pedido.id" class="wa-muted flex items-center justify-between gap-2 text-[13px]">
+                                    <span class="min-w-0 truncate"><span :class="{ 'font-semibold': pedido.id === resultado.pedidoId }">Venda #{{ pedido.id }}</span> · {{ pedido.canal }} · {{ formatDate(pedido.criadoEm) }} · {{ formatMoney(pedido.total) }}</span>
+                                    <StatusBadge :status="pedido.status" context="order" />
+                                </li>
+                            </ul>
+                            <div class="mt-3 flex items-center justify-between gap-3 pl-14">
+                                <span class="wa-muted text-[12px]">
+                                    <template v-if="resultado.conversaId">Já tem conversa</template>
+                                    <template v-else-if="resultado.telefone">Pelo WhatsApp da {{ resultado.numeroLojaNome }}</template>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="wa-nova-btn"
+                                    :disabled="!resultado.telefone || !!iniciando"
+                                    @click="iniciarConversa(resultado)"
+                                >
+                                    <i v-if="iniciando === resultado.telefone + (resultado.pedidoId ?? '')" class="fas fa-circle-notch fa-spin"></i>
+                                    {{ resultado.conversaId ? 'Abrir conversa' : 'Iniciar conversa' }}
+                                </button>
+                            </div>
+                        </div>
+                        <p v-if="!novaResultados.length && novaBusca.trim().replace(/^#/, '').length >= 2 && !novaErro" class="wa-muted px-8 py-10 text-center text-sm">
+                            Nenhum pedido com esse número. Para um telefone, digite DDD + número.
+                        </p>
+                    </template>
+                </div>
+            </div>
 
             <div v-if="!status.readyToSend || !status.autoReply" class="shrink-0 px-3 pb-2">
                 <div v-if="!status.readyToSend" class="wa-banner wa-banner-warn">
@@ -879,7 +1029,8 @@ function linkify(text) {
                             </span>
                             <span class="flex shrink-0 items-center gap-2">
                                 <span v-if="conversation.pedidoId" class="wa-venda-badge" :title="'Venda #' + conversation.pedidoId + (conversation.clienteNome ? ' · ' + conversation.clienteNome : '')">#{{ conversation.pedidoId }}</span>
-                                <span v-if="conversation.loja && conversation.loja !== 'kazakora'" class="wa-loja-badge" :class="'wa-loja-' + conversation.loja" :title="'Conversa no número da ' + conversation.lojaNome">{{ conversation.lojaNome }}</span>
+                                <span v-if="lojaDaConversa(conversation) && lojaDaConversa(conversation).chave !== 'kazakora'" class="wa-loja-badge" :class="lojaClass(lojaDaConversa(conversation))" :title="'Cliente da ' + lojaDaConversa(conversation).nome + ' (' + lojaDaConversa(conversation).site + ')'">{{ lojaDaConversa(conversation).nome }}</span>
+                                <span v-else-if="!lojaDaConversa(conversation) && conversation.loja && conversation.loja !== 'kazakora'" class="wa-loja-badge" :class="'wa-loja-' + conversation.loja" :title="'Conversa no número da ' + conversation.lojaNome">{{ conversation.lojaNome }}</span>
                                 <span v-if="conversation.needsHuman" class="wa-human-badge" title="A conversa precisa que uma pessoa responda"><i class="fas fa-hand"></i>Humano</span>
                                 <span v-if="conversation.unread" class="wa-unread">{{ conversation.unread }}</span>
                                 <button
@@ -920,7 +1071,10 @@ function linkify(text) {
                         <span class="min-w-0">
                             <span class="wa-head-name block truncate">{{ displayName(active) }}</span>
                             <span class="wa-head-sub block truncate">
-                                <span v-if="active.lojaNome" class="wa-loja-badge mr-1.5 align-middle" :class="'wa-loja-' + active.loja" :title="'Conversa no número da ' + active.lojaNome">{{ active.lojaNome }}</span>
+                                <span v-if="lojaDaConversa(active)" class="wa-loja-site mr-1.5 align-middle" :class="lojaClass(lojaDaConversa(active))" :title="'Cliente da ' + lojaDaConversa(active).nome + (lojaDaConversa(active).chave !== active.loja ? ', conversa pelo WhatsApp da ' + active.lojaNome : '')">
+                                    <strong>{{ lojaDaConversa(active).nome }}</strong><span>{{ lojaDaConversa(active).site }}</span>
+                                </span>
+                                <span v-else-if="active.lojaNome" class="wa-loja-badge mr-1.5 align-middle" :class="'wa-loja-' + active.loja" :title="'Conversa no número da ' + active.lojaNome">{{ active.lojaNome }}</span>
                                 <span v-if="active.needsHuman" class="wa-human-badge mr-1.5 align-middle"><i class="fas fa-hand"></i>Precisa de humano</span>
                                 <template v-if="active.status === 'resolved'">encerrada · </template>
                                 <template v-if="active.pedidoId || clienteDiferente(active)">
@@ -1192,6 +1346,9 @@ function linkify(text) {
                 <section class="wa-drawer-card mt-2.5 px-7 py-4">
                     <p class="wa-muted mb-3 text-sm">Cliente e vendas</p>
                     <template v-if="active.cliente">
+                        <span v-if="active.cliente.loja" class="wa-loja-site mb-3" :class="lojaClass(active.cliente.loja)">
+                            <strong>{{ active.cliente.loja.nome }}</strong><span>{{ active.cliente.loja.site }}</span>
+                        </span>
                         <p class="text-base">
                             <i class="fas fa-user mr-2 text-[#00a884]"></i>
                             <Link v-if="active.cliente.documento" :href="`/admin/clientes/${active.cliente.documento}`" class="hover:underline">{{ active.cliente.nome || 'Cliente sem nome' }}</Link>
@@ -1318,6 +1475,26 @@ function linkify(text) {
 .wa-human-badge i { font-size: 10px; }
 .wa-loja-badge { display: inline-flex; height: 20px; align-items: center; border-radius: 9999px; background: #e9edef; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #3b4a54; white-space: nowrap; }
 .wa-loja-badge.wa-loja-ferrakora { background: #f97316; color: #fff; }
+.wa-loja-badge.wa-loja-beautykora { background: #db2777; color: #fff; }
+/* Loja do cliente com o site (KazaKora vinho, FerraKora laranja, Beauty Kora rosa) */
+.wa-loja-site { display: inline-flex; height: 22px; align-items: stretch; overflow: hidden; border-radius: 9999px; font-size: 11.5px; line-height: 1; white-space: nowrap; border: 1px solid var(--wa-loja-cor); }
+.wa-loja-site strong { display: inline-flex; align-items: center; padding: 0 8px; background: var(--wa-loja-cor); color: #fff; font-weight: 600; }
+.wa-loja-site span { display: inline-flex; align-items: center; padding: 0 8px; color: var(--wa-loja-cor); font-weight: 500; }
+.wa-loja-kazakora { --wa-loja-cor: #8b1e3f; }
+.wa-loja-ferrakora { --wa-loja-cor: #ea580c; }
+.wa-loja-beautykora { --wa-loja-cor: #db2777; }
+.wa-avatar-kazakora { background: #8b1e3f; }
+.wa-avatar-ferrakora { background: #ea580c; }
+.wa-avatar-beautykora { background: #db2777; }
+.wa-nova { background: var(--wa-panel); }
+.wa-nova-head { background: var(--wa-green); color: #fff; }
+.wa-nova-head .wa-icon-btn { color: #fff; }
+.wa-nova-head .wa-icon-btn:hover { background: rgba(255, 255, 255, 0.15); }
+.wa-nova-item { border: 1px solid var(--wa-border); background: var(--wa-panel); }
+.wa-nova-item:hover { background: var(--wa-hover); }
+.wa-nova-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; background: var(--wa-green); padding: 6px 14px; font-size: 13.5px; font-weight: 600; color: #fff; }
+.wa-nova-btn:hover { background: #008f72; }
+.wa-nova-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .wa-venda-badge { display: inline-flex; height: 20px; align-items: center; border-radius: 9999px; background: #e7f3ff; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #0044c3; white-space: nowrap; }
 .wa-venda-link { height: 32px; align-items: center; gap: 6px; border-radius: 9999px; padding: 0 12px; font-size: 13px; font-weight: 600; color: #0044c3; }
 .wa-venda-link:hover { background: rgba(0, 68, 195, 0.08); }
@@ -1459,6 +1636,8 @@ function linkify(text) {
 .dark .wa-app .wa-rail-btn-active { background: rgba(255, 255, 255, 0.1); }
 .dark .wa-app .wa-venda-badge { background: rgba(83, 189, 235, 0.16); color: #53bdeb; }
 .dark .wa-app .wa-venda-link { color: #53bdeb; }
+.dark .wa-app .wa-loja-kazakora { --wa-loja-cor: #c2416b; }
+.dark .wa-app .wa-nova-head { background: #202c33; }
 .dark .wa-app .wa-venda-item:hover { background: rgba(255, 255, 255, 0.06); }
 .dark .wa-app .wa-sender-bot { color: #25d366; }
 .dark .wa-app .wa-sender-human { color: #a78bfa; }

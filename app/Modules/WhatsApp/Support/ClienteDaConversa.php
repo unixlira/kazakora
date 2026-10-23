@@ -26,12 +26,59 @@ class ClienteDaConversa
     private const MAX_CANDIDATOS = 200;
 
     /**
-     * @return array{nome: ?string, userId: ?int, documento: ?string, pedidos: array<int, array<string, mixed>>}|null
+     * @return array{nome: ?string, userId: ?int, documento: ?string, loja: ?array, pedidos: array<int, array<string, mixed>>}|null
      */
     public function identificar(WhatsAppConversation $conversation): ?array
     {
-        $waId = $conversation->wa_id ?? $conversation->phone;
-        $pedidos = $this->pedidosCitados($conversation)
+        // Venda escolhida ao iniciar a conversa pelo "+" fica logo depois das citadas.
+        $escolhido = $conversation->metadata['pedido_escolhido'] ?? null;
+        $primeiros = $this->pedidosCitados($conversation)
+            ->concat($escolhido ? Order::query()->with('user')->whereKey($escolhido)->get() : []);
+
+        return $this->montar($primeiros, $conversation->wa_id ?? $conversation->phone);
+    }
+
+    /**
+     * Mesma ficha a partir de um telefone digitado na "Nova conversa" (pedido
+     * do Lira 2026-10-23). O pedido buscado pelo número vem primeiro.
+     */
+    public function porTelefone(?string $telefone, ?Order $pedido = null): ?array
+    {
+        return $this->montar(collect(array_filter([$pedido])), $telefone);
+    }
+
+    /**
+     * Loja do cliente pela venda principal: FerraKora e Beauty Kora pelo site
+     * de origem; o resto (kazakora.com, Shopee, ML, TikTok, Amazon) é KazaKora.
+     *
+     * @return array{chave: string, nome: string, site: string}
+     */
+    public static function loja(?string $chave): array
+    {
+        $sites = [
+            Order::SITE_FERRAKORA => ['FerraKora', config('services.ferrakora.url', 'https://ferrakora.devlira.com.br')],
+            Order::SITE_BEAUTYKORA => ['Beauty Kora', 'https://'.explode(',', (string) config('services.beautykora.origens', 'beautykora.devlira.com.br'))[0]],
+        ];
+        [$nome, $site] = $sites[$chave] ?? ['KazaKora', 'https://kazakora.com'];
+
+        return [
+            'chave' => isset($sites[$chave]) ? $chave : WhatsAppNumeros::KAZAKORA,
+            'nome' => $nome,
+            'site' => (string) (parse_url((string) $site, PHP_URL_HOST) ?: $site),
+        ];
+    }
+
+    public static function lojaDoPedido(?Order $order): string
+    {
+        return $order?->origin === Order::ORIGIN_STORE && in_array($order->site_origem, Order::SITES, true)
+            ? $order->site_origem
+            : WhatsAppNumeros::KAZAKORA;
+    }
+
+    /** @param  Collection<int, Order>  $primeiros */
+    private function montar(Collection $primeiros, ?string $waId): ?array
+    {
+        $pedidos = $primeiros
             ->concat($this->pedidosPeloTelefone($waId))
             ->unique('id')
             ->take(self::MAX_PEDIDOS)
@@ -49,6 +96,8 @@ class ClienteDaConversa
             'nome' => $user?->name ?: $principal?->shipping_name,
             'userId' => $user?->id,
             'documento' => $principal?->buyer_document ?: $user?->cpf,
+            // Cadastro sem venda é do kazakora.com (FerraKora tem cadastro próprio).
+            'loja' => self::loja(self::lojaDoPedido($principal)),
             'pedidos' => $pedidos->map(fn (Order $o) => [
                 'id' => $o->id,
                 'numero' => $o->numero,
@@ -70,6 +119,7 @@ class ClienteDaConversa
         $novo = array_merge($metadata, [
             'pedido_id' => $cliente['pedidos'][0]['id'] ?? null,
             'cliente_nome' => $cliente['nome'] ?? null,
+            'cliente_loja' => $cliente['loja']['chave'] ?? null,
         ]);
 
         if ($novo === $metadata) {

@@ -221,6 +221,7 @@ class CheckoutController extends Controller
             ] : null,
             'prazo_gratis' => $entrega['prazo'] ?? null,
             'turbo' => $entrega['turbo'] ?? null,
+            'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
         ]);
     }
 

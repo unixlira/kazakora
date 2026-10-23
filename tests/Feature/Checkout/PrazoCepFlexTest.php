@@ -30,4 +30,39 @@ class PrazoCepFlexTest extends TestCase
         $this->correios([6, 9]);
         $this->getJson("/frete/prazo?cep=69900-000&produto={$product->id}")->assertJson(['prazo_dias' => 6, 'modalidade' => null]);
     }
+
+    public function test_opcoes_da_tabela_full_flex_padrao_e_turbo_na_ordem(): void
+    {
+        config(['frete_embutido.folga_dias' => 2, 'frete_embutido.prazo_padrao_dias' => 7, 'entrega_expressa.horario_entrega' => '21h']);
+
+        $this->assertSame(
+            [['tipo' => 'full', 'quando' => 'amanha', 'horario' => '21h', 'preco' => 0.0]],
+            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => ['tipo' => 'amanha'], 'prazo_dias' => null], null),
+        );
+
+        // Flex: até Y + 2, geralmente Y (prazo do grátis, o mesmo do checkout), e o Turbo depois.
+        $opcoes = \App\Modules\Checkout\Support\PrazoPorCep::opcoes(
+            ['entrega_expressa' => null, 'prazo_dias' => 2],
+            ['prazo' => 3, 'turbo' => ['preco' => 12.5, 'prazo' => 2, 'dias_a_menos' => 1]],
+        );
+        $this->assertSame(['flex', 'turbo'], array_column($opcoes, 'tipo'));
+        $this->assertSame(['ate' => 5, 'geralmente' => 3], ['ate' => $opcoes[0]['ate'], 'geralmente' => $opcoes[0]['geralmente']]);
+        $this->assertSame(12.5, $opcoes[1]['preco']);
+
+        // Mais de 3 dias: Padrão; sem prazo nenhum, até 7 sem o "geralmente".
+        $this->assertSame('padrao', \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => null, 'prazo_dias' => 2], ['prazo' => 6, 'turbo' => null])[0]['tipo']);
+        $this->assertSame(
+            [['tipo' => 'padrao', 'ate' => 7, 'geralmente' => null, 'preco' => 0.0]],
+            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => null, 'prazo_dias' => null], null),
+        );
+    }
+
+    public function test_pagina_do_produto_recebe_as_opcoes(): void
+    {
+        $product = Product::factory()->create(['is_active' => true]);
+        config(['entrega_expressa.faixas' => [['inicio' => '01000000', 'fim' => '05999999', 'local' => 'São Paulo']]]);
+
+        $this->getJson("/frete/prazo?cep=01310-100&produto={$product->id}")
+            ->assertOk()->assertJsonPath('opcoes.0.tipo', 'full')->assertJsonCount(1, 'opcoes');
+    }
 }

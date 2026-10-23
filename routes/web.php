@@ -240,6 +240,10 @@ Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGr
 // sem o que ela digitou. Fora do CSRF (sendBeacon); ver CheckoutEventosController.
 Route::post('/finalizacao/eventos', [\App\Modules\Analytics\Http\Controllers\CheckoutEventosController::class, 'store'])->middleware('throttle:60,1')->name('finalizacao.eventos');
 
+// Checkout no subdomínio seguro (pedido 2026-10-23): https://seguro.<loja>/pagamento
+// é a mesma tela de /finalizacao (RedirecionarCheckoutSeguro, App\Support\CheckoutSeguro).
+Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamento.seguro');
+
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');

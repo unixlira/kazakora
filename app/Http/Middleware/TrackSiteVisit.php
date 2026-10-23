@@ -199,7 +199,10 @@ class TrackSiteVisit
     {
         $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
 
-        return $dominio === '' || preg_replace('/^www\./', '', $request->getHost()) === $dominio;
+        // O checkout em seguro.<loja> (2026-10-23) também é o site da loja.
+        $host = preg_replace('/^(www|seguro)\./', '', $request->getHost());
+
+        return $dominio === '' || $host === $dominio;
     }
 
     /**

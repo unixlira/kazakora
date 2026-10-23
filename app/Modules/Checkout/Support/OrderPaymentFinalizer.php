@@ -43,7 +43,11 @@ class OrderPaymentFinalizer
             return true;
         }
 
-        if ($order->payments->isEmpty()) {
+        // Pix antigo trocado por um novo (`pedidos:novo-pix`, 2026-10-23):
+        // fica no histórico, mas não conta para "todas as parcelas prontas".
+        $pagamentos = $order->payments->filter(fn (Payment $payment) => $payment->substituido_em === null);
+
+        if ($pagamentos->isEmpty()) {
             return false;
         }
 
@@ -56,7 +60,7 @@ class OrderPaymentFinalizer
             return false;
         }
 
-        $allReady = $order->payments->every(
+        $allReady = $pagamentos->every(
             fn (Payment $payment) => in_array($payment->status, [Payment::STATUS_AUTHORIZED, Payment::STATUS_CAPTURED], true)
         );
 
@@ -64,7 +68,7 @@ class OrderPaymentFinalizer
             return false;
         }
 
-        foreach ($order->payments as $payment) {
+        foreach ($pagamentos as $payment) {
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
                 $payment->provider === Payment::PROVIDER_MERCADOPAGO
                     ? $this->mercadoPago->captureOrder($payment->mercadopago_order_id)

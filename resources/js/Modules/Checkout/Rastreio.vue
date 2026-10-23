@@ -3,9 +3,11 @@
 // /rastreio/{ref} (o mesmo que vai no WhatsApp de pedido aprovado). Só com
 // login desde 2026-10-17: o dono do pedido ou um admin. Depois de 3 buscas
 // com erro do mesmo IP, pede o código da imagem (CAPTCHA, 2026-10-22).
+// Pix novo de 24 h (pedidos:novo-pix, 2026-10-23): com o Pix aberto, o link
+// abre sem login e mostra o QR Code e o copia e cola para pagar.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     pedido: { type: Object, default: null },
@@ -49,6 +51,39 @@ const copiarCodigo = async () => {
         // sem permissão de área de transferência: o código continua visível na tela
     }
 };
+
+const pix = computed(() => props.pedido?.pix ?? null);
+const pixCopiado = ref(false);
+const copiarPix = async () => {
+    try {
+        await navigator.clipboard.writeText(pix.value.copia_e_cola);
+        pixCopiado.value = true;
+        setTimeout(() => { pixCopiado.value = false; }, 3000);
+    } catch {
+        // sem permissão: o código continua visível para copiar à mão
+    }
+};
+
+// Confere o pagamento enquanto o Pix está na tela; pago ou vencido, recarrega.
+let consulta = null;
+const conferirPix = async () => {
+    if (!pix.value?.status_url || document.hidden) return;
+    try {
+        const resposta = await fetch(pix.value.status_url, { headers: { Accept: 'application/json' } });
+        if (!resposta.ok) return;
+        const dados = await resposta.json();
+        if (dados.pago || !dados.aberto) {
+            clearInterval(consulta);
+            router.reload();
+        }
+    } catch {
+        // sem conexão: tenta na próxima
+    }
+};
+onMounted(() => {
+    if (pix.value) consulta = setInterval(conferirPix, 8000);
+});
+onBeforeUnmount(() => clearInterval(consulta));
 </script>
 
 <template>
@@ -57,7 +92,7 @@ const copiarCodigo = async () => {
     <AppLayout>
         <div class="mx-auto max-w-[720px] px-4 py-12 md:px-6">
             <h1 class="font-display text-3xl font-semibold">
-                <i class="fa-solid fa-location-dot mr-2 text-store-accent"></i>Rastrear pedido
+                <i class="fa-solid mr-2 text-store-accent" :class="pedido?.publico ? 'fa-receipt' : 'fa-location-dot'"></i>{{ pedido?.publico ? 'Pagamento do pedido' : 'Rastrear pedido' }}
             </h1>
 
             <form v-if="!pedido" class="mt-8 flex flex-col gap-4 rounded-2xl border border-store-border bg-store-bg-raised p-6" @submit.prevent="buscar">
@@ -100,7 +135,40 @@ const copiarCodigo = async () => {
             </form>
 
             <template v-else>
-                <div class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6">
+                <section v-if="pix" class="mt-8 rounded-2xl border-2 border-emerald-500 bg-store-bg-raised p-6" aria-labelledby="pix-titulo">
+                    <h2 id="pix-titulo" class="text-lg font-semibold">
+                        <i class="fa-brands fa-pix mr-1.5 text-emerald-600"></i>Pague com Pix para confirmar o pedido
+                    </h2>
+                    <p class="mt-1 text-sm text-store-fg-muted">Pedido {{ pedido.numero ?? pedido.id }}</p>
+                    <div class="mt-3 flex flex-wrap items-baseline justify-between gap-2">
+                        <p class="text-2xl font-bold text-store-accent">{{ formatPrice(pix.valor) }}</p>
+                        <p v-if="pix.vencimento" class="text-sm text-store-fg-muted">
+                            Vale até {{ formatDate(pix.vencimento) }}
+                        </p>
+                    </div>
+                    <div class="mt-4 flex flex-col items-center gap-4 md:flex-row md:items-start">
+                        <img v-if="pix.qr_base64" :src="`data:image/png;base64,${pix.qr_base64}`" alt="QR Code do Pix"
+                            width="200" height="200" class="h-[200px] w-[200px] rounded-lg border border-store-border bg-white p-2" />
+                        <div class="flex w-full min-w-0 flex-col gap-3">
+                            <p class="text-sm text-store-fg-muted">
+                                Abra o app do seu banco, escolha Pix e leia o QR Code ou use o código copia e cola.
+                            </p>
+                            <label for="pix-copia-e-cola" class="text-xs font-medium text-store-fg-muted">Código Pix copia e cola</label>
+                            <textarea id="pix-copia-e-cola" readonly rows="3" :value="pix.copia_e_cola"
+                                class="w-full resize-none break-all rounded-lg border border-store-border bg-store-bg px-3 py-2 font-store-mono text-xs"
+                                @focus="$event.target.select()"></textarea>
+                            <button type="button" class="rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700" @click="copiarPix">
+                                <i class="fa-regular mr-1.5" :class="pixCopiado ? 'fa-circle-check' : 'fa-copy'"></i>
+                                {{ pixCopiado ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
+                            </button>
+                            <p class="text-xs text-store-fg-muted" aria-live="polite">
+                                <i class="fa-solid fa-spinner mr-1 animate-spin"></i> Assim que o pagamento cair, esta página confirma sozinha.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <div v-if="!pedido.publico" class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <p class="text-lg font-semibold">Pedido {{ pedido.numero ?? pedido.id }}</p>
                         <p class="text-xs text-store-fg-muted">{{ formatDate(pedido.criado_em) }}</p>
@@ -126,7 +194,7 @@ const copiarCodigo = async () => {
                     </ol>
                 </div>
 
-                <div v-if="pedido.codigo_rastreio" class="mt-4 rounded-2xl border border-store-border bg-store-bg-raised p-6">
+                <div v-if="pedido.codigo_rastreio && !pedido.publico" class="mt-4 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <p class="text-sm text-store-fg-muted">
                         Código de rastreio<span v-if="pedido.transportadora"> · {{ pedido.transportadora }}</span>
                     </p>
@@ -141,7 +209,7 @@ const copiarCodigo = async () => {
                         </a>
                     </div>
                 </div>
-                <p v-else-if="!pedido.cancelado" class="mt-4 rounded-2xl border border-dashed border-store-border px-6 py-4 text-sm text-store-fg-muted">
+                <p v-else-if="!pedido.cancelado && !pedido.publico && !pix" class="mt-4 rounded-2xl border border-dashed border-store-border px-6 py-4 text-sm text-store-fg-muted">
                     <i class="fa-regular fa-clock mr-1"></i> O código de rastreio aparece aqui assim que o pedido for despachado.
                 </p>
 
@@ -151,12 +219,12 @@ const copiarCodigo = async () => {
                         <span v-for="(item, index) in pedido.itens" :key="index">{{ item.nome }} × {{ item.quantidade }}</span>
                     </div>
                     <div class="mt-3 flex items-baseline justify-between border-t border-store-border pt-3 text-sm">
-                        <span>Entrega em {{ pedido.cidade || '—' }}</span>
+                        <span>{{ pedido.publico ? 'Total do pedido' : `Entrega em ${pedido.cidade || '—'}` }}</span>
                         <span class="font-semibold text-store-accent">{{ formatPrice(pedido.total) }}</span>
                     </div>
                 </div>
 
-                <Link href="/rastreio" class="mt-6 inline-block text-sm font-medium text-store-accent hover:underline">
+                <Link v-if="!pedido.publico" href="/rastreio" class="mt-6 inline-block text-sm font-medium text-store-accent hover:underline">
                     Rastrear outro pedido
                 </Link>
             </template>

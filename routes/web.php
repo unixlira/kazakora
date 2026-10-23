@@ -217,8 +217,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
     // CAPTCHA depois de 3 buscas com erro do mesmo IP (pedido 2026-10-22). Antes do {ref}.
     Route::get('/rastreio/captcha', [TrackingController::class, 'captcha'])->middleware('throttle:30,1')->name('rastreio.captcha');
-    Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 });
+
+// Link direto do rastreio fora do login (2026-10-23): com Pix aberto
+// (pedidos:novo-pix) o cliente paga sem entrar; sem Pix aberto o próprio
+// controller manda para o login e volta (regra de 2026-10-17 mantida).
+Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])
+    ->where('ref', '[0-9]+-[a-f0-9]{10}')->name('rastreio.ver');
+Route::get('/rastreio/{ref}/pix', [TrackingController::class, 'statusDoPix'])
+    ->where('ref', '[0-9]+-[a-f0-9]{10}')->middleware('throttle:20,1')->name('rastreio.pix');
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
 // Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.

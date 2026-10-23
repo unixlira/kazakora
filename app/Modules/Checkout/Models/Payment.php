@@ -42,8 +42,13 @@ class Payment extends Model
         'boleto_linha_digitavel',
         'boleto_url',
         'expira_em',
+        'pix_copia_e_cola',
+        'pix_qr_base64',
+        'substituido_em',
         'motivo_recusa',
     ];
+
+    protected $hidden = ['pix_qr_base64'];
 
     /**
      * Pagamento marcado com o site do pedido (FerraKora, Beauty Kora; nulo =
@@ -61,6 +66,7 @@ class Payment extends Model
         return [
             'amount' => 'decimal:2',
             'expira_em' => 'datetime',
+            'substituido_em' => 'datetime',
         ];
     }
 
@@ -70,6 +76,22 @@ class Payment extends Model
         return $this->method_type === self::METHOD_BOLETO
             && $this->provider === self::PROVIDER_MERCADOPAGO
             && $this->status === self::STATUS_REQUIRES_CONFIRMATION;
+    }
+
+    /**
+     * Pix de vencimento longo (`pedidos:novo-pix`, 2026-10-23) ainda pagável:
+     * aguardando, com copia e cola guardado e vencimento no futuro. O Pix do
+     * checkout (10 min) não guarda o copia e cola e nunca entra aqui.
+     */
+    public function pixAberto(): bool
+    {
+        return $this->method_type === self::METHOD_PIX
+            && $this->provider === self::PROVIDER_MERCADOPAGO
+            && $this->status === self::STATUS_REQUIRES_CONFIRMATION
+            && $this->substituido_em === null
+            && filled($this->pix_copia_e_cola)
+            && $this->expira_em !== null
+            && $this->expira_em->isFuture();
     }
 
     /**

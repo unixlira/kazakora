@@ -180,7 +180,8 @@ class TrackSiteVisit
         // não misturar com nenhuma plataforma"): acesso pelo IP, pelo
         // homolog ou por outro domínio apontado pra cá não conta.
         $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
-        if ($dominio !== '' && preg_replace('/^www\./', '', $request->getHost()) !== $dominio) {
+        // O checkout em seguro.<loja> (2026-10-23) também é o site da loja.
+        if ($dominio !== '' && preg_replace('/^(www|seguro)\./', '', $request->getHost()) !== $dominio) {
             return false;
         }
 

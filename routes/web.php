@@ -224,6 +224,10 @@ Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->mid
 // Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.
 Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGratis'])->middleware('throttle:30,1')->name('finalizacao.entrega-gratis');
 
+// Checkout no subdomínio seguro (pedido 2026-10-23): https://seguro.<loja>/pagamento
+// é a mesma tela de /finalizacao (RedirecionarCheckoutSeguro, App\Support\CheckoutSeguro).
+Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamento.seguro');
+
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');

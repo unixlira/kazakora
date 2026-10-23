@@ -95,7 +95,11 @@ class MercadoPagoPaymentService
      * nessa aplicação, a confirmação do Pix depende só do polling — que já
      * é o mecanismo usado de qualquer forma enquanto o QR não é pago.
      */
-    public function createPixPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey): array
+    /**
+     * $validadeMinutos: 10 no checkout (padrão); o novo Pix oferecido pela
+     * Manuela a quem perdeu o prazo vale 24 h (`pedidos:novo-pix`, 2026-10-23).
+     */
+    public function createPixPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey, int $validadeMinutos = 10): array
     {
         return $this->request('POST', 'v1/payments', [
             'transaction_amount' => $amount,
@@ -103,7 +107,7 @@ class MercadoPagoPaymentService
             'description' => "Pedido {$externalReference} - KazaKora",
             'external_reference' => $externalReference,
             'payer' => $payer,
-            'date_of_expiration' => now()->addMinutes(10)->format('Y-m-d\TH:i:s.vP'),
+            'date_of_expiration' => now()->addMinutes(max(1, $validadeMinutos))->format('Y-m-d\TH:i:s.vP'),
         ], $idempotencyKey);
     }
 

@@ -960,6 +960,8 @@ class MetaAdsService
         'yesterday' => 'Ontem',
         'last_7d' => 'Últimos 7 dias',
         'last_30d' => 'Últimos 30 dias',
+        // Central de campanhas (2026-10-23): o mês corrente, como no Gerenciador.
+        'this_month' => 'Mês atual',
         'maximum' => 'Desde o início',
     ];
 

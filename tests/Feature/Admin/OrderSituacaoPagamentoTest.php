@@ -72,9 +72,18 @@ class OrderSituacaoPagamentoTest extends TestCase
     public function test_pix_vencido_ainda_nao_cancelado_avisa(): void
     {
         $order = $this->pedido(Order::STATUS_AWAITING_PAYMENT);
-        $this->pix($order, Payment::STATUS_REQUIRES_CONFIRMATION)->forceFill(['created_at' => now()->subMinutes(15)])->save();
+        $this->pix($order, Payment::STATUS_REQUIRES_CONFIRMATION)->forceFill(['created_at' => now()->subHours(25)])->save();
 
         $this->assertSame('pix_vencido', $this->situacao($order)['codigo']);
+    }
+
+    /** Pix do Mercado Pago vale 24 h desde 2026-10-23. */
+    public function test_pix_de_horas_atras_ainda_esta_no_prazo(): void
+    {
+        $order = $this->pedido(Order::STATUS_AWAITING_PAYMENT);
+        $this->pix($order, Payment::STATUS_REQUIRES_CONFIRMATION)->forceFill(['created_at' => now()->subHours(23)])->save();
+
+        $this->assertSame('pix_aguardando', $this->situacao($order)['codigo']);
     }
 
     public function test_pix_nao_pago_cancelado_pelo_admin_nao_diz_que_expirou(): void

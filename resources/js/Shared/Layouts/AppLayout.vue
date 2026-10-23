@@ -17,6 +17,7 @@ const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
 const user = computed(() => page.props.auth?.user);
+const entregaFull = computed(() => page.props.entregaFull);
 
 // Favoritos sem login ficam no navegador; com login, vêm da conta (2026-10-15).
 watch(
@@ -467,6 +468,25 @@ const REDES = [
                         <img :src="imagensLiberadas ? marca.logoRodape : undefined" :alt="imagensLiberadas ? 'KazaKora' : ''" class="mx-auto h-8 w-auto rounded-[8px] lg:mx-0" loading="lazy">
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
+                        </p>
+                        <!-- Modalidades de entrega (pedido 2026-10-23), com as mesmas regras da Política de Entrega. -->
+                        <ul class="mx-auto mt-5 flex max-w-[30ch] flex-col gap-2.5 text-left text-sm lg:mx-0">
+                            <li v-if="entregaFull?.ativa" class="flex items-start gap-2.5">
+                                <span class="selo-full w-14 shrink-0"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <span class="opacity-80"><strong class="font-semibold text-white">Receba hoje</strong> na Grande SP pagando até as {{ entregaFull.horario_corte }}</span>
+                            </li>
+                            <li class="flex items-start gap-2.5">
+                                <span class="selo-full w-14 shrink-0"><i class="fa-solid fa-bolt"></i>FLEX</span>
+                                <span class="opacity-80"><strong class="font-semibold text-white">Até 3 dias úteis</strong> quando os Correios confirmam para o seu CEP</span>
+                            </li>
+                            <li class="flex items-start gap-2.5">
+                                <span class="w-14 shrink-0 font-extrabold italic text-[#F44D00]"><i class="fa-solid fa-bolt"></i>TURBO</span>
+                                <span class="opacity-80"><strong class="font-semibold text-white">SEDEX</strong> pagando só a diferença, para chegar antes</span>
+                            </li>
+                        </ul>
+                        <p class="mt-3 text-sm opacity-80">
+                            <i class="fas fa-truck mr-1 text-[#00a650]"></i>Frete grátis para todo o Brasil ·
+                            <Link href="/politica-de-entrega" class="underline underline-offset-2 hover:opacity-100">Como funciona</Link>
                         </p>
                         <!-- Redes sociais (pedido 2026-10-10) -->
                         <div class="mt-5 flex justify-center gap-3 lg:justify-start">

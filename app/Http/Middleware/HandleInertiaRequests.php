@@ -76,6 +76,13 @@ class HandleInertiaRequests extends Middleware
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             // Selo do Reclame Aqui no rodapé (config/loja.php).
             'reclameAqui' => fn () => ['verificada' => (bool) config('loja.selo_ra_verificada'), 'url' => (string) config('loja.reclame_aqui_url')],
+            // Modalidades de entrega no rodapé (pedido 2026-10-23): horário do
+            // Full o mesmo da Política de Entrega (config/entrega_expressa.php).
+            'entregaFull' => fn () => $request->is('admin*') ? null : [
+                'ativa' => (bool) config('entrega_expressa.ativa', true),
+                'horario_corte' => str_replace(':00', 'h', (string) config('entrega_expressa.horario_corte', '13:00')),
+                'horario_entrega' => (string) config('entrega_expressa.horario_entrega', '21h'),
+            ],
             // Endereço da loja para o "Ver loja" do admin: o admin roda em
             // painel.kazakora.com, então "/" caía no próprio painel.
             'lojaUrl' => fn () => $request->is('admin*') ? rtrim((string) config('app.url'), '/') : null,

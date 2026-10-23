@@ -29,7 +29,7 @@ const ano = new Date().getFullYear();
 
         <!-- Faixa escura com razão social, CNPJ e endereço (os mesmos dos Termos de Uso). -->
         <div class="bg-gradient-to-r from-[#0b0f19] via-[#1b2130] to-[#0b0f19] px-3 py-2.5 text-center text-[11px] leading-relaxed text-white/80 sm:text-[13px]">
-            <p>{{ COMPANY.nomeFantasia }} · {{ COMPANY.razaoSocial }} · CNPJ: {{ COMPANY.cnpj }}</p>
+            <p>{{ COMPANY.nomeFantasia }} · <span class="whitespace-nowrap">{{ COMPANY.razaoSocial }}</span> · <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span></p>
             <p>{{ COMPANY.enderecoResumido }}</p>
             <p class="mt-0.5 font-semibold text-white"><i class="fa-solid fa-lock mr-1 text-[#2fd27a]"></i>Ambiente 100% seguro</p>
         </div>

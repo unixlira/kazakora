@@ -9,18 +9,22 @@ use App\Modules\Marketplace\Support\ReviewImportService;
 use Illuminate\Console\Command;
 
 /**
- * Pedido do Lira 2026-10-22: às 3h, coleta todas as avaliações dos anúncios
+ * Pedido do Lira 2026-10-22: coleta todas as avaliações dos anúncios
  * da KazaKora na Shopee e no Mercado Livre, com nome sorteado (único na
  * página do produto) no lugar do apelido e sem citar marketplace ou loja no
  * texto. Também passa a limpeza nas avaliações desses canais que já estavam
  * no banco antes disso (nome_original vazio = ainda não tratada).
+ *
+ * Só manual, sem cron (Lira 2026-10-22): ele escolhe o que entra na loja.
+ * Use --produto=ID (repetível) para trazer só as avaliações desses produtos.
  *
  * Diferente do reviews:sync (a cada 4 min, só Shopee, para a resposta
  * automática): aqui não responde ninguém, só importa e limpa.
  */
 class ColetarAvaliacoes extends Command
 {
-    protected $signature = 'reviews:coletar';
+    protected $signature = 'reviews:coletar
+        {--produto=* : Só os anúncios destes produtos (id local); sem a opção, todos.}';
 
     protected $description = 'Coleta as avaliações da Shopee e do Mercado Livre com nome sorteado e texto sem citar lojas.';
 
@@ -28,7 +32,8 @@ class ColetarAvaliacoes extends Command
 
     public function handle(ReviewImportService $service, AnonimizaAvaliacao $anonimiza): int
     {
-        $resumo = $service->importAll(self::CANAIS);
+        $produtos = array_map('intval', $this->option('produto'));
+        $resumo = $service->importAll(self::CANAIS, $produtos ?: null);
 
         $nomes = 0;
         $textos = 0;
@@ -36,6 +41,7 @@ class ColetarAvaliacoes extends Command
         Review::query()
             ->whereIn('channel', self::CANAIS)
             ->whereNull('user_id')
+            ->when($produtos, fn ($query) => $query->whereIn('product_id', $produtos))
             ->where(fn ($query) => $query->whereNull('nome_original')
                 ->orWhere(fn ($query) => $query->whereNull('comentario_original')->whereNotNull('comment')))
             ->lazyById()

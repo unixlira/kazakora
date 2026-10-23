@@ -253,6 +253,17 @@ class FreteEmbutido
         ];
     }
 
+    /**
+     * TURBO na área FULL (pedido 2026-10-23): mesmo preço (SEDEX pela
+     * diferença), sem o "dias antes", que compara com o PAC.
+     *
+     * @param  array{preco: float, prazo: ?int, dias_a_menos: ?int}|null  $turbo
+     */
+    public static function turboNoFull(?array $turbo): ?array
+    {
+        return $turbo ? [...$turbo, 'dias_a_menos' => null] : null;
+    }
+
     /** TURBO acima de frete_embutido.turbo_max some do checkout (pedido 2026-10-12). */
     private static function turboAteOTeto(?array $turbo): ?array
     {

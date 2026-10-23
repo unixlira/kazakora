@@ -931,8 +931,8 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                                     <span class="text-sm font-bold text-emerald-700">Grátis</span>
                                 </label>
 
-                                <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
-                                <label v-if="turbo && !entregaExpressa"
+                                <!-- TURBO: SEDEX pagando só a diferença, também na área FULL (2026-10-23). Escolhido = laranja do tema. -->
+                                <label v-if="turbo"
                                     class="mt-2 flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
                                     :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
                                     <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">

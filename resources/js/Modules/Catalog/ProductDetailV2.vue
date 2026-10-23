@@ -720,13 +720,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="opcao in prazo.opcoes" :key="opcao.tipo" :class="opcao.tipo">
+                                            <tr v-for="opcao in prazo.opcoes" :key="opcao.tipo" :class="`opcao-${opcao.tipo}`">
                                                 <td class="nome">
                                                     <template v-if="opcao.tipo === 'padrao'">Padrão</template>
                                                     <template v-else><i class="fas fa-bolt" aria-hidden="true"></i> <em>{{ NOME_ENTREGA[opcao.tipo] }}</em></template>
                                                 </td>
                                                 <td>{{ prazoDaOpcao(opcao) }}</td>
-                                                <td class="preco">{{ opcao.preco > 0 ? `+ ${formatPrice(opcao.preco)}` : 'Grátis' }}</td>
+                                                <td class="valor">{{ opcao.preco > 0 ? `+ ${formatPrice(opcao.preco)}` : 'Grátis' }}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1251,19 +1251,21 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .tabela-entrega th { background: #e4e4e7; color: #111; font-weight: 700; padding: 9px 10px; text-align: center; }
 .pd2 .tabela-entrega td { padding: 10px; text-align: center; color: #27272a; border-top: 1px solid #d4d4d8; vertical-align: middle; }
 .pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d4d8; }
+.pd2 .tabela-entrega .nome, .pd2 .tabela-entrega .valor { width: 1%; }
 .pd2 .tabela-entrega .nome { font-weight: 700; white-space: nowrap; }
+@media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 8px 6px; font-size: 13px; } }
 .pd2 .tabela-entrega .nome em { font-style: italic; font-weight: 800; }
-.pd2 .tabela-entrega .full .nome, .pd2 .tabela-entrega .flex .nome, .pd2 .tabela-entrega .flex td:nth-child(2) { color: #00801a; }
-.pd2 .tabela-entrega .flex td:nth-child(2) { font-weight: 600; }
-.pd2 .tabela-entrega .turbo .nome { color: #c2410c; }
-.pd2 .tabela-entrega .preco { font-weight: 800; white-space: nowrap; color: #00801a; }
-.pd2 .tabela-entrega .turbo .preco { color: #111; }
+.pd2 .tabela-entrega .opcao-full .nome, .pd2 .tabela-entrega .opcao-flex .nome, .pd2 .tabela-entrega .opcao-flex td:nth-child(2) { color: #00801a; }
+.pd2 .tabela-entrega .opcao-flex td:nth-child(2) { font-weight: 600; }
+.pd2 .tabela-entrega .opcao-turbo .nome { color: #c2410c; }
+.pd2 .tabela-entrega .valor { font-weight: 800; white-space: nowrap; color: #00801a; }
+.pd2 .tabela-entrega .opcao-turbo .valor { color: #111; }
 .dark .pd2 .tabela-entrega { background: #27272a; border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega th { background: #18181b; color: #f4f4f5; }
 .dark .pd2 .tabela-entrega td { color: #e4e4e7; border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega .full .nome, .dark .pd2 .tabela-entrega .flex .nome, .dark .pd2 .tabela-entrega .flex td:nth-child(2), .dark .pd2 .tabela-entrega .preco { color: #4ade80; }
-.dark .pd2 .tabela-entrega .turbo .preco { color: #f4f4f5; }
+.dark .pd2 .tabela-entrega .opcao-full .nome, .dark .pd2 .tabela-entrega .opcao-flex .nome, .dark .pd2 .tabela-entrega .opcao-flex td:nth-child(2), .dark .pd2 .tabela-entrega .valor { color: #4ade80; }
+.dark .pd2 .tabela-entrega .opcao-turbo .valor { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }

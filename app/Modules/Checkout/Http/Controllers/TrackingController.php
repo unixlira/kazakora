@@ -5,8 +5,11 @@ namespace App\Modules\Checkout\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Support\CaptchaRastreio;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,19 +18,40 @@ use Inertia\Response;
  * do pedido ou um admin. Por formulário (número do pedido) ou pelo link
  * direto que vai no WhatsApp/e-mail (/rastreio/{id}-{assinatura}, ver
  * Order::trackingRef()); quem abre o link sem login entra e volta para ele.
+ * Depois de 3 buscas com erro do mesmo IP, pede CAPTCHA (CaptchaRastreio).
  */
 class TrackingController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        return Inertia::render('Checkout/Rastreio', ['pedido' => null]);
+        return Inertia::render('Checkout/Rastreio', ['pedido' => null, 'captcha' => CaptchaRastreio::exigido($request)]);
+    }
+
+    public function captcha(Request $request): HttpResponse
+    {
+        return response(CaptchaRastreio::imagem($request), 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ]);
     }
 
     public function search(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'pedido' => ['required', 'string', 'max:20'],
-        ], [], ['pedido' => 'número do pedido']);
+        if (CaptchaRastreio::exigido($request) && ! CaptchaRastreio::confere($request, $request->input('captcha'))) {
+            CaptchaRastreio::registrarFalha($request);
+
+            return back()->withErrors(['captcha' => 'Digite os caracteres da imagem para continuar.'])->withInput();
+        }
+
+        try {
+            $data = $request->validate([
+                'pedido' => ['required', 'string', 'max:20'],
+            ], [], ['pedido' => 'número do pedido']);
+        } catch (ValidationException $e) {
+            CaptchaRastreio::registrarFalha($request);
+
+            throw $e;
+        }
 
         // Aceita o número novo (261011K7Q2M9XD) ou o antigo (só dígitos).
         $digitado = strtoupper(trim(str_replace(['#', ' '], '', $data['pedido'])));
@@ -35,8 +59,12 @@ class TrackingController extends Controller
             ?? (ctype_digit($digitado) ? Order::query()->find((int) $digitado) : null);
 
         if (! $order || ! $this->podeVer($request->user(), $order)) {
+            CaptchaRastreio::registrarFalha($request);
+
             return back()->withErrors(['pedido' => 'Não encontramos esse pedido na sua conta. Confira o número.'])->withInput();
         }
+
+        CaptchaRastreio::limparFalhas($request);
 
         return redirect()->route('rastreio.ver', $order->trackingRef());
     }

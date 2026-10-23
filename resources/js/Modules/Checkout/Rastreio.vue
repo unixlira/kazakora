@@ -1,17 +1,34 @@
 <script setup>
 // Rastrear pedido (pedido 2026-10-10): busca pelo número ou link direto
 // /rastreio/{ref} (o mesmo que vai no WhatsApp de pedido aprovado). Só com
-// login desde 2026-10-17: o dono do pedido ou um admin.
+// login desde 2026-10-17: o dono do pedido ou um admin. Depois de 3 buscas
+// com erro do mesmo IP, pede o código da imagem (CAPTCHA, 2026-10-22).
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
     pedido: { type: Object, default: null },
+    captcha: { type: Boolean, default: false },
 });
 
-const form = useForm({ pedido: '' });
-const buscar = () => form.post('/rastreio', { preserveScroll: true });
+// Cada imagem vale uma tentativa: se ela já estava na tela, troca depois de
+// enviar. Na primeira vez que aparece não troca (seriam duas imagens e a
+// sessão ficaria com o código da outra).
+const captchaVersao = ref(Date.now());
+const trocarCaptcha = () => { captchaVersao.value = Date.now(); };
+
+const form = useForm({ pedido: '', captcha: '' });
+const buscar = () => {
+    const mostrava = props.captcha;
+    form.post('/rastreio', {
+        preserveScroll: true,
+        onFinish: () => {
+            form.captcha = '';
+            if (mostrava) trocarCaptcha();
+        },
+    });
+};
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -55,6 +72,26 @@ const copiarCodigo = async () => {
                 <p v-if="form.errors.pedido" class="text-sm text-red-600">
                     {{ form.errors.pedido }}
                 </p>
+                <div v-if="captcha" class="flex flex-col gap-2">
+                    <p class="text-sm text-store-fg-muted">
+                        Para continuar, digite os caracteres da imagem.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <img :src="`/rastreio/captcha?v=${captchaVersao}`" alt="Código de verificação" width="200" height="64"
+                            class="rounded-lg border border-store-border" />
+                        <button type="button" class="rounded-lg border border-store-border-strong px-3 py-1.5 text-sm" @click="trocarCaptcha">
+                            <i class="fa-solid fa-rotate mr-1"></i> Trocar imagem
+                        </button>
+                    </div>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Código da imagem
+                        <input v-model="form.captcha" type="text" autocomplete="off" autocapitalize="characters" maxlength="10"
+                            class="rounded-lg border border-store-border-strong bg-store-bg px-3 py-2.5 font-normal uppercase" />
+                    </label>
+                    <p v-if="form.errors.captcha" class="text-sm text-red-600">
+                        {{ form.errors.captcha }}
+                    </p>
+                </div>
                 <button type="submit" :disabled="form.processing"
                     class="rounded-lg bg-store-accent px-4 py-3 font-semibold text-store-accent-contrast disabled:opacity-50">
                     <i class="fa-solid mr-1.5" :class="form.processing ? 'fa-spinner animate-spin' : 'fa-magnifying-glass'"></i>

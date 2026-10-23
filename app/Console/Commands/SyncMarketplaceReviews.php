@@ -17,13 +17,14 @@ class SyncMarketplaceReviews extends Command
 {
     protected $signature = 'reviews:sync
         {--no-auto-reply : Sincroniza/importa avaliações sem responder publicamente na Shopee.}
-        {--retry-failed : Tenta novamente avaliações que já falharam antes.}';
+        {--retry-failed : Tenta novamente avaliações que já falharam antes.}
+        {--canal=* : Só estes canais (shopee, mercado_livre); sem a opção, todos.}';
 
     protected $description = 'Importa avaliações dos marketplaces e responde automaticamente avaliações da Shopee.';
 
     public function handle(ReviewImportService $service, AutoReplyShopeeReviewsService $autoReply): int
     {
-        $summary = $service->importAll();
+        $summary = $service->importAll($this->option('canal') ?: null);
         $replySummary = $this->option('no-auto-reply')
             ? ['checked' => 0, 'sent' => 0, 'failed' => 0]
             : $autoReply->replyPendingPositiveShopeeReviews(retryFailed: (bool) $this->option('retry-failed'));

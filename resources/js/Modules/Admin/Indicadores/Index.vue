@@ -3,8 +3,10 @@
  * Indicadores em abas (2026-10-19). Quando /admin virou o Fluxo de Caixa,
  * tudo o que o Gerenciador mostrava veio para cá: "Visão geral" é o
  * Indicadores de antes; "Hoje e mês", "Cauê e Diego", "Produtos" e
- * "Acessos ao site" são os blocos do Gerenciador. A aba fica na URL
+ * "Visitas KazaKora" são os blocos do Gerenciador. A aba fica na URL
  * (?aba=) e o servidor calcula só a aba aberta (KpiController).
+ * "Visitas FerraKora" (pedido 2026-10-22) é o mesmo bloco com as visitas
+ * gravadas com site = ferrakora.
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
@@ -34,7 +36,8 @@ const ABAS = [
     { chave: 'hoje-e-mes', rotulo: 'Hoje e mês', icone: 'fas fa-calendar-day' },
     { chave: 'caue-diego', rotulo: 'Cauê e Diego', icone: 'fas fa-list-check' },
     { chave: 'produtos', rotulo: 'Produtos', icone: 'fas fa-fire' },
-    { chave: 'acessos', rotulo: 'Acessos ao site', icone: 'fas fa-globe' },
+    { chave: 'acessos', rotulo: 'Visitas KazaKora', icone: 'fas fa-globe' },
+    { chave: 'visitas-ferrakora', rotulo: 'Visitas FerraKora', icone: 'fas fa-screwdriver-wrench' },
 ];
 </script>
 
@@ -59,6 +62,6 @@ const ABAS = [
         <HojeEMes v-else-if="aba === 'hoje-e-mes' && hojeMes" :hoje-mes="hojeMes" />
         <CaueDiego v-else-if="aba === 'caue-diego'" :diagnosticos="diagnosticos ?? { shopee: null, mercado_livre: null }" />
         <Produtos v-else-if="aba === 'produtos' && produtos" :produtos="produtos" />
-        <AcessosSite v-else-if="aba === 'acessos' && visitantes" :visitantes="visitantes" />
+        <AcessosSite v-else-if="(aba === 'acessos' || aba === 'visitas-ferrakora') && visitantes" :key="aba" :aba="aba" :visitantes="visitantes" />
     </AdminLayout>
 </template>

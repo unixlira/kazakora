@@ -17,11 +17,11 @@ class DashboardVisitantesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function visita(string $visitante, string $quando, ?int $usuario = null, int $vezes = 1, bool $consentiu = true, string $ip = '1.1.1.1'): void
+    private function visita(string $visitante, string $quando, ?int $usuario = null, int $vezes = 1, bool $consentiu = true, string $ip = '1.1.1.1', string $site = 'kazakora'): void
     {
         for ($i = 0; $i < $vezes; $i++) {
             DB::table('site_visits')->insert([
-                'visitor_id' => $visitante, 'user_id' => $usuario, 'path' => '/',
+                'site' => $site, 'visitor_id' => $visitante, 'user_id' => $usuario, 'path' => '/',
                 'ip' => $ip, 'consentiu' => $consentiu, 'created_at' => $quando,
             ]);
         }
@@ -79,5 +79,41 @@ class DashboardVisitantesTest extends TestCase
             ->where('visitantes.visitantesMes', 1)
             ->where('visitantes.paginasMes', 2)
             ->has('visitantes.dias', 30));
+    }
+
+    /**
+     * Pedido 2026-10-22: o banco é compartilhado, então cada aba lê só o
+     * próprio site (coluna site). Visitas KazaKora não conta FerraKora e
+     * Visitas FerraKora não conta a loja.
+     */
+    public function test_cada_aba_conta_so_as_visitas_do_proprio_site(): void
+    {
+        $this->travelTo('2026-10-11 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('ana', '2026-10-11 10:00:00', null, 2, true, '1.1.1.1');
+        // FerraKora não tem cookie: o visitante é o IP (md5), sem OK.
+        $this->visita(md5('2.2.2.2'), '2026-10-11 11:00:00', null, 3, false, '2.2.2.2', 'ferrakora');
+        $this->visita(md5('3.3.3.3'), '2026-10-11 12:00:00', null, 1, false, '3.3.3.3', 'ferrakora');
+        $this->visita(md5('3.3.3.3'), '2026-09-30 12:00:00', null, 1, false, '3.3.3.3', 'ferrakora');
+
+        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('aba', 'acessos')
+            ->where('visitantes.site', 'kazakora')
+            ->where('visitantes.visitantesHoje', 1)
+            ->where('visitantes.paginasMes', 2)
+            ->where('visitantes.meses', ['2026-10']));
+
+        $this->actingAs($admin)->get('/admin/indicadores?aba=visitas-ferrakora')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('aba', 'visitas-ferrakora')
+            ->where('visitantes.site', 'ferrakora')
+            ->where('visitantes.visitantesHoje', 2)
+            ->where('visitantes.visitantesMes', 2)
+            ->where('visitantes.paginasMes', 4)
+            ->where('visitantes.meses', ['2026-10', '2026-09']));
+
+        $this->actingAs($admin)->get('/admin/indicadores?aba=visitas-ferrakora&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('visitantes.mes', '2026-09')
+            ->where('visitantes.visitantesMes', 1));
     }
 }

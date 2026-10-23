@@ -472,15 +472,15 @@ const REDES = [
                         <!-- Modalidades de entrega (pedido 2026-10-23), com as mesmas regras da Política de Entrega. -->
                         <ul class="mx-auto mt-5 flex max-w-[30ch] flex-col gap-2.5 text-left text-sm lg:mx-0">
                             <li v-if="entregaFull?.ativa" class="flex items-start gap-2.5">
-                                <span class="selo-full w-14 shrink-0"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <span class="selo-full w-16 shrink-0"><i class="fa-solid fa-bolt"></i>FULL</span>
                                 <span class="opacity-80"><strong class="font-semibold text-white">Receba hoje</strong> na Grande SP pagando até as {{ entregaFull.horario_corte }}</span>
                             </li>
                             <li class="flex items-start gap-2.5">
-                                <span class="selo-full w-14 shrink-0"><i class="fa-solid fa-bolt"></i>FLEX</span>
+                                <span class="selo-full w-16 shrink-0"><i class="fa-solid fa-bolt"></i>FLEX</span>
                                 <span class="opacity-80"><strong class="font-semibold text-white">Até 3 dias úteis</strong> quando os Correios confirmam para o seu CEP</span>
                             </li>
                             <li class="flex items-start gap-2.5">
-                                <span class="w-14 shrink-0 font-extrabold italic text-[#F44D00]"><i class="fa-solid fa-bolt"></i>TURBO</span>
+                                <span class="selo-full w-16 shrink-0 !text-[#F44D00]"><i class="fa-solid fa-bolt"></i>TURBO</span>
                                 <span class="opacity-80"><strong class="font-semibold text-white">SEDEX</strong> pagando só a diferença, para chegar antes</span>
                             </li>
                         </ul>

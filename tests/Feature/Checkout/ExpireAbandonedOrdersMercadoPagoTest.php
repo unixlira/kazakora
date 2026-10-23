@@ -38,7 +38,7 @@ class ExpireAbandonedOrdersMercadoPagoTest extends TestCase
     }
 
     /** @return array{0: Order, 1: Payment} */
-    private function pedidoComPix(string $metodo = Payment::METHOD_PIX, ?string $mpOrderId = null): array
+    private function pedidoComPix(string $metodo = Payment::METHOD_PIX, ?string $mpOrderId = null, int $criadoHaHoras = 25): array
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
@@ -57,7 +57,7 @@ class ExpireAbandonedOrdersMercadoPagoTest extends TestCase
             'subtotal' => 82.60,
             'total' => 82.60,
         ]);
-        $order->forceFill(['created_at' => now()->subHour()])->save();
+        $order->forceFill(['created_at' => now()->subHours($criadoHaHoras)])->save();
 
         $payment = Payment::create([
             'order_id' => $order->id,
@@ -68,6 +68,7 @@ class ExpireAbandonedOrdersMercadoPagoTest extends TestCase
             'amount' => 82.60,
             'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
         ]);
+        $payment->forceFill(['created_at' => now()->subHours($criadoHaHoras)])->save();
 
         return [$order->fresh(), $payment];
     }
@@ -108,6 +109,42 @@ class ExpireAbandonedOrdersMercadoPagoTest extends TestCase
                 ->where('detalhe.situacao_pagamento.codigo', 'pix_expirado')
                 ->where('detalhe.situacao_pagamento.selo', 'Pix expirado, não pago')
                 ->where('detalhe.situacao_pagamento.titulo', 'Pix gerado e não pago: pedido cancelado porque o prazo expirou.'));
+    }
+
+    /** Lira, 2026-10-23: o QR do Pix vale 24 h e o pedido não pode cair antes disso. */
+    public function test_pix_pendente_dentro_das_24_horas_nao_cancela_nem_mexe_no_mercado_pago(): void
+    {
+        Http::fake(['api.mercadopago.com/v1/payments/7001' => Http::response(['id' => 7001, 'status' => 'pending'])]);
+        [$order, $payment] = $this->pedidoComPix(criadoHaHoras: 23);
+
+        $this->artisan('orders:expire-abandoned')->assertSuccessful();
+
+        Http::assertNotSent(fn (HttpRequest $request) => $request->method() === 'PUT');
+        $this->assertSame(Order::STATUS_AWAITING_PAYMENT, $order->fresh()->status);
+        $this->assertSame(Payment::STATUS_REQUIRES_CONFIRMATION, $payment->fresh()->status);
+        $this->assertNull($order->fresh()->stock_restored_at);
+    }
+
+    public function test_pix_pago_dentro_das_24_horas_confirma_o_pedido(): void
+    {
+        Http::fake(['api.mercadopago.com/v1/payments/7001' => Http::response(['id' => 7001, 'status' => 'approved'])]);
+        [$order] = $this->pedidoComPix(criadoHaHoras: 2);
+
+        $this->artisan('orders:expire-abandoned')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
+    }
+
+    public function test_pix_criado_com_validade_de_24_horas(): void
+    {
+        Http::fake(['api.mercadopago.com/v1/payments' => Http::response(['id' => 7002, 'status' => 'pending'])]);
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-23 10:00:00', 'America/Sao_Paulo'));
+
+        app(\App\Services\MercadoPago\MercadoPagoPaymentService::class)
+            ->createPixPayment(10.0, ['email' => 'a@b.com'], 'order-1-payment-1', 'order:1:payment:1');
+
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'POST'
+            && \Illuminate\Support\Carbon::parse($request['date_of_expiration'])->equalTo(\Illuminate\Support\Carbon::parse('2026-10-24 10:00:00', 'America/Sao_Paulo')));
     }
 
     public function test_pix_pago_no_ultimo_segundo_confirma_mesmo_tentando_cancelar(): void

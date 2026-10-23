@@ -215,6 +215,8 @@ Route::post('/fale-conosco', [ContatoController::class, 'store'])->middleware('t
 Route::middleware('auth')->group(function () {
     Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
     Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
+    // CAPTCHA depois de 3 buscas com erro do mesmo IP (pedido 2026-10-22). Antes do {ref}.
+    Route::get('/rastreio/captcha', [TrackingController::class, 'captcha'])->middleware('throttle:30,1')->name('rastreio.captcha');
     Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 });
 

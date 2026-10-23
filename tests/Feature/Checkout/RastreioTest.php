@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -114,5 +115,53 @@ class RastreioTest extends TestCase
         $this->actingAs($order->user)->get('/pedidos')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('orders.data.0.tracking_ref', $order->trackingRef()));
+    }
+
+    public function test_depois_de_3_erros_pede_captcha(): void
+    {
+        RateLimiter::clear('rastreio-falhas:127.0.0.1');
+        $order = $this->pedido();
+        $user = $order->user;
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->actingAs($user)->get('/rastreio')->assertInertia(fn (AssertableInertia $page) => $page->where('captcha', false));
+            $this->actingAs($user)->from('/rastreio')->post('/rastreio', ['pedido' => '999999'])->assertSessionHasErrors('pedido');
+        }
+
+        $this->actingAs($user)->get('/rastreio')->assertInertia(fn (AssertableInertia $page) => $page->where('captcha', true));
+
+        // Sem o código, nem o pedido certo passa.
+        $this->actingAs($user)->from('/rastreio')->post('/rastreio', ['pedido' => (string) $order->id])
+            ->assertRedirect('/rastreio')
+            ->assertSessionHasErrors('captcha');
+
+        // Código errado também não, e o código vale uma tentativa só.
+        $this->actingAs($user)->withSession(['rastreio_captcha' => ['codigo' => 'ACDEF', 'expira' => time() + 600]])
+            ->from('/rastreio')->post('/rastreio', ['pedido' => (string) $order->id, 'captcha' => 'XXXXX'])
+            ->assertSessionHasErrors('captcha');
+        $this->assertNull(session('rastreio_captcha'));
+
+        // Código vencido não vale.
+        $this->actingAs($user)->withSession(['rastreio_captcha' => ['codigo' => 'ACDEF', 'expira' => time() - 1]])
+            ->from('/rastreio')->post('/rastreio', ['pedido' => (string) $order->id, 'captcha' => 'ACDEF'])
+            ->assertSessionHasErrors('captcha');
+
+        // Código certo (minúsculo e com espaço vale) passa e zera a contagem.
+        $this->actingAs($user)->withSession(['rastreio_captcha' => ['codigo' => 'ACDEF', 'expira' => time() + 600]])
+            ->post('/rastreio', ['pedido' => (string) $order->id, 'captcha' => ' acd ef'])
+            ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
+        $this->actingAs($user)->get('/rastreio')->assertInertia(fn (AssertableInertia $page) => $page->where('captcha', false));
+    }
+
+    public function test_imagem_do_captcha_guarda_o_codigo_na_sessao(): void
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('Sem a extensão GD.');
+        }
+        $order = $this->pedido();
+
+        $resposta = $this->actingAs($order->user)->get('/rastreio/captcha')->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->assertStringStartsWith("\x89PNG", $resposta->getContent());
+        $this->assertMatchesRegularExpression('/^[A-Z0-9]{5}$/', session('rastreio_captcha.codigo'));
     }
 }

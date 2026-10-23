@@ -59,3 +59,19 @@ systemctl is-active php8.3-fpm mysql redis-server supervisor nginx
 supervisorctl status kazakora:*
 tail -f /var/www/kazakora/shared/storage/logs/laravel-*.log
 ```
+
+## Checkout seguro (seguro.kazakora.com)
+
+Pedido de 2026-10-23: o botão de compra leva para
+`https://seguro.kazakora.com/pagamento`. É o mesmo sistema; carrinho, login
+e cupom passam por um código de uso único (`App\Support\CheckoutSeguro`).
+Ligar, nesta ordem:
+
+1. Cloudflare: registro `CNAME seguro → kazakora.com`, proxy ligado.
+2. VPS: `cp nginx-seguro.conf /etc/nginx/sites-available/seguro`, link em
+   `sites-enabled`, `nginx -t && systemctl reload nginx`, depois
+   `certbot --nginx -d seguro.kazakora.com`.
+3. Conferir `curl -sI https://seguro.kazakora.com/pagamento` (302 para
+   `/finalizacao` enquanto desligado).
+4. `.env` (`shared/.env`): `CHECKOUT_SEGURO_HOSTS=kazakora.com`, depois
+   `php8.3 artisan config:cache`. Para desligar, deixar vazio.

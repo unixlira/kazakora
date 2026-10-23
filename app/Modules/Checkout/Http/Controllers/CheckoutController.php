@@ -154,8 +154,9 @@ class CheckoutController extends Controller
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
             'desconto_plataforma' => $entrega['desconto_plataforma'],
-            // Na área FULL a entrega já é a mais rápida: sem TURBO.
-            'turbo' => $expressa ? null : $entrega['turbo'],
+            // Na área FULL o TURBO também aparece (pedido 2026-10-23), sem o
+            // "dias antes", que compara com o PAC.
+            'turbo' => $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'],
         ]);
     }
 
@@ -198,12 +199,12 @@ class CheckoutController extends Controller
         $prazo = $prazoPorCep->consultar($cep, $produto);
 
         // Rua do CEP e opção TURBO na página do produto (pedido 2026-10-23):
-        // mesmo TURBO do checkout (SEDEX pela diferença), só fora do Full.
+        // mesmo TURBO do checkout (SEDEX pela diferença), também no Full.
         // Prazo do grátis e TURBO saem da mesma conta do checkout
         // (entregaGratis), para a quantidade escolhida na página.
         $viaCep = app(CompletarEnderecoPeloCep::class)->buscar($cep);
         $quantidade = max(1, min(99, (int) $request->query('quantidade', 1)));
-        $entrega = $produto && ! $prazo['entrega_expressa']
+        $entrega = $produto
             ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => $quantidade]])), null, false)
             : null;
 
@@ -1791,7 +1792,7 @@ class CheckoutController extends Controller
     {
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
-        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+        if (! empty($draft['turbo']) && $cartItems && $cep) {
             $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
             if ($turbo) {
                 return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];

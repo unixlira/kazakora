@@ -398,7 +398,7 @@ const enderecoPrazo = computed(() => {
     return [endereco.rua, endereco.bairro, local].filter(Boolean).join(', ');
 });
 // Tabela de entrega (pedido 2026-10-23): o servidor manda as opções na ordem
-// Full, Flex (ou Padrão) e Turbo. Flex não cita Correios nem transportadora:
+// Full (ou Flex), Turbo e, por último, Padrão (Correios ou transportadora). Flex não cita Correios nem transportadora:
 // "Entrega em até X dias úteis. (Mas geralmente chega em Y)".
 const NOME_ENTREGA = { full: 'Full', flex: 'Flex', turbo: 'Turbo' };
 const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
@@ -1058,13 +1058,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 <style>
 /* Tudo preso em .pd2 pra não vazar pro resto da loja. Medidas e cores
    tiradas da página de referência (izeshop): fundo #F7F7F7, cards brancos
-   raio 20px, amarelo #FCBD10, verde #00AB21, azul #0044C3 / #002F88.
+   raio 20px, amarelo #FCBD10, verde #00AB21, azul #0044C3 / #002F88
+   (azul escuro trocado pelo azul claro #2563EB, pedido 2026-10-23).
    Verde fechado para #00851C (4,8:1 com branco; o #00AB21 dava 3,1 no PageSpeed, 2026-10-21);
    no tema escuro volta o #00AB21, que passa no fundo escuro. Cinza --muted #767676 → #6b6b6b
    (4,2 → 5,0:1 no fundo #F7F7F7). */
 .pd2 {
     --bg: #f7f7f7; --card: #fff; --ink: #18212e; --text: #575757; --muted: #6b6b6b; --line: #ebebeb; --soft: #f9f9f9; --sunk: #f3f3f3;
-    --yellow: #fcbd10; --yellow-edge: #5a4200; --green: #00851c; --green-edge: #006915; --blue: #0044c3; --navy: #002f88; --star: #fcbd10;
+    --yellow: #fcbd10; --yellow-edge: #5a4200; --green: #00851c; --green-edge: #006915; --blue: #2563eb; --navy: #2563eb; --star: #fcbd10;
     --shadow: 0 0 10px 0 rgba(218, 218, 218, .24); --shadow-strong: 0 17px 10px 0 rgba(218, 218, 218, .24);
     background: var(--bg); color: var(--text); font: 400 16px/1.5 Poppins, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
     padding-bottom: 40px;
@@ -1162,7 +1163,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 /* Selo do Pix logo abaixo do preço, no azul padrão da loja (pedido 2026-10-20). */
-.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #e8efff; color: var(--navy); border: 1px solid var(--blue); border-radius: 6px; padding: 5px 10px; font-size: 13px; line-height: 1.3; }
+.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #eff4ff; color: var(--navy); border: 1px solid var(--blue); border-radius: 6px; padding: 5px 10px; font-size: 13px; line-height: 1.3; }
 .pd2 .selo-pix i { color: var(--blue); font-size: 16px; }
 .pd2 .selo-pix strong { font-weight: 800; }
 .dark .pd2 .selo-pix { background: rgba(122, 162, 255, 0.14); color: var(--blue); }

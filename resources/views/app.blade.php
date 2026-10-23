@@ -38,7 +38,8 @@
                 <meta property="og:title" content="{{ $seoProduto['name'] }}">
                 <meta property="og:description" content="{{ $descricao }}">
                 @if ($imagens)
-                    <meta property="og:image" content="{{ $imagens[0] }}">
+                    <meta property="og:image" content="{{ url($imagens[0]) }}">
+                    <meta name="twitter:card" content="summary_large_image">
                 @endif
                 <script type="application/ld+json">{!! json_encode(array_filter([
                     '@context' => 'https://schema.org',
@@ -63,6 +64,17 @@
                     <meta property="og:video" content="{{ $video['conteudo'] }}">
                     <script type="application/ld+json">{!! json_encode(\App\Modules\Catalog\Support\VideoParaGoogle::schema($video), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
                 @endif
+            @else
+                {{-- Link da loja compartilhado no WhatsApp/Instagram/Facebook saía sem logo
+                     (pedido 2026-10-23): fora da página de produto vai a logo oficial 1200x630. --}}
+                <meta property="og:title" content="{{ config('app.name', 'KazaKora') }}">
+                <meta property="og:description" content="{{ $descricao }}">
+                <meta property="og:image" content="{{ url('/images/marca/og-kazakora.png') }}">
+                <meta property="og:image:type" content="image/png">
+                <meta property="og:image:width" content="1200">
+                <meta property="og:image:height" content="630">
+                <meta property="og:image:alt" content="Logo KazaKora">
+                <meta name="twitter:card" content="summary_large_image">
             @endif
         @endunless
 

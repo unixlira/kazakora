@@ -43,4 +43,15 @@ class AvatarDeAvaliacaoTest extends TestCase
             $this->assertFileExists(__DIR__.'/../../../public/images/avaliacoes/avatares/'.$arquivo);
         }
     }
+
+    public function test_com_mais_homens_que_rostos_os_rostos_revezam(): void
+    {
+        $usados = [];
+        $arquivos = [];
+        foreach (range(1, 6) as $id) {
+            $arquivos[] = AvaliacoesDoCheckout::avatar($id, 'Carlos', $usados);
+        }
+
+        $this->assertSame([2, 2, 2], array_values(array_count_values($arquivos)));
+    }
 }

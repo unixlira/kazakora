@@ -200,7 +200,12 @@ const REDES = [
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
             :class="{ 'loja-topo-fume': topoFlutuando }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
-            <div class="mx-auto flex max-w-[1320px] items-center gap-4 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
+            <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
+                <!-- Celular: menu (três listras) à esquerda do logo (pedido do Lira 2026-10-23). -->
+                <button type="button" class="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
+                    <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
+                </button>
+
                 <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
                 <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
                     <picture>
@@ -372,10 +377,6 @@ const REDES = [
                             <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-4 py-3 text-left text-[15px] font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                         </div>
                     </div>
-
-                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
-                        <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
-                    </button>
                 </div>
             </div>
 

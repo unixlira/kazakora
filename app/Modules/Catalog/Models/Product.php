@@ -134,6 +134,16 @@ class Product extends Model
         return $this->id ? app(\App\Modules\Checkout\Support\FreteEmbutido::class)->acrescimo($this) : 0.0;
     }
 
+    /**
+     * Preço de 1 unidade pagando o pedido todo no Pix (DescontoPix, mesma
+     * conta do checkout). Null sem desconto no Pix. Não está no $appends:
+     * só a página de produto pede, com append('preco_pix').
+     */
+    public function getPrecoPixAttribute(): ?float
+    {
+        return \App\Support\DescontoPix::precoPix($this);
+    }
+
     /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
     public function getPrecoDeAttribute(): ?float
     {

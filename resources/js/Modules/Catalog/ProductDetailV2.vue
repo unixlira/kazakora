@@ -259,8 +259,12 @@ const variantThumbnail = (item) => {
 const quantityDiscounts = computed(() =>
     [...(precoBase.value.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
 );
+// Oferta do Dia e Relâmpago não acumulam com o desconto por quantidade
+// (Product::unitPriceForQuantity): aí as faixas não aparecem.
+const emOferta = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
+const faixasVisiveis = computed(() => (emOferta.value ? [] : quantityDiscounts.value));
 const unitPriceForQuantity = (qty) => {
-    const tier = [...quantityDiscounts.value].reverse().find((row) => row.min_quantity <= qty);
+    const tier = emOferta.value ? null : [...quantityDiscounts.value].reverse().find((row) => row.min_quantity <= qty);
     if (!tier) return Number(precoBase.value.final_price);
     return Math.max(0, Math.round(Number(precoBase.value.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
 };
@@ -276,8 +280,39 @@ const precoDe = computed(() => {
     return precoBase.value.has_discount ? Number(precoBase.value.preco_de ?? precoBase.value.price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((1 - precoPor.value / precoDe.value) * 100)) : 0));
-const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
+
+// Preço no Pix (pedido 2026-10-23): pagando o pedido todo no Pix. O de 1
+// unidade vem pronto do backend (preco_pix, DescontoPix::precoPix); kits e
+// total usam a mesma conta: % com 4 casas (R$ fixo vira % sobre a unidade)
+// e desconto arredondado no centavo, sobre o subtotal.
+const percentualPix = (item, unitario) => {
+    const pct = Number(item?.checkout_discount_percentage ?? 0);
+    if (pct > 0) return Math.min(100, pct);
+    const valor = Number(item?.checkout_discount_amount ?? 0);
+    if (valor > 0 && unitario > 0) return Math.round(Math.min(100, (valor * 100) / unitario) * 10000) / 10000;
+    return 0;
+};
+const precoPixPara = (item, unitario, qtd = 1) => {
+    const pct = percentualPix(item, unitario);
+    if (pct <= 0 || unitario <= 0) return null;
+    const subtotal = Math.round(unitario * qtd * 100) / 100;
+    return Math.round((subtotal - Math.round(subtotal * pct) / 100) * 100) / 100;
+};
+const precoPix = computed(() => {
+    const doBackend = precoBase.value.preco_pix;
+    if (doBackend !== undefined) return doBackend === null ? null : Number(doBackend);
+    return precoPixPara(precoBase.value, precoPor.value);
+});
+// Selo ao lado do valor no Pix: o % real do produto ou "R$ N OFF" quando é valor fixo.
+const seloPix = computed(() => {
+    const pct = Number(precoBase.value.checkout_discount_percentage ?? 0);
+    if (pct > 0) return `${Number(pct.toFixed(2)).toLocaleString('pt-BR')}% OFF`;
+    const valor = Number(precoBase.value.checkout_discount_amount ?? 0);
+    return valor > 0 ? `${formatPrice(valor).replace(/,00$/, '')} OFF` : '';
+});
+// Total com a quantidade escolhida no Pix (kits).
+const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
 // Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
 // no lugar de números fixos): vendidos com o número exato desde a 1ª venda
 // ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
@@ -639,21 +674,25 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <hr class="divisor">
 
-                            <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço de
-                                 venda (final_price, igual ao card) em destaque, 12x, "R$ X de desconto"
-                                 e, por último, o selo azul do Pix. O Pix desconta no checkout; aqui só o selo (pedido 2026-10-20). -->
+                            <!-- Bloco de preço (pedido 2026-10-23, referência Mavo): riscado + selo
+                                 "−N%", preço de venda (final_price, igual ao card; decisão de 18/10) em
+                                 destaque, valor no Pix com a conta do checkout e a parcela. -->
                             <div class="preco">
-                                <span class="rot">{{ aPartirDe ? 'A partir de:' : 'Preço:' }}</span>
-                                <div class="valores">
-                                    <div v-if="precoDe" class="linha-de">
-                                        <span class="de">{{ formatPrice(precoDe) }}</span>
-                                        <span v-if="percentualTotal > 0" class="selo">⇣ {{ percentualTotal }}%</span>
-                                    </div>
-                                    <div class="por">{{ formatPrice(precoPor) }}</div>
-                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
-                                    <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
-                                    <span v-if="DESCONTO_PIX" class="selo-pix"><i class="fa-brands fa-pix" aria-hidden="true"></i> <span><strong>{{ DESCONTO_PIX }} DE DESCONTO EXTRA</strong> no PIX</span></span>
+                                <span v-if="aPartirDe" class="a-partir">A partir de</span>
+                                <div v-if="precoDe" class="linha-de">
+                                    <span class="de">{{ formatPrice(precoDe) }}</span>
+                                    <span v-if="percentualTotal > 0" class="selo-off">−{{ percentualTotal }}%</span>
                                 </div>
+                                <div class="por">{{ formatPrice(precoPor) }}</div>
+                                <template v-if="precoPix !== null">
+                                    <div class="linha-pix">
+                                        <i class="fa-brands fa-pix" aria-hidden="true"></i>
+                                        <span class="valor-pix">{{ formatPrice(precoPix) }} no Pix</span>
+                                        <span v-if="seloPix" class="selo-pix">{{ seloPix }}</span>
+                                    </div>
+                                    <p class="nota-pix">pagando o pedido todo no Pix</p>
+                                </template>
+                                <div class="parc">ou {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong> sem juros</div>
                             </div>
 
                             <div v-if="modelos.length > 1" class="variacoes modelos">
@@ -686,13 +725,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
-                            <div v-if="quantityDiscounts.length" class="leve-mais">
+                            <!-- Kits (pedido 2026-10-23): "2 unidades · 9% OFF" com o desconto já
+                                 cadastrado; o clique escolhe a quantidade e o total atualiza. -->
+                            <div v-if="faixasVisiveis.length" class="leve-mais">
                                 <span class="subtitulo">Leve mais, pague menos</span>
                                 <ul>
-                                    <li v-for="tier in quantityDiscounts" :key="tier.id">
-                                        <span>{{ tier.min_quantity }} unidades</span>
-                                        <strong>{{ formatPrice(unitPriceForQuantity(tier.min_quantity)) }}/un.</strong>
-                                        <span class="selo">-{{ Math.round(Number(tier.discount_percentage)) }}%</span>
+                                    <li v-for="tier in faixasVisiveis" :key="tier.id">
+                                        <button type="button" class="kit" :aria-pressed="quantity === tier.min_quantity" @click="setQuantity(tier.min_quantity)">
+                                            <span>{{ tier.min_quantity }} unidades · <b class="kit-off">{{ Math.round(Number(tier.discount_percentage)) }}% OFF</b></span>
+                                            <strong>{{ formatPrice(unitPriceForQuantity(tier.min_quantity)) }}/un.</strong>
+                                        </button>
                                     </li>
                                 </ul>
                             </div>
@@ -714,7 +756,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
                                 </div>
-                                <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
+                                <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
 
@@ -1045,7 +1087,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
             </div>
 
             <!-- Botão fixo no celular -->
+            <!-- Barra fixa do celular (pedido 2026-10-23): valor no Pix à esquerda, botão com ~60%. -->
             <div class="barra">
+                <div class="barra-preco">
+                    <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
+                    <span v-if="precoPix !== null">no Pix</span>
+                </div>
                 <button type="button" class="btn" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
             </div>
         </div>
@@ -1192,20 +1239,23 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .checks li i { color: #00a650; margin-right: 6px; font-size: 1.1em; -webkit-text-stroke: 0.8px #00a650; }
 .pd2 .divisor { border: 0; border-top: 1px solid #777; margin: 16px 0; opacity: .6; }
 
-.pd2 .preco { display: grid; grid-template-columns: 25% 75%; align-items: center; margin-bottom: 15px; }
-.pd2 .preco .rot { font-size: 18px; color: var(--ink); }
-.pd2 .valores { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.pd2 .linha-de { display: flex; align-items: center; gap: 15px; }
-.pd2 .de { color: var(--text); font-size: 22px; font-weight: 600; text-decoration: line-through; }
-.pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
+/* Preço em largura cheia (pedido 2026-10-23): riscado + −N%, preço, Pix, parcela. */
+.pd2 .preco { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 15px; }
+.pd2 .a-partir { font-size: 14px; color: #575757; }
+.pd2 .linha-de { display: flex; align-items: center; gap: 8px; }
+.pd2 .de { color: #8a8a8a; font-size: 16px; font-weight: 400; text-decoration: line-through; }
+.pd2 .selo-off { display: inline-block; background: #c2410c; color: #fff; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; line-height: 1.4; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-/* Selo do Pix logo abaixo do preço: verde escuro, cantos retos (padrão Mavo, pedido 2026-10-23). */
-.pd2 .selo-pix { display: inline-flex; align-items: center; gap: 6px; background: #0b6b3a; color: #fff; border: 0; border-radius: 0; padding: 7px 12px; font-size: 13px; line-height: 1.3; }
-.pd2 .selo-pix i { color: #fff; font-size: 16px; }
-.pd2 .selo-pix strong { font-weight: 800; }
-.pd2 .parc { color: var(--ink); font-size: 18px; }
-.pd2 .parc i { color: var(--navy); margin-right: 4px; }
-.dark .pd2 .parc i { color: var(--blue); }
+.pd2 .linha-pix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #00851c; }
+.pd2 .linha-pix i { font-size: 18px; width: 18px; color: #00851c; }
+.pd2 .valor-pix { font-size: 20px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.pd2 .selo-pix { display: inline-block; background: #00851c; color: #fff; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.pd2 .nota-pix { margin: -4px 0 0; font-size: 12px; color: #575757; }
+.dark .pd2 .linha-pix, .dark .pd2 .linha-pix i { color: var(--green); }
+.dark .pd2 .nota-pix, .dark .pd2 .a-partir { color: var(--text); }
+.pd2 .parc { color: #18212e; font-size: 16px; }
+.pd2 .parc strong { font-weight: 700; }
+.dark .pd2 .parc { color: var(--ink); }
 
 .pd2 .subtitulo { display: block; font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
 .pd2 .variacoes, .pd2 .leve-mais { margin: 6px 0 16px; }
@@ -1222,8 +1272,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .acao.sem-variacao .btn, .pd2 .acao.sem-variacao .qtd button[aria-label="Aumentar quantidade"] { opacity: .5; }
 @keyframes pd2-tremer { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .pd2 .leve-mais ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
-.pd2 .leve-mais li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; }
+.pd2 .leve-mais .kit { width: 100%; display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid #b9b9b9; border-radius: 10px; padding: 8px 12px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.pd2 .leve-mais .kit:hover { border-color: var(--ink); }
+.pd2 .leve-mais .kit[aria-pressed=true] { border: 2px solid var(--yellow); padding: 7px 11px; }
+.pd2 .leve-mais .kit-off { color: #00851c; font-weight: 700; }
+.dark .pd2 .leve-mais .kit-off { color: var(--green); }
 .pd2 .leve-mais strong { color: var(--ink); }
+.pd2 .total-pix { color: #00851c; }
 
 .pd2 .acao { display: flex; gap: 10px; margin: 6px 0 10px; }
 .pd2 .qtd { display: inline-flex; align-items: center; gap: 4px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); padding: 5px; flex: 0 0 auto; }
@@ -1481,7 +1536,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .foto { flex-basis: auto; width: 100%; }
     .pd2 .miniaturas { flex-direction: row; gap: 8px; max-height: none; overflow-x: auto; }
     .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); }
-    .pd2 .preco { grid-template-columns: 20% 80%; }
     .pd2 .btn { font-size: 20px; }
     .pd2 .fretefundo li { font-size: 14px; }
     .pd2 .fretefundo i { color: #7b7b7b; }
@@ -1496,8 +1550,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 6px; font-size: 14px; padding: 18px 12px; }
     .pd2 .confianca i { font-size: 40px; }
     .pd2 .confianca strong { font-size: 16px; }
-    .pd2 .barra { display: block; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }
-    .pd2 .barra .btn { width: 100%; font-size: 18px; min-height: 46px; }
+    .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }
+    .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+    .pd2 .barra-preco strong { font-size: 17px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pd2 .barra-preco span { font-size: 11px; color: #575757; }
+    .dark .pd2 .barra-preco strong { color: var(--green); }
+    .dark .pd2 .barra-preco span { color: var(--text); }
+    .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; }
     .pd2 { padding-bottom: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {

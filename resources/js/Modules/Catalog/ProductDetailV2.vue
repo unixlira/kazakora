@@ -322,21 +322,62 @@ const seloPix = computed(() => {
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
-// Vendidos: texto fixo "mais de 1.350 vendidos" em todo produto, número do
-// fornecedor (ordem do Lira em 2026-10-23 23h, no homolog; antes era o total
-// real de props.salesCount, que segue vindo do servidor). "EXCLUSIVO" e
+// Vendidos: texto fixo "mais de 1.538 vendidos" em todo produto (ordem do
+// Lira em 2026-10-23 23h, no homolog; antes era o total real de
+// props.salesCount, que segue vindo do servidor). "EXCLUSIVO" e
 // "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão do Lira em
-// 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar); "Só restam" com o estoque da
-// variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
+// 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
-const vendidosLegenda = computed(() => 'mais de 1.350 vendidos');
-const estoqueBaixo = computed(() => {
-    if (faltaVariacao.value) return null;
-    const estoque = Number(selecionada.value.stock) || 0;
-    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
-});
-// Barra do "Só N unidades!" (formato da Mavo, pedido 2026-10-23): enche pelo
-// estoque real numa barra de tamanho fixo 50, com um mínimo para não sumir.
+const vendidosLegenda = computed(() => 'mais de 1.538 vendidos');
+// "Só N unidades!" no efeito que o Lira mostrou na tela (2026-10-23 23h, como
+// a Mavo): a barra abre cheia (50), desce até um número sorteado entre 4 e 9
+// e, alguns segundos depois, cai mais uma unidade e fica vermelha. O sorteio
+// nunca passa do estoque real da variação; sem estoque, não aparece.
+const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada.value.stock) || 0));
+const estoqueBaixo = ref(null);
+const estoqueVermelho = ref(false);
+let estoqueTimers = [];
+const pararEstoque = () => {
+    estoqueTimers.forEach((id) => clearTimeout(id));
+    estoqueTimers = [];
+};
+const animarEstoque = () => {
+    pararEstoque();
+    estoqueVermelho.value = false;
+    const real = estoqueReal.value;
+    if (real < 1) {
+        estoqueBaixo.value = null;
+        return;
+    }
+    const alvo = Math.min(real, 4 + Math.floor(Math.random() * 6));
+    const cair = () => {
+        if (alvo < 2) return;
+        estoqueTimers.push(setTimeout(() => {
+            estoqueBaixo.value = alvo - 1;
+            estoqueVermelho.value = true;
+        }, 5000 + Math.random() * 5000));
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        estoqueBaixo.value = alvo;
+        cair();
+        return;
+    }
+    // Desce uma unidade por passo em ~2,5 s, como um contador.
+    estoqueBaixo.value = ESTOQUE_BAIXO;
+    const passo = Math.round(2500 / (ESTOQUE_BAIXO - alvo));
+    const descer = () => {
+        if (estoqueBaixo.value <= alvo) {
+            cair();
+            return;
+        }
+        estoqueBaixo.value -= 1;
+        estoqueTimers.push(setTimeout(descer, passo));
+    };
+    estoqueTimers.push(setTimeout(descer, 400));
+};
+onMounted(animarEstoque);
+onUnmounted(pararEstoque);
+watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
 const barraEstoque = computed(() => (estoqueBaixo.value
     ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
     : 0));
@@ -769,7 +810,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <div v-if="estoqueBaixo" class="estoque-baixo">
+                                <div v-if="estoqueBaixo" class="estoque-baixo" :class="{ vermelho: estoqueVermelho }">
                                     <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
@@ -1238,9 +1279,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
 /* Animação da barra: enche do zero ao abrir a página e as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; animation: estoque-enche 1.2s ease-out both; }
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .08s linear, background-color .3s; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
-@keyframes estoque-enche { from { width: 0; } }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }
@@ -1630,6 +1670,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo .num { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
+/* Queda de uma unidade: barra vermelha (efeito pedido pelo Lira, 2026-10-23). */
+.pd2 .compra .estoque-baixo.vermelho .estoque-barra span, .dark .pd2 .compra .estoque-baixo.vermelho .estoque-barra span { background: #e11d2a; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
 .pd2 .compra .comprar-agora { width: 100%; min-height: 64px; padding: 0 14px; border: 0; border-radius: 50px; background: #0aac48; color: #fff; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; letter-spacing: 0; text-transform: uppercase; }

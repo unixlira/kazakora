@@ -32,21 +32,28 @@ const cookies = [
     {
         nome: 'kazakora_cookies',
         tipo: 'Necessário',
-        finalidade: 'Lembra que você já deu OK neste aviso, para não perguntar de novo.',
+        finalidade: 'Lembra que você aceitou o uso de cookies ao finalizar uma compra.',
         duracao: '12 meses',
-        base: 'Cumprimento de obrigação legal — prova do consentimento (art. 8º, § 2º)',
+        base: 'Cumprimento de obrigação legal: prova do consentimento (art. 8º, § 2º)',
+    },
+    {
+        nome: 'kazakora_cep',
+        tipo: 'Necessário',
+        finalidade: 'Guarda o CEP que você digitou, para os preços e o frete já saírem calculados para a sua região.',
+        duracao: '12 meses',
+        base: 'Execução de contrato (art. 7º, V)',
     },
     {
         nome: 'kazakora_visitor',
         tipo: 'Estatística',
-        finalidade: 'Código aleatório que conta visitas e páginas vistas para melhorarmos a loja. Não identifica você pelo nome e só é criado depois do seu OK.',
+        finalidade: 'Código aleatório que conta visitas e páginas vistas para melhorarmos a loja. Não identifica você pelo nome e só é criado depois do seu aceite ao finalizar a compra.',
         duracao: '12 meses',
         base: 'Consentimento (art. 7º, I)',
     },
     {
         nome: '_fbp, _fbc',
         tipo: 'Publicidade',
-        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu OK, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. Só é criado depois do seu OK.',
+        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. Só é criado depois do seu aceite ao finalizar a compra.',
         duracao: 'até 90 dias',
         base: 'Consentimento (art. 7º, I)',
     },
@@ -74,7 +81,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios, e só depois do seu OK. A KazaKora não vende dados.
+                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios, e só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 
@@ -99,15 +106,17 @@ const cookies = [
                     </p>
                 </LegalCard>
 
-                <LegalCard title="O aviso e o seu OK">
+                <LegalCard title="Quando você aceita">
                     <p>
                         Os cookies necessários funcionam desde o primeiro acesso, porque sem eles a loja não abre o carrinho nem o
-                        pagamento. O cookie de estatística só é criado depois que você clica em <strong>OK</strong> no aviso. Guardamos
-                        a data, a hora e a versão do aviso em que você deu o OK, como a LGPD exige.
+                        pagamento. Os de estatística e de publicidade só são criados quando você clica em
+                        <strong>Finalizar pedido</strong>: a frase abaixo do botão informa que, ao finalizar, você aceita os termos de
+                        uso, a política de privacidade e o uso de cookies. Guardamos a data, a hora, o IP, o navegador e a versão do
+                        texto aceito, como a LGPD exige.
                     </p>
                     <p>
-                        Para desfazer, apague os cookies do site nas configurações do seu navegador. O aviso volta a aparecer e
-                        nada de estatística é registrado até um novo OK. Você também pode pedir pelo e-mail {{ COMPANY.email }}
+                        Para desfazer, apague os cookies do site nas configurações do seu navegador: nada de estatística ou
+                        publicidade é registrado até uma nova compra. Você também pode pedir pelo e-mail {{ COMPANY.email }}
                         ou pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>.
                     </p>
                 </LegalCard>
@@ -125,7 +134,7 @@ const cookies = [
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Página visitada, data e hora</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Site de onde você veio e campanha (UTM), sem o restante do endereço</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Tipo de aparelho (celular, tablet ou computador)</span></li>
-                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Navegador completo e código de visitante: só com o seu OK</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Navegador completo, código de visitante e código de clique dos anúncios: só depois do seu aceite</span></li>
                     </ul>
                     <p class="mt-2">
                         Usamos esses dados para saber quais produtos interessam mais, de onde vêm as visitas e melhorar a loja.

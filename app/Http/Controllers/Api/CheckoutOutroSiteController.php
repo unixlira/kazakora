@@ -15,6 +15,7 @@ use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -147,6 +148,9 @@ abstract class CheckoutOutroSiteController extends Controller
         }
 
         $order->refresh();
+        // Prova do aceite dos termos, da privacidade e dos cookies (2026-10-24):
+        // a frase abaixo do botão de finalizar no site de origem.
+        rescue(fn () => Cookies::registrarAceite($request, $this->checkout->site(), $order->user_id));
         rescue(fn () => $this->depoisDoPedido($request, $order, $dados));
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 

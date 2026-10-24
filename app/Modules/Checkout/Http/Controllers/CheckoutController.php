@@ -39,6 +39,7 @@ use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -695,6 +696,11 @@ class CheckoutController extends Controller
             ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma), DescontoPix::percentualDosItens($cartItems))
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
+
+        // Aceite dos termos, da privacidade e dos cookies (2026-10-24): é a
+        // frase abaixo do "Finalizar pedido", no lugar do aviso flutuante.
+        // Vem antes do pedido para o rastreio da Meta já enxergar o aceite.
+        rescue(fn () => Cookies::registrarAceite($request));
 
         $visitante = ! $request->user();
         // Medição do checkout (2026-10-23): o código do visitante sai da sessão,

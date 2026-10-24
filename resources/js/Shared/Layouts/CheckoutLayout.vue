@@ -9,7 +9,6 @@
 // Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
 // da loja. Sem menu, busca e rodapé da loja. Sempre claro (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
-import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -57,7 +56,6 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
         <div v-else class="checkout-oferta h-[3px]" aria-hidden="true"></div>
 
         <slot />
-        <AvisoCookies />
 
         <footer class="mt-auto px-4 pb-10 pt-2">
             <div class="mx-auto max-w-[1200px] border-t border-slate-300/70 pt-8 text-center">

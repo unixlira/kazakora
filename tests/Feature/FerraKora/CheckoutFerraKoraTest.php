@@ -118,6 +118,10 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(0, \App\Modules\Checkout\Models\Address::count());
         Mail::assertNotSent(\App\Modules\Auth\Mail\WelcomeEmail::class);
         $this->assertSame($resposta->json('token'), CheckoutFerraKora::token($order));
+        // Aceite dos cookies no "Finalizar" do site (2026-10-24): só a prova, com a origem.
+        $prova = \App\Modules\Analytics\Models\ConsentimentoCookie::sole();
+        $this->assertSame('ferrakora', $prova->origem);
+        $this->assertSame(\App\Support\Privacidade\Cookies::VERSAO, $prova->versao);
 
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=errado")->assertNotFound();
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))

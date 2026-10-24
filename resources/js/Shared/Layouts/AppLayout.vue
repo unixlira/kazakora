@@ -309,9 +309,9 @@ const REDES = [
                     <!-- Celular: carrinho no topo, à direita, onde ficava o botão do menu (pedido do Lira 2026-10-23).
                          Sacolinha de mão no lugar do carrinho de supermercado, o mesmo desenho da Mavo (feather shopping-bag, 2026-10-23). -->
                     <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
-                        <!-- Bolinha laranja ao lado da sacola, só no celular, igual à da lupa; some quando o contador aparece (pedido 2026-10-23). -->
+                        <!-- Bolinha laranja ao lado da sacola, só no celular, com o "0" dentro quando o carrinho está vazio; some quando o contador aparece (pedido 2026-10-23). -->
                         <span class="relative"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-[22px] w-[22px]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-                            <span v-if="cartCount === 0" class="absolute -right-1 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#f27a2a] lg:hidden" aria-hidden="true"></span></span>
+                            <span v-if="cartCount === 0" class="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#f27a2a] text-[0.6rem] font-store-mono font-semibold leading-none text-white lg:hidden" aria-hidden="true">0</span></span>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
 

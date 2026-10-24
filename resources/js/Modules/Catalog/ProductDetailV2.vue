@@ -340,10 +340,14 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 //          continua vermelha (correção do Lira em 2026-10-23).
 // O sorteio é novo a cada carregamento da página e NUNCA passa de 37 (regra
 // do Lira em 2026-10-23, exemplos 19, 26, 35), nem do estoque real da
-// variação; sem estoque, não aparece.
+// variação; sem estoque, não aparece. Antes de escolher a variação vale o
+// maior estoque entre elas (antes era 0 e a barra sumia em todo produto com
+// variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
 const ESTOQUE_SORTEIO_MIN = 19;
 const ESTOQUE_SORTEIO_MAX = 37;
-const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada.value.stock) || 0));
+const estoqueReal = computed(() => (faltaVariacao.value
+    ? Math.max(0, ...opcoesVariacao.value.map((variant) => Number(variant.stock) || 0))
+    : Number(selecionada.value.stock) || 0));
 const estoqueBaixo = ref(null);
 const estoqueBarra = ref(ESTOQUE_BAIXO);
 const estoqueFundo = ref(false);

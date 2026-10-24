@@ -322,17 +322,13 @@ const seloPix = computed(() => {
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
-// Vendidos com o número real desde a 1ª venda ("+1538 vendidos", formato da
-// referência, tarefa 2648). O texto fixo "mais de 1.350/1.538 vendidos" saiu
-// em 2026-10-23: sem registro, seria publicidade enganosa (decisão do Lira).
-// "EXCLUSIVO" e "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão
+// Vendidos: texto fixo "+1.538 vendidos" em todo produto (tarefa 2704 do
+// Lira em 2026-10-23, corrigindo o "mais de 1.538" da 2697; ele foi avisado
+// do risco de publicidade enganosa e manteve). props.salesCount, o total
+// real, segue vindo do servidor. "EXCLUSIVO" e "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão
 // do Lira em 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
-const vendidosLegenda = computed(() => {
-    const total = Number(props.salesCount) || 0;
-    if (total < 1) return null;
-    return total === 1 ? '1 vendido' : `+${total} vendidos`;
-});
+const vendidosLegenda = computed(() => '+1.538 vendidos');
 // "Só N unidades!" com o estoque REAL da variação (ex.: "Só 37 unidades!"),
 // como o Lira mostrou: aparece abaixo de 50 e some sem estoque. O número
 // sorteado entre 4 e 9 do #1014 saiu em 2026-10-23: estoque inventado seria

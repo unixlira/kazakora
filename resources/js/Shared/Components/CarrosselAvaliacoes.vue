@@ -5,6 +5,9 @@
 // desliza nativamente e no desktop o mouse arrasta (pointer events). Sem setas;
 // as bolinhas só mostram a posição. Todas as avaliações ficam lado a lado, então
 // a altura é a da maior e nada abaixo pula quando a avaliação troca.
+// Card mais baixo (2026-10-24): foto de 40px, nome e estrelas na mesma linha,
+// texto em até 3 linhas e menos respiro; UF real do cliente ao lado do nome
+// (só quando a avaliação veio de um pedido nosso, ver reviews.uf).
 import { onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -78,24 +81,28 @@ onUnmounted(parar);
 </script>
 
 <template>
-    <section v-if="avaliacoes.length" class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
+    <section v-if="avaliacoes.length" class="rounded-[24px] bg-white px-4 py-3.5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
         aria-roledescription="carrossel" aria-label="Avaliações de clientes" @mouseenter="parar" @mouseleave="iniciar" @focusin="parar" @focusout="iniciar" @touchend="iniciar">
         <div ref="trilho" class="flex select-none overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             :class="arrastando ? 'cursor-grabbing' : 'cursor-grab snap-x snap-mandatory'"
             @scroll.passive="aoRolar" @pointerdown="aoPressionar" @pointermove="aoMover" @pointerup="aoSoltar" @pointercancel="aoSoltar" @click.capture="aoClicar" @dragstart.prevent>
             <article v-for="(avaliacao, indice) in avaliacoes" :key="avaliacao.id" class="flex w-full shrink-0 snap-start gap-3"
                 :aria-label="`Avaliação ${indice + 1} de ${avaliacoes.length}`">
-                <img :src="avaliacao.avatar" alt="" width="56" height="56" loading="lazy" decoding="async" draggable="false" class="h-14 w-14 shrink-0 rounded-full bg-slate-100 object-cover">
+                <img :src="avaliacao.avatar" alt="" width="40" height="40" loading="lazy" decoding="async" draggable="false" class="h-10 w-10 shrink-0 rounded-full bg-slate-100 object-cover">
                 <div class="min-w-0 flex-1">
-                    <p class="text-slate-900" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
-                        <i v-for="estrela in 5" :key="estrela" class="text-sm" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
-                    </p>
-                    <p class="mt-1 text-xs font-bold text-slate-900">{{ avaliacao.nome }}</p>
-                    <p class="mt-2 line-clamp-4 text-sm leading-relaxed text-slate-700">{{ avaliacao.texto }}</p>
+                    <div class="flex flex-wrap items-center gap-x-2">
+                        <p class="truncate text-xs font-bold text-slate-900">
+                            {{ avaliacao.nome }}<span v-if="avaliacao.uf" class="font-semibold text-slate-500"> · {{ avaliacao.uf }}</span>
+                        </p>
+                        <p class="shrink-0 text-slate-900" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
+                            <i v-for="estrela in 5" :key="estrela" class="text-[11px]" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
+                        </p>
+                    </div>
+                    <p class="mt-1 line-clamp-3 text-[13px] leading-snug text-slate-700">{{ avaliacao.texto }}</p>
                 </div>
             </article>
         </div>
-        <div v-if="avaliacoes.length > 1" class="mt-3 flex items-center justify-center gap-1.5" aria-hidden="true">
+        <div v-if="avaliacoes.length > 1" class="mt-2.5 flex items-center justify-center gap-1.5" aria-hidden="true">
             <span v-for="(avaliacao, indice) in avaliacoes" :key="`ponto-${avaliacao.id}`"
                 class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-5 bg-slate-800' : 'w-2 bg-slate-300'"></span>
         </div>

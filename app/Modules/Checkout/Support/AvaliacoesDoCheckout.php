@@ -12,9 +12,11 @@ use Illuminate\Support\Str;
 /**
  * Avaliações do carrossel do checkout (modelo Mavo): o da loja e o dos outros
  * sites (FerraKora e Beauty Kora) pela API de resumo. Só as que existem no
- * banco, nota 4 ou 5 e com texto. Primeiro as dos produtos do carrinho
- * (anúncio pai e variações), completando com as melhores da loja; com foto
- * antes. O nome segue a mesma regra da página do produto (reviewer_display_name).
+ * banco, nota 4 ou 5 e com texto, só dos produtos do carrinho (anúncio pai e
+ * variações); com foto antes. Produto sem avaliação não mostra o carrossel: as
+ * "melhores da loja" de outro produto saíram (pedido 2026-10-24, depois do
+ * PR #1080). O nome segue a mesma regra da página do produto
+ * (reviewer_display_name) e a UF só aparece quando é a real (reviews.uf).
  *
  * Foto redonda (pedido 2026-10-24): avatar do pacote da vitrine em
  * public/images/avaliacoes/avatares, do mesmo gênero do nome, escolhido
@@ -36,11 +38,11 @@ class AvaliacoesDoCheckout
 
     /**
      * $catalogo (ids de produto pai publicados no site): os outros sites só
-     * completam com avaliações do próprio catálogo (2026-10-24: a Beauty Kora
+     * mostram avaliações do próprio catálogo (2026-10-24: a Beauty Kora
      * mostrava "Torque forte" de parafusadeira).
      *
      * @param  Collection<int, int>|array<int, int>  $productIds  produtos do carrinho
-     * @return list<array{id: int, nota: int, nome: string, texto: string, avatar: string}>
+     * @return list<array{id: int, nota: int, nome: string, uf: ?string, texto: string, avatar: string}>
      */
     public function paraProdutos(Collection|array $productIds, ?Builder $catalogo = null): array
     {
@@ -48,7 +50,11 @@ class AvaliacoesDoCheckout
         $grupos = $ids->isEmpty() ? collect() : Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
             ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)->unique()->values();
 
-        $base = fn () => Review::query()
+        if ($grupos->isEmpty()) {
+            return [];
+        }
+
+        $avaliacoes = Review::query()
             ->where('rating', '>=', 4)
             ->whereNotNull('comment')
             ->whereRaw('LENGTH(TRIM(comment)) >= 15')
@@ -58,16 +64,10 @@ class AvaliacoesDoCheckout
             ->orderByDesc('rating')
             ->latest()
             ->orderByDesc('id')
-            ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')));
-
-        $avaliacoes = $grupos->isEmpty() ? collect() : $base()
+            ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')))
             ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
             ->limit(self::CANDIDATAS)
             ->get();
-
-        if ($avaliacoes->count() < self::CANDIDATAS) {
-            $avaliacoes = $avaliacoes->concat($base()->whereNotIn('id', $avaliacoes->pluck('id'))->limit(self::CANDIDATAS - $avaliacoes->count())->get());
-        }
 
         $usados = [];
         $resultado = [];
@@ -89,6 +89,7 @@ class AvaliacoesDoCheckout
                 'id' => $review->id,
                 'nota' => (int) $review->rating,
                 'nome' => $nome,
+                'uf' => $review->uf ? strtoupper($review->uf) : null,
                 'texto' => Str::limit(trim((string) $review->comment), 220),
                 'avatar' => asset('images/avaliacoes/avatares/'.$arquivo),
             ];

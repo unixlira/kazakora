@@ -66,12 +66,13 @@ class ReviewController extends Controller
 
     public function store(Request $request, Product $product, ClubeDeAvaliacoes $clube): RedirectResponse
     {
-        $purchased = $request->user()->orders()
+        $pedido = $request->user()->orders()
             ->where('status', Order::STATUS_COMPLETED)
             ->whereHas('items', fn ($query) => $query->where('product_id', $product->id))
-            ->exists();
+            ->latest()
+            ->first(['id', 'shipping_state']);
 
-        if (! $purchased) {
+        if (! $pedido) {
             return back()->withErrors(['review' => 'Você só pode avaliar produtos que já recebeu.']);
         }
 
@@ -93,6 +94,8 @@ class ReviewController extends Controller
 
         $fotos = $request->file('fotos', []);
         unset($validated['fotos']);
+        // UF do carrossel do checkout: estado de entrega do pedido avaliado.
+        $validated['uf'] = $pedido->shipping_state ?: null;
 
         // Edição pela tela "Avalie suas compras" soma às fotos que já existem: teto total.
         $existente = Review::query()->where('user_id', $request->user()->id)->where('product_id', $product->id)->withCount('images')->first();

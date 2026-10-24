@@ -576,9 +576,6 @@ const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.v
 const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
 const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
 
-// No celular o vídeo da avaliação não baixa nada até o toque (pedido 2026-10-23):
-// a miniatura é só o quadrado com o play; o 1º quadro custava ~2 MB por página.
-
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const ehVideo = (midia) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(midia?.image_url ?? '');
 const fotoAberta = ref(null);
@@ -1052,8 +1049,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <span v-if="ehVideo(image) && ehCelular" class="video-sem-capa"></span>
-                                    <video v-else-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
+                                    <video v-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
                                     <img v-else :src="miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
@@ -1482,8 +1478,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .video-sem-capa { display: block; }
-.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video, .pd2 .video-sem-capa { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
+.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
 .pd2 .foto-btn { position: relative; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
 .pd2 .play-video { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .pd2 .play-video i { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; padding-left: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }

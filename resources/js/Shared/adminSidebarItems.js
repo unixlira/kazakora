@@ -171,6 +171,7 @@ export const sidebarSections = [
             { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'perguntasMkplace', alertaFixo: true },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
+            { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },
         ],
     },
     {

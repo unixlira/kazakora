@@ -27,6 +27,7 @@ use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
+use App\Modules\Checkout\Support\LeadsDoCheckout;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Services\Meta\ConversoesMeta;
 use App\Modules\Inventory\Models\StockMovement;
@@ -419,6 +420,14 @@ class CheckoutController extends Controller
         if (! $request->user() && ! empty($data['guest']['email'])) {
             rescue(fn () => $this->cart->lembrarEmail($data['guest']['email']), null, false);
         }
+        // Carrinho abandonado (pedido 2026-10-24): o lead chega em "pagamento".
+        // registrar() nunca lança erro; só loga, sem dado pessoal.
+        app(LeadsDoCheckout::class)->registrar($request, [
+            'nome' => $data['guest']['name'] ?? null,
+            'email' => $data['guest']['email'] ?? null,
+            'cpf' => $data['guest']['cpf'] ?? null,
+            'telefone' => $data['guest']['phone'] ?? ($data['new_address']['phone'] ?? null),
+        ], \App\Modules\Checkout\Models\LeadCheckout::ETAPA_PAGAMENTO);
         // Grava a sessão já aqui (em vez de esperar a fase terminate() do
         // kernel) — sob PHP-FPM com fastcgi_finish_request, a resposta do
         // redirect pode chegar ao navegador antes do terminate() rodar, e o
@@ -691,6 +700,8 @@ class CheckoutController extends Controller
         // Medição do checkout (2026-10-23): o código do visitante sai da sessão,
         // que muda quando o convidado ganha conta e entra; por isso vem antes.
         $visitanteMedicao = CheckoutEvento::visitante($request);
+        // Carrinho abandonado (2026-10-24): o login do convidado troca o ID da sessão.
+        $sessaoDoLead = $request->session()->getId();
 
         try {
             [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
@@ -899,6 +910,7 @@ class CheckoutController extends Controller
         }
 
         CheckoutEvento::pedidoCriado($request, $visitanteMedicao, $order->user_id);
+        app(LeadsDoCheckout::class)->converter($order, $sessaoDoLead);
 
         if ($useMercadoPago) {
             if ($methods[0] === Payment::METHOD_BOLETO) {

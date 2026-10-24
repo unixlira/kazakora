@@ -79,6 +79,12 @@ class OrderPaymentFinalizer
 
         $order->update(['status' => Order::STATUS_PAID]);
 
+        // Carrinho abandonado (2026-10-24): pago com lead ainda aberto (outro
+        // aparelho, mesmo e-mail/CPF) também conta como convertido. Nunca lança.
+        if ($order->origin === Order::ORIGIN_STORE) {
+            app(LeadsDoCheckout::class)->converter($order);
+        }
+
         // Emissão da nota + envio do e-mail de recibo acontecem de forma
         // assíncrona, numa fila — o webhook do Stripe (chamador mais comum
         // deste método) precisa responder rápido, sem esperar SEFAZ/SMTP.

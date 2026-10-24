@@ -1731,7 +1731,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .barra-preco span { font-size: 11px; color: #575757; }
     .dark .pd2 .barra-preco strong { color: var(--green); }
     .dark .pd2 .barra-preco span { color: var(--text); }
-    .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; }
+    /* Pílula como no computador (pedido do Lira 2026-10-23). */
+    .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; border-radius: 999px; }
     .pd2 { padding-bottom: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1789,6 +1790,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .acao { margin: 0; }
 /* Preso no rodapé da tela enquanto a caixa rola; encaixa no fim do card, depois do frete/prazo.
    No celular a barra fixa já faz esse papel. */
+@media (max-width: 767px) {
+    /* No celular o COMPRAR AGORA da caixa sai: o da barra fixa já está sempre na tela (pedido do Lira 2026-10-23). */
+    .pd2 .compra .acao { display: none; }
+}
 @media (min-width: 768px) {
     .pd2 .compra .acao { position: sticky; bottom: 0; z-index: 2; margin: 0 0 -12px; padding: 12px 0; background: var(--card); }
 }

@@ -341,10 +341,12 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 //          fonte branca e some em 1 s (fade out); a fonte fica vermelha e
 //          continua vermelha (correção do Lira em 2026-10-23).
 // O sorteio é novo a cada carregamento da página e fica OBRIGATORIAMENTE
-// entre 7 e 36 (tarefa #2809, Lira em 2026-10-24; antes 19 a 37). Também não
-// passa do estoque real da variação: com menos de 7 em estoque, não aparece. Antes de escolher a variação vale o
-// maior estoque entre elas (antes era 0 e a barra sumia em todo produto com
-// variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
+// entre 7 e 36 (tarefa #2809, Lira em 2026-10-24; antes 19 a 37). O estoque
+// real não limita mais o número (Lira em 2026-10-24, teste no homolog; antes
+// o sorteio não passava do estoque e um produto com 10 mostrava sempre 10):
+// ele só esconde a barra quando a variação está esgotada. Antes de escolher a
+// variação vale o maior estoque entre elas (antes era 0 e a barra sumia em
+// todo produto com variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
 const ESTOQUE_SORTEIO_MIN = 7;
 const ESTOQUE_SORTEIO_MAX = 36;
 const estoqueReal = computed(() => (faltaVariacao.value
@@ -403,13 +405,11 @@ const animarEstoque = () => {
     pararEstoque();
     estoqueFundo.value = false;
     estoqueVermelho.value = false;
-    const real = estoqueReal.value;
-    if (real < ESTOQUE_SORTEIO_MIN) {
+    if (estoqueReal.value < 1) {
         estoqueBaixo.value = null;
         return;
     }
-    const teto = Math.min(real, ESTOQUE_SORTEIO_MAX);
-    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (teto - ESTOQUE_SORTEIO_MIN + 1));
+    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
     estoqueBaixo.value = numero;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         estoqueBarra.value = numero;

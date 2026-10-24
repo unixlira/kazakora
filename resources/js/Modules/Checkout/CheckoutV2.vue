@@ -11,7 +11,7 @@ import CheckoutLayout from '@/Shared/Layouts/CheckoutLayout.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
-import { maskCpf, maskPhone } from '@/Shared/useMasks';
+import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -69,6 +69,17 @@ const pessoa = reactive({
     cpf: props.customer?.cpf ? maskCpf(props.customer.cpf) : (draftGuest.cpf ?? ''),
     phone: props.customer?.phone ? maskPhone(props.customer.phone) : (draftGuest.phone ?? props.draft?.new_address?.phone ?? ''),
 });
+
+// Pessoa física ou jurídica (pedido 2026-10-24, modelo Mavo). PROTÓTIPO: a
+// razão social e o CNPJ vão no envio (campo "empresa"), mas o servidor ainda
+// não grava e o pedido e a nota seguem no CPF do responsável. Ligar na nota
+// fiscal é mudança fiscal e espera o OK do Lira.
+const tipoPessoa = ref(props.draft?.empresa?.cnpj ? 'pj' : 'pf');
+const empresa = reactive({
+    razaoSocial: props.draft?.empresa?.razao_social ?? '',
+    cnpj: props.draft?.empresa?.cnpj ? maskCnpj(props.draft.empresa.cnpj) : '',
+});
+const ehPj = computed(() => tipoPessoa.value === 'pj');
 
 // ---------- 2. Endereço ----------
 const enderecoSalvoValido = props.addresses.some((address) => address.id === props.draft?.address_id);
@@ -398,6 +409,10 @@ const payloadEntrega = () => {
         data.new_address = { ...endereco, state: (endereco.state || '').toUpperCase().slice(0, 2), recipient_name: pessoa.name, phone: pessoa.phone, label: 'Entrega' };
     }
 
+    if (ehPj.value) {
+        data.empresa = { razao_social: empresa.razaoSocial.trim(), cnpj: empresa.cnpj };
+    }
+
     if (!isLoggedIn.value) {
         data.guest = { name: pessoa.name, email: pessoa.email, cpf: pessoa.cpf, phone: pessoa.phone };
     } else if (pedirCpf.value) {
@@ -438,6 +453,31 @@ const cpfValido = (valor) => {
 };
 // CPF: convidado sempre informa; logado só quando o do cadastro está vazio ou
 // inválido (pedido 2026-10-11 — o Mercado Pago recusa Pix com CPF inválido).
+// CNPJ: dígitos verificadores, como o CPF.
+const cnpjValido = (valor) => {
+    const cnpj = String(valor ?? '').replace(/\D/g, '');
+    if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+    const digito = (tamanho) => {
+        let soma = 0;
+        let peso = tamanho - 7;
+        for (let i = 0; i < tamanho; i += 1) {
+            soma += Number(cnpj[i]) * peso;
+            peso = peso === 2 ? 9 : peso - 1;
+        }
+        const resto = soma % 11;
+        return resto < 2 ? 0 : 11 - resto;
+    };
+    return digito(12) === Number(cnpj[12]) && digito(13) === Number(cnpj[13]);
+};
+const conferirCnpj = () => {
+    if (!String(empresa.cnpj ?? '').trim()) return;
+    if (!cnpjValido(empresa.cnpj)) {
+        erros.value = { ...erros.value, 'empresa.cnpj': ['CNPJ inválido. Confira os números.'] };
+    } else if (erros.value['empresa.cnpj']) {
+        const { 'empresa.cnpj': _, ...resto } = erros.value;
+        erros.value = resto;
+    }
+};
 const pedirCpf = computed(() => !isLoggedIn.value || !cpfValido(props.customer?.cpf));
 const campoCpf = computed(() => (isLoggedIn.value ? 'cpf' : 'guest.cpf'));
 
@@ -462,11 +502,12 @@ const salvandoEntrega = ref(false);
 // mesmo); logado entregando num endereço salvo segue sem, como antes.
 const telefoneValido = () => (isLoggedIn.value && !usarNovoEndereco.value) || String(pessoa.phone ?? '').replace(/\D/g, '').length >= 10;
 const emailValido = () => isLoggedIn.value || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(pessoa.email ?? '').trim());
-const dadosCompletos = () => !nomeCurto() && emailValido() && (!pedirCpf.value || cpfValido(pessoa.cpf)) && telefoneValido();
+const empresaValida = () => !ehPj.value || (empresa.razaoSocial.trim().length >= 3 && cnpjValido(empresa.cnpj));
+const dadosCompletos = () => !nomeCurto() && emailValido() && (!pedirCpf.value || cpfValido(pessoa.cpf)) && telefoneValido() && empresaValida();
 const CAMPOS_RUA = ['street', 'number', 'neighborhood', 'city', 'state'];
 const enderecoCompleto = () => (!usarNovoEndereco.value && !!addressId.value)
     || (endereco.zip.replace(/\D/g, '').length === 8 && CAMPOS_RUA.every((campo) => String(endereco[campo] ?? '').trim()));
-const ehErroDeDados = (chave) => chave.startsWith('guest.') || chave === 'cpf' || chave === 'new_address.phone' || chave === 'session';
+const ehErroDeDados = (chave) => chave.startsWith('guest.') || chave.startsWith('empresa.') || chave === 'cpf' || chave === 'new_address.phone' || chave === 'session';
 const ehErroDeEntrega = (chave) => chave.startsWith('new_address.') || chave === 'address_id' || chave === 'shipping_method_id';
 const etapaDosErros = (lista) => {
     const chaves = Object.keys(lista ?? {});
@@ -497,6 +538,8 @@ const errosDosDados = () => {
     if (!emailValido()) lista['guest.email'] = [String(pessoa.email ?? '').trim() ? 'E-mail inválido. Confira.' : 'Digite seu e-mail.'];
     if (pedirCpf.value && !cpfValido(pessoa.cpf)) lista[campoCpf.value] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
     if (!telefoneValido()) lista['new_address.phone'] = ['Informe seu celular com DDD.'];
+    if (ehPj.value && empresa.razaoSocial.trim().length < 3) lista['empresa.razao_social'] = ['Digite a razão social da empresa.'];
+    if (ehPj.value && !cnpjValido(empresa.cnpj)) lista['empresa.cnpj'] = [String(empresa.cnpj ?? '').trim() ? 'CNPJ inválido. Confira os números.' : 'Digite o CNPJ.'];
     return lista;
 };
 
@@ -752,15 +795,29 @@ onMounted(iniciarCarrossel);
 onUnmounted(pararCarrossel);
 
 // ---------- Resumo ----------
-// Fechado no celular (pedido 2026-10-23, desfaz o de 21/10): só a barra
-// "Ver resumo" no topo e o formulário já na primeira tela. No computador o
-// resumo fica sempre ao lado.
-const resumoAberto = ref(false);
+// Aberto no celular (pedido 2026-10-24, modelo Mavo; desfaz o de 23/10): a
+// barra "Resumo (n)" no topo recolhe e abre, e já nasce aberta com o cupom,
+// os valores e os produtos. No computador o resumo fica sempre ao lado.
+const resumoAberto = ref(true);
 const fotoDoItem = (item) => {
     const imagens = item.product?.images ?? [];
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
 };
 const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item.quantity, 0));
+const precoUnitario = (item) => (item.quantity > 0 ? item.subtotal / item.quantity : item.subtotal);
+// Selo do item e relógio do topo só com oferta de verdade: Oferta Relâmpago
+// (fim vindo do servidor) ou Oferta do Dia (vale até 23:59:59 de hoje em SP).
+const fimDaOfertaDoDia = () => `${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })}T23:59:59-03:00`;
+const ofertaDoItem = (item) => {
+    if (item.product?.oferta_relampago?.fim) return { nome: 'Oferta Relâmpago', fim: item.product.oferta_relampago.fim };
+    if (item.product?.oferta_do_dia) return { nome: 'Oferta do Dia', fim: fimDaOfertaDoDia() };
+    return null;
+};
+// A que acaba primeiro entre as do carrinho.
+const ofertaFim = computed(() => itens.value
+    .map((item) => ofertaDoItem(item)?.fim)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a) - new Date(b))[0] ?? null);
 
 const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
     ? round2(totalCartao.value - round2((subtotalAtual.value - descontoCupom.value - descontoPlataforma.value) * props.pixDiscountPercentage / 100))
@@ -776,7 +833,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
 <template>
     <Head title="Finalize sua compra" />
 
-    <CheckoutLayout>
+    <CheckoutLayout :oferta-fim="props.order ? null : ofertaFim">
         <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
         <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
             :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">
@@ -810,9 +867,31 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                             <p v-if="!isLoggedIn" class="mt-1 text-sm text-slate-500">
                                 Já tem conta? <Link href="/entrar" class="font-semibold text-sky-700 hover:underline">Entrar</Link>
                             </p>
-                            <div class="mt-4 space-y-3">
+                            <!-- Pessoa física / jurídica (pedido 2026-10-24, modelo Mavo). -->
+                            <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
+                                <button v-for="[valor, rotulo, icone] in [['pf', 'Pessoa física', 'fa-user'], ['pj', 'Pessoa jurídica', 'fa-building']]" :key="valor"
+                                    type="button" role="radio" :aria-checked="tipoPessoa === valor"
+                                    class="flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition"
+                                    :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
+                                    @click="tipoPessoa = valor">
+                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i>{{ rotulo }}
+                                </button>
+                            </div>
+                            <div class="mt-3 space-y-3">
+                                <template v-if="ehPj">
+                                    <label class="block" :data-erro="erro('empresa.razao_social') ? 1 : 0">
+                                        <span class="sr-only">Razão social</span>
+                                        <input v-model="empresa.razaoSocial" data-medir="razao_social" type="text" autocomplete="organization" :class="[inputClass, erro('empresa.razao_social') && inputErroClass]" placeholder="Razão social">
+                                        <small v-if="erro('empresa.razao_social')" class="ml-4 text-xs text-red-600">{{ erro('empresa.razao_social') }}</small>
+                                    </label>
+                                    <label class="block" :data-erro="erro('empresa.cnpj') ? 1 : 0">
+                                        <span class="sr-only">CNPJ</span>
+                                        <input :value="empresa.cnpj" data-medir="cnpj" type="text" inputmode="numeric" :class="[inputClass, erro('empresa.cnpj') && inputErroClass]" placeholder="CNPJ" @input="empresa.cnpj = maskCnpj($event.target.value)" @blur="conferirCnpj">
+                                        <small v-if="erro('empresa.cnpj')" class="ml-4 text-xs text-red-600">{{ erro('empresa.cnpj') }}</small>
+                                    </label>
+                                </template>
                                 <label class="block" :data-erro="erro('guest.name') ? 1 : 0">
-                                    <span class="sr-only">Nome completo</span>
+                                    <span class="sr-only">{{ ehPj ? 'Nome completo do responsável' : 'Nome completo' }}</span>
                                     <input v-model="pessoa.name" data-medir="nome" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'text-slate-600']" placeholder="Nome completo">
                                     <small v-if="erro('guest.name')" class="ml-4 text-xs text-red-600">{{ erro('guest.name') }}</small>
                                 </label>
@@ -824,8 +903,8 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                                 </label>
                                 <div class="grid gap-3 sm:grid-cols-2">
                                     <label v-if="pedirCpf" class="block" :data-erro="erro(campoCpf) ? 1 : 0">
-                                        <span class="sr-only">CPF</span>
-                                        <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="CPF" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
+                                        <span class="sr-only">{{ ehPj ? 'CPF do responsável' : 'CPF' }}</span>
+                                        <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" :placeholder="ehPj ? 'CPF do responsável' : 'CPF'" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
                                         <small v-if="isLoggedIn && !erro(campoCpf)" class="ml-4 text-xs text-red-600">O CPF do seu cadastro está inválido.</small>
                                         <small v-if="erro(campoCpf)" class="ml-4 text-xs text-red-600">{{ erro(campoCpf) }}</small>
                                     </label>
@@ -846,6 +925,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                         <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
                             <div class="min-w-0">
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
+                                <p v-if="ehPj">{{ empresa.razaoSocial }} · CNPJ {{ empresa.cnpj }}</p>
                                 <p v-if="!isLoggedIn" class="truncate">{{ pessoa.email }}</p>
                                 <p>{{ [pedirCpf ? pessoa.cpf : null, pessoa.phone].filter(Boolean).join(' · ') }}</p>
                             </div>
@@ -1149,8 +1229,13 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                             <span v-else class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
                             <div class="min-w-0 flex-1">
                                 <p class="text-sm leading-snug text-slate-700">{{ item.product.name }}</p>
-                                <p v-if="item.product.variation && !item.product.name.includes(item.product.variation)" class="text-xs text-slate-500">{{ item.product.variation }}</p>
-                                <p class="mt-1 text-sm font-bold text-slate-900">{{ formatPrice(item.subtotal) }}</p>
+                                <!-- Unidade, preço e selo da oferta no modelo Mavo (pedido 2026-10-24). -->
+                                <p class="mt-1 text-xs text-slate-500">Unid.: {{ item.quantity }}x<template v-if="item.product.variation"> {{ item.product.variation }}</template></p>
+                                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">
+                                    {{ formatPrice(precoUnitario(item)) }}
+                                    <span v-if="ofertaDoItem(item)" class="rounded-md bg-[#141414] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">{{ ofertaDoItem(item).nome }}</span>
+                                </p>
+                                <p v-if="item.quantity > 1" class="text-xs text-slate-500">Total: {{ formatPrice(item.subtotal) }}</p>
                                 <div class="mt-2 inline-flex items-center rounded-full border border-slate-200" role="group" :aria-label="`Quantidade de ${item.product.name}`">
                                     <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
                                         :disabled="item.quantity <= 1 || !!alterandoItem || !!order" aria-label="Diminuir quantidade" @click="alterarQuantidade(item, -1)">

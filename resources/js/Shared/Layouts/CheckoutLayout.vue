@@ -1,17 +1,39 @@
 <script setup>
 // Layout do checkout no modelo Yampi (pedido 2026-10-23, referência
-// seguro.mavoloja.com.br): só a logo no topo, faixa escura com os dados da
-// empresa e uma linha fina laranja; rodapé curto com as formas de pagamento,
-// os selos e 4 linhas com os dados da loja. Sem menu, busca e rodapé da loja.
-// Sem contador regressivo: o da referência é falso (regra do Lira, nada de
-// publicidade enganosa), e o "Frete grátis por tempo limitado" de 15 minutos
-// que recomeçava ao atualizar saiu junto. Sempre claro (cores fixas).
+// seguro.mavoloja.com.br). Desde 2026-10-24 o topo segue o print da Mavo:
+// uma faixa escura só, com a logo, o CNPJ e o endereço, e abaixo a barra
+// colorida "Oferta termina em". O relógio conta até o FIM REAL da oferta do
+// carrinho (Oferta Relâmpago ou Oferta do Dia, vindo da página); sem oferta
+// no ar a barra não aparece e fica só a linha colorida. Nada de contador que
+// recomeça ao atualizar (regra do Lira, nada de publicidade enganosa).
+// Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
+// da loja. Sem menu, busca e rodapé da loja. Sempre claro (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
 import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+
+const props = defineProps({
+    // ISO 8601 do fim da oferta que vale para o carrinho (null = sem oferta).
+    ofertaFim: { type: String, default: null },
+});
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
+
+const agora = ref(Date.now());
+let relogio = null;
+onMounted(() => { relogio = setInterval(() => { agora.value = Date.now(); }, 1000); });
+onBeforeUnmount(() => clearInterval(relogio));
+
+const restante = computed(() => {
+    const fim = props.ofertaFim ? new Date(props.ofertaFim).getTime() : NaN;
+
+    return Number.isFinite(fim) ? Math.max(0, Math.floor((fim - agora.value) / 1000)) : 0;
+});
+const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((restante.value % 3600) / 60), restante.value % 60]
+    .map((parte) => String(parte).padStart(2, '0'))
+    .join(':'));
 </script>
 
 <template>
@@ -21,19 +43,18 @@ const ano = new Date().getFullYear();
             <i class="fa-solid fa-flask mr-1"></i>Modo teste do Mercado Pago: nenhum valor é cobrado
         </div>
 
-        <header class="bg-white">
-            <div class="mx-auto flex h-16 max-w-[1200px] items-center justify-center px-4 md:h-20">
-                <img :src="$page.props.marca?.logoNav || '/images/marca/logo-nav.webp'" alt="KazaKora" width="170" height="30" class="h-7 w-auto md:h-8">
-            </div>
+        <header class="bg-[#141414] px-4 py-3 text-center text-white">
+            <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
+            <!-- Razão social, CNPJ e endereço (os mesmos dos Termos de Uso). -->
+            <p class="mt-2 text-[11px] font-semibold leading-snug sm:text-[13px]">{{ COMPANY.nomeFantasia }} · <span class="whitespace-nowrap">{{ COMPANY.razaoSocial }}</span> · <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span></p>
+            <p class="text-[11px] leading-snug text-white/75 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
-
-        <!-- Faixa escura com razão social, CNPJ e endereço (os mesmos dos Termos de Uso). -->
-        <div class="bg-gradient-to-r from-[#0b0f19] via-[#1b2130] to-[#0b0f19] px-3 py-2.5 text-center text-[11px] leading-relaxed text-white/80 sm:text-[13px]">
-            <p>{{ COMPANY.nomeFantasia }} · <span class="whitespace-nowrap">{{ COMPANY.razaoSocial }}</span> · <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span></p>
-            <p>{{ COMPANY.enderecoResumido }}</p>
-            <p class="mt-0.5 font-semibold text-white"><i class="fa-solid fa-lock mr-1 text-[#2fd27a]"></i>Ambiente 100% seguro</p>
+        <div v-if="restante > 0" role="timer" aria-live="off" class="checkout-oferta flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
+            <i class="fa-solid fa-stopwatch animate-pulse" aria-hidden="true"></i>
+            <span>Oferta termina em</span>
+            <span class="font-mono text-[15px] font-extrabold tabular-nums sm:text-lg">{{ tempo }}</span>
         </div>
-        <div class="h-[3px] bg-gradient-to-r from-[#F44D00] via-[#ffb000] to-[#F44D00]" aria-hidden="true"></div>
+        <div v-else class="checkout-oferta h-[3px]" aria-hidden="true"></div>
 
         <slot />
         <AvisoCookies />
@@ -70,3 +91,10 @@ const ano = new Date().getFullYear();
         </footer>
     </div>
 </template>
+
+<style scoped>
+/* Barra colorida do topo (modelo Mavo, nas cores da KazaKora). */
+.checkout-oferta {
+    background: linear-gradient(90deg, #F44D00 0%, #E0247A 55%, #6D28D9 100%);
+}
+</style>

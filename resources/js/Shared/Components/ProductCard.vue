@@ -48,7 +48,7 @@ if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
-import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
+import { cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
@@ -160,10 +160,6 @@ const notaTexto = computed(() => nota.value.toFixed(1).replace('.', ','));
 const totalAvaliacoes = computed(() => Number(props.product.reviews_count ?? 0));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
-// Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
-// igual à faixa do topo (FaixaPromo). Antes era "Oferta MM.MM" pelo mês.
-const SELO_DO_MES = 'Black November';
-
 // Nome do produto (pedido 2026-10-10): 2 linhas no celular e 3 no computador.
 // Se não couber, mede de verdade e corta na última palavra que deixa espaço
 // para "… Ver mais" terminar exatamente no fim da última linha.
@@ -257,7 +253,6 @@ onBeforeUnmount(() => {
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 // Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).
 const preco = computed(() => props.product.preco_vitrine ?? props.product);
-const aPartirDe = computed(() => Boolean(props.product.preco_vitrine?.a_partir_de));
 const precoAntes = computed(() => {
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
     if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);
@@ -270,9 +265,6 @@ const precoPartes = computed(() => {
     const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
-// Variações com preços diferentes: o carrinho do card abre o produto para
-// escolher (o preço do card é o da mais barata, não o do produto da página).
-const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props.product.id, preco.value.final_price));
 </script>
 
 <template>
@@ -315,23 +307,16 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <i class="fas fa-star text-amber-400"></i> Avaliar
             </button>
 
-            <!-- Selo promocional sobre a foto (canto inferior esquerdo): "Oferta do dia"
-                 nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
-            <div class="promo-badge">
+            <!-- Selo promocional sobre a foto (canto inferior esquerdo): só nas ofertas
+                 (Relâmpago e do Dia). Sem selo de campanha (pedido 2026-10-23). -->
+            <div v-if="preco.oferta_relampago || preco.oferta_do_dia" class="promo-badge">
                 <span class="promo-badge-icon">%</span>
-                <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : (preco.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
+                <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : 'Oferta do Dia' }}</span>
             </div>
 
-            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
-            <button type="button" :disabled="product.stock < 1"
-                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
-                :class="'bottom-0 translate-y-1/2'"
-                :aria-label="aPartirDe ? 'Escolher a variação' : 'Adicionar ao carrinho'" @click.stop="comprarPeloCard">
-                <i class="fas fa-cart-shopping text-sm"></i>
-            </button>
         </div>
 
-        <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
+        <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-4">
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">

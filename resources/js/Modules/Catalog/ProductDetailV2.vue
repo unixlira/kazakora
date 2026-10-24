@@ -832,10 +832,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <hr class="divisor">
 
                             <div class="preco">
+                                <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
+                                <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
                                 <div class="linha-por">
                                     <span class="por">{{ formatPrice(precoPor) }}</span>
-                                    <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 </div>
                                 <div class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong></div>
                                 <div v-if="precoPix !== null && seloPix" class="linha-pix">
@@ -1724,7 +1725,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .a-partir { font-size: 13px; color: #777; }
 .pd2 .compra .linha-por { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
 .pd2 .compra .por { color: #000; font-size: 28px; font-weight: 600; line-height: 1.15; letter-spacing: 0; }
-.pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; text-decoration: line-through; }
+.pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; line-height: 1.2; text-decoration: line-through; }
 .pd2 .compra .parc { display: flex; align-items: center; gap: 4px; color: #1c1c1c; font-size: 15px; line-height: 1.35; }
 .pd2 .compra .parc i { color: #1c1c1c; font-size: 14px; margin: 0; }
 .pd2 .compra .parc strong { color: #0aac48; font-weight: 700; }

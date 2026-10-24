@@ -776,8 +776,30 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
+                            <!-- Quatro selos num quadro só, no desenho do print do Lira (pedido 2026-10-23):
+                                 entre as bandeiras e o "Calcular o prazo"; substituem os cards soltos. -->
+                            <ul class="selos-compra">
+                                <li>
+                                    <img src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> para a sua casa!</span>
+                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
+                                </li>
+                                <li>
+                                    <img src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
+                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
+                                </li>
+                                <li>
+                                    <img src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
+                                    <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
+                                </li>
+                                <li>
+                                    <img src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
+                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
+                                </li>
+                            </ul>
+
                             <!-- Calcular o prazo logo abaixo das bandeiras de pagamento (pedido do Lira 2026-10-23;
-                                 antes ficava depois dos cards, na posição da Mavo). -->
+                                 antes ficava depois dos cards, na posição da Mavo); os selos ficam entre os dois. -->
                             <form class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
@@ -806,17 +828,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
-                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
-                                 sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
-                            <ul class="fretefundo">
-                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
-                                     já fica no campo "Calcular o prazo de entrega" logo acima. -->
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
-                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
-                                </li>
-                                <!-- Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
+                            <!-- Fora do quadro dos quatro selos ficam só os cards que não estão nele.
+                                 Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
+                            <ul v-if="isFreeShipping || DESCONTO_PIX" class="fretefundo">
                                 <li v-if="isFreeShipping">
                                     <span class="selo-icone"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
                                     <span><b>Frete Grátis com entrega expressa</b> para São Paulo/SP e região. Consulte seu CEP acima.</span>
@@ -826,25 +840,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span v-if="isFreeShipping && DESCONTO_PIX"><b>Frete Grátis + desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
                                     <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
                                     <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
-                                </li>
-                                <!-- Formato da Mavo (pedido 2026-10-23) com os prazos da política de trocas:
-                                     7 dias para desistir (art. 49 CDC) e 30 dias com defeito (art. 26). -->
-                                <li class="devolucao">
-                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro em até 7 dias após o recebimento, ou 30 dias se o produto vier com defeito.</span>
-                                </li>
-                            </ul>
-
-                            <!-- Pagamento seguro e Empresa 100% legal por último, como antes do #1002
-                                 (Lira voltou atrás nos cards em 2026-10-23). -->
-                            <ul class="fretefundo">
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
                         </aside>
@@ -1650,6 +1645,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo .escudo { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
 .pd2 .compra .fretefundo .escudo i { color: #0aac48; font-size: 16px; }
 .pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
+.pd2 .compra .selos-compra { list-style: none; margin: 0 0 10px; padding: 4px 14px; border: 1px solid #ebebeb; border-radius: 8px; background: #f9f9f9; }
+.pd2 .compra .selos-compra li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 12px 0; font-size: 14px; line-height: 1.5; color: #545454; }
+.pd2 .compra .selos-compra li + li { border-top: 1px solid #e6e6e6; }
+.pd2 .compra .selos-compra img { width: 40px; height: 40px; object-fit: contain; }
+.pd2 .compra .selos-compra b { color: #1846c7; font-weight: 700; }
+.pd2 .compra .selos-compra .selo-full { color: #0aac48; font-style: italic; font-weight: 800; }
+.pd2 .compra .selos-compra .selo-full i { margin: 0 2px 0 0; font-size: .95em; color: inherit; }
+.dark .pd2 .compra .selos-compra { background: var(--card); border-color: var(--line); }
+.dark .pd2 .compra .selos-compra li { color: var(--text); }
+.dark .pd2 .compra .selos-compra li + li { border-color: var(--line); }
+.dark .pd2 .compra .selos-compra b { color: var(--blue); }
 .pd2 .compra .prazo-cep { margin: 0 0 10px; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }

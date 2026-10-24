@@ -528,21 +528,55 @@ const onCepPrazo = (event) => {
 };
 
 // Rolagem até a tabela (pedido 2026-10-23): no celular o resultado ficava
-// abaixo da dobra e o cliente não via que o frete foi calculado. Só rola
-// quando a tabela não está inteira na tela.
+// abaixo da dobra e o cliente não via que o frete foi calculado. Desce só o
+// que falta para a tabela inteira aparecer, com ela no pé da tela.
+const rolarSuave = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MARGEM_PE = 16;
+// O que fica preso no pé da tela e cobre o fim dela: a barra do rodapé (celular)
+// ou o COMPRAR AGORA preso na caixa (computador). Conta o maior dos dois.
+const barraEl = ref(null);
+const alturaBarraRodape = () => Math.max(barraEl.value?.offsetHeight ?? 0, botaoCompraEl.value?.offsetHeight ?? 0);
 const mostrarResultadoPrazo = async () => {
     await nextTick();
     const el = resultadoPrazoEl.value;
     if (!el) return;
     const caixa = el.getBoundingClientRect();
-    // O COMPRAR AGORA preso no rodapé cobre o fim da tela: desconta a altura dele.
-    const rodape = botaoCompraEl.value?.offsetHeight ?? 0;
-    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight - rodape) return;
-    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'center' });
+    const pe = window.innerHeight - alturaBarraRodape() - MARGEM_PE;
+    if (caixa.top >= 0 && caixa.bottom <= pe) return;
+    const falta = caixa.bottom - pe;
+    // Tabela maior que a tela: o topo dela fica visível.
+    window.scrollBy({ top: Math.min(falta, caixa.top - MARGEM_PE), behavior: rolarSuave() ? 'smooth' : 'auto' });
 };
 
+// Primeira rolagem da página (pedido 2026-10-23): quando o cliente para de rolar
+// pela primeira vez, a tela completa a descida até o "Calcular o prazo" ficar
+// no pé da área visível. Só uma vez, só para baixo e só se o campo ainda não
+// apareceu inteiro; se o cliente já passou do campo, não mexe.
+const prazoCepEl = ref(null);
+let ajusteFeito = false;
+let esperaFimRolagem = null;
+const ajustarAoCep = () => {
+    if (ajusteFeito || !prazoCepEl.value) return;
+    ajusteFeito = true;
+    pararAjusteCep();
+    if (window.scrollY < 40) { ajusteFeito = false; ligarAjusteCep(); return; }
+    const caixa = prazoCepEl.value.getBoundingClientRect();
+    const pe = window.innerHeight - alturaBarraRodape() - MARGEM_PE;
+    if (caixa.bottom <= pe || caixa.top < 0) return;
+    window.scrollBy({ top: caixa.bottom - pe, behavior: rolarSuave() ? 'smooth' : 'auto' });
+};
+const aoRolar = () => {
+    clearTimeout(esperaFimRolagem);
+    esperaFimRolagem = setTimeout(ajustarAoCep, 180);
+};
+const ligarAjusteCep = () => window.addEventListener('scroll', aoRolar, { passive: true });
+const pararAjusteCep = () => { window.removeEventListener('scroll', aoRolar); clearTimeout(esperaFimRolagem); };
+onMounted(() => { if (!window.location.hash) ligarAjusteCep(); });
+onUnmounted(pararAjusteCep);
+
 const consultarPrazo = async ({ rolar = true } = {}) => {
+    ajusteFeito = true;
+    pararAjusteCep();
     if (cep.value.replace(/\D/g, '').length !== 8) {
         erroPrazo.value = 'Digite um CEP com 8 números.';
         return;
@@ -707,6 +741,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click.stop="toggleFavorite(product.id)">
                                         <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                     </button>
+                                    <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`">-{{ percentualTotal }}%</span>
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
@@ -857,7 +892,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <!-- Calcular o prazo logo abaixo das bandeiras de pagamento (pedido do Lira 2026-10-23;
                                  antes ficava depois dos cards, na posição da Mavo); os selos ficam entre os dois. -->
-                            <form class="prazo-cep" @submit.prevent="consultarPrazo()">
+                            <form ref="prazoCepEl" class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
                                     <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
@@ -1148,7 +1183,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
             <!-- Barra fixa no rodapé (pedido 2026-10-23): valor no Pix à esquerda, botão à direita.
                  No celular fica sempre; no computador aparece quando o botão da caixa sai da tela. -->
-            <div class="barra" :class="{ visivel: !botaoNaTela }">
+            <div ref="barraEl" class="barra" :class="{ visivel: !botaoNaTela }">
                 <div class="barra-preco">
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
@@ -1238,12 +1273,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
 .pd2 .galeria { display: flex; flex-direction: row-reverse; gap: 20px; }
-.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 2px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
+.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
 .pd2 .galeria.sem-miniaturas .foto { flex-basis: 100%; }
 .pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
 .pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
 .pd2 .miniaturas { flex: 1; display: flex; flex-direction: column; gap: 20px; max-height: 640px; overflow-y: auto; scrollbar-width: thin; }
-.pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
+.pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
 .pd2 .miniaturas button:hover { border-color: var(--line); }
 .pd2 .miniaturas button[aria-current=true] { border-color: var(--yellow); }
 /* Foto da variação escolhida: borda azul, sem sair do lugar na galeria. */
@@ -1726,6 +1761,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
+/* Selo de desconto no canto da foto (pedido 2026-10-23): "-9%" quando o preço caiu. */
+.pd2 .selo-desconto { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); pointer-events: none; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
 .dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }

@@ -73,7 +73,16 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // Card deitado (pedido 2026-10-24, Utilidades para casa no celular): foto à
+    // esquerda; nome, estrelas, preço e parcela à direita; "X% OFF" na foto.
+    horizontal: {
+        type: Boolean,
+        default: false,
+    },
 });
+
+// Mesmo parcelamento da página do produto (12x sem juros).
+const PARCELAS = 12;
 
 
 const secondImage = computed(() => {
@@ -265,14 +274,17 @@ const precoPartes = computed(() => {
     const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
+const parcela = computed(() => Number(preco.value.final_price) / PARCELAS);
 </script>
 
 <template>
     <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
          com estilo próprio (página do produto, pedido 2026-10-22). -->
-    <article class="card-produto group flex cursor-pointer font-store text-store-fg h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]"
+    <article class="card-produto group flex cursor-pointer font-store text-store-fg overflow-hidden border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]"
+        :class="horizontal ? 'card-horizontal flex-row items-center rounded-xl' : 'h-full flex-col rounded-[1.15rem]'"
         @mouseenter="prefetchProduct" @touchstart.passive="prefetchProduct" @click="clicarCard">
         <div class="relative aspect-square bg-white"
+            :class="{ 'm-2 w-[120px] shrink-0 overflow-hidden rounded-lg': horizontal }"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false">
             <template v-if="primaryImage(product)">
                 <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
@@ -300,23 +312,28 @@ const precoPartes = computed(() => {
             -->
 
 
-            <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->
+            <!-- Card deitado: o "X% OFF" vermelho fica no canto de cima da foto (exemplo do Lira 2026-10-24). -->
+            <span v-if="horizontal && precoAntes" class="absolute left-0 top-1.5 z-[6] whitespace-nowrap rounded-r-full bg-[#d71920] py-0.5 pl-1.5 pr-2 text-[10px] font-bold leading-tight text-white shadow">{{ descontoPct }}% OFF</span>
+
+            <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card).
+                 No card deitado vai para a direita, longe do "X% OFF". -->
             <button v-if="canReview && !hasReviewed" type="button"
-                class="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-store-bg-raised px-2.5 py-1 text-[11px] font-semibold text-store-accent shadow hover:underline"
+                class="absolute z-10 flex items-center gap-1 rounded-full bg-store-bg-raised px-2.5 py-1 text-[11px] font-semibold text-store-accent shadow hover:underline"
+                :class="horizontal ? 'right-1.5 top-1.5' : 'left-2.5 top-2.5'"
                 @click.stop="showReviewModal = true">
                 <i class="fas fa-star text-amber-400"></i> Avaliar
             </button>
 
             <!-- Selo promocional sobre a foto (canto inferior esquerdo): só nas ofertas
                  (Relâmpago e do Dia). Sem selo de campanha (pedido 2026-10-23). -->
-            <div v-if="preco.oferta_relampago || preco.oferta_do_dia" class="promo-badge">
+            <div v-if="preco.oferta_relampago || preco.oferta_do_dia" class="promo-badge" :class="{ 'promo-badge-compacto': horizontal }">
                 <span class="promo-badge-icon">%</span>
                 <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : 'Oferta do Dia' }}</span>
             </div>
 
         </div>
 
-        <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-4">
+        <div class="flex min-w-0 flex-1 flex-col" :class="horizontal ? 'gap-1.5 py-2.5 pl-1 pr-3' : 'gap-2 px-4 pb-4 pt-4'">
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
@@ -336,7 +353,28 @@ const precoPartes = computed(() => {
                     <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
                 </div>
             </div>
-            <div class="mt-auto pt-1">
+            <!-- Card deitado (exemplo do Lira 2026-10-24): preço com o riscado ao lado,
+                 parcela embaixo e o frete. O "X% OFF" está na foto. -->
+            <div v-if="horizontal">
+                <div class="flex items-end gap-x-1.5">
+                    <div class="flex shrink-0 items-start leading-none text-store-fg">
+                        <span class="mr-0.5 mt-[2px] text-xs font-medium">R$</span>
+                        <span class="text-xl font-semibold tracking-tight">{{ precoPartes.inteiro }}</span>
+                        <span class="ml-px mt-[2px] text-[10px] font-semibold">{{ precoPartes.centavos }}</span>
+                    </div>
+                    <s v-if="precoAntes" class="min-w-0 truncate whitespace-nowrap pb-px text-[11px] text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                </div>
+                <p class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
+                    <i class="far fa-credit-card" aria-hidden="true"></i>
+                    ou {{ PARCELAS }}x de <span class="font-semibold text-store-verde-texto">{{ formatPrice(parcela) }}</span>
+                </p>
+                <p v-if="product.stock <= 0" class="mt-1 text-[11px] font-semibold text-red-600">Esgotado</p>
+                <p v-else class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto">
+                    Frete grátis
+                    <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                </p>
+            </div>
+            <div v-else class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
                      centavos pequenos no alto. -->

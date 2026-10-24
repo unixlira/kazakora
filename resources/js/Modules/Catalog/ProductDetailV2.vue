@@ -322,13 +322,17 @@ const seloPix = computed(() => {
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
-// Vendidos: texto fixo "mais de 1.538 vendidos" em todo produto (ordem do
-// Lira em 2026-10-23 23h, no homolog; antes era o total real de
-// props.salesCount, que segue vindo do servidor). "EXCLUSIVO" e
-// "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão do Lira em
-// 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
+// Vendidos com o número real desde a 1ª venda ("+1538 vendidos", formato da
+// referência, tarefa 2648). O texto fixo "mais de 1.350/1.538 vendidos" saiu
+// em 2026-10-23: sem registro, seria publicidade enganosa (decisão do Lira).
+// "EXCLUSIVO" e "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão
+// do Lira em 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
-const vendidosLegenda = computed(() => 'mais de 1.538 vendidos');
+const vendidosLegenda = computed(() => {
+    const total = Number(props.salesCount) || 0;
+    if (total < 1) return null;
+    return total === 1 ? '1 vendido' : `+${total} vendidos`;
+});
 // "Só N unidades!" no efeito que o Lira mostrou na tela (2026-10-23 23h, como
 // a Mavo): a barra abre cheia (50), desce até um número sorteado entre 4 e 9
 // e, alguns segundos depois, cai mais uma unidade e fica vermelha. O sorteio

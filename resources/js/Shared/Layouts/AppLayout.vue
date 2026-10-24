@@ -298,14 +298,15 @@ const REDES = [
                 <BuscaInstantanea v-model="search" class="hidden max-w-xs flex-1 lg:block" @buscar="submitSearch" />
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
-                    <!-- Celular: lupa, coração, carrinho e conta ficam dentro do menu (pedido 2026-10-15). -->
+                    <!-- Celular: lupa e conta ficam dentro do menu (pedido 2026-10-15); o carrinho fica aqui no topo (2026-10-23). -->
                     <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente.
                     <Link href="/favoritos" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
                         <i class="fas fa-heart text-base text-[#ef4444]"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
                     -->
-                    <Link href="/carrinho" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                    <!-- Celular: carrinho no topo, à direita, onde ficava o botão do menu (pedido do Lira 2026-10-23). -->
+                    <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
                         <i class="fas fa-cart-shopping text-base"></i>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>

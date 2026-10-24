@@ -35,6 +35,16 @@ class SitemapTest extends TestCase
             ->assertSee('<meta name="description"', false);
     }
 
+    public function test_link_da_home_compartilhado_leva_a_logo_oficial(): void
+    {
+        $this->get('/')->assertOk()
+            ->assertSee('<meta property="og:title" content="'.config('app.name').'">', false)
+            ->assertSee('<meta property="og:image" content="'.url('/images/marca/og-kazakora.png').'">', false)
+            ->assertSee('<meta name="twitter:card" content="summary_large_image">', false);
+
+        $this->assertFileExists(public_path('images/marca/og-kazakora.png'));
+    }
+
     public function test_pagina_de_produto_traz_titulo_descricao_e_dados_estruturados_no_html_inicial(): void
     {
         Product::factory()->create([

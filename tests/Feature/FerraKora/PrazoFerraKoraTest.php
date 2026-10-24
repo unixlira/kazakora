@@ -48,7 +48,8 @@ class PrazoFerraKoraTest extends TestCase
         config(['entrega_expressa.faixas' => [['inicio' => '01000000', 'fim' => '05999999', 'local' => 'São Paulo']]]);
 
         $this->getJson("/api/ferrakora/produtos/kz-{$pai->id}/prazo?cep=01310-100")
-            ->assertOk()->assertJson(['modalidade' => 'full', 'entrega_expressa' => ['local' => 'São Paulo']]);
+            ->assertOk()->assertJson(['modalidade' => 'full', 'entrega_expressa' => ['local' => 'São Paulo']])
+            ->assertJsonPath('opcoes.0.tipo', 'full');
     }
 
     public function test_cep_invalido_e_produto_fora_do_site(): void

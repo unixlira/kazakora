@@ -337,6 +337,15 @@ class CatalogController extends Controller
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
 
+        // Vendidos de verdade (pedido 2026-10-23, volta só na página do produto):
+        // unidades em pedidos pagos, enviados ou entregues de todos os canais,
+        // somando as variações e só venda efetiva (sem estorno nem nota avulsa).
+        // A página só mostra a partir de 50.
+        $salesCount = (int) OrderItem::query()
+            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
+            ->whereHas('order', fn ($query) => $query->vendaEfetiva()->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
+            ->sum('quantity');
+
         // Avaliações (pedido 2026-10-11): do produto E das variações dele (a
         // avaliação importada fica na variação vendida — Power Bank Rosa…).
         // Ordem (pedido 2026-10-20): as com foto/vídeo primeiro e, dentro de
@@ -413,7 +422,7 @@ class CatalogController extends Controller
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price'));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix'));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -477,7 +486,8 @@ class CatalogController extends Controller
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
-            'product' => $product->makeHidden('cost_price'),
+            // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
+            'product' => $product->makeHidden('cost_price')->append('preco_pix'),
             'variations' => $variations,
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),
@@ -531,6 +541,7 @@ class CatalogController extends Controller
             'relatedReviewedIds' => $user
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
+            'salesCount' => $salesCount,
         ]);
     }
 

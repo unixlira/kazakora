@@ -62,6 +62,30 @@ class DescontoPix
         return round($valor * max(0.0, $percentual) / 100, 2);
     }
 
+    /**
+     * Quanto o cliente paga no Pix por $quantidade unidades a $preco cada
+     * (sem preço: final_price da loja), com a mesma conta do checkout:
+     * % do carrinho com 4 casas e desconto arredondado no centavo. Null =
+     * produto sem desconto no Pix. Página de produto (pedido 2026-10-23).
+     */
+    public static function precoPix(?Product $produto, ?float $preco = null, int $quantidade = 1): ?float
+    {
+        if (! $produto) {
+            return null;
+        }
+
+        $preco ??= (float) $produto->final_price;
+        $percentual = round(self::percentualDo($produto, $preco), 4);
+
+        if ($percentual <= 0 || $preco <= 0) {
+            return null;
+        }
+
+        $subtotal = round($preco * max(1, $quantidade), 2);
+
+        return round($subtotal - self::desconto($subtotal, $percentual), 2);
+    }
+
     /** Maior "Desconto Checkout" entre os produtos ativos (chamada "até X% no Pix"). */
     public static function maiorPercentual(): float
     {

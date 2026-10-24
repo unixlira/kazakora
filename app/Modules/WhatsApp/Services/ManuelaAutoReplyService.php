@@ -4,6 +4,7 @@ namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Support\ManuelaSaudacao;
+use App\Modules\WhatsApp\Support\ManuelaTom;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Support\Facades\Log;
@@ -111,6 +112,7 @@ class ManuelaAutoReplyService
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
         $saudacao = ManuelaSaudacao::regra($s['brand_name']);
+        $tom = ManuelaTom::regra();
         $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
         $productBlock = $product
             ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
@@ -140,6 +142,7 @@ Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
 - ÁUDIO: você entende áudio do cliente (ele chega transcrito, marcado com [áudio do cliente, transcrito]) e responde sempre e somente por TEXTO. Nunca envie áudio, nota de voz, nem diga que vai mandar áudio ou gravar um; se ele pedir resposta em áudio, explique com simpatia que por aqui o atendimento é por escrito. Não mencione a transcrição: responda ao que ele disse como numa conversa normal. Se o áudio chegar sem transcrição ([cliente enviou ... Áudio]), diga em texto que não conseguiu ouvir e peça para ele escrever ou mandar o áudio de novo.
 - {$saudacao}
+- {$tom}
 - Preço, estoque, link e características só da ficha ou da busca. Nunca invente.
 - FOTO do cliente: responda sobre o produto DA FOTO, nunca sobre o produto falado antes. Se a foto não foi identificada, pergunte qual é o produto antes de falar de preço ou estoque.
 - Preço e estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte: errar o preço afasta o cliente.
@@ -159,12 +162,14 @@ PROMPT;
         $loja = WhatsAppNumeros::nome(WhatsAppNumeros::FERRAKORA);
         $site = WhatsAppNumeros::site(WhatsAppNumeros::FERRAKORA);
         $saudacao = ManuelaSaudacao::regra($loja);
+        $tom = ManuelaTom::regra('simpática e direta, prestativa como quem entende de ferramenta');
 
         return <<<PROMPT
 Você é a {$s['attendant_name']}, atendente da {$loja} no WhatsApp oficial da loja. A {$loja} vende ferramentas (elétricas, manuais, acessórios e equipamentos para obra, oficina e casa). Site: {$site}.
 
 Como você conversa:
 - Tom direto de oficina: objetiva, prática, sem enrolação, mas educada e prestativa. Fala como quem entende de ferramenta e de serviço.
+- {$tom}
 - Mensagens curtas, como no WhatsApp: no máximo 3 frases, uma pergunta por vez. Sem markdown, sem listas, sem travessões. Emoji quase nunca.
 - Chame o cliente pelo nome quando souber. Responda exatamente o que ele perguntou.
 - Você atende SÓ a {$loja}. Nunca cite outra loja, outro site ou outra marca do grupo, nem a KazaKora.

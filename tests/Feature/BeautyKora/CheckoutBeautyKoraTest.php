@@ -170,8 +170,10 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertJsonPath('entrega.escolhida', 'full')
             ->assertJsonPath('entrega.opcoes.0.id', 'full')
             ->assertJsonPath('entrega.opcoes.1.id', 'correios')
-            ->assertJsonPath('entrega.opcoes.2.id', 'me:31')
-            ->assertJsonCount(3, 'entrega.opcoes')
+            // TURBO também na área Full (pedido 2026-10-23).
+            ->assertJsonPath('entrega.opcoes.2.id', 'turbo')
+            ->assertJsonPath('entrega.opcoes.3.id', 'me:31')
+            ->assertJsonCount(4, 'entrega.opcoes')
             ->assertJsonPath('frete', 0);
     }
 
@@ -188,14 +190,15 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertSame(0, Order::count());
     }
 
-    public function test_cep_da_grande_sp_tem_entrega_full_sem_turbo(): void
+    /** Na área Full o TURBO também aparece (pedido 2026-10-23), sem o "dias antes". */
+    public function test_cep_da_grande_sp_tem_entrega_full_e_turbo(): void
     {
         $this->comTurbo();
 
         $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FULL])
             ->assertOk()
             ->assertJsonPath('entrega.full.local', 'São Paulo')
-            ->assertJsonPath('entrega.turbo', null)
+            ->assertJsonPath('entrega.turbo', ['preco' => 2500, 'prazo_dias' => 4, 'dias_a_menos' => null])
             ->assertJsonPath('frete', 0)
             ->assertJsonPath('total', 20000)
             ->assertJsonPath('total_pix', 19000);
@@ -245,14 +248,16 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertSame('213.75', $order->total);
     }
 
-    public function test_turbo_pedido_na_area_full_e_ignorado(): void
+    public function test_turbo_pedido_na_area_full_e_cobrado(): void
     {
         $this->comTurbo();
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()->andReturn(['id' => 78, 'status' => 'pending']));
 
-        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['turbo' => true]))->assertCreated();
+        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['turbo' => true, 'total_esperado' => 21375]))->assertCreated();
 
-        $this->assertSame('0.00', Order::findOrFail($resposta->json('pedido.id'))->shipping_cost);
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $this->assertSame(FreteEmbutido::TURBO, $order->shipping_carrier_name);
+        $this->assertSame('25.00', $order->shipping_cost);
     }
 
     public function test_produto_que_nao_esta_no_beauty_kora_e_recusado(): void

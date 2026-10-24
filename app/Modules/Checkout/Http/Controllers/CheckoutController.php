@@ -22,6 +22,7 @@ use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -153,8 +154,9 @@ class CheckoutController extends Controller
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
             'desconto_plataforma' => $entrega['desconto_plataforma'],
-            // Na área FULL a entrega já é a mais rápida: sem TURBO.
-            'turbo' => $expressa ? null : $entrega['turbo'],
+            // Na área FULL o TURBO também aparece (pedido 2026-10-23), sem o
+            // "dias antes", que compara com o PAC.
+            'turbo' => $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'],
         ]);
     }
 
@@ -194,12 +196,32 @@ class CheckoutController extends Controller
         app(FreteEmbutido::class)->usarCep($cep);
 
         $produto = Product::query()->with('fiscalData')->find((int) $request->query('produto'));
+        $prazo = $prazoPorCep->consultar($cep, $produto);
+
+        // Rua do CEP e opção TURBO na página do produto (pedido 2026-10-23):
+        // mesmo TURBO do checkout (SEDEX pela diferença), também no Full.
+        // Prazo do grátis e TURBO saem da mesma conta do checkout
+        // (entregaGratis), para a quantidade escolhida na página.
+        $viaCep = app(CompletarEnderecoPeloCep::class)->buscar($cep);
+        $quantidade = max(1, min(99, (int) $request->query('quantidade', 1)));
+        $entrega = $produto
+            ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => $quantidade]])), null, false)
+            : null;
 
         return response()->json([
             'final_price' => $produto?->final_price,
             'preco_de' => $produto?->preco_de,
             'preco_sem_oferta' => $produto?->preco_sem_oferta,
-            ...$prazoPorCep->consultar($cep, $produto),
+            ...$prazo,
+            'endereco' => $viaCep ? [
+                'rua' => trim((string) ($viaCep['logradouro'] ?? '')),
+                'bairro' => trim((string) ($viaCep['bairro'] ?? '')),
+                'cidade' => trim((string) ($viaCep['localidade'] ?? '')),
+                'uf' => strtoupper(trim((string) ($viaCep['uf'] ?? ''))),
+            ] : null,
+            'prazo_gratis' => $entrega['prazo'] ?? null,
+            'turbo' => $entrega['turbo'] ?? null,
+            'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
         ]);
     }
 
@@ -1770,7 +1792,7 @@ class CheckoutController extends Controller
     {
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
-        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+        if (! empty($draft['turbo']) && $cartItems && $cep) {
             $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
             if ($turbo) {
                 return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];

@@ -681,18 +681,9 @@ const teclaFoto = (evento) => {
 onMounted(() => window.addEventListener('keydown', teclaFoto));
 onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
 
-// Barra do rodapé no computador (pedido 2026-10-23): a caixa de compra deixou de
-// ficar presa no meio da tela; quando o COMPRAR AGORA da caixa sai da tela, a
-// barra com preço e botão aparece presa embaixo. No celular a barra fica sempre.
+// COMPRAR AGORA da caixa (ou o aviso de esgotado). A barra do rodapé é só do
+// celular (pedido 2026-10-24); no computador quem fica preso é este botão.
 const botaoCompraEl = ref(null);
-const botaoNaTela = ref(true);
-let observadorBotao = null;
-onMounted(() => {
-    if (!botaoCompraEl.value || !('IntersectionObserver' in window)) { botaoNaTela.value = false; return; }
-    observadorBotao = new IntersectionObserver(([entrada]) => { botaoNaTela.value = entrada.isIntersecting; });
-    observadorBotao.observe(botaoCompraEl.value);
-});
-onUnmounted(() => observadorBotao?.disconnect());
 
 // Caixa de compra como na Mavo (pedido 2026-10-23): no computador ela rola com a
 // página até o fim dela aparecer e trava com o pé no rodapé da tela, enquanto a
@@ -1203,8 +1194,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
             </div>
 
             <!-- Barra fixa no rodapé (pedido 2026-10-23): valor no Pix à esquerda, botão à direita.
-                 No celular fica sempre; no computador aparece quando o botão da caixa sai da tela. -->
-            <div ref="barraEl" class="barra" :class="{ visivel: !botaoNaTela }">
+                 Só no celular (pedido 2026-10-24); no computador fica escondida. -->
+            <div ref="barraEl" class="barra">
                 <div class="barra-preco">
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
@@ -1597,22 +1588,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
 .pd2 .relacionados h2 { margin-top: 10px; }
 
-/* Barra presa no rodapé: no computador entra quando o botão da caixa sai da tela,
-   com o miolo na mesma largura da página (1320px). */
-/* À direita sobra espaço para o botão flutuante do WhatsApp (right 24px, 56px). */
-.pd2 .barra { display: flex; align-items: center; gap: 24px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 12px max(104px, calc((100% - 1320px) / 2 + 24px)) 12px max(24px, calc((100% - 1320px) / 2 + 24px)); box-shadow: 0 0 10px 1px rgba(0, 0, 0, .2); transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
-.pd2 .barra.visivel { transform: none; visibility: visible; }
-@media (min-width: 768px) {
-    .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-    .pd2 .barra-preco strong { font-size: 22px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .pd2 .barra-preco span { font-size: 14px; color: #575757; }
-    .dark .pd2 .barra-preco strong { color: var(--green); }
-    .dark .pd2 .barra-preco span { color: var(--text); }
-    .pd2 .barra .btn { flex: 0 0 360px; min-height: 52px; border: 0; border-radius: 50px; background: #0aac48; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; }
-    .pd2 .barra .btn:hover { background: #089a3f; }
-    /* Espaço para a barra não cobrir o fim da página quando aparece. */
-    .pd2 { padding-bottom: 76px; }
-}
+/* Barra presa no rodapé: só no celular (pedido 2026-10-24). No computador o
+   COMPRAR AGORA preso na caixa já faz esse papel. O estilo dela está no
+   bloco de até 767px. */
+.pd2 .barra { display: none; }
 
 @media (max-width: 1024px) {
     .pd2 .card { padding: 30px; }

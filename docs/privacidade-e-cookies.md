@@ -149,12 +149,18 @@ o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
 - Base legal: procedimentos preliminares do contrato que a pessoa começou
   (art. 7º V). Mensagem de recuperação, quando o Lira decidir ligar, precisa
   ser avaliada à parte (legítimo interesse com opção de sair, art. 7º IX).
-- Prazo de guarda: ainda sem limpeza automática; decidir com o Lira (sugestão:
-  aberto há mais de 6 meses apagado em `privacidade:limpar`) e citar na
-  Política de Privacidade.
+- Prazo de guarda (decisão do Lira, 2026-10-24): **3 meses** desde a última
+  interação (`updated_at`). Depois disso o lead é apagado, aberto ou
+  convertido, pelo `php artisan leads:limpar` (todo dia 03:52, horário de São
+  Paulo; `--dry-run` só conta). Convertido também sai porque o que importa da
+  venda já está no pedido. Prazo em `config/loja.php`
+  (`LOJA_LEAD_CHECKOUT_DIAS_GUARDA`, padrão 90 dias). Falta citar na Política
+  de Privacidade pública.
 
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Medição do checkout (`checkout_eventos`) com mais de 6 meses: apagada.
+- Carrinho abandonado (`lead_checkout`) sem interação há mais de 3 meses:
+  apagado (`leads:limpar`, comando próprio).
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do
   clique (`click_id`) apagados (`visitor_id = anonimo`). A estatística
   (página, dia, origem) fica.

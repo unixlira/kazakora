@@ -22,6 +22,8 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
+// Carrinho abandonado (lead_checkout): 3 meses desde a última interação (decisão do Lira 2026-10-24).
+Schedule::command('leads:limpar')->dailyAt('03:52')->withoutOverlapping(30);
 // Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram
 // metade do banco e deixavam o backup horário lento. Jobs falhos ficam 15 dias.
 Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');

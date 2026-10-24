@@ -35,6 +35,7 @@ use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\CupomAutomatico;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -480,6 +481,10 @@ class CheckoutController extends Controller
     public function removeCouponJson(Request $request): JsonResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY, []);
+        // Tirou o cupom automático: ele não volta sozinho nesta compra.
+        if (CupomAutomatico::eh($draft['coupon_code'] ?? null)) {
+            $draft['cupom_automatico_removido'] = true;
+        }
         unset($draft['coupon_code']);
         $request->session()->put(self::SESSION_KEY, $draft);
 
@@ -531,6 +536,28 @@ class CheckoutController extends Controller
     private function subtotalParaCupom($cartItems): float
     {
         return round($cartItems->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
+    }
+
+    /**
+     * Põe o cupom automático (BEMVINDO, config loja.cupom_automatico) no
+     * rascunho quando ainda não há cupom, ele vale para o carrinho (não só
+     * Oferta do Dia/Relâmpago) e o cliente não tirou ele nesta compra
+     * (pedido do Lira 2026-10-24). A tela já abre com o cupom aplicado.
+     */
+    private function comCupomAutomatico(Request $request, array $draft, $cartItems, float $subtotal): array
+    {
+        if (! empty($draft['coupon_code']) || ! empty($draft['cupom_automatico_removido']) || $this->subtotalParaCupom($cartItems) <= 0) {
+            return $draft;
+        }
+
+        $user = $request->user();
+        $coupon = CupomAutomatico::para($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
+        if ($coupon) {
+            $draft['coupon_code'] = $coupon->code;
+            $request->session()->put(self::SESSION_KEY, $draft);
+        }
+
+        return $draft;
     }
 
     /**
@@ -679,10 +706,12 @@ class CheckoutController extends Controller
             : [$data['payment_method']];
 
         // Desconto no Pix (pedido 2026-10-09): só pagando 100% no Pix, sobre os
-        // produtos (já com cupom e desconto por quantidade), nunca no frete.
+        // produtos (com desconto por quantidade), nunca no frete.
         // Percentual = "Desconto Checkout (%)" de cada produto (2026-10-18).
+        // Desde 2026-10-24 sobre o valor ANTES do cupom: 3% do BEMVINDO + 2%
+        // do Pix = 5% (nunca passa do que sobrou depois do cupom).
         $pixDiscount = $methods === [Payment::METHOD_PIX]
-            ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma), DescontoPix::percentualDosItens($cartItems))
+            ? DescontoPix::descontoSobreCupom($subtotal - $descontoPlataforma, $discount, DescontoPix::percentualDosItens($cartItems))
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
@@ -1577,10 +1606,11 @@ class CheckoutController extends Controller
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
+        $draft = $this->comCupomAutomatico(request(), $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
         $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
-        $discount = round($discount + $plataforma, 2);
+        $discount = round($descontoCupom + $plataforma, 2);
 
         return [
             'items' => $cartItems,
@@ -1594,7 +1624,7 @@ class CheckoutController extends Controller
             // Pagando 100% no Pix (pedido 2026-10-09).
             'pixDiscountPercentage' => $pixPercentual = DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
-            'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount), $pixPercentual),
+            'pixDiscountAmount' => DescontoPix::descontoSobreCupom($subtotal - $plataforma, $descontoCupom, $pixPercentual),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
                 ? \App\Services\MercadoPago\CredenciaisCheckout::publicKey()
@@ -1865,6 +1895,7 @@ class CheckoutController extends Controller
         }
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
+        $draft = $this->comCupomAutomatico($request, $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
 
         return [

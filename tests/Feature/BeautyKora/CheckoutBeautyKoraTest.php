@@ -339,8 +339,9 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertJsonPath('cupom_erro', null)
             ->assertJsonPath('subtotal', 20000)
             ->assertJsonPath('total', 18000)
-            ->assertJsonPath('desconto_pix', 900)
-            ->assertJsonPath('total_pix', 17100);
+            // Pix sobre o valor antes do cupom desde 2026-10-24 (5% de 200).
+            ->assertJsonPath('desconto_pix', 1000)
+            ->assertJsonPath('total_pix', 17000);
     }
 
     public function test_cupom_que_nao_vale_volta_o_motivo_e_nao_desconta(): void
@@ -362,17 +363,17 @@ class CheckoutBeautyKoraTest extends TestCase
     {
         $this->cupom();
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()
-            ->withArgs(fn ($valor) => $valor === 171.0)
+            ->withArgs(fn ($valor) => $valor === 170.0)
             ->andReturn(['id' => 91, 'status' => 'pending']));
 
-        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['cupom' => 'BELEZA10', 'total_esperado' => 17100]))
+        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['cupom' => 'BELEZA10', 'total_esperado' => 17000]))
             ->assertCreated();
 
         $order = Order::findOrFail($resposta->json('pedido.id'));
         $this->assertSame('BELEZA10', $order->coupon_code);
-        $this->assertSame('29.00', $order->discount_amount);
-        $this->assertSame('9.00', $order->pix_discount_amount);
-        $this->assertSame('171.00', $order->total);
+        $this->assertSame('30.00', $order->discount_amount);
+        $this->assertSame('10.00', $order->pix_discount_amount);
+        $this->assertSame('170.00', $order->total);
     }
 
     public function test_cupom_que_expirou_antes_de_pagar_nao_cria_pedido(): void

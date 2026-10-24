@@ -75,6 +75,7 @@ const contaMobileAberta = ref(false);
 // Abrem ao passar o mouse (com uma folguinha pra não fechar no caminho) e
 // também no clique/teclado.
 const departamentos = computed(() => page.props.menuLoja?.departamentos ?? []);
+const utilidadesLink = computed(() => page.props.menuLoja?.utilidadesLink ?? null);
 const menuAberto = ref(null);
 let fecharTimer = null;
 const abrirMenu = (nome) => {
@@ -467,6 +468,11 @@ const REDES = [
                         <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
                         <span>Mandar mensagem</span>
                     </Link>
+                    <!-- Pedido 2026-10-24: abaixo de Departamentos (linha de baixo, 1ª coluna). -->
+                    <a v-if="utilidadesLink" :href="`/?categoria=${utilidadesLink}#produtos`" class="menu-mobile-icone">
+                        <i class="fas fa-house text-xl text-[#10b981]"></i>
+                        <span>Utilidades para Casa</span>
+                    </a>
                 </nav>
 
                 <!-- Fim do menu: só o símbolo do WhatsApp em verde, na coluna do Rastrear pedido (pedido 2026-10-23). -->

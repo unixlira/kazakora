@@ -120,7 +120,6 @@ const prefetchProduct = () => router.prefetch(`/produtos/${props.product.slug}`,
 
 const onPointerEnter = () => {
     isHovering.value = true;
-    prefetchProduct();
 
     if (supportsHover) {
         hasHovered.value = true;
@@ -128,6 +127,19 @@ const onPointerEnter = () => {
 };
 
 const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
+
+// Card inteiro clicável (pedido 2026-10-23): clicar em qualquer parte abre o
+// produto. Botões e links de dentro (carrinho, Avaliar, Detalhes) fazem a
+// própria ação. Ctrl/Cmd+clique abre em outra aba, como num link.
+const clicarCard = (evento) => {
+    if (evento.target.closest('a, button, input, textarea, select')) return;
+    if (window.getSelection?.().toString()) return;
+    if (evento.ctrlKey || evento.metaKey) {
+        window.open(`/produtos/${props.product.slug}`, '_blank', 'noopener');
+        return;
+    }
+    goToProduct();
+};
 
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
@@ -266,9 +278,10 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
 <template>
     <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
          com estilo próprio (página do produto, pedido 2026-10-22). -->
-    <article class="card-produto group flex font-store text-store-fg h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
-        <div class="relative aspect-square cursor-pointer bg-white"
-            @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
+    <article class="card-produto group flex cursor-pointer font-store text-store-fg h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]"
+        @mouseenter="prefetchProduct" @touchstart.passive="prefetchProduct" @click="clicarCard">
+        <div class="relative aspect-square bg-white"
+            @mouseenter="onPointerEnter" @mouseleave="isHovering = false">
             <template v-if="primaryImage(product)">
                 <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
                 <img ref="fotoEl" :src="imagensLiberadas ? primaryImage(product) : undefined" :alt="product.name" loading="lazy" decoding="async"
@@ -322,7 +335,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
-                <h3 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
+                <h3 ref="tituloEl" class="titulo-card overflow-hidden font-semibold group-hover:text-store-accent" :title="product.name">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
@@ -380,7 +393,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card.
                          Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
                          avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
-                    <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
+                    <Link :href="`/produtos/${product.slug}`"
                         class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>

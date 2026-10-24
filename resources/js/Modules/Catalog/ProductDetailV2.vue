@@ -766,11 +766,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                                    <!-- Favorito no canto da foto (a caixa de compra segue a Mavo, sem o coração). -->
+                                    <!-- Favorito no canto da foto desligado (pedido do Lira 2026-10-23); para voltar, descomente.
                                     <button type="button" class="fav fav-foto" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
                                         :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click.stop="toggleFavorite(product.id)">
                                         <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                     </button>
+                                    -->
                                     <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`">-{{ percentualTotal }}%</span>
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
@@ -1289,6 +1290,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo-full i { margin: 0 1px 0 0; font-size: 0.9em; width: auto; color: inherit; }
 /* Faixa laranja (cor da logo): ⚡FULL em preto só aqui (pedido 2026-10-10). */
 .pd2 .faixa .selo-full { color: #111; }
+/* Faixa laranja com a mesma fonte do "⚡FULL" (itálico 800), pedido do Lira 2026-10-23. */
+.pd2 .faixa > span:not(.sep) { font-style: italic; font-weight: 800; }
 .pd2 .faixa .sep { opacity: .4; }
 
 .pd2 .migalhas { font-size: 14.5px; color: var(--muted); padding: 18px 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1461,7 +1464,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* Rua e tabela de entrega iguais ao print do Lira (2026-10-23 21:24): rua em
    azul-claro com o pino; tabela com fundo cinza claro, bordas arredondadas,
    cabeçalhos pretos, tudo centralizado e o preço em azul-claro. */
-.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
+.pd2 .prazo-cep .rua { color: #000; font-weight: 700; font-size: 16px; margin: 10px 0 0; }
 .pd2 .prazo-cep .rua i { margin-right: 4px; }
 .pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d7dd; border-radius: 12px; overflow: hidden; background: #fff; font-size: 15px; table-layout: fixed; }
 .pd2 .tabela-entrega th { background: #f3f4f6; color: #111; font-weight: 500; padding: 11px 8px; text-align: center; }
@@ -1469,9 +1472,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d7dd; }
 .pd2 .tabela-entrega .nome { color: #444; font-weight: 500; }
 .pd2 .tabela-entrega .quando { color: #111; font-weight: 700; }
-.pd2 .tabela-entrega .valor { color: #13bce6; font-weight: 700; white-space: nowrap; }
-/* "Full" em azul (pedido 2026-10-23 21:31). */
-.pd2 .tabela-entrega .linha-full .nome { color: #2563eb; font-weight: 700; }
+.pd2 .tabela-entrega .valor { color: #000; font-weight: 700; white-space: nowrap; }
+/* Textos que eram azuis (Full, preço e rua) em preto e negrito (pedido do Lira 2026-10-23 23h). */
+.pd2 .tabela-entrega .linha-full .nome { color: #000; font-weight: 700; }
 @media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 10px 6px; font-size: 14px; } }
 .dark .pd2 .prazo-cep { background: #141a24; }
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
@@ -1481,7 +1484,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .tabela-entrega td { background: #27272a; border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega .nome { color: #d4d4d8; }
-.dark .pd2 .tabela-entrega .linha-full .nome { color: #60a5fa; }
+.dark .pd2 .tabela-entrega .linha-full .nome, .dark .pd2 .tabela-entrega .valor, .dark .pd2 .prazo-cep .rua { color: #f4f4f5; }
 .dark .pd2 .tabela-entrega .quando { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }

@@ -694,6 +694,34 @@ onMounted(() => {
     observadorBotao.observe(botaoCompraEl.value);
 });
 onUnmounted(() => observadorBotao?.disconnect());
+
+// Caixa de compra como na Mavo (pedido 2026-10-23): no computador ela rola com a
+// página até o fim dela aparecer e trava com o pé no rodapé da tela, enquanto a
+// coluna da esquerda segue rolando. Caixa menor que a tela fica presa embaixo do
+// cabeçalho. O topo do sticky é recalculado quando a caixa muda de altura (CEP,
+// variação) ou a janela muda de tamanho.
+const MARGEM_CAIXA = 16;
+const compraEl = ref(null);
+const topoCompra = ref(null);
+let observadorCaixa = null;
+const ajustarTopoCompra = () => {
+    const caixa = compraEl.value;
+    if (!caixa) return;
+    const cabecalho = document.querySelector('.loja-topo')?.offsetHeight ?? 0;
+    topoCompra.value = Math.min(cabecalho + MARGEM_CAIXA, window.innerHeight - caixa.offsetHeight - MARGEM_CAIXA);
+};
+onMounted(() => {
+    ajustarTopoCompra();
+    window.addEventListener('resize', ajustarTopoCompra, { passive: true });
+    if ('ResizeObserver' in window && compraEl.value) {
+        observadorCaixa = new ResizeObserver(ajustarTopoCompra);
+        observadorCaixa.observe(compraEl.value);
+    }
+});
+onUnmounted(() => {
+    window.removeEventListener('resize', ajustarTopoCompra);
+    observadorCaixa?.disconnect();
+});
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 const submitReview = () => {
@@ -775,7 +803,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </section>
 
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
-                        <aside id="comprar" class="card compra">
+                        <aside id="comprar" ref="compraEl" class="card compra" :style="topoCompra !== null ? { top: `${topoCompra}px` } : null">
                             <!-- Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h), com
                                  os números reais: vendidos, oferta no ar, nota, estoque e desconto do Pix. -->
                             <div class="condicao">
@@ -1267,8 +1295,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
 .pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
 .pd2 .col-principal > .card { grid-column: 1; }
-/* Sem sticky (pedido 2026-10-23): a caixa rola com a página e o botão vai para a barra do rodapé. */
-.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; box-shadow: var(--shadow-strong); }
+/* Caixa presa como na Mavo (pedido 2026-10-23): rola até o fim e trava no rodapé da tela;
+   o top vem do script (ajustarTopoCompra). Abaixo de 900px vira static. */
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; box-shadow: var(--shadow-strong); }
 .pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */

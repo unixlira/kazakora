@@ -1148,7 +1148,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'pix' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'pix'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
                                     <i class="fa-brands fa-pix text-xl text-[#32BCAD]"></i>
                                     <span class="flex-1">
-                                        <span class="block text-sm font-bold text-slate-900">Pix <span class="font-normal text-slate-500">· aprovação na hora</span></span>
+                                        <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Pix <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
                                         <span v-if="pixDiscountPercentage > 0" class="block text-sm font-extrabold text-[#00843f]">{{ formatPrice(totalNoPix) }} no Pix</span>
                                     </span>
                                     <span v-if="pixDiscountPercentage > 0" class="rounded-full bg-[#00843f] px-2.5 py-1 text-xs font-bold text-white">-{{ pixPercentualTexto }}%</span>
@@ -1159,7 +1159,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'card' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'card'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
                                     <i class="fa-solid fa-credit-card text-xl text-slate-700"></i>
                                     <span class="flex-1">
-                                        <span class="block text-sm font-bold text-slate-900">Cartão de Crédito</span>
+                                        <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Cartão de Crédito <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
                                         <span class="block text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
                                     </span>
                                 </button>

@@ -447,7 +447,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                     <div>
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
-                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
+                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Aprovação imediata · em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
                                             <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixPercentualTexto }}% de desconto</span>
                                         </p>
                                     </div>

@@ -596,6 +596,14 @@ const REDES = [
                             <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]">
                                 <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
                             </div>
+                            <!-- Norton Safe Web (2026-10-23): classificação "Seguro" para kazakora.com.
+                                 SVG vetorial de 5 KB, mesma caixa branca e altura dos outros selos. -->
+                            <a href="https://safeweb.norton.com/report?url=kazakora.com" target="_blank" rel="noopener"
+                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                title="Ver a classificação do Norton Safe Web">
+                                <img :src="imagensLiberadas ? '/images/selos/selo-norton.svg' : undefined" :alt="imagensLiberadas ? 'Norton Safe Web' : ''" width="104" height="40" loading="lazy" decoding="async"
+                                    class="h-[22px] w-auto sm:h-[30px] lg:h-[34px]">
+                            </a>
                         </div>
                     </div>
                 </div>

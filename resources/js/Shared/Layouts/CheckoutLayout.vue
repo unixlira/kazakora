@@ -55,6 +55,9 @@ const ano = new Date().getFullYear();
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <SeloReclameAqui :altura="28" sem-link />
                     </div>
+                    <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
+                        <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-6 w-auto">
+                    </div>
                 </div>
 
                 <div class="mt-6 space-y-1 text-xs text-slate-600">

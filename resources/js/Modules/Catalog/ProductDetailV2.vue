@@ -807,17 +807,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
                                     <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro em até 7 dias após o recebimento, ou 30 dias se o produto vier com defeito.</span>
                                 </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
-                                </li>
                             </ul>
 
-                            <!-- Calcular o prazo por último na coluna, como na Mavo (pedido 2026-10-23). -->
+                            <!-- Calcular o prazo logo depois de Devoluções Gratuitas, na mesma posição da Mavo
+                                 (Pagamento › Frete Grátis › Devoluções › Calcular; pedido 2026-10-23). -->
                             <form class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
@@ -841,6 +834,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </table>
                                 </div>
                             </form>
+
+                            <ul class="fretefundo">
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
+                                </li>
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
+                                </li>
+                            </ul>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1645,6 +1649,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo .escudo i { color: #0aac48; font-size: 16px; }
 .pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
 .pd2 .compra .prazo-cep { margin: 0; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
+.pd2 .compra .prazo-cep + .fretefundo { margin-top: 10px; }
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }

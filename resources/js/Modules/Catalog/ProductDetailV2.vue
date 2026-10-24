@@ -322,18 +322,14 @@ const seloPix = computed(() => {
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
-// Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
-// no lugar de números fixos): vendidos com o número exato desde a 1ª venda
-// ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
+// Vendidos: texto fixo "mais de 1.350 vendidos" em todo produto, número do
+// fornecedor (ordem do Lira em 2026-10-23 23h, no homolog; antes era o total
+// real de props.salesCount, que segue vindo do servidor). "EXCLUSIVO" e
 // "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão do Lira em
 // 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar); "Só restam" com o estoque da
 // variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
 const ESTOQUE_BAIXO = 50;
-const vendidosLegenda = computed(() => {
-    const total = Number(props.salesCount) || 0;
-    if (total < 1) return null;
-    return total === 1 ? '1 vendido' : `+${total} vendidos`;
-});
+const vendidosLegenda = computed(() => 'mais de 1.350 vendidos');
 const estoqueBaixo = computed(() => {
     if (faltaVariacao.value) return null;
     const estoque = Number(selecionada.value.stock) || 0;

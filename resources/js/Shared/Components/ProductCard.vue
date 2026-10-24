@@ -338,15 +338,6 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
                 </div>
             </div>
-            <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
-                 computador), laterais inclinadas "/ texto /", parte cinza do caminhão
-                 arredondada à direita e mais larga. -->
-            <div class="envio-express mx-auto flex h-6 text-white">
-                <span class="relative z-[1] flex w-[46px] shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-2 pr-1">
-                    <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px] md:text-xs"></i>
-                </span>
-                <span class="-ml-3 flex items-center justify-center whitespace-nowrap bg-[#7B1E3A] pl-4 pr-4 text-[10px] font-extrabold uppercase italic leading-none tracking-tight md:text-[11px]">Envio Express</span>
-            </div>
             <div class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
@@ -394,10 +385,6 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                         Detalhes
                     </Link>
                 </div>
-                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
-                    Ver detalhes
-                </Link>
             </div>
         </div>
     </article>

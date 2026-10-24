@@ -621,11 +621,6 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
     }
 }
 
-/* Selo "Envio Express" do card com as duas laterais inclinadas (/ texto /). */
-.envio-express {
-    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
-}
-
 /* Nome no card: 2 linhas no celular, 3 no computador (altura fixa). */
 .titulo-card {
     font-size: 12px;

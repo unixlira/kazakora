@@ -26,6 +26,7 @@ const props = defineProps({
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
+    cupomAutomatico: { type: Object, default: null },
     discountAmount: { type: Number, default: 0 },
     pixDiscountPercentage: { type: Number, default: 0 },
     addresses: { type: Array, default: () => [] },
@@ -219,7 +220,7 @@ const alterarQuantidade = async (item, delta) => {
         });
         if (!resposta.ok) throw new Error();
         await new Promise((resolve) => router.reload({
-            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
+            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'cupomAutomatico', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
             preserveScroll: true,
             preserveState: true,
             onFinish: resolve,
@@ -1228,7 +1229,20 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
 
                     <!-- Cupom sempre à mostra (modelo Yampi). -->
                     <div class="mt-4">
-                        <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+                        <div v-if="cupomAplicado && cupomAutomatico && cupomAutomatico.code === cupomAplicado" data-cupom-automatico
+                            class="flex items-center justify-between gap-3 rounded-2xl border-2 border-[#00843f] bg-emerald-50 px-4 py-3 text-sm shadow-[0_4px_14px_rgba(0,132,63,0.15)]">
+                            <span class="flex items-start gap-3 text-emerald-900">
+                                <i class="fa-solid fa-circle-check mt-0.5 text-lg text-[#00843f]"></i>
+                                <span>
+                                    <strong class="block text-base">Cupom {{ cupomAplicado }} já aplicado!</strong>
+                                    <span class="block text-xs text-emerald-800">Aplicamos para você: {{ cupomAutomatico.descricao }} na sua compra.</span>
+                                </span>
+                            </span>
+                            <button type="button" :disabled="cupomCarregando || !!order" class="shrink-0 text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
+                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
+                            </button>
+                        </div>
+                        <div v-else-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
                             <span class="text-emerald-800">
                                 <i class="fa-solid fa-ticket mr-1"></i> Cupom <strong>{{ cupomAplicado }}</strong> aplicado
                                 <span v-if="cupomDescricao" class="block text-xs text-emerald-700">{{ cupomDescricao }}</span>

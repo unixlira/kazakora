@@ -56,7 +56,12 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
 // Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
-const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
+// Fileira do "PAGAMENTO SEGURO E RÁPIDO" na ordem da Mavo (tarefa 2656); Diners
+// entra porque o checkout aceita (CheckoutV2, detecção da bandeira).
+const PAYMENT_BRANDS = ['visa', 'mastercard', 'elo', 'amex', 'diners', 'hipercard', 'pix', 'boleto'];
+// Bandeiras do bloco de formas de pagamento (mesmas imagens do rodapé, pedido 2026-10-14).
+const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
+const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'American Express', diners: 'Diners Club', hipercard: 'Hipercard', pix: 'Pix', boleto: 'Boleto' };
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
@@ -114,6 +119,8 @@ const exigirVariacao = () => {
     variacoesEl.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
 };
+// "Cor: Verde" quando todas as opções têm cor cadastrada; senão "Variação: ...".
+const rotuloVariacao = computed(() => (opcoesVariacao.value.length && opcoesVariacao.value.every((variant) => variant.color) ? 'Cor' : 'Variação'));
 const opcoesVariacao = computed(() => (props.variations.length
     ? [props.product, ...props.variations].sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
     : []));
@@ -609,6 +616,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
+                                    <!-- Favorito no canto da foto (a caixa de compra segue a Mavo, sem o coração). -->
+                                    <button type="button" class="fav fav-foto" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
+                                        :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click.stop="toggleFavorite(product.id)">
+                                        <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
+                                    </button>
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
@@ -643,83 +655,56 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
                         <aside id="comprar" class="card compra">
-                            <!-- Em cima do título, como na referência da Mavo (pedido 2026-10-23, tarefa 2648):
-                                 "Novo | +N vendidos" amarelo e preto (vendas reais), EXCLUSIVO e
-                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar, e as estrelas. -->
+                            <!-- Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h), com
+                                 os números reais: vendidos, oferta no ar, nota, estoque e desconto do Pix. -->
                             <div class="condicao">
-                                <span class="tag-novo">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
+                                <span class="cond-texto">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
                                 <template v-if="tempoLimitado">
                                     <span class="tag-exclusivo">EXCLUSIVO</span>
                                     <span class="tag-tempo">POR TEMPO LIMITADO!</span>
                                 </template>
                             </div>
-                            <div v-if="reviewsCount > 0" class="nota">
-                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
-                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
-                            </div>
 
-                            <div class="titulo">
-                                <h1>{{ selecionada.name }}</h1>
-                                <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
-                                <button type="button" class="fav" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
-                                    :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click="toggleFavorite(product.id)">
-                                    <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
-                                </button>
-                            </div>
+                            <h1>{{ selecionada.name }}</h1>
 
-                            <ul v-if="highlights.length" class="checks">
-                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                            </ul>
+                            <a v-if="reviewsCount > 0" href="#avaliacoes" class="nota">
+                                <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <span class="media">{{ ratingAvg.toFixed(1) }}</span>
+                                <span class="qtd-aval-topo">({{ reviewsCount }} {{ reviewsCount === 1 ? 'Avaliação' : 'Avaliações' }})</span>
+                            </a>
 
                             <hr class="divisor">
 
-                            <!-- Bloco de preço (pedido 2026-10-23, referência Mavo): riscado + selo
-                                 "−N%", preço de venda (final_price, igual ao card; decisão de 18/10) em
-                                 destaque, valor no Pix com a conta do checkout e a parcela. -->
                             <div class="preco">
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
-                                <div v-if="precoDe" class="linha-de">
-                                    <span class="de">{{ formatPrice(precoDe) }}</span>
-                                    <span v-if="percentualTotal > 0" class="selo-off">−{{ percentualTotal }}%</span>
+                                <div class="linha-por">
+                                    <span class="por">{{ formatPrice(precoPor) }}</span>
+                                    <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 </div>
-                                <div class="por">{{ formatPrice(precoPor) }}</div>
-                                <template v-if="precoPix !== null">
-                                    <div class="linha-pix">
-                                        <i class="fa-brands fa-pix" aria-hidden="true"></i>
-                                        <span class="valor-pix">{{ formatPrice(precoPix) }} no Pix</span>
-                                        <span v-if="seloPix" class="selo-pix">{{ seloPix }}</span>
-                                    </div>
-                                    <p class="nota-pix">pagando o pedido todo no Pix</p>
-                                </template>
-                                <div class="parc">ou {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong> sem juros</div>
+                                <div class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong></div>
+                                <div v-if="precoPix !== null && seloPix" class="linha-pix">
+                                    <i class="fa-brands fa-pix" aria-hidden="true"></i> pague no pix <b>{{ seloPix }}</b>
+                                </div>
                             </div>
 
                             <div v-if="modelos.length > 1" class="variacoes modelos">
-                                <span class="subtitulo">Modelo</span>
+                                <span class="subtitulo">Modelo: <span class="valor-escolhido">{{ modelos.find((modelo) => modelo.atual)?.rotulo }}</span></span>
                                 <div class="opcoes">
                                     <template v-for="modelo in modelos" :key="modelo.id">
-                                        <span v-if="modelo.atual" class="opcao atual" aria-current="page">
-                                            <img v-if="modelo.thumb_url" :src="modelo.mini_url || modelo.thumb_url" alt="">
-                                            {{ modelo.rotulo }}
-                                        </span>
-                                        <Link v-else :href="modelo.url" class="opcao" @click="escolherModelo(modelo, $event)">
-                                            <img v-if="modelo.thumb_url" :src="modelo.mini_url || modelo.thumb_url" alt="">
-                                            {{ modelo.rotulo }}
-                                        </Link>
+                                        <span v-if="modelo.atual" class="opcao atual" aria-current="page">{{ modelo.rotulo }}</span>
+                                        <Link v-else :href="modelo.url" class="opcao" @click="escolherModelo(modelo, $event)">{{ modelo.rotulo }}</Link>
                                     </template>
                                 </div>
                             </div>
 
                             <div v-if="variations.length" ref="variacoesEl" class="variacoes" :class="{ 'com-alerta': alertaVariacao }">
-                                <span class="subtitulo">Escolha a variação
+                                <span class="subtitulo">{{ rotuloVariacao }}: <span class="valor-escolhido">{{ escolhida ? (escolhida.variation || escolhida.name) : '' }}</span>
                                     <span v-if="alertaVariacao" :key="alertaVariacao" class="alerta-variacao" role="alert"><i class="fas fa-circle-exclamation"></i> Escolha a sua variação</span>
                                 </span>
                                 <div class="opcoes">
                                     <button v-for="variant in opcoesVariacao" :key="variant.id" type="button"
                                         class="opcao" :class="{ atual: variant.id === escolhida?.id, esgotada: variant.stock < 1 }"
                                         :aria-pressed="variant.id === escolhida?.id" @click="escolherVariacao(variant)">
-                                        <img v-if="variantThumbnail(variant)" :src="variantThumbnail(variant)" alt="">
                                         {{ variant.variation || variant.name }}
                                     </button>
                                 </div>
@@ -740,29 +725,30 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <!-- Sem variação escolhida os botões ficam apagados, mas o clique
-                                     mostra o alerta (por isso não usam disabled). -->
-                                <div class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                    <div class="qtd">
-                                        <button type="button" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="setQuantity(quantity - 1)">-</button>
-                                        <input :value="quantity" type="number" min="1" :max="selecionada.stock" aria-label="Quantidade" :readonly="faltaVariacao" @focus="exigirVariacao" @change="setQuantity($event.target.value)">
-                                        <button type="button" aria-label="Aumentar quantidade" :aria-disabled="faltaVariacao" :disabled="!faltaVariacao && quantity >= selecionada.stock" @click="setQuantity(quantity + 1)">+</button>
-                                    </div>
-                                    <button type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
-                                </div>
                                 <div v-if="estoqueBaixo" class="estoque-baixo">
-                                    <p><i class="fas fa-fire" aria-hidden="true"></i> <b>{{ estoqueBaixo === 1 ? 'Só 1 unidade!' : `Só ${estoqueBaixo} unidades!` }}</b> {{ complementoEstoque }}</p>
+                                    <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
+                                </div>
+                                <!-- Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
+                                <div class="acao" :class="{ 'sem-variacao': faltaVariacao }">
+                                    <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
                                 </div>
                                 <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
 
-                            <div class="bandeiras">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
+                            <div class="pagamento-seguro">
+                                <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
+                                <div class="bandeiras">
+                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
+                                </div>
                             </div>
+
+                            <ul v-if="highlights.length" class="checks">
+                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
+                            </ul>
 
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
                                 <label for="cep-prazo"><i class="fas fa-location-dot"></i> Consultar prazo de entrega</label>
@@ -981,7 +967,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Pagamento Seguro</h2>
                             <div class="bandeiras esquerda">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
+                                <img v-for="brand in BANDEIRAS_FORMAS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
                             </div>
                             <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
@@ -1562,5 +1548,72 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 @media (prefers-reduced-motion: reduce) {
     .pd2 * { transition: none !important; }
     .pd2 .tag-tempo, .pd2 .estoque-barra span, .pd2 .estoque-barra span::after { animation: none; }
+}
+
+/* Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h): medidas,
+   cores e espaçamentos tirados do print. Vem por último para valer sobre as regras
+   antigas da caixa (e as do celular). */
+.pd2 .compra { padding: 20px 20px 22px; color: #222; }
+.pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; line-height: 1.4; }
+.pd2 .compra .cond-texto { color: #a3a3a3; font-weight: 400; margin-right: 2px; }
+.pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 2px 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 1.35; letter-spacing: -.1px; }
+.pd2 .compra .tag-exclusivo { background: #000; color: #fff600; }
+.pd2 .compra h1 { font-size: 20px; font-weight: 600; line-height: 1.48; color: #222; text-transform: none; letter-spacing: -.1px; margin: 0; }
+.pd2 .compra .nota { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin: 12px 0 0; font-size: 15px; font-weight: 400; color: #555; line-height: 1.4; text-decoration: none; }
+.pd2 .compra .nota .estrelas { color: #fcbd10; font-size: 16px; letter-spacing: 2px; }
+.pd2 .compra .nota .media { font-size: 15px; font-weight: 400; color: #555; }
+.pd2 .compra .divisor { border: 0; border-top: 1px solid #ececec; opacity: 1; margin: 14px 0 18px; }
+.pd2 .compra .preco { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 28px; }
+.pd2 .compra .a-partir { font-size: 13px; color: #777; }
+.pd2 .compra .linha-por { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
+.pd2 .compra .por { color: #111; font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -.3px; }
+.pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; text-decoration: line-through; }
+.pd2 .compra .parc { display: flex; align-items: center; gap: 4px; color: #222; font-size: 15px; line-height: 1.35; }
+.pd2 .compra .parc i { color: #222; font-size: 14px; margin: 0; }
+.pd2 .compra .parc strong { color: #12a14b; font-weight: 700; }
+.pd2 .compra .linha-pix { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: #222; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.pd2 .compra .linha-pix i { color: #12a14b; font-size: 17px; width: 18px; }
+.pd2 .compra .linha-pix b { color: #12a14b; font-weight: 700; }
+.pd2 .compra .variacoes, .pd2 .compra .leve-mais { margin: 0 0 22px; }
+.pd2 .compra .subtitulo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; font-weight: 400; color: #555; margin: 0 0 12px; }
+.pd2 .compra .valor-escolhido { color: #555; }
+.pd2 .compra .opcoes { gap: 10px; }
+.pd2 .compra .opcao { min-height: 44px; padding: 0 18px; border: 1px solid #d4d4d4; border-radius: 999px; background: #fff; color: #333; font-size: 15px; font-weight: 400; }
+.pd2 .compra .opcao:hover { border-color: #888; }
+.pd2 .compra .opcao.atual { border: 2px solid #2b2b2b; background: #f2f2f2; font-weight: 400; padding: 0 17px; }
+.pd2 .compra .variacoes.com-alerta .opcao { border-color: #dc2626; }
+.pd2 .compra .estoque-baixo { margin: 34px 0 10px; }
+.pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 14px; color: #111; line-height: 1.4; }
+.pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
+.pd2 .compra .estoque-baixo p { font-weight: 700; }
+.pd2 .compra .estoque-baixo .num { color: #e11d2a; }
+.pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
+.pd2 .compra .estoque-barra span { background: #000; }
+.pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
+.pd2 .compra .acao { margin: 0; }
+.pd2 .compra .comprar-agora { width: 100%; min-height: 62px; border: 0; border-radius: 999px; background: #0aac47; color: #fff; font: 600 17px/1.2 Poppins, system-ui, sans-serif; letter-spacing: .2px; text-transform: uppercase; }
+.pd2 .compra .comprar-agora:hover { background: #089a3f; }
+.pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
+.pd2 .compra .total { margin: 10px 0 0; text-align: center; }
+.pd2 .compra .pagamento-seguro { margin: 16px 0 18px; border: 1px solid #efefef; border-radius: 8px; padding: 4px 4px 10px; background: #fff; }
+.pd2 .compra .ps-topo { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: 6px; background: #f4f4f5; color: #555; font-size: 12px; font-weight: 600; letter-spacing: .1px; }
+.pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
+.pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
+.pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
+.pd2 .compra .checks { margin: 0 0 16px; font-size: 15px; }
+.pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
+.dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
+.dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }
+.dark .pd2 .compra .nota, .dark .pd2 .compra .nota .media, .dark .pd2 .compra .subtitulo, .dark .pd2 .compra .valor-escolhido, .dark .pd2 .compra .ps-topo { color: var(--text); }
+.dark .pd2 .compra .divisor { border-top-color: var(--line); }
+.dark .pd2 .compra .opcao { background: var(--card); color: var(--ink); border-color: var(--line); }
+.dark .pd2 .compra .opcao.atual { background: var(--sunk); border-color: var(--ink); }
+.dark .pd2 .compra .estoque-barra { background: rgba(255, 255, 255, .15); }
+.dark .pd2 .compra .estoque-barra span { background: #e5e7eb; }
+.dark .pd2 .compra .pagamento-seguro { background: var(--card); border-color: var(--line); }
+.dark .pd2 .compra .ps-topo { background: var(--sunk); }
+@media (max-width: 767px) {
+    .pd2 .compra { padding: 18px 18px 20px; }
+    .pd2 .compra h1 { font-size: 19px; }
 }
 </style>

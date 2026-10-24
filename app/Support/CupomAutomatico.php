@@ -7,9 +7,11 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Coupon;
 
 /**
- * Cupom que o checkout aplica sozinho (config loja.cupom_automatico, pedido
- * do Lira 2026-10-24): BEMVINDO de 3% em qualquer forma de pagamento. Os 2%
- * a mais do Pix são o "Desconto Checkout" do produto (DescontoPix).
+ * Cupom de boas-vindas (config loja.cupom_automatico, pedido do Lira
+ * 2026-10-24): BEMVINDO de 3% em qualquer forma de pagamento. Desde o 2º
+ * pedido do dia não entra sozinho: o pop-up do checkout oferece e o cliente
+ * aplica ou fecha. Os 2% a mais do Pix são o "Desconto Checkout" do produto
+ * (DescontoPix).
  */
 class CupomAutomatico
 {

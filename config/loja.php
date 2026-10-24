@@ -13,11 +13,11 @@ return [
     */
 
     /*
-    | Cupom que entra sozinho no campo de cupom do checkout (pedido do Lira
-    | 2026-10-24): código de um cupom JÁ cadastrado em Admin > Cupons (a
-    | migração 2026_10_24_150000 cria o BEMVINDO de 3%). Só entra quando não
-    | há outro cupom, ele vale para o carrinho e o cliente não tirou ele
-    | nesta compra. Outro cupom digitado troca o automático (não somam).
+    | Cupom de boas-vindas (pedido do Lira 2026-10-24): código de um cupom JÁ
+    | cadastrado em Admin > Cupons (a migração 2026_10_24_150000 cria o
+    | BEMVINDO de 3%). Não entra sozinho: o pop-up do checkout (KazaKora,
+    | FerraKora e Beauty Kora) oferece no 1º acesso e o cliente escolhe
+    | "Aplicar cupom" ou fecha. Outro cupom digitado troca ele (não somam).
     | Vazio desliga.
     */
     'cupom_automatico' => env('LOJA_CUPOM_AUTOMATICO', 'BEMVINDO'),
@@ -77,10 +77,10 @@ return [
     | úteis), a loja cancela o boleto e o pedido e devolve o estoque.
     */
     /*
-    | Pop-up "Você ganhou um cupom para sua 1ª compra!" no checkout (pedido
-    | 2026-10-23, modelo Yampi). Código de um cupom JÁ cadastrado em Admin >
-    | Cupons. Vazio, inexistente, inativo ou que não vale para o carrinho: o
-    | pop-up não aparece. Aparece uma vez só por navegador (cookie).
+    | Pop-up de cupom no checkout (pedido 2026-10-23, modelo Yampi). Código de
+    | um cupom JÁ cadastrado em Admin > Cupons; vazio usa o cupom_automatico
+    | (BEMVINDO, 2026-10-24). Inexistente, inativo ou que não vale para o
+    | carrinho: o pop-up não aparece. Aparece uma vez só por navegador (cookie).
     */
     'cupom_primeira_compra' => env('LOJA_CUPOM_PRIMEIRA_COMPRA'),
 

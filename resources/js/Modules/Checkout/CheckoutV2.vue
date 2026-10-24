@@ -814,11 +814,14 @@ watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });
 onMounted(() => { if (!props.order) medicao.iniciar(secaoDados.value); });
 onUnmounted(() => medicao.parar());
 
-// ---------- Pop-up do cupom de 1ª compra (modelo Yampi, 2026-10-23) ----------
-// Só com cupom cadastrado e válido (config loja.cupom_primeira_compra; o
-// servidor manda null se não houver). Uma vez por navegador (cookie).
+// ---------- Pop-up do cupom de boas-vindas (modelo Yampi, 2026-10-23) ----------
+// Desde 2026-10-24 oferece o BEMVINDO, que não entra mais sozinho: "Aplicar
+// cupom" põe o código no campo e aplica; fechar não aplica nada. Só com cupom
+// cadastrado e válido (o servidor manda null se não houver). Uma vez por
+// navegador (cookie).
 const COOKIE_CUPOM = 'kazakora_cupom_1a';
 const popupCupom = ref(false);
+const botaoAplicarPopup = ref(null);
 const fecharPopupCupom = () => { popupCupom.value = false; };
 const aplicarCupomDoPopup = async () => {
     popupCupom.value = false;
@@ -832,6 +835,7 @@ onMounted(() => {
     document.cookie = `${COOKIE_CUPOM}=1; max-age=${60 * 60 * 24 * 365}; path=/; SameSite=Lax`;
     popupCupom.value = true;
     window.addEventListener('keydown', fecharComEsc);
+    nextTick(() => botaoAplicarPopup.value?.focus());
 });
 onUnmounted(() => window.removeEventListener('keydown', fecharComEsc));
 
@@ -1242,7 +1246,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                     <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
                     <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
-                         (o BEMVINDO já entra sozinho) fica dentro do campo: borda verde e X para tirar. -->
+                         (o BEMVINDO vem do pop-up de boas-vindas) fica dentro do campo: borda verde e X para tirar. -->
                     <div class="mt-4">
                         <form class="flex gap-2" @submit.prevent="aplicarCupom">
                             <label class="relative min-w-0 flex-1">
@@ -1376,17 +1380,19 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
             </aside>
         </div>
 
-        <!-- Pop-up do cupom de 1ª compra: só com cupom cadastrado (loja.cupom_primeira_compra), uma vez por navegador. -->
+        <!-- Pop-up do cupom de boas-vindas (BEMVINDO): só com cupom cadastrado e válido, uma vez por navegador. -->
         <div v-if="popupCupom && cupomPrimeiraCompra" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="fecharPopupCupom">
             <div role="dialog" aria-modal="true" aria-labelledby="popup-cupom-titulo" class="relative w-full max-w-[440px] rounded-2xl bg-white px-6 pb-8 pt-10 text-center shadow-2xl">
                 <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100" aria-label="Fechar" @click="fecharPopupCupom">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
                 <i class="fa-solid fa-ticket text-5xl text-slate-800" aria-hidden="true"></i>
-                <h2 id="popup-cupom-titulo" class="mt-5 text-2xl font-extrabold leading-tight text-slate-700">Você ganhou um cupom para sua 1ª compra!</h2>
-                <p class="mt-2 text-sm text-slate-600">Cupom <strong>{{ cupomPrimeiraCompra.code }}</strong>: {{ cupomPrimeiraCompra.descricao }}</p>
-                <button type="button" class="mx-auto mt-6 block w-full max-w-[240px] rounded-full bg-[#00843f] px-6 py-3.5 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.3)] hover:brightness-105" @click="aplicarCupomDoPopup">Aplicar desconto</button>
-                <button type="button" class="mx-auto mt-4 block rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-[#00843f] hover:bg-emerald-100" @click="fecharPopupCupom">Não gosto de descontos</button>
+                <h2 id="popup-cupom-titulo" class="mt-5 text-2xl font-extrabold leading-tight text-slate-700">Boas-vindas! Ganhe {{ cupomPrimeiraCompra.descricao }}</h2>
+                <p class="mt-3 text-sm text-slate-600">Use o cupom</p>
+                <p class="mx-auto mt-1 inline-block rounded-xl border-2 border-dashed border-[#00843f] bg-emerald-50 px-5 py-2 text-xl font-extrabold tracking-widest text-[#00843f]" data-cupom-popup>{{ cupomPrimeiraCompra.code }}</p>
+                <p v-if="pixDiscountPercentage > 0" class="mt-3 text-sm text-slate-600">Pagando no Pix, você ainda ganha mais {{ pixPercentualTexto }}% de desconto.</p>
+                <button ref="botaoAplicarPopup" type="button" class="mx-auto mt-6 block w-full max-w-[240px] rounded-full bg-[#00843f] px-6 py-3.5 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.3)] hover:brightness-105" @click="aplicarCupomDoPopup">Aplicar cupom</button>
+                <button type="button" class="mx-auto mt-4 block rounded-full px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100" @click="fecharPopupCupom">Agora não</button>
             </div>
         </div>
 

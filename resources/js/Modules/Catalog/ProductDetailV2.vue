@@ -921,11 +921,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
+                                <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
-                                    <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}</p>
+                                    <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <p v-else class="normal">
                                         <span v-if="prazo.modalidade === 'flex'" class="full"><i class="fas fa-bolt"></i> Flex</span>
-                                        {{ prazoNormal }}
+                                        {{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span>
                                     </p>
                                 </div>
                             </form>
@@ -1438,10 +1439,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep button { height: 46px; padding: 0 26px; border: 0; border-radius: 16px; background: #13bce6; color: #fff; font: 600 19px Poppins, sans-serif; cursor: pointer; }
 .pd2 .prazo-cep button:disabled { opacity: .6; }
 .pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }
-.pd2 .prazo-cep .expressa { display: inline-flex; align-items: center; gap: 6px; background: #e7f8ec; color: #00801a; font-weight: 700; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
-.dark .pd2 .prazo-cep .expressa { background: rgba(0, 171, 33, .15); color: #4ade80; }
+/* Resposta como um botão w-full: largura toda, texto centralizado (pedido 2026-10-24). */
+.pd2 .prazo-cep .expressa, .pd2 .prazo-cep .normal { display: block; width: 100%; box-sizing: border-box; text-align: center; background: #e7f8ec; border-radius: 8px; padding: 10px 12px; }
+.pd2 .prazo-cep .expressa { color: #00801a; font-weight: 700; font-size: 15px; }
+.dark .pd2 .prazo-cep .expressa, .dark .pd2 .prazo-cep .normal { background: rgba(0, 171, 33, .15); }
+.dark .pd2 .prazo-cep .expressa { color: #4ade80; }
 /* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
 .pd2 .prazo-cep .expressa .full { font-weight: 800; }
+.pd2 .prazo-cep .gratis { font-weight: 800; white-space: nowrap; }
 .pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
 .dark .pd2 .prazo-cep { background: #141a24; }
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }

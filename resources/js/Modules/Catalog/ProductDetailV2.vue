@@ -517,22 +517,34 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
 // dela, o prazo normal de envio.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade } depois da consulta
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
 // Fora do Full e do Flex (pedido 2026-10-10): frase em verde.
 // A tabela Full/Flex/Turbo de 2026-10-23 foi desfeita a pedido do Lira (2026-10-24).
 const prazoNormal = computed(() => `Entrega pelos Correios ou transportadora em até ${Math.max(7, Number(prazo.value?.dias) || 0)} dias úteis.`);
-// Flex (pedido 2026-10-24): "Receba em até X dias úteis. (Mas geralmente chega em Y)".
-// Y = prazo dos Correios do serviço que o preço já paga e X = Y + folga de postagem,
-// a mesma conta do checkout (PrazoPorCep::opcoes). Não usa `modalidade`: ela olha o
-// serviço mais rápido (SEDEX) e marcaria Flex onde o frete grátis leva 5 dias.
-const prazoFlex = computed(() => prazo.value?.flex ?? null);
+// Flex (pedido 2026-10-24): só quando o servidor manda a opção Flex (PrazoPorCep::opcoes,
+// frete grátis em até 3 dias). Não usa `modalidade`: ela olha o serviço mais rápido
+// (SEDEX) e marcaria Flex onde o frete grátis leva 5 dias. Texto fixo "Receba de 1 a 7 dias" (pedido do Lira 2026-10-24,
+// no lugar do "em até X dias úteis (Mas geralmente chega em Y)").
+const ehFlex = computed(() => Boolean(prazo.value?.flex));
+// Turbo como opção de rádio abaixo do grátis (pedido do Lira 2026-10-24):
+// mesmo TURBO do checkout (SEDEX pela diferença, preço e prazo reais do CEP).
+// Nasce desmarcado; a finalização continua nascendo no grátis (pedido 2026-10-12).
+const turboMarcado = ref(false);
+const textoTurbo = computed(() => {
+    const turbo = prazo.value?.turbo;
+    if (!turbo) return '';
+    const dias = Number(turbo.prazo) || 0;
+    const quando = dias ? `em ${dias} dia${dias === 1 ? '' : 's'}` : 'mais rápido';
+    return `Receba ${quando} por ${formatPrice(turbo.preco)}`;
+});
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
     prazo.value = null;
+    turboMarcado.value = false;
     erroPrazo.value = '';
 };
 
@@ -596,7 +608,8 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, flex: data.opcoes?.find((opcao) => opcao.tipo === 'flex') ?? null };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, flex: data.opcoes?.find((opcao) => opcao.tipo === 'flex') ?? null, turbo: data.turbo ?? null };
+        turboMarcado.value = false;
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
@@ -924,9 +937,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
-                                    <!-- Flex no mesmo formato do Full, com X e Y calculados pelo CEP (pedido do Lira 2026-10-24). -->
-                                    <p v-else-if="prazoFlex" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Flex</span> Receba em até {{ prazoFlex.ate }} dias úteis.<template v-if="prazoFlex.geralmente"> (Mas geralmente chega em {{ prazoFlex.geralmente }})</template><span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
+                                    <!-- Flex no formato do Full com texto fixo "Receba de 1 a 7 dias" e Turbo como rádio desmarcado,
+                                         os dois na largura toda e centralizados (pedido do Lira 2026-10-24). -->
+                                    <p v-else-if="ehFlex" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Flex</span> Receba de 1 a 7 dias<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <p v-else class="normal">{{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
+                                    <label v-if="isFreeShipping && prazo.turbo" class="turbo" :class="{ marcado: turboMarcado }">
+                                        <input type="radio" name="frete-turbo" :checked="turboMarcado" @click="turboMarcado = !turboMarcado">
+                                        <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> {{ textoTurbo }}</span>
+                                    </label>
                                 </div>
                             </form>
 
@@ -1452,6 +1470,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
+/* Turbo (2026-10-24): rádio na largura toda, centralizado como o Flex; laranja do Envio Prioritário do checkout. */
+.pd2 .prazo-cep .turbo { display: flex; width: 100%; box-sizing: border-box; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 0; padding: 10px 12px; border: 1px solid #cdd5e1; border-radius: 8px; background: #fff; color: #111; font-size: 14px; font-weight: 600; text-align: center; cursor: pointer; }
+.pd2 .prazo-cep .turbo input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; accent-color: #F44D00; cursor: pointer; }
+.pd2 .prazo-cep .turbo .full { color: #F44D00; font-weight: 800; font-style: italic; margin-right: 4px; }
+.pd2 .prazo-cep .turbo.marcado { border-color: #F44D00; background: #fff4ec; box-shadow: 0 0 0 1px #F44D00; }
+.dark .pd2 .prazo-cep .turbo { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
+.dark .pd2 .prazo-cep .turbo.marcado { background: rgba(244, 77, 0, .15); border-color: #F44D00; }
 
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }

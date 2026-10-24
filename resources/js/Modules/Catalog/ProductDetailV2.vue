@@ -60,6 +60,8 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
 // Fileira do "PAGAMENTO SEGURO E RÁPIDO" na ordem da Mavo (tarefa 2656); Diners
 // entra porque o checkout aceita (CheckoutV2, detecção da bandeira).
 const PAYMENT_BRANDS = ['visa', 'mastercard', 'elo', 'amex', 'diners', 'hipercard', 'pix', 'boleto'];
+// Versão no endereço: o CDN guarda os SVG por dias; troque ao redesenhar uma bandeira (AMEX maior, 2026-10-24).
+const VERSAO_BANDEIRAS = '20261024';
 // Bandeiras do bloco de formas de pagamento (mesmas imagens do rodapé, pedido 2026-10-14).
 const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'American Express', diners: 'Diners Club', hipercard: 'Hipercard', pix: 'Pix', boleto: 'Boleto' };
@@ -931,7 +933,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="pagamento-seguro">
                                 <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
                                 <div class="bandeiras">
-                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
+                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg?v=${VERSAO_BANDEIRAS}`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
                                 </div>
                             </div>
 

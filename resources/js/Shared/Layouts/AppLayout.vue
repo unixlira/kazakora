@@ -599,12 +599,6 @@ const REDES = [
             </div>
         </footer>
 
-        <!-- WhatsApp float -->
-        <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="WhatsApp"
-            class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
-            <i class="fab fa-whatsapp"></i>
-        </a>
-
         <!-- Modal inicial de desconto: visual conversion-first, sem criar cupom falso. -->
         <Teleport to="body">
             <div v-if="discountModalOpen" class="fixed inset-0 z-[115] flex items-center justify-center p-4">

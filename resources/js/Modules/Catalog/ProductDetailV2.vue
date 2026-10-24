@@ -1616,5 +1616,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 @media (max-width: 767px) {
     .pd2 .compra { padding: 18px 18px 20px; }
     .pd2 .compra h1 { font-size: 19px; }
+    /* "Só N unidades! Frete grátis + desconto no checkout." numa linha, como no print. */
+    .pd2 .compra .estoque-baixo p { font-size: clamp(11px, 3.1vw, 13.5px); }
 }
 </style>

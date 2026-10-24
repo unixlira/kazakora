@@ -446,24 +446,29 @@ const erroPrazo = ref('');
 const enderecoPrazo = computed(() => {
     const endereco = prazo.value?.endereco;
     if (!endereco) return '';
-    const local = [endereco.cidade, endereco.uf].filter(Boolean).join('/');
-    return [endereco.rua, endereco.bairro, local].filter(Boolean).join(', ');
+    // "Rua Mogi Mirim - São Paulo - SP", como no print.
+    return [endereco.rua, endereco.cidade, endereco.uf].filter(Boolean).join(' - ');
 });
-// Tabela de entrega (pedido 2026-10-23): o servidor manda as opções na ordem
-// Full (ou Flex), Turbo e, por último, Padrão (Correios ou transportadora). Flex não cita Correios nem transportadora:
-// "Entrega em até X dias úteis. (Mas geralmente chega em Y)".
-const NOME_ENTREGA = { full: 'Full', flex: 'Flex', turbo: 'Turbo' };
-const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
-const prazoDaOpcao = (opcao) => {
-    if (opcao.tipo === 'full') return opcao.quando === 'hoje' ? `Hoje, até ${opcao.horario}` : 'Amanhã';
-    if (opcao.tipo === 'turbo') {
-        if (!opcao.ate) return 'Entrega mais rápida';
-        return `Chega em até ${diasUteis(opcao.ate)}${opcao.dias_a_menos ? ` (${diasUteis(opcao.dias_a_menos)} antes)` : ''}`;
+// Tabela de entrega igual ao print do Lira (2026-10-23 21:24): duas linhas,
+// "Frete | 8 a 11 dias | Grátis" e "Envio Prioritário | Postagem em 24h |
+// R$ 19,90". O prazo e o valor vêm do servidor: Frete = entrega grátis
+// (Full, Flex ou Padrão, "geralmente a até" dias); Prioritário = Turbo (SEDEX),
+// com o mesmo valor cobrado no checkout.
+const linhasEntrega = computed(() => {
+    const opcoes = prazo.value?.opcoes ?? [];
+    const gratis = opcoes.find((opcao) => opcao.tipo !== 'turbo');
+    const turbo = opcoes.find((opcao) => opcao.tipo === 'turbo');
+    const linhas = [];
+    if (gratis) {
+        let quando;
+        if (gratis.tipo === 'full') quando = gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã';
+        else if (gratis.geralmente && gratis.geralmente < gratis.ate) quando = `${gratis.geralmente} a ${gratis.ate} dias`;
+        else quando = `Até ${gratis.ate} ${gratis.ate === 1 ? 'dia' : 'dias'}`;
+        linhas.push({ tipo: 'frete', nome: 'Frete', quando, valor: 'Grátis' });
     }
-    const geralmente = opcao.geralmente && opcao.geralmente < opcao.ate ? ` (Mas geralmente chega em ${opcao.geralmente})` : '';
-    const quem = opcao.tipo === 'padrao' ? ' pelos Correios ou transportadora' : '';
-    return `Entrega${quem} em até ${diasUteis(opcao.ate)}.${geralmente}`;
-};
+    if (turbo) linhas.push({ tipo: 'prioritario', nome: 'Envio Prioritário', quando: 'Postagem em 24h', valor: formatPrice(turbo.preco) });
+    return linhas;
+});
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
@@ -752,26 +757,23 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
 
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
-                                <label for="cep-prazo"><i class="fas fa-location-dot"></i> Consultar prazo de entrega</label>
+                                <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
                                     <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
-                                    <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'OK' }}</button>
+                                    <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
                                 <template v-else-if="prazo">
                                     <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
-                                    <table class="tabela-entrega">
+                                    <table v-if="linhasEntrega.length" class="tabela-entrega">
                                         <thead>
                                             <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="opcao in prazo.opcoes" :key="opcao.tipo" :class="`opcao-${opcao.tipo}`">
-                                                <td class="nome">
-                                                    <template v-if="opcao.tipo === 'padrao'">Padrão</template>
-                                                    <template v-else><i class="fas fa-bolt" aria-hidden="true"></i> <em>{{ NOME_ENTREGA[opcao.tipo] }}</em></template>
-                                                </td>
-                                                <td>{{ prazoDaOpcao(opcao) }}</td>
-                                                <td class="valor">{{ opcao.preco > 0 ? `+ ${formatPrice(opcao.preco)}` : 'Grátis' }}</td>
+                                            <tr v-for="linha in linhasEntrega" :key="linha.tipo">
+                                                <td class="nome">{{ linha.nome }}</td>
+                                                <td class="quando">{{ linha.quando }}</td>
+                                                <td class="valor">{{ linha.valor }}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1306,12 +1308,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fretefundo .selo-full i { font-size: 0.9em; margin: 0 1px 0 0; color: inherit; text-align: left; }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
 
-.pd2 .prazo-cep { margin: 0 0 14px; }
-.pd2 .prazo-cep label { display: block; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
-.pd2 .prazo-cep label i { color: var(--blue); margin-right: 4px; }
-.pd2 .prazo-cep .linha { display: flex; gap: 8px; }
-.pd2 .prazo-cep input { flex: 1; min-width: 0; height: 44px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 0 12px; font: inherit; background: var(--card); color: var(--ink); }
-.pd2 .prazo-cep button { height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--navy); color: #fff; font: 600 15px Poppins, sans-serif; cursor: pointer; }
+.pd2 .prazo-cep { margin: 0 0 14px; background: #f8f9fb; border-radius: 14px; padding: 14px 12px; }
+.pd2 .prazo-cep label { display: block; font-size: 16px; font-weight: 500; color: #111; margin-bottom: 10px; text-align: center; }
+.pd2 .prazo-cep .linha { display: flex; gap: 10px; }
+.pd2 .prazo-cep input { flex: 1; min-width: 0; height: 46px; border: 1px solid #cdd5e1; border-radius: 16px; padding: 0 14px; font: inherit; font-size: 16px; background: #e8f0fe; color: #111; }
+.pd2 .prazo-cep button { height: 46px; padding: 0 26px; border: 0; border-radius: 16px; background: #13bce6; color: #fff; font: 600 19px Poppins, sans-serif; cursor: pointer; }
 .pd2 .prazo-cep button:disabled { opacity: .6; }
 .pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }
 .pd2 .prazo-cep .expressa { display: inline-flex; align-items: center; gap: 6px; background: #e7f8ec; color: #00801a; font-weight: 700; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
@@ -1319,30 +1320,28 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
 .pd2 .prazo-cep .expressa .full { font-weight: 800; }
 .pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
-/* Rua e opções de entrega depois do CEP, fonte azul-claro (pedido 2026-10-23). */
-.pd2 .prazo-cep .rua { color: var(--ink); font-weight: 500; }
-.pd2 .prazo-cep .rua i { color: var(--blue); margin-right: 4px; }
-/* Tabela de entrega (pedido 2026-10-23): cinza, cabeçalhos pretos; Flex e
-   Full em verde com o raio, como o selo Flex do pedido. */
-.pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d4d8; border-radius: 10px; overflow: hidden; background: #f4f4f5; font-size: 14px; }
-.pd2 .tabela-entrega th { background: #e4e4e7; color: #111; font-weight: 700; padding: 9px 10px; text-align: center; }
-.pd2 .tabela-entrega td { padding: 10px; text-align: center; color: #27272a; border-top: 1px solid #d4d4d8; vertical-align: middle; }
-.pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d4d8; }
-.pd2 .tabela-entrega .nome, .pd2 .tabela-entrega .valor { width: 1%; }
-.pd2 .tabela-entrega .nome { font-weight: 700; white-space: nowrap; }
-@media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 8px 6px; font-size: 13px; } }
-.pd2 .tabela-entrega .nome em { font-style: italic; font-weight: 800; }
-.pd2 .tabela-entrega .opcao-full .nome, .pd2 .tabela-entrega .opcao-flex .nome, .pd2 .tabela-entrega .opcao-flex td:nth-child(2) { color: #00801a; }
-.pd2 .tabela-entrega .opcao-flex td:nth-child(2) { font-weight: 600; }
-.pd2 .tabela-entrega .opcao-turbo .nome { color: #c2410c; }
-.pd2 .tabela-entrega .valor { font-weight: 800; white-space: nowrap; color: #00801a; }
-.pd2 .tabela-entrega .opcao-turbo .valor { color: #111; }
-.dark .pd2 .tabela-entrega { background: #27272a; border-color: #3f3f46; }
+/* Rua e tabela de entrega iguais ao print do Lira (2026-10-23 21:24): rua em
+   azul-claro com o pino; tabela com fundo cinza claro, bordas arredondadas,
+   cabeçalhos pretos, tudo centralizado e o preço em azul-claro. */
+.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
+.pd2 .prazo-cep .rua i { margin-right: 4px; }
+.pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d7dd; border-radius: 12px; overflow: hidden; background: #fff; font-size: 15px; table-layout: fixed; }
+.pd2 .tabela-entrega th { background: #f3f4f6; color: #111; font-weight: 500; padding: 11px 8px; text-align: center; }
+.pd2 .tabela-entrega td { padding: 12px 8px; text-align: center; vertical-align: middle; border-top: 1px solid #d4d7dd; background: #fafafa; }
+.pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d7dd; }
+.pd2 .tabela-entrega .nome { color: #444; font-weight: 500; }
+.pd2 .tabela-entrega .quando { color: #111; font-weight: 700; }
+.pd2 .tabela-entrega .valor { color: #13bce6; font-weight: 700; white-space: nowrap; }
+@media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 10px 6px; font-size: 14px; } }
+.dark .pd2 .prazo-cep { background: #141a24; }
+.dark .pd2 .prazo-cep label { color: #f3f4f6; }
+.dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
+.dark .pd2 .tabela-entrega { border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega th { background: #18181b; color: #f4f4f5; }
-.dark .pd2 .tabela-entrega td { color: #e4e4e7; border-color: #3f3f46; }
+.dark .pd2 .tabela-entrega td { background: #27272a; border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega .opcao-full .nome, .dark .pd2 .tabela-entrega .opcao-flex .nome, .dark .pd2 .tabela-entrega .opcao-flex td:nth-child(2), .dark .pd2 .tabela-entrega .valor { color: #4ade80; }
-.dark .pd2 .tabela-entrega .opcao-turbo .valor { color: #f4f4f5; }
+.dark .pd2 .tabela-entrega .nome { color: #d4d4d8; }
+.dark .pd2 .tabela-entrega .quando { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }

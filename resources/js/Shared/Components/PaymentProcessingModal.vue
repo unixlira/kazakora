@@ -1,6 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     open: { type: Boolean, default: false },
@@ -27,15 +27,40 @@ const emit = defineEmits(['retry']);
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const pixCountdown = computed(() => {
-    if (props.pixSecondsLeft === null) return null;
-    const total = Math.max(0, props.pixSecondsLeft);
-    const hours = Math.floor(total / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    const seconds = total % 60;
-    const mmss = `${String(minutes).padStart(hours ? 2 : 1, '0')}:${String(seconds).padStart(2, '0')}`;
-    // Pix do Mercado Pago vale 24 h (2026-10-23): "23:59:59" em vez de "1439:59".
-    return hours ? `${hours}:${mmss}` : mmss;
+// Prazo de 30 minutos na tela, como na Appmax (pedido 2026-10-24). O Pix do
+// Mercado Pago continua valendo 24 h: o relógio é só o "garanta sua compra".
+// Quando ele zera, o QR segue na tela e o texto muda, sem dar o Pix por perdido.
+// O início fica no sessionStorage para atualizar a página não zerar o relógio.
+const PRAZO_PIX_SEGUNDOS = 30 * 60;
+const agora = ref(Date.now());
+const inicioDoPix = ref(null);
+let relogio = null;
+onMounted(() => { relogio = setInterval(() => { agora.value = Date.now(); }, 1000); });
+onBeforeUnmount(() => clearInterval(relogio));
+
+watch(() => [props.state, props.pixQrCode], ([state, codigo]) => {
+    if (state !== 'awaiting_pix') return;
+    const chave = `pix-inicio:${codigo ?? props.orderCode ?? ''}`;
+    let inicio = null;
+    try { inicio = Number(sessionStorage.getItem(chave)) || null; } catch {}
+    if (! inicio || inicio > Date.now()) {
+        inicio = Date.now();
+        try { sessionStorage.setItem(chave, String(inicio)); } catch {}
+    }
+    inicioDoPix.value = inicio;
+    agora.value = Date.now();
+}, { immediate: true });
+
+const prazoVisivel = computed(() => {
+    const decorrido = Math.max(0, Math.floor((agora.value - (inicioDoPix.value ?? agora.value)) / 1000));
+    let restante = Math.min(PRAZO_PIX_SEGUNDOS, Math.max(0, PRAZO_PIX_SEGUNDOS - decorrido));
+    if (props.pixSecondsLeft !== null) restante = Math.min(restante, Math.max(0, props.pixSecondsLeft));
+    return restante;
+});
+const prazoFormatado = computed(() => {
+    const minutos = Math.floor(prazoVisivel.value / 60);
+    const segundos = prazoVisivel.value % 60;
+    return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
 });
 
 const copied = ref(false);
@@ -77,7 +102,7 @@ const copyPixCode = async () => {
 
             <!-- Pix (pedido 2026-10-12): sem padding no cartão, cada faixa cuida do seu,
                  e tudo dimensionado pela altura da tela para caber sem rolagem. -->
-            <div class="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] overflow-y-auto overflow-x-hidden rounded-2xl text-center shadow-xl" :class="state === 'awaiting_pix' ? 'bg-white p-0 [color-scheme:light]' : 'bg-store-bg-raised p-6 sm:p-8'">
+            <div class="relative max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto overflow-x-hidden rounded-2xl text-center shadow-xl" :class="state === 'awaiting_pix' ? 'max-w-[960px] bg-[#f4f4f4] p-0 [color-scheme:light]' : 'max-w-[420px] bg-store-bg-raised p-6 sm:p-8'">
                 <template v-if="state === 'processing' || state === 'timeout'">
                     <div class="mx-auto flex h-14 w-14 items-center justify-center">
                         <i class="fas fa-circle-notch animate-spin text-4xl text-store-accent"></i>
@@ -92,62 +117,64 @@ const copyPixCode = async () => {
                 </template>
 
                 <template v-else-if="state === 'awaiting_pix'">
-                    <!-- Pix (pedido 2026-10-12): sai o verde, entra o grafite da tarja de
-                         confiança com o laranja da marca. Cabeçalho em linha e QR que encolhe
-                         com a altura da tela, para não aparecer barra de rolagem. -->
-                    <div class="rounded-t-2xl bg-gradient-to-br from-[#1c1c1e] to-[#111] px-5 pb-4 pt-4 text-white">
-                        <div class="flex items-center justify-between gap-3">
-                            <h2 class="flex items-center gap-2 whitespace-nowrap font-display text-lg font-bold">
-                                <i class="fa-brands fa-pix text-[#32BCAD]"></i> Pague com Pix
-                            </h2>
-                            <p v-if="orderTotal !== null" class="whitespace-nowrap text-lg font-extrabold">{{ formatPrice(orderTotal) }}</p>
-                        </div>
-                        <div class="mt-3 flex justify-center">
-                            <!-- Número do pedido em destaque (laranja da marca) com botão de copiar. -->
-                            <div v-if="orderCode" class="flex items-center gap-1.5 rounded-xl bg-white px-2.5 py-1">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pedido</span>
-                                <span class="whitespace-nowrap text-base font-black uppercase italic tracking-tight text-[#F27A2A]">{{ orderCode }}</span>
-                                <button type="button" class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs transition"
+                    <!-- Pix no estilo da Appmax (pedido 2026-10-24): "Quase lá..." com o
+                         prazo e o "Aguardando pagamento" à esquerda, cartão branco com o
+                         passo a passo, o QR e o valor à direita. No celular empilha. -->
+                    <div class="grid items-center gap-5 p-5 text-left sm:p-8 md:grid-cols-[1fr_minmax(0,400px)] md:gap-10 md:p-10">
+                        <div class="text-center md:text-left">
+                            <h2 class="text-3xl font-extrabold text-zinc-600 sm:text-4xl">Quase lá...</h2>
+                            <p v-if="prazoVisivel > 0" class="mt-2 text-base text-zinc-600 sm:mt-4 sm:text-lg">
+                                Pague seu Pix dentro de <strong class="tabular-nums text-zinc-700" data-testid="pix-prazo">{{ prazoFormatado }}</strong>
+                                <br class="hidden md:block"> para garantir sua compra.
+                            </p>
+                            <p v-else class="mt-2 text-base text-zinc-600 sm:mt-4 sm:text-lg">
+                                Seu Pix ainda está valendo. Pague agora para garantir sua compra.
+                            </p>
+
+                            <div class="mt-4 inline-flex items-center gap-3 rounded-full bg-[#fff7c2] px-6 py-3 text-sm text-[#a68a00] sm:mt-8 sm:text-base" role="status">
+                                Aguardando pagamento
+                                <span class="flex items-center gap-1.5" aria-hidden="true">
+                                    <span class="pix-ponto"></span><span class="pix-ponto"></span><span class="pix-ponto"></span>
+                                </span>
+                            </div>
+
+                            <div v-if="orderCode" class="mt-4 flex items-center justify-center gap-1.5 text-sm text-zinc-500 md:justify-start">
+                                Pedido <span class="font-black uppercase italic text-[#F27A2A]">{{ orderCode }}</span>
+                                <button type="button" class="flex h-6 w-6 items-center justify-center rounded-md text-xs transition"
                                     :class="codigoCopiado ? 'bg-slate-900 text-white' : 'bg-orange-50 text-[#F27A2A] hover:bg-orange-100'"
                                     :aria-label="codigoCopiado ? 'Número copiado' : 'Copiar número do pedido'" @click="copiarCodigoDoPedido">
                                     <i class="fas" :class="codigoCopiado ? 'fa-check' : 'fa-copy'"></i>
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="px-5 pb-4 pt-4">
-                        <div class="mx-auto w-fit rounded-2xl bg-white p-1.5 ring-2 ring-[#F27A2A] ring-offset-2">
-                            <img v-if="pixQrImageUrl" :src="pixQrImageUrl" alt="QR Code Pix" class="size-[clamp(7.5rem,28dvh,12rem)]">
+                        <div class="rounded-lg bg-white px-5 py-6 text-center shadow-sm ring-1 ring-black/5 sm:px-8 sm:py-8">
+                            <p class="text-sm font-medium leading-relaxed text-zinc-600">
+                                Abra seu aplicativo de pagamento onde você utiliza o Pix e escolha a opção
+                                <strong class="text-[#F27A2A]">Ler QR Code</strong>
+                            </p>
+                            <p class="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-600">
+                                <i class="fas fa-mobile-screen text-zinc-500"></i> Aponte a câmera do seu celular
+                            </p>
+                            <div class="mx-auto mt-2 w-fit rounded-lg bg-zinc-50 p-3">
+                                <img v-if="pixQrImageUrl" :src="pixQrImageUrl" alt="QR Code Pix" class="size-[clamp(9rem,30dvh,13rem)]" data-testid="pix-qr">
+                            </div>
+                            <p v-if="orderTotal !== null" class="mt-4 text-zinc-600">
+                                Valor do Pix: <strong class="text-[#0a8a23]">{{ formatPrice(orderTotal) }}</strong>
+                            </p>
+
+                            <!-- No celular não dá para ler o QR da própria tela: copia e cola. -->
+                            <button v-if="pixQrCode" type="button"
+                                class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition"
+                                :class="copied ? 'bg-slate-900' : 'bg-store-laranja hover:bg-store-laranja-hover'"
+                                @click="copyPixCode">
+                                <i class="fas" :class="copied ? 'fa-check' : 'fa-copy'"></i>
+                                {{ copied ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
+                            </button>
+
+                            <p class="mt-5 text-[11px] text-zinc-500">Pix processado por</p>
+                            <p class="text-lg font-black uppercase tracking-tight text-zinc-800">KAZA<span class="text-[#F27A2A]">KORA</span></p>
                         </div>
-
-                        <ol class="mt-3 grid grid-cols-3 [@media(max-height:620px)]:hidden gap-2 text-[11px] leading-snug text-slate-600">
-                            <li class="flex flex-col items-center gap-1"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">1</span><span>Abra o app do banco no <strong>Pix</strong></span></li>
-                            <li class="flex flex-col items-center gap-1"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">2</span><span>Leia o QR ou use o <strong>copia e cola</strong></span></li>
-                            <li class="flex flex-col items-center gap-1"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">3</span><span>A confirmação aparece aqui</span></li>
-                        </ol>
-
-                        <button v-if="pixQrCode" type="button"
-                            class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition"
-                            :class="copied ? 'bg-slate-900' : 'bg-store-laranja hover:bg-store-laranja-hover'"
-                            @click="copyPixCode">
-                            <i class="fas" :class="copied ? 'fa-check' : 'fa-copy'"></i>
-                            {{ copied ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
-                        </button>
-
-                        <p class="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                            <span><i class="fas fa-circle-notch mr-1 animate-spin text-[#F27A2A]"></i>Aguardando o pagamento</span>
-                            <span v-if="pixCountdown" class="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 font-bold text-[#c2410c]">
-                                <i class="fas fa-stopwatch"></i> expira em {{ pixCountdown }}
-                            </span>
-                        </p>
-                    </div>
-
-                    <!-- Tarja de confiança, como no topo da finalização. -->
-                    <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-b-2xl bg-[#111] px-3 py-2.5 text-[10px] min-[360px]:text-[11px] font-bold uppercase tracking-wide text-white sm:text-xs">
-                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#0FB930]"></i>Frete grátis</span>
-                        <span class="opacity-40">|</span>
-                        <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#0FB930]"></i>Compra 100% segura</span>
                     </div>
                 </template>
 
@@ -267,5 +294,9 @@ const copyPixCode = async () => {
 @keyframes cair { 0% { transform:translateY(0) rotate(0); opacity:1; } 100% { transform:translateY(190px) rotate(540deg); opacity:0; } }
 .sucesso-check { animation:pulo .5s cubic-bezier(.34,1.56,.64,1) both; }
 @keyframes pulo { from { transform:scale(.3); opacity:0; } to { transform:scale(1); opacity:1; } }
-@media (prefers-reduced-motion: reduce) { .confete, .sucesso-check { animation:none; } .confete { display:none; } }
+.pix-ponto { width:8px; height:8px; border-radius:9999px; background:#c9a800; animation:pixPonto 1.2s ease-in-out infinite; }
+.pix-ponto:nth-child(2) { animation-delay:.2s; }
+.pix-ponto:nth-child(3) { animation-delay:.4s; }
+@keyframes pixPonto { 0%, 80%, 100% { opacity:.3; transform:scale(.8); } 40% { opacity:1; transform:scale(1); } }
+@media (prefers-reduced-motion: reduce) { .confete, .sucesso-check, .pix-ponto { animation:none; } .confete { display:none; } }
 </style>

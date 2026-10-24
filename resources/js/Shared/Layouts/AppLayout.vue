@@ -451,7 +451,7 @@ const REDES = [
                     <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-3 py-2.5 text-left text-red-600" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                 </nav>
 
-                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15, sem o WhatsApp); ícones coloridos e chamativos, uma cor por botão. -->
+                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15); ícones coloridos e chamativos, uma cor por botão. -->
                 <nav class="menu-mobile-atalhos mt-4 grid grid-cols-3 gap-2 border-t border-store-border pt-4">
                     <a href="/#categorias" class="menu-mobile-icone">
                         <i class="fas fa-table-cells-large text-xl text-[#8b5cf6]"></i>
@@ -466,6 +466,14 @@ const REDES = [
                         <span>Mandar mensagem</span>
                     </Link>
                 </nav>
+
+                <!-- Fim do menu: só o símbolo do WhatsApp em verde, na coluna do Rastrear pedido (pedido 2026-10-23). -->
+                <div class="mt-3 grid grid-cols-3 gap-2">
+                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="Falar no WhatsApp"
+                        class="col-start-2 flex h-12 items-center justify-center rounded-xl no-underline">
+                        <i class="fa-brands fa-whatsapp text-[2rem] text-[#25D366]"></i>
+                    </a>
+                </div>
             </div>
         </header>
 

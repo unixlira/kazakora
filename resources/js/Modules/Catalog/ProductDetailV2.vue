@@ -513,49 +513,17 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
 // dela, o prazo normal de envio.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { endereco, opcoes } depois da consulta
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
-
-// Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
-// Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
-// amanhã); fora dela, a entrega grátis com o prazo e o TURBO (SEDEX) pelo
-// mesmo valor da diferença cobrado no checkout.
-const enderecoPrazo = computed(() => {
-    const endereco = prazo.value?.endereco;
-    if (!endereco) return '';
-    // "Rua Mogi Mirim - São Paulo - SP", como no print.
-    return [endereco.rua, endereco.cidade, endereco.uf].filter(Boolean).join(' - ');
-});
-// Tabela de entrega igual ao print do Lira (2026-10-23 21:24): duas linhas,
-// "Frete | 8 a 11 dias | Grátis" e "Envio Prioritário | Postagem em 24h |
-// R$ 19,90". O prazo e o valor vêm do servidor: Frete = entrega grátis
-// (Full, Flex ou Padrão, "geralmente a até" dias); Prioritário = Turbo (SEDEX),
-// com o mesmo valor cobrado no checkout.
-// Regras do Lira (2026-10-23 21:31): no raio do Full a primeira coluna diz
-// "Full" em azul; depois do corte das 13h (Full = "Amanhã") entra embaixo
-// "Turbo | Chegará em até 3 horas" no lugar do Prioritário, pelo valor que
-// ele deu para o Turbo de 3h. O checkout ainda não tem esse serviço.
-// Fora do raio do Full (print do Lira 2026-10-23 21:34): a primeira linha
-// vira "Flex | 1 a 7 dias | Grátis", prazo fixo pedido por ele.
-const PRECO_TURBO_3H = 39.9;
-const linhasEntrega = computed(() => {
-    const opcoes = prazo.value?.opcoes ?? [];
-    const gratis = opcoes.find((opcao) => opcao.tipo !== 'turbo');
-    const turbo = opcoes.find((opcao) => opcao.tipo === 'turbo');
-    const full = gratis?.tipo === 'full';
-    const linhas = [];
-    if (gratis) {
-        const quando = full ? (gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã') : '1 a 7 dias';
-        linhas.push({ tipo: full ? 'full' : 'flex', nome: full ? 'Full' : 'Flex', quando, valor: 'Grátis' });
-    }
-    if (full && gratis.quando !== 'hoje') {
-        linhas.push({ tipo: 'turbo', nome: 'Turbo', quando: 'Chegará em até 3 horas', valor: formatPrice(PRECO_TURBO_3H) });
-    } else if (turbo) {
-        linhas.push({ tipo: 'prioritario', nome: 'Envio Prioritário', quando: 'Postagem em 24h', valor: formatPrice(turbo.preco) });
-    }
-    return linhas;
+// Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
+// Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
+// A tabela Full/Flex/Turbo de 2026-10-23 foi desfeita a pedido do Lira (2026-10-24).
+const prazoNormal = computed(() => {
+    const ate = Math.max(7, Number(prazo.value?.dias) || 0);
+    const base = `Entrega pelos Correios ou transportadora em até ${ate} dias úteis.`;
+    return prazo.value?.modalidade === 'flex' ? `${base} (Mas geralmente chega em 3)` : base;
 });
 
 const onCepPrazo = (event) => {
@@ -564,9 +532,9 @@ const onCepPrazo = (event) => {
     erroPrazo.value = '';
 };
 
-// Rolagem até a tabela (pedido 2026-10-23): no celular o resultado ficava
+// Rolagem até o resultado (pedido 2026-10-23): no celular o resultado ficava
 // abaixo da dobra e o cliente não via que o frete foi calculado. Desce só o
-// que falta para a tabela inteira aparecer, com ela no pé da tela.
+// que falta para o resultado inteiro aparecer, com ele no pé da tela.
 const rolarSuave = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MARGEM_PE = 16;
 // O que fica preso no pé da tela e cobre o fim dela: a barra do rodapé (celular)
@@ -581,7 +549,7 @@ const mostrarResultadoPrazo = async () => {
     const pe = window.innerHeight - alturaBarraRodape() - MARGEM_PE;
     if (caixa.top >= 0 && caixa.bottom <= pe) return;
     const falta = caixa.bottom - pe;
-    // Tabela maior que a tela: o topo dela fica visível.
+    // Resultado maior que a tela: o topo dele fica visível.
     window.scrollBy({ top: Math.min(falta, caixa.top - MARGEM_PE), behavior: rolarSuave() ? 'smooth' : 'auto' });
 };
 
@@ -611,7 +579,7 @@ const pararAjusteCep = () => { window.removeEventListener('scroll', aoRolar); cl
 onMounted(() => { if (!window.location.hash) ligarAjusteCep(); });
 onUnmounted(pararAjusteCep);
 
-const consultarPrazo = async ({ rolar = true } = {}) => {
+const consultarPrazo = async () => {
     ajusteFeito = true;
     pararAjusteCep();
     if (cep.value.replace(/\D/g, '').length !== 8) {
@@ -621,14 +589,11 @@ const consultarPrazo = async ({ rolar = true } = {}) => {
     consultandoPrazo.value = true;
     erroPrazo.value = '';
     try {
-        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}&quantidade=${quantity.value}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = {
-            endereco: data.endereco ?? null,
-            opcoes: data.opcoes ?? [],
-        };
-        if (rolar) mostrarResultadoPrazo();
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
+        mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
         if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
@@ -640,11 +605,6 @@ const consultarPrazo = async ({ rolar = true } = {}) => {
         consultandoPrazo.value = false;
     }
 };
-
-// Outra variação ou quantidade muda a caixa: refaz a conta do CEP já consultado.
-watch(() => [selecionada.value.id, quantity.value], () => {
-    if (prazo.value && !consultandoPrazo.value) consultarPrazo({ rolar: false });
-});
 
 const buyingNow = ref(false);
 
@@ -967,19 +927,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
-                                    <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
-                                    <table v-if="linhasEntrega.length" class="tabela-entrega">
-                                        <thead>
-                                            <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="linha in linhasEntrega" :key="linha.tipo" :class="`linha-${linha.tipo}`">
-                                                <td class="nome">{{ linha.nome }}</td>
-                                                <td class="quando">{{ linha.quando }}</td>
-                                                <td class="valor">{{ linha.valor }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                    <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}</p>
+                                    <p v-else class="normal">
+                                        <span v-if="prazo.modalidade === 'flex'" class="full"><i class="fas fa-bolt"></i> Flex</span>
+                                        {{ prazoNormal }}
+                                    </p>
                                 </div>
                             </form>
 
@@ -1496,31 +1448,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
 .pd2 .prazo-cep .expressa .full { font-weight: 800; }
 .pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
-/* Rua e tabela de entrega iguais ao print do Lira (2026-10-23 21:24): rua em
-   azul-claro com o pino; tabela com fundo cinza claro, bordas arredondadas,
-   cabeçalhos pretos, tudo centralizado e o preço em azul-claro. */
-.pd2 .prazo-cep .rua { color: #000; font-weight: 700; font-size: 16px; margin: 10px 0 0; }
-.pd2 .prazo-cep .rua i { margin-right: 4px; }
-.pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d7dd; border-radius: 12px; overflow: hidden; background: #fff; font-size: 15px; table-layout: fixed; }
-.pd2 .tabela-entrega th { background: #f3f4f6; color: #111; font-weight: 500; padding: 11px 8px; text-align: center; }
-.pd2 .tabela-entrega td { padding: 12px 8px; text-align: center; vertical-align: middle; border-top: 1px solid #d4d7dd; background: #fafafa; }
-.pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d7dd; }
-.pd2 .tabela-entrega .nome { color: #444; font-weight: 500; }
-.pd2 .tabela-entrega .quando { color: #111; font-weight: 700; }
-.pd2 .tabela-entrega .valor { color: #000; font-weight: 700; white-space: nowrap; }
-/* Textos que eram azuis (Full, preço e rua) em preto e negrito (pedido do Lira 2026-10-23 23h). */
-.pd2 .tabela-entrega .linha-full .nome { color: #000; font-weight: 700; }
-@media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 10px 6px; font-size: 14px; } }
 .dark .pd2 .prazo-cep { background: #141a24; }
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
-.dark .pd2 .tabela-entrega { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega th { background: #18181b; color: #f4f4f5; }
-.dark .pd2 .tabela-entrega td { background: #27272a; border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega .nome { color: #d4d4d8; }
-.dark .pd2 .tabela-entrega .linha-full .nome, .dark .pd2 .tabela-entrega .valor, .dark .pd2 .prazo-cep .rua { color: #f4f4f5; }
-.dark .pd2 .tabela-entrega .quando { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }

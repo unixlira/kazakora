@@ -333,20 +333,20 @@ const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => '+1.538 vendidos');
 // "Só N unidades!" no fluxo que o Lira corrigiu (2026-10-23, decisão dele,
 // no lugar do estoque real do #1020):
-//   0 s    barra 100% cheia e um número sorteado entre 19 e 37, em preto, que
+//   0 s    barra 100% cheia e um número sorteado entre 7 e 36, em preto, que
 //          fica FIXO enquanto a barra desce (não conta para baixo);
 //   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
 //   +3 s   parada; o número cai uma unidade e a barra perde o pedaço dessa
 //          unidade. No momento da queda o fundo do número fica vermelho com a
 //          fonte branca e some em 1 s (fade out); a fonte fica vermelha e
 //          continua vermelha (correção do Lira em 2026-10-23).
-// O sorteio é novo a cada carregamento da página e NUNCA passa de 37 (regra
-// do Lira em 2026-10-23, exemplos 19, 26, 35), nem do estoque real da
-// variação; sem estoque, não aparece. Antes de escolher a variação vale o
+// O sorteio é novo a cada carregamento da página e fica OBRIGATORIAMENTE
+// entre 7 e 36 (tarefa #2809, Lira em 2026-10-24; antes 19 a 37). Também não
+// passa do estoque real da variação: com menos de 7 em estoque, não aparece. Antes de escolher a variação vale o
 // maior estoque entre elas (antes era 0 e a barra sumia em todo produto com
 // variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
-const ESTOQUE_SORTEIO_MIN = 19;
-const ESTOQUE_SORTEIO_MAX = 37;
+const ESTOQUE_SORTEIO_MIN = 7;
+const ESTOQUE_SORTEIO_MAX = 36;
 const estoqueReal = computed(() => (faltaVariacao.value
     ? Math.max(0, ...opcoesVariacao.value.map((variant) => Number(variant.stock) || 0))
     : Number(selecionada.value.stock) || 0));
@@ -404,12 +404,12 @@ const animarEstoque = () => {
     estoqueFundo.value = false;
     estoqueVermelho.value = false;
     const real = estoqueReal.value;
-    if (real < 1) {
+    if (real < ESTOQUE_SORTEIO_MIN) {
         estoqueBaixo.value = null;
         return;
     }
-    const sorteio = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
-    const numero = Math.min(real, sorteio, ESTOQUE_SORTEIO_MAX);
+    const teto = Math.min(real, ESTOQUE_SORTEIO_MAX);
+    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (teto - ESTOQUE_SORTEIO_MIN + 1));
     estoqueBaixo.value = numero;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         estoqueBarra.value = numero;

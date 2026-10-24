@@ -1583,9 +1583,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
    cores e espaçamentos tirados do print. Vem por último para valer sobre as regras
    antigas da caixa (e as do celular). */
 .pd2 .compra { padding: 20px 20px 22px; color: #222; font-family: 'DM Sans', Poppins, system-ui, sans-serif; }
-.pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; line-height: 1.4; }
-.pd2 .compra .cond-texto { color: #a3a3a3; font-weight: 400; margin-right: 2px; }
-.pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 2px 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 1.35; letter-spacing: -.1px; }
+/* Faixa "Novo | +N vendidos / EXCLUSIVO / POR TEMPO LIMITADO!" com os valores lidos da Mavo
+   no ar (2026-10-23 21h45): Manrope 400, 13px #a7a5a5 no texto, tags 10px com 3px 5px. */
+.pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-family: Manrope, 'DM Sans', sans-serif; font-size: 13px; line-height: 1.4; }
+.pd2 .compra .cond-texto { color: #a7a5a5; font-size: 13px; font-weight: 400; margin-right: 0; }
+.pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 3px 5px; border-radius: 3px; font-size: 10px; font-weight: 400; line-height: 1.3; letter-spacing: normal; }
 .pd2 .compra .tag-exclusivo { background: #000; color: #fff600; }
 .pd2 .compra h1 { font-size: 20px; font-weight: 600; line-height: 1.48; color: #222; text-transform: none; letter-spacing: -.1px; margin: 0; }
 .pd2 .compra .nota { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin: 12px 0 0; font-size: 15px; font-weight: 400; color: #555; line-height: 1.4; text-decoration: none; }

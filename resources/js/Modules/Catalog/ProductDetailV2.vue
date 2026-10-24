@@ -438,6 +438,7 @@ const cep = ref('');
 const prazo = ref(null); // null = não consultado; { endereco, opcoes } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
+const resultadoPrazoEl = ref(null);
 
 // Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
 // Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
@@ -486,7 +487,20 @@ const onCepPrazo = (event) => {
     erroPrazo.value = '';
 };
 
-const consultarPrazo = async () => {
+// Rolagem até a tabela (pedido 2026-10-23): no celular o resultado ficava
+// abaixo da dobra e o cliente não via que o frete foi calculado. Só rola
+// quando a tabela não está inteira na tela.
+const mostrarResultadoPrazo = async () => {
+    await nextTick();
+    const el = resultadoPrazoEl.value;
+    if (!el) return;
+    const caixa = el.getBoundingClientRect();
+    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight) return;
+    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'center' });
+};
+
+const consultarPrazo = async ({ rolar = true } = {}) => {
     if (cep.value.replace(/\D/g, '').length !== 8) {
         erroPrazo.value = 'Digite um CEP com 8 números.';
         return;
@@ -501,6 +515,7 @@ const consultarPrazo = async () => {
             endereco: data.endereco ?? null,
             opcoes: data.opcoes ?? [],
         };
+        if (rolar) mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
         if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
@@ -515,7 +530,7 @@ const consultarPrazo = async () => {
 
 // Outra variação ou quantidade muda a caixa: refaz a conta do CEP já consultado.
 watch(() => [selecionada.value.id, quantity.value], () => {
-    if (prazo.value && !consultandoPrazo.value) consultarPrazo();
+    if (prazo.value && !consultandoPrazo.value) consultarPrazo({ rolar: false });
 });
 
 const buyingNow = ref(false);
@@ -768,14 +783,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
-                            <form class="prazo-cep" @submit.prevent="consultarPrazo">
+                            <form class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
                                     <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
-                                <template v-else-if="prazo">
+                                <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
                                     <table v-if="linhasEntrega.length" class="tabela-entrega">
                                         <thead>
@@ -789,7 +804,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             </tr>
                                         </tbody>
                                     </table>
-                                </template>
+                                </div>
                             </form>
 
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo

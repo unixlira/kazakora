@@ -459,6 +459,8 @@ const enderecoPrazo = computed(() => {
 // "Full" em azul; depois do corte das 13h (Full = "Amanhã") entra embaixo
 // "Turbo | Chegará em até 3 horas" no lugar do Prioritário, pelo valor que
 // ele deu para o Turbo de 3h. O checkout ainda não tem esse serviço.
+// Fora do raio do Full (print do Lira 2026-10-23 21:34): a primeira linha
+// vira "Flex | 1 a 7 dias | Grátis", prazo fixo pedido por ele.
 const PRECO_TURBO_3H = 39.9;
 const linhasEntrega = computed(() => {
     const opcoes = prazo.value?.opcoes ?? [];
@@ -467,11 +469,8 @@ const linhasEntrega = computed(() => {
     const full = gratis?.tipo === 'full';
     const linhas = [];
     if (gratis) {
-        let quando;
-        if (full) quando = gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã';
-        else if (gratis.geralmente && gratis.geralmente < gratis.ate) quando = `${gratis.geralmente} a ${gratis.ate} dias`;
-        else quando = `Até ${gratis.ate} ${gratis.ate === 1 ? 'dia' : 'dias'}`;
-        linhas.push({ tipo: full ? 'full' : 'frete', nome: full ? 'Full' : 'Frete', quando, valor: 'Grátis' });
+        const quando = full ? (gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã') : '1 a 7 dias';
+        linhas.push({ tipo: full ? 'full' : 'flex', nome: full ? 'Full' : 'Flex', quando, valor: 'Grátis' });
     }
     if (full && gratis.quando !== 'hoje') {
         linhas.push({ tipo: 'turbo', nome: 'Turbo', quando: 'Chegará em até 3 horas', valor: formatPrice(PRECO_TURBO_3H) });

@@ -521,20 +521,14 @@ const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
-// Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
-// Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
+// Fora do Full e do Flex (pedido 2026-10-10): frase em verde.
 // A tabela Full/Flex/Turbo de 2026-10-23 foi desfeita a pedido do Lira (2026-10-24).
 const prazoNormal = computed(() => `Entrega pelos Correios ou transportadora em até ${Math.max(7, Number(prazo.value?.dias) || 0)} dias úteis.`);
 // Flex (pedido 2026-10-24): "Receba em até X dias úteis. (Mas geralmente chega em Y)".
 // Y = prazo dos Correios do serviço que o preço já paga e X = Y + folga de postagem,
-// a mesma conta do checkout (PrazoPorCep::opcoes). Sem a opção, usa o prazo do CEP + 2.
-const prazoFlex = computed(() => {
-    if (!prazo.value) return null;
-    const opcao = prazo.value.flex;
-    if (opcao) return { ate: opcao.ate, geralmente: opcao.geralmente };
-    if (prazo.value.modalidade !== 'flex' || !prazo.value.dias) return null;
-    return { ate: Number(prazo.value.dias) + 2, geralmente: Number(prazo.value.dias) };
-});
+// a mesma conta do checkout (PrazoPorCep::opcoes). Não usa `modalidade`: ela olha o
+// serviço mais rápido (SEDEX) e marcaria Flex onde o frete grátis leva 5 dias.
+const prazoFlex = computed(() => prazo.value?.flex ?? null);
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);

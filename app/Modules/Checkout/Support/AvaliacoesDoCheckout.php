@@ -19,11 +19,16 @@ use Illuminate\Support\Str;
  * Foto redonda (pedido 2026-10-24): avatar do pacote da vitrine em
  * public/images/avaliacoes/avatares, do mesmo gênero do nome, escolhido
  * pelo id da avaliação (a mesma avaliação mostra sempre o mesmo rosto) e sem
- * repetir rosto no mesmo carrossel enquanto houver outro livre.
+ * repetir rosto no mesmo carrossel. Máximo de 5 avaliações (pedido 2026-10-24):
+ * se o gênero do nome já usou todos os rostos dele, a avaliação é pulada e
+ * entra a próxima, então nunca há duas pessoas com a mesma foto.
  */
 class AvaliacoesDoCheckout
 {
-    public const LIMITE = 8;
+    public const LIMITE = 5;
+
+    // Candidatas lidas do banco: avaliação cujo rosto já saiu é pulada, então precisa sobrar.
+    private const CANDIDATAS = 40;
 
     public const AVATARES_FEMININOS = 16;
 
@@ -57,38 +62,49 @@ class AvaliacoesDoCheckout
 
         $avaliacoes = $grupos->isEmpty() ? collect() : $base()
             ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
-            ->limit(self::LIMITE)
+            ->limit(self::CANDIDATAS)
             ->get();
 
-        if ($avaliacoes->count() < self::LIMITE) {
-            $avaliacoes = $avaliacoes->concat($base()->whereNotIn('id', $avaliacoes->pluck('id'))->limit(self::LIMITE - $avaliacoes->count())->get());
+        if ($avaliacoes->count() < self::CANDIDATAS) {
+            $avaliacoes = $avaliacoes->concat($base()->whereNotIn('id', $avaliacoes->pluck('id'))->limit(self::CANDIDATAS - $avaliacoes->count())->get());
         }
 
         $usados = [];
+        $resultado = [];
 
-        return $avaliacoes->map(function (Review $review) use (&$usados) {
+        foreach ($avaliacoes as $review) {
+            if (count($resultado) >= self::LIMITE) {
+                break;
+            }
             if ($review->ocultar_nome) {
                 $review->setRelation('user', null);
             }
             $nome = $review->reviewer_display_name;
+            $arquivo = self::avatar($review->id, $nome, $usados, repetir: false);
+            if ($arquivo === null) {
+                continue;
+            }
 
-            return [
+            $resultado[] = [
                 'id' => $review->id,
                 'nota' => (int) $review->rating,
                 'nome' => $nome,
                 'texto' => Str::limit(trim((string) $review->comment), 220),
-                'avatar' => asset('images/avaliacoes/avatares/'.self::avatar($review->id, $nome, $usados)),
+                'avatar' => asset('images/avaliacoes/avatares/'.$arquivo),
             ];
-        })->values()->all();
+        }
+
+        return $resultado;
     }
 
     /**
      * Arquivo do avatar ("f03.webp"). $usados guarda os já mostrados no
-     * carrossel; quando todos do gênero já saíram, volta a repetir.
+     * carrossel; quando todos do gênero já saíram, volta a repetir (ou devolve
+     * null com $repetir = false).
      *
      * @param  array<string, true>  $usados
      */
-    public static function avatar(int $semente, string $nome, array &$usados = []): string
+    public static function avatar(int $semente, string $nome, array &$usados = [], bool $repetir = true): ?string
     {
         [$prefixo, $total] = NomeBrasileiro::feminino($nome)
             ? ['f', self::AVATARES_FEMININOS]
@@ -97,6 +113,9 @@ class AvaliacoesDoCheckout
         $inicio = hexdec(substr(sha1('avatar-avaliacao:'.$semente), 0, 8)) % $total;
         // Todos do gênero já saíram: começa outra rodada (revezando, sem cair sempre no mesmo).
         if (count(array_filter(array_keys($usados), fn (string $usado) => $usado[0] === $prefixo)) >= $total) {
+            if (! $repetir) {
+                return null;
+            }
             $usados = array_filter($usados, fn (string $usado) => $usado[0] !== $prefixo, ARRAY_FILTER_USE_KEY);
         }
         $arquivo = null;

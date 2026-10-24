@@ -81,6 +81,20 @@ class CheckoutYampiTest extends TestCase
             ->where('avaliacoesCarrossel.0.avatar', fn (string $url) => (bool) preg_match('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $url)));
     }
 
+    public function test_carrossel_tem_no_maximo_5_avaliacoes_com_rostos_diferentes(): void
+    {
+        $product = $this->produto();
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        foreach (range(1, 9) as $n) {
+            $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'name' => 'Carlos '.$n]);
+            Review::create(['user_id' => $cliente->id, 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Produto muito bom, recomendo '.$n.'.']);
+        }
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('avaliacoesCarrossel', 3) // só existem 3 rostos masculinos: nenhum se repete
+            ->where('avaliacoesCarrossel', fn ($avaliacoes) => collect($avaliacoes)->pluck('avatar')->unique()->count() === collect($avaliacoes)->count()));
+    }
+
     public function test_sem_avaliacao_o_carrossel_fica_vazio(): void
     {
         $product = $this->produto();

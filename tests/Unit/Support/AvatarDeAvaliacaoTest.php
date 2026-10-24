@@ -54,4 +54,14 @@ class AvatarDeAvaliacaoTest extends TestCase
 
         $this->assertSame([2, 2, 2], array_values(array_count_values($arquivos)));
     }
+
+    public function test_sem_repetir_devolve_null_quando_os_rostos_acabam(): void
+    {
+        $usados = [];
+        foreach (range(1, AvaliacoesDoCheckout::AVATARES_MASCULINOS) as $id) {
+            $this->assertNotNull(AvaliacoesDoCheckout::avatar($id, 'Carlos', $usados, repetir: false));
+        }
+
+        $this->assertNull(AvaliacoesDoCheckout::avatar(99, 'Carlos', $usados, repetir: false));
+    }
 }

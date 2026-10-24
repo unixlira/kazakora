@@ -10,6 +10,7 @@ use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
@@ -353,6 +354,12 @@ abstract class CheckoutOutroSite
             'total' => self::centavos($valores['total']),
             'total_pix' => self::centavos($valores['total_pix']),
             'mercadopago_public_key' => CredenciaisCheckout::publicKey(),
+            // Carrossel de avaliações (2026-10-24), igual ao checkout da loja;
+            // nome oculto vira só "Cliente" (o site não é a KazaKora).
+            'avaliacoes' => array_map(
+                fn (array $avaliacao) => ['nome' => $avaliacao['nome'] === 'Cliente KazaKora' ? 'Cliente' : $avaliacao['nome']] + $avaliacao,
+                app(AvaliacoesDoCheckout::class)->paraProdutos($itens->map(fn (array $item) => $item['product']->id)),
+            ),
         ];
     }
 

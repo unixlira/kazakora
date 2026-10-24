@@ -5,7 +5,8 @@
 // e só a atual fica visível, então a caixa tem a altura da maior e nada abaixo
 // dela pula quando a avaliação troca sozinha (antes ia de 192 a 249px a cada 6s
 // e, no celular, empurrava o formulário enquanto a pessoa digitava).
-import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
+// Foto do cliente (2026-10-24): avatar redondo à esquerda, do mesmo gênero do
+// nome (AvaliacoesDoCheckout); a foto do produto enviada na avaliação saiu daqui.
 import { onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
@@ -34,6 +35,7 @@ onUnmounted(parar);
             <article v-for="(avaliacao, indice) in avaliacoes" :key="avaliacao.id" class="flex gap-3 [grid-area:1/1]"
                 :class="indice === atual ? 'visible' : 'invisible'" :aria-hidden="indice !== atual"
                 :aria-label="`Avaliação ${indice + 1} de ${avaliacoes.length}`">
+                <img :src="avaliacao.avatar" alt="" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0 rounded-full bg-slate-100 object-cover">
                 <div class="min-w-0 flex-1">
                     <p class="text-slate-900" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
                         <i v-for="estrela in 5" :key="estrela" class="text-sm" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
@@ -41,7 +43,6 @@ onUnmounted(parar);
                     <p class="mt-1 text-xs font-bold text-slate-900">{{ avaliacao.nome }}</p>
                     <p class="mt-2 line-clamp-4 text-sm leading-relaxed text-slate-700">{{ avaliacao.texto }}</p>
                 </div>
-                <img v-if="avaliacao.foto" :src="miniaturaAvaliacao(avaliacao.foto)" alt="Foto enviada pelo cliente" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 shrink-0 rounded-full object-cover">
             </article>
         </div>
         <div v-if="avaliacoes.length > 1" class="mt-3 flex items-center justify-center gap-1.5">

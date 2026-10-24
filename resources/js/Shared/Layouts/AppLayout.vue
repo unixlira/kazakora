@@ -387,7 +387,9 @@ const REDES = [
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
                         :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile" @click="alternarBuscaMobile">
-                        <i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                        <!-- Bolinha laranja sempre visível ao lado da lupa, mesmo sem termo pesquisado (pedido 2026-10-23). -->
+                        <span class="relative"><i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                            <span class="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full bg-[#f27a2a]" aria-hidden="true"></span></span>
                         <span>{{ buscaMobileAberta ? 'Fechar' : 'Buscar' }}</span>
                     </button>
                     <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente e troque grid-cols-3 por 4.

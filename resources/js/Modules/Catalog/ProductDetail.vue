@@ -434,13 +434,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <button type="button" class="mt-1 text-sm font-semibold text-store-accent hover:underline" @click="showPaymentModal = true">Ver meios de pagamento</button>
                             </div>
 
-                            <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
+                            <!-- Favorito desligado (pedido do Lira 2026-10-23); para voltar, descomente.
                             <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors"
                                 :class="ehFavorito(product.id) ? 'favorito-ativo' : 'border-store-border bg-store-bg-raised hover:bg-store-bg-sunken'"
                                 :aria-pressed="ehFavorito(product.id)" :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'"
                                 @click="toggleFavorite(product.id)">
                                 <i class="text-lg" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
                             </button>
+                            -->
                         </div>
 
                         <div v-if="variations.length" class="mt-5 border-t border-store-border pt-5">

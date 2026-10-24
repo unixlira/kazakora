@@ -283,7 +283,8 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
             </div>
-            <!-- Favorito com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15). -->
+            <!-- Favorito desligado (pedido do Lira 2026-10-23); para voltar, descomente.
+                 Era: com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15).
             <button type="button"
                 class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full shadow transition-colors"
                 :class="ehFavorito(product.id) ? 'favorito-ativo' : 'bg-store-bg-raised'"
@@ -291,6 +292,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 @click.stop="toggleFavorite(product.id)">
                 <i class="text-sm" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
             </button>
+            -->
 
 
             <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->

@@ -294,11 +294,12 @@ const REDES = [
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
                     <!-- Celular: lupa, coração, carrinho e conta ficam dentro do menu (pedido 2026-10-15). -->
+                    <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente.
                     <Link href="/favoritos" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
-                        <!-- Coração vermelho igual ao do menu do celular (pedido 2026-10-15). -->
                         <i class="fas fa-heart text-base text-[#ef4444]"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
+                    -->
                     <Link href="/carrinho" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
                         <i class="fas fa-cart-shopping text-base"></i>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
@@ -381,18 +382,21 @@ const REDES = [
             <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
-                <div class="grid grid-cols-4 gap-2">
+                <!-- Eram 4 colunas com Favoritos; voltou a 3 sem eles (2026-10-23). -->
+                <div class="grid grid-cols-3 gap-2">
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
                         :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile" @click="alternarBuscaMobile">
                         <i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
                         <span>{{ buscaMobileAberta ? 'Fechar' : 'Buscar' }}</span>
                     </button>
+                    <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente e troque grid-cols-3 por 4.
                     <Link href="/favoritos" class="menu-mobile-icone" preserve-scroll>
                         <span class="relative"><i class="fas fa-heart text-lg text-[#ef4444]"></i>
                             <span v-if="favoritesCount > 0" class="menu-mobile-contador">{{ favoritesCount }}</span></span>
                         <span>Favoritos</span>
                     </Link>
+                    -->
                     <Link href="/carrinho" class="menu-mobile-icone">
                         <span class="relative"><i class="fas fa-cart-shopping text-lg"></i>
                             <span v-if="cartCount > 0" class="menu-mobile-contador">{{ cartCount }}</span></span>

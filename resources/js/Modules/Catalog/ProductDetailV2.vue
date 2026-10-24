@@ -538,7 +538,7 @@ const textoTurbo = computed(() => {
     if (!turbo) return '';
     const dias = Number(turbo.prazo) || 0;
     const quando = dias ? `em ${dias} dia${dias === 1 ? '' : 's'}` : 'mais rápido';
-    return `Receba ${quando} por ${formatPrice(turbo.preco)}`;
+    return `Receba ${quando} por`;
 });
 
 const onCepPrazo = (event) => {
@@ -947,7 +947,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <p v-else class="normal">{{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <label v-if="isFreeShipping && prazo.turbo" class="turbo" :class="{ marcado: turboMarcado }">
                                         <input type="radio" name="frete-turbo" :checked="turboMarcado" @click="turboMarcado = ehFlex ? true : !turboMarcado">
-                                        <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> {{ textoTurbo }}</span>
+                                        <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> {{ textoTurbo }} <span class="preco-turbo">{{ formatPrice(prazo.turbo.preco) }}</span></span>
                                     </label>
                                 </div>
                             </form>
@@ -1480,6 +1480,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep .turbo .full { color: #F44D00; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .turbo.marcado { border-color: #F44D00; background: #fff4ec; box-shadow: 0 0 0 1px #F44D00; }
 .dark .pd2 .prazo-cep .turbo { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
+.pd2 .prazo-cep .turbo .preco-turbo { white-space: nowrap; }
 .dark .pd2 .prazo-cep .turbo.marcado { background: rgba(244, 77, 0, .15); border-color: #F44D00; }
 /* Flex como rádio (2026-10-24): mesma caixa verde do Full, largura toda, rádio e texto centralizados. */
 .pd2 .prazo-cep .flex-radio { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 0; font-size: 15px; font-weight: 700; color: #00801a; cursor: pointer; }

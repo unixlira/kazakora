@@ -26,7 +26,6 @@ const props = defineProps({
     subtotal: { type: Number, default: 0 },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
-    cupomAutomatico: { type: Object, default: null },
     discountAmount: { type: Number, default: 0 },
     pixDiscountPercentage: { type: Number, default: 0 },
     addresses: { type: Array, default: () => [] },
@@ -220,7 +219,7 @@ const alterarQuantidade = async (item, delta) => {
         });
         if (!resposta.ok) throw new Error();
         await new Promise((resolve) => router.reload({
-            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'cupomAutomatico', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
+            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
             preserveScroll: true,
             preserveState: true,
             onFinish: resolve,
@@ -268,7 +267,11 @@ const chamarCupom = (method, body) => fetch('/finalizacao/cupom', {
 });
 
 const aplicarCupom = async () => {
-    if (!cupom.value.trim() || cupomCarregando.value) return;
+    if (cupomCarregando.value || cupomAplicado.value) return;
+    if (!cupom.value.trim()) {
+        cupomErro.value = 'Digite o código do cupom.';
+        return;
+    }
     cupomCarregando.value = true;
     cupomErro.value = null;
     try {
@@ -287,6 +290,17 @@ const aplicarCupom = async () => {
     } finally {
         cupomCarregando.value = false;
     }
+};
+
+const campoCupom = ref(null);
+
+// X dentro do campo: tira o cupom, esvazia o campo e deixa pronto para digitar outro.
+const limparCupom = async () => {
+    await removerCupom();
+    cupom.value = '';
+    cupomErro.value = null;
+    await nextTick();
+    campoCupom.value?.focus();
 };
 
 const removerCupom = async () => {
@@ -1227,41 +1241,28 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                 <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6">
                     <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
-                    <!-- Cupom sempre à mostra (modelo Yampi). -->
+                    <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
+                         (o BEMVINDO já entra sozinho) fica dentro do campo: borda verde e X para tirar. -->
                     <div class="mt-4">
-                        <div v-if="cupomAplicado && cupomAutomatico && cupomAutomatico.code === cupomAplicado" data-cupom-automatico
-                            class="flex items-center justify-between gap-3 rounded-2xl border-2 border-[#00843f] bg-emerald-50 px-4 py-3 text-sm shadow-[0_4px_14px_rgba(0,132,63,0.15)]">
-                            <span class="flex items-start gap-3 text-emerald-900">
-                                <i class="fa-solid fa-circle-check mt-0.5 text-lg text-[#00843f]"></i>
-                                <span>
-                                    <strong class="block text-base">Cupom {{ cupomAplicado }} já aplicado!</strong>
-                                    <span class="block text-xs text-emerald-800">Aplicamos para você: {{ cupomAutomatico.descricao }} na sua compra.</span>
-                                </span>
-                            </span>
-                            <button type="button" :disabled="cupomCarregando || !!order" class="shrink-0 text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
-                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
-                            </button>
-                        </div>
-                        <div v-else-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
-                            <span class="text-emerald-800">
-                                <i class="fa-solid fa-ticket mr-1"></i> Cupom <strong>{{ cupomAplicado }}</strong> aplicado
-                                <span v-if="cupomDescricao" class="block text-xs text-emerald-700">{{ cupomDescricao }}</span>
-                            </span>
-                            <button type="button" :disabled="cupomCarregando || !!order" class="text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
-                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
-                            </button>
-                        </div>
-                        <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
-                            <label class="min-w-0 flex-1">
+                        <form class="flex gap-2" @submit.prevent="aplicarCupom">
+                            <label class="relative min-w-0 flex-1">
                                 <span class="sr-only">Cupom de desconto</span>
-                                <input v-model="cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters" :disabled="cupomCarregando"
-                                    class="w-full rounded-full border bg-[#F1F2F4] px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case focus:border-slate-300 focus:bg-white"
-                                    :class="cupomErro ? 'border-red-400' : 'border-transparent'" @input="cupomErro = null">
+                                <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters"
+                                    :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado"
+                                    ref="campoCupom"
+                                    class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
+                                    :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
+                                    @input="cupom = $event.target.value; cupomErro = null">
+                                <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
+                                    class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
+                                    @click="limparCupom">
+                                    <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
+                                </button>
                             </label>
-                            <button type="submit" :disabled="!cupom.trim() || cupomCarregando"
+                            <button type="submit" :disabled="!!cupomAplicado || cupomCarregando"
                                 class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
-                                <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
-                                {{ cupomCarregando ? 'Buscando' : 'Adicionar' }}
+                                <i v-if="cupomCarregando && !cupomAplicado" class="fa-solid fa-spinner animate-spin"></i>
+                                {{ cupomCarregando && !cupomAplicado ? 'Buscando' : 'Aplicar' }}
                             </button>
                         </form>
                         <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>

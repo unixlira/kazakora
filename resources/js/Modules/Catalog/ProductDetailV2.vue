@@ -780,19 +780,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
-                            <!-- Pagamento seguro e rápido e Empresa 100% legal logo abaixo das bandeiras,
-                                 antes dos cards de frete (pedido 2026-10-23: foco na segurança do pagamento). -->
-                            <ul class="fretefundo">
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
-                                </li>
-                            </ul>
-
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
                                  sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
                             <ul class="fretefundo">
@@ -809,14 +796,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
-                                <li v-if="isFreeShipping || DESCONTO_PIX">
+                                <li>
                                     <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping"><b>Frete grátis</b> mais desconto no checkout</span>
-                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                    <span><b>Pagamento seguro e rápido</b></span>
                                 </li>
                                 <li class="devolucao">
                                     <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Devoluções gratuitas</b></span>
+                                    <span><b>Empresa 100% legal</b></span>
                                 </li>
                             </ul>
 

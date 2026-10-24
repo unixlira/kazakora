@@ -524,10 +524,16 @@ const resultadoPrazoEl = ref(null);
 // Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
 // Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
 // A tabela Full/Flex/Turbo de 2026-10-23 foi desfeita a pedido do Lira (2026-10-24).
-const prazoNormal = computed(() => {
-    const ate = Math.max(7, Number(prazo.value?.dias) || 0);
-    const base = `Entrega pelos Correios ou transportadora em até ${ate} dias úteis.`;
-    return prazo.value?.modalidade === 'flex' ? `${base} (Mas geralmente chega em 3)` : base;
+const prazoNormal = computed(() => `Entrega pelos Correios ou transportadora em até ${Math.max(7, Number(prazo.value?.dias) || 0)} dias úteis.`);
+// Flex (pedido 2026-10-24): "Receba em até X dias úteis. (Mas geralmente chega em Y)".
+// Y = prazo dos Correios do serviço que o preço já paga e X = Y + folga de postagem,
+// a mesma conta do checkout (PrazoPorCep::opcoes). Sem a opção, usa o prazo do CEP + 2.
+const prazoFlex = computed(() => {
+    if (!prazo.value) return null;
+    const opcao = prazo.value.flex;
+    if (opcao) return { ate: opcao.ate, geralmente: opcao.geralmente };
+    if (prazo.value.modalidade !== 'flex' || !prazo.value.dias) return null;
+    return { ate: Number(prazo.value.dias) + 2, geralmente: Number(prazo.value.dias) };
 });
 
 const onCepPrazo = (event) => {
@@ -596,7 +602,7 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, flex: data.opcoes?.find((opcao) => opcao.tipo === 'flex') ?? null };
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
@@ -924,10 +930,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
-                                    <p v-else class="normal">
-                                        <span v-if="prazo.modalidade === 'flex'" class="full"><i class="fas fa-bolt"></i> Flex</span>
-                                        {{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span>
-                                    </p>
+                                    <!-- Flex no mesmo formato do Full, com X e Y calculados pelo CEP (pedido do Lira 2026-10-24). -->
+                                    <p v-else-if="prazoFlex" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Flex</span> Receba em até {{ prazoFlex.ate }} dias úteis.<template v-if="prazoFlex.geralmente"> (Mas geralmente chega em {{ prazoFlex.geralmente }})</template><span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
+                                    <p v-else class="normal">{{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                 </div>
                             </form>
 
@@ -1452,7 +1457,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
-.pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
 
 /* descrição no visual da v1 */

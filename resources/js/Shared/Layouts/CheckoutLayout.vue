@@ -23,6 +23,30 @@ const props = defineProps({
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
 
+// Menus do rodapé no celular (pedido 2026-10-24). Abrem em outra aba para o
+// cliente não perder o pagamento em andamento.
+const MENUS_RODAPE = [
+    {
+        titulo: 'Institucional',
+        links: [
+            { texto: 'Termos de Uso', href: '/termos-de-uso' },
+            { texto: 'Política de Privacidade', href: '/politica-de-privacidade' },
+            { texto: 'Política de Cookies', href: '/politica-de-cookies' },
+            { texto: 'Política de Entrega', href: '/politica-de-entrega' },
+            { texto: 'Trocas e Devoluções', href: '/trocas-e-devolucoes' },
+        ],
+    },
+    {
+        titulo: 'Atendimento',
+        links: [
+            { texto: 'Fale Conosco', href: '/fale-conosco' },
+            { texto: 'Rastrear pedido', href: '/rastreio' },
+            { texto: 'WhatsApp', href: COMPANY.whatsappLink },
+            { texto: 'E-mail', href: `mailto:${COMPANY.email}`, mesmaAba: true },
+        ],
+    },
+];
+
 const RELOGIO_MINUTOS = 30;
 const RELOGIO_CHAVE = 'kz_checkout_relogio_fim';
 const agora = ref(Date.now());
@@ -101,6 +125,21 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
                     </div>
                 </div>
 
+                <!-- Só no celular: dois menus sanfona, um por vez com <details> nativo (teclado e leitor de tela de graça). -->
+                <nav class="mx-auto mt-6 max-w-[420px] space-y-2 text-left md:hidden" aria-label="Institucional e atendimento">
+                    <details v-for="menu in MENUS_RODAPE" :key="menu.titulo" class="rodape-menu rounded-[8px] border border-slate-200 bg-white">
+                        <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold text-slate-700">
+                            {{ menu.titulo }}
+                            <i class="fa-solid fa-chevron-down rodape-menu-seta text-xs text-slate-500 transition-transform" aria-hidden="true"></i>
+                        </summary>
+                        <ul class="border-t border-slate-200 px-4 py-1 text-sm">
+                            <li v-for="link in menu.links" :key="link.href">
+                                <a :href="link.href" :target="link.mesmaAba ? null : '_blank'" rel="noopener" class="block py-2.5 text-slate-600 hover:text-slate-900">{{ link.texto }}</a>
+                            </li>
+                        </ul>
+                    </details>
+                </nav>
+
                 <div class="mt-6 space-y-1 text-xs text-slate-600">
                     <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
                     <p>{{ COMPANY.enderecoCompleto }}</p>
@@ -113,6 +152,12 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
 </template>
 
 <style scoped>
+.rodape-menu > summary::-webkit-details-marker {
+    display: none;
+}
+.rodape-menu[open] .rodape-menu-seta {
+    transform: rotate(180deg);
+}
 /* Barra do relógio: roxa (pedido 2026-10-24). */
 .checkout-oferta-relogio {
     background: #6D28D9;

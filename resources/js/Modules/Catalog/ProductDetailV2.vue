@@ -521,14 +521,14 @@ const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
-// Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
-// Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
+// Fora do Full e do Flex (pedido 2026-10-10): frase em verde.
 // A tabela Full/Flex/Turbo de 2026-10-23 foi desfeita a pedido do Lira (2026-10-24).
 const prazoNormal = computed(() => `Entrega pelos Correios ou transportadora em até ${Math.max(7, Number(prazo.value?.dias) || 0)} dias úteis.`);
-// Flex (pedido 2026-10-24): quando o CEP tem a opção Flex (PrazoPorCep::opcoes) ou
-// a modalidade é flex. Texto fixo "Receba de 1 a 7 dias" (pedido do Lira 2026-10-24,
+// Flex (pedido 2026-10-24): só quando o servidor manda a opção Flex (PrazoPorCep::opcoes,
+// frete grátis em até 3 dias). Não usa `modalidade`: ela olha o serviço mais rápido
+// (SEDEX) e marcaria Flex onde o frete grátis leva 5 dias. Texto fixo "Receba de 1 a 7 dias" (pedido do Lira 2026-10-24,
 // no lugar do "em até X dias úteis (Mas geralmente chega em Y)").
-const ehFlex = computed(() => Boolean(prazo.value?.flex) || prazo.value?.modalidade === 'flex');
+const ehFlex = computed(() => Boolean(prazo.value?.flex));
 // Turbo como opção de rádio abaixo do grátis (pedido do Lira 2026-10-24):
 // mesmo TURBO do checkout (SEDEX pela diferença, preço e prazo reais do CEP).
 // Nasce desmarcado; a finalização continua nascendo no grátis (pedido 2026-10-12).

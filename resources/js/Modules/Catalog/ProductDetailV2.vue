@@ -119,8 +119,9 @@ const exigirVariacao = () => {
     variacoesEl.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return true;
 };
-// "Cor: Verde" quando todas as opções têm cor cadastrada; senão "Variação: ...".
-const rotuloVariacao = computed(() => (opcoesVariacao.value.length && opcoesVariacao.value.every((variant) => variant.color) ? 'Cor' : 'Variação'));
+// "Cor: Verde" quando cada opção é só a cor (variação igual à cor cadastrada); senão "Variação: ...".
+const rotuloVariacao = computed(() => (opcoesVariacao.value.length && opcoesVariacao.value.every((variant) => variant.color
+    && String(variant.variation || variant.color).trim().toLowerCase() === String(variant.color).trim().toLowerCase()) ? 'Cor' : 'Variação'));
 const opcoesVariacao = computed(() => (props.variations.length
     ? [props.product, ...props.variations].sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
     : []));
@@ -1553,7 +1554,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h): medidas,
    cores e espaçamentos tirados do print. Vem por último para valer sobre as regras
    antigas da caixa (e as do celular). */
-.pd2 .compra { padding: 20px 20px 22px; color: #222; }
+.pd2 .compra { padding: 20px 20px 22px; color: #222; font-family: 'DM Sans', Poppins, system-ui, sans-serif; }
 .pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; line-height: 1.4; }
 .pd2 .compra .cond-texto { color: #a3a3a3; font-weight: 400; margin-right: 2px; }
 .pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 2px 4px; border-radius: 3px; font-size: 10px; font-weight: 500; line-height: 1.35; letter-spacing: -.1px; }
@@ -1583,7 +1584,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .opcao.atual { border: 2px solid #2b2b2b; background: #f2f2f2; font-weight: 400; padding: 0 17px; }
 .pd2 .compra .variacoes.com-alerta .opcao { border-color: #dc2626; }
 .pd2 .compra .estoque-baixo { margin: 34px 0 10px; }
-.pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 14px; color: #111; line-height: 1.4; }
+.pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
 .pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
 .pd2 .compra .estoque-baixo p { font-weight: 700; }
 .pd2 .compra .estoque-baixo .num { color: #e11d2a; }
@@ -1591,7 +1592,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
-.pd2 .compra .comprar-agora { width: 100%; min-height: 62px; border: 0; border-radius: 999px; background: #0aac47; color: #fff; font: 600 17px/1.2 Poppins, system-ui, sans-serif; letter-spacing: .2px; text-transform: uppercase; }
+.pd2 .compra .comprar-agora { width: 100%; min-height: 62px; border: 0; border-radius: 999px; background: #0aac47; color: #fff; font: 700 17px/1.2 'DM Sans', Poppins, system-ui, sans-serif; letter-spacing: .1px; text-transform: uppercase; }
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
 .pd2 .compra .total { margin: 10px 0 0; text-align: center; }

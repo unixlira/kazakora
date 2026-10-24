@@ -531,7 +531,9 @@ const mostrarResultadoPrazo = async () => {
     const el = resultadoPrazoEl.value;
     if (!el) return;
     const caixa = el.getBoundingClientRect();
-    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight) return;
+    // O COMPRAR AGORA preso no rodapé cobre o fim da tela: desconta a altura dele.
+    const rodape = botaoCompraEl.value?.offsetHeight ?? 0;
+    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight - rodape) return;
     const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'center' });
 };
@@ -816,10 +818,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
                                 </div>
-                                <!-- Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
-                                <div ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                    <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
-                                </div>
                                 <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
                             <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
@@ -878,6 +876,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </table>
                                 </div>
                             </form>
+
+                            <!-- COMPRAR AGORA no fim da caixa, depois do frete/prazo (pedido do Lira 2026-10-23):
+                                 no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
+                                 Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
+                            <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
+                                <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
+                            </div>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1675,6 +1680,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo.vermelho .estoque-barra span, .dark .pd2 .compra .estoque-baixo.vermelho .estoque-barra span { background: #e11d2a; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
+/* Preso no rodapé da tela enquanto a caixa rola; encaixa no fim do card, depois do frete/prazo.
+   No celular a barra fixa já faz esse papel. */
+@media (min-width: 768px) {
+    .pd2 .compra .acao { position: sticky; bottom: 0; z-index: 2; margin: 0 0 -12px; padding: 12px 0; background: var(--card); }
+}
 .pd2 .compra .comprar-agora { width: 100%; min-height: 64px; padding: 0 14px; border: 0; border-radius: 50px; background: #0aac48; color: #fff; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; letter-spacing: 0; text-transform: uppercase; }
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }

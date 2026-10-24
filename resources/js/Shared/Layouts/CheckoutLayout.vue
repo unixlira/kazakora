@@ -1,11 +1,12 @@
 <script setup>
 // Layout do checkout no modelo Yampi (pedido 2026-10-23, referência
 // seguro.mavoloja.com.br). Desde 2026-10-24 o topo segue o print da Mavo:
-// uma faixa escura só, com a logo, o CNPJ e o endereço, e abaixo a barra
-// colorida "Oferta termina em". O relógio conta até o FIM REAL da oferta do
-// carrinho (Oferta Relâmpago ou Oferta do Dia, vindo da página); sem oferta
-// no ar a barra não aparece e fica só a linha colorida. Nada de contador que
-// recomeça ao atualizar (regra do Lira, nada de publicidade enganosa).
+// uma faixa escura só, com a logo, o CNPJ e o endereço (sem nome nem razão
+// social, ajuste de 2026-10-24), e abaixo a barra roxa "Oferta termina em".
+// O relógio conta até o fim real da oferta do carrinho (Oferta Relâmpago ou
+// Oferta do Dia); sem oferta no ar, 30 minutos a partir da primeira visita
+// ao checkout (pedido do Lira 2026-10-24, modelo Mavo), guardados no
+// navegador para não recomeçar ao atualizar. Zerou, a barra some.
 // Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
 // da loja. Sem menu, busca e rodapé da loja. Sempre claro (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
@@ -15,18 +16,39 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 const props = defineProps({
     // ISO 8601 do fim da oferta que vale para o carrinho (null = sem oferta).
     ofertaFim: { type: String, default: null },
+    // Pedido já criado (pagando a 2ª parte, Pix aberto): sem relógio.
+    semRelogio: { type: Boolean, default: false },
 });
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
 
+const RELOGIO_MINUTOS = 30;
+const RELOGIO_CHAVE = 'kz_checkout_relogio_fim';
 const agora = ref(Date.now());
+const fimDoRelogio = ref(NaN);
 let relogio = null;
-onMounted(() => { relogio = setInterval(() => { agora.value = Date.now(); }, 1000); });
+onMounted(() => {
+    let fim = NaN;
+    try {
+        fim = Number(localStorage.getItem(RELOGIO_CHAVE));
+        // Passou mais de um dia desde o relógio anterior: é outra compra, começa de novo.
+        if (!Number.isFinite(fim) || fim <= 0 || Date.now() - fim > 86400000) {
+            fim = Date.now() + RELOGIO_MINUTOS * 60000;
+            localStorage.setItem(RELOGIO_CHAVE, String(fim));
+        }
+    } catch {
+        fim = Date.now() + RELOGIO_MINUTOS * 60000;
+    }
+    fimDoRelogio.value = fim;
+    relogio = setInterval(() => { agora.value = Date.now(); }, 1000);
+});
 onBeforeUnmount(() => clearInterval(relogio));
 
 const restante = computed(() => {
-    const fim = props.ofertaFim ? new Date(props.ofertaFim).getTime() : NaN;
+    if (props.semRelogio) return 0;
+    const fimOferta = props.ofertaFim ? new Date(props.ofertaFim).getTime() : NaN;
+    const fim = Number.isFinite(fimOferta) && fimOferta > agora.value ? fimOferta : fimDoRelogio.value;
 
     return Number.isFinite(fim) ? Math.max(0, Math.floor((fim - agora.value) / 1000)) : 0;
 });
@@ -44,16 +66,16 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
 
         <header class="bg-[#141414] px-4 py-3 text-center text-white">
             <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
-            <!-- Razão social, CNPJ e endereço (os mesmos dos Termos de Uso). -->
-            <p class="mt-2 text-[11px] font-semibold leading-snug sm:text-[13px]">{{ COMPANY.nomeFantasia }} · <span class="whitespace-nowrap">{{ COMPANY.razaoSocial }}</span> · <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span></p>
+            <!-- Só logo, CNPJ e endereço (os mesmos dos Termos de Uso). -->
+            <p class="mt-2 text-[11px] font-semibold leading-snug sm:text-[13px]">CNPJ: {{ COMPANY.cnpj }}</p>
             <p class="text-[11px] leading-snug text-white/75 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
-        <div v-if="restante > 0" role="timer" aria-live="off" class="checkout-oferta flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
+        <div class="checkout-oferta h-[3px]" aria-hidden="true"></div>
+        <div v-if="restante > 0" role="timer" aria-live="off" class="checkout-oferta-relogio flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
             <i class="fa-solid fa-stopwatch animate-pulse" aria-hidden="true"></i>
             <span>Oferta termina em</span>
             <span class="font-mono text-[15px] font-extrabold tabular-nums sm:text-lg">{{ tempo }}</span>
         </div>
-        <div v-else class="checkout-oferta h-[3px]" aria-hidden="true"></div>
 
         <slot />
 
@@ -91,7 +113,11 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
 </template>
 
 <style scoped>
-/* Barra colorida do topo (modelo Mavo, nas cores da KazaKora). */
+/* Barra do relógio: roxa (pedido 2026-10-24). */
+.checkout-oferta-relogio {
+    background: #6D28D9;
+}
+/* Linha colorida do topo (modelo Mavo, nas cores da KazaKora). */
 .checkout-oferta {
     background: linear-gradient(90deg, #F44D00 0%, #E0247A 55%, #6D28D9 100%);
 }

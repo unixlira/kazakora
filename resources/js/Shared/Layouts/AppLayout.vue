@@ -382,7 +382,7 @@ const REDES = [
             <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
-                <!-- Eram 4 colunas com Favoritos; voltou a 3 sem eles (2026-10-23). -->
+                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e Mandar mensagem. -->
                 <div class="grid grid-cols-3 gap-2">
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
@@ -399,10 +399,16 @@ const REDES = [
                         <span>Favoritos</span>
                     </Link>
                     -->
+                    <!-- Carrinho fora do menu do celular (pedido do Lira 2026-10-23); para voltar, descomente e tire o Rastrear pedido daqui.
                     <Link href="/carrinho" class="menu-mobile-icone">
                         <span class="relative"><i class="fas fa-cart-shopping text-lg"></i>
                             <span v-if="cartCount > 0" class="menu-mobile-contador">{{ cartCount }}</span></span>
                         <span>Carrinho</span>
+                    </Link>
+                    -->
+                    <Link href="/rastreio" class="menu-mobile-icone">
+                        <i class="fas fa-truck-fast text-lg text-[#10b981]"></i>
+                        <span>Rastrear pedido</span>
                     </Link>
                     <button v-if="user" type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': contaMobileAberta }"
@@ -442,7 +448,7 @@ const REDES = [
                 </nav>
 
                 <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15, sem o WhatsApp); ícones coloridos e chamativos, uma cor por botão. -->
-                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-4 gap-2 border-t border-store-border pt-4">
+                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-3 gap-2 border-t border-store-border pt-4">
                     <a href="/#categorias" class="menu-mobile-icone">
                         <i class="fas fa-table-cells-large text-xl text-[#8b5cf6]"></i>
                         <span>Departamentos</span>
@@ -451,10 +457,6 @@ const REDES = [
                         <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
                         <span>Produtos</span>
                     </a>
-                    <Link href="/rastreio" class="menu-mobile-icone">
-                        <i class="fas fa-truck-fast text-xl text-[#10b981]"></i>
-                        <span>Rastrear pedido</span>
-                    </Link>
                     <Link href="/fale-conosco" class="menu-mobile-icone">
                         <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
                         <span>Mandar mensagem</span>

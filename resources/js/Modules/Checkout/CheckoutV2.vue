@@ -1290,10 +1290,10 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ livrosBrinde.quantidade }}</span>
                             </span>
                             <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
-                            <!-- Valor de referência riscado antes do GRÁTIS (pedido do Lira 2026-10-22). -->
+                            <!-- Valor de referência riscado antes do GRÁTIS (pedido do Lira 2026-10-22); GRÁTIS no tamanho do Total, verde mantido (2026-10-24). -->
                             <span class="flex shrink-0 items-baseline gap-2">
                                 <s class="whitespace-nowrap text-sm text-slate-500"><span class="sr-only">De </span>R$ 97,50</s>
-                                <span class="text-2xl font-extrabold tracking-tight text-[#00843f]">GRÁTIS</span>
+                                <span class="text-xl font-extrabold text-[#00843f]">GRÁTIS</span>
                             </span>
                         </li>
                     </ul>

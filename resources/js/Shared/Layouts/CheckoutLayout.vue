@@ -108,6 +108,8 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
             <div class="mx-auto max-w-[1200px] border-t border-slate-300/70 pt-8 text-center">
                 <!-- No computador as bandeiras ficam abertas; no celular vão para a sanfona "Formas de Pagamento". -->
                 <div class="hidden md:block">
+                    <!-- Link discreto de ajuda (pedido 2026-10-24): abre o WhatsApp da loja em outra aba, o pagamento fica aberto. -->
+                    <a :href="`${COMPANY.whatsappLink}?text=${encodeURIComponent('Olá! Estou com problemas no pagamento.')}`" target="_blank" rel="noopener" class="mb-4 inline-block text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700">Problemas no pagamento?</a>
                     <p class="text-sm font-medium text-slate-600">Formas de pagamento</p>
                     <ul class="mx-auto mt-3 flex max-w-[420px] flex-nowrap items-center justify-center gap-1.5" aria-label="Bandeiras aceitas">
                         <li v-for="bandeira in BANDEIRAS" :key="bandeira" class="min-w-0 flex-1">

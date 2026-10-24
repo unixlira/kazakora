@@ -314,7 +314,8 @@ class CheckoutV2Test extends TestCase
                 ->has('order.id'));
 
         $user = User::where('email', 'maria@exemplo.com')->firstOrFail();
-        $this->assertAuthenticatedAs($user);
+        // Conta criada, mas sem login automático (pedido do Lira 2026-10-24).
+        $this->assertGuest();
         $this->assertSame('(11) 99999-0000', $user->phone);
         // Senha temporária: a loja pede a troca ao entrar.
         $this->assertTrue($user->deve_trocar_senha);

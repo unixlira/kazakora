@@ -75,9 +75,18 @@ class GuestCheckoutTest extends TestCase
         $order = Order::where('user_id', $user->id)->first();
         $this->assertNotNull($order);
 
+        // Sem login automático (2026-10-24): acompanha o pagamento pela sessão, sem entrar na conta.
         $this->get("/finalizacao/{$order->id}/status")->assertOk()->assertJson(['status' => 'paid']);
+        $this->get("/finalizacao/{$order->id}/confirmacao")->assertOk();
 
-        $this->assertAuthenticatedAs($user);
+        $this->assertGuest();
+        $this->get('/pedidos')->assertRedirect();
+
+        // Outro navegador (sessão nova) não acompanha o pedido do convidado.
+        $this->flushSession();
+        $this->getJson("/finalizacao/{$order->id}/status")->assertForbidden();
+        // 403 de visitante vira a tela de login (bootstrap/app.php).
+        $this->get("/finalizacao/{$order->id}/confirmacao")->assertRedirect(route('entrar'));
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
         Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
     }

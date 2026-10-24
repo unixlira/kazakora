@@ -45,7 +45,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -61,6 +60,16 @@ use Stripe\Exception\ApiErrorException;
 class CheckoutController extends Controller
 {
     private const SESSION_KEY = 'checkout_draft';
+
+    /**
+     * Sem login automático (pedido do Lira 2026-10-24): o convidado ganha a
+     * conta e os e-mails, mas não entra nela. Os pedidos que ele criou neste
+     * navegador ficam aqui, para acompanhar o pagamento (status, 2ª parte,
+     * confirmação) sem sessão logada. Para ver a conta, entra em /entrar.
+     */
+    private const SESSION_PEDIDOS_CONVIDADO = 'checkout_pedidos_convidado';
+
+    private const PEDIDOS_CONVIDADO_MAX = 10;
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
@@ -703,10 +712,9 @@ class CheckoutController extends Controller
         rescue(fn () => Cookies::registrarAceite($request));
 
         $visitante = ! $request->user();
-        // Medição do checkout (2026-10-23): o código do visitante sai da sessão,
-        // que muda quando o convidado ganha conta e entra; por isso vem antes.
+        // Medição do checkout (2026-10-23) e carrinho abandonado (2026-10-24):
+        // código do visitante e ID da sessão lidos antes de criar o pedido.
         $visitanteMedicao = CheckoutEvento::visitante($request);
-        // Carrinho abandonado (2026-10-24): o login do convidado troca o ID da sessão.
         $sessaoDoLead = $request->session()->getId();
 
         try {
@@ -867,10 +875,6 @@ class CheckoutController extends Controller
         } catch (GuestEmailAlreadyExistsException|UniqueConstraintViolationException) {
             // E-mail ou CPF cadastrado entre a entrega e o pagamento (ou duas
             // abas ao mesmo tempo): nada foi gravado, volta com o aviso.
-            if ($visitante && Auth::check()) {
-                // A conta criada nesta tentativa foi desfeita pelo rollback.
-                Auth::logout();
-            }
             $emUso = $visitante && isset($draft['guest']) ? $this->dadosEmUso($draft['guest']) : [];
 
             return redirect()->route('finalizacao.entrega')->withErrors($emUso ?: ['guest.email' => 'Este CPF ou e-mail já estão em uso. Entre na sua conta para continuar.']);
@@ -915,6 +919,10 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
+        if ($visitante) {
+            $this->lembrarPedidoDoConvidado($request, $order);
+        }
+
         CheckoutEvento::pedidoCriado($request, $visitanteMedicao, $order->user_id);
         app(LeadsDoCheckout::class)->converter($order, $sessaoDoLead);
 
@@ -955,7 +963,7 @@ class CheckoutController extends Controller
      */
     public function storeSecondPayment(Request $request, Order $order): Response
     {
-        abort_unless($order->user_id === optional($request->user())->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         $data = $request->validate([
             'method_type' => ['required', 'in:card,pix'],
@@ -1027,7 +1035,7 @@ class CheckoutController extends Controller
      */
     public function status(Request $request, Order $order): JsonResponse
     {
-        abort_unless($order->user_id === optional($request->user())->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         foreach ($order->payments as $payment) {
             if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
@@ -1103,7 +1111,7 @@ class CheckoutController extends Controller
 
     public function confirmation(Request $request, Order $order): Response
     {
-        abort_if($order->user_id !== $request->user()->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         $pago = $order->status === Order::STATUS_PAID && ConversoesMeta::pedidoDaLoja($order);
 
@@ -1773,6 +1781,24 @@ class CheckoutController extends Controller
         return ['visitante_latitude' => (float) $lat, 'visitante_longitude' => (float) $lng];
     }
 
+    /** Dono logado do pedido, ou o convidado que criou o pedido neste navegador (sem login). */
+    private function podeAcompanhar(Request $request, Order $order): bool
+    {
+        if ($user = $request->user()) {
+            return $order->user_id === $user->id;
+        }
+
+        return in_array($order->id, (array) $request->session()->get(self::SESSION_PEDIDOS_CONVIDADO, []), true);
+    }
+
+    private function lembrarPedidoDoConvidado(Request $request, Order $order): void
+    {
+        $pedidos = (array) $request->session()->get(self::SESSION_PEDIDOS_CONVIDADO, []);
+        $pedidos[] = $order->id;
+
+        $request->session()->put(self::SESSION_PEDIDOS_CONVIDADO, array_slice(array_values(array_unique($pedidos)), -self::PEDIDOS_CONVIDADO_MAX));
+    }
+
     private function createGuestAccount(array $guest): User
     {
         if ($this->dadosEmUso($guest)) {
@@ -1796,7 +1822,8 @@ class CheckoutController extends Controller
         // Senha temporária: a loja pede para trocar ao entrar (pedido 2026-10-10).
         $user->forceFill(['deve_trocar_senha' => true])->save();
 
-        Auth::login($user);
+        // Sem Auth::login (pedido do Lira 2026-10-24): a conta nasce, mas o
+        // cliente só entra nela fazendo login com a senha do e-mail.
 
         // Só depois do commit: se a cobrança falhar, a transação desfaz a
         // conta e nenhum e-mail com senha de conta inexistente sai.

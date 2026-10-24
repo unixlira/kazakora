@@ -71,7 +71,7 @@ class CheckoutEvento extends Model
             ?? $visitas->latest('id')->value('origem');
     }
 
-    /** Pedido criado pelo checkout (servidor). $visitante calculado antes do login do convidado. */
+    /** Pedido criado pelo checkout (servidor). $visitante calculado antes de criar o pedido. */
     public static function pedidoCriado(Request $request, string $visitante, ?int $userId): void
     {
         rescue(fn () => self::create([

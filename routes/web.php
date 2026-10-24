@@ -258,7 +258,8 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');
     Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->middleware('throttle:10,1')->name('pagamento.proxima-parte');
     Route::get('/{order}/status', [CheckoutController::class, 'status'])->name('status');
-    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->middleware('auth')->name('confirmacao');
+    // Sem middleware auth: o convidado não fica logado (2026-10-24); confirmation() confere o dono.
+    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->name('confirmacao');
 });
 
 Route::get('/pedidos', [CheckoutController::class, 'myOrders'])->middleware('auth')->name('pedidos.meus');

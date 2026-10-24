@@ -15,8 +15,11 @@ const props = defineProps({
     reviewableProductIds: { type: Array, default: () => [] },
     reviewedProductIds: { type: Array, default: () => [] },
     // Celular: slide com 2 cards por tela, do tamanho dos outros (Ofertas do dia,
-    // pedido 2026-10-10; eram 1 por tela até 2026-10-22) e Utilidades para casa (2026-10-24).
+    // pedido 2026-10-10; eram 1 por tela até 2026-10-22).
     slider: { type: Boolean, default: false },
+    // Celular: lista de cards deitados, foto ao lado do texto (Utilidades para
+    // casa, pedido 2026-10-24). Tablet e computador continuam na grade.
+    lista: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -82,7 +85,13 @@ const irPara = (indice) => {
                     @click="irPara(indice - 1)"><span class="h-2 rounded-full transition-all" :class="indice - 1 === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"></span></button>
             </div>
         </div>
-        <div v-if="!slider || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4" :class="{ 'max-md:hidden': slider }">
+        <!-- Lista do celular: um card deitado por linha. -->
+        <div v-if="lista && celular" class="flex flex-col gap-3 md:hidden">
+            <ProductCard v-for="product in produtos" :key="product.id" :product="product" horizontal
+                :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
+                :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
+        </div>
+        <div v-if="!(slider || lista) || !celular" class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4" :class="{ 'max-md:hidden': slider || lista }">
             <ProductCard v-for="product in produtos" :key="product.id" :product="product"
                 :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                 :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />

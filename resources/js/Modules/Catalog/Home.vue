@@ -242,8 +242,9 @@ onBeforeUnmount(() => observador?.disconnect());
             <template v-if="vitrineCompleta">
                 <MaisBuscadosSlider :produtos="vitrine.maisBuscados" />
 
-                <!-- Celular: cards na horizontal, mesmo slide das Ofertas do Dia (pedido 2026-10-24). -->
-                <SecaoProdutos titulo="Utilidades para casa" :produtos="vitrine.utilidades" slider
+                <!-- Celular: lista de cards deitados, foto ao lado do texto (pedido 2026-10-24;
+                     o slide de 2 por tela do #1054 não era o pedido). -->
+                <SecaoProdutos titulo="Utilidades para casa" :produtos="vitrine.utilidades" lista
                     :link="vitrine.utilidadesLink ? `/?categoria=${vitrine.utilidadesLink}#produtos` : null"
                     :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
 

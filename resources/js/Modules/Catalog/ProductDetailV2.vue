@@ -331,15 +331,17 @@ const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => '+1.538 vendidos');
 // "Só N unidades!" no fluxo que o Lira corrigiu (2026-10-23, decisão dele,
 // no lugar do estoque real do #1020):
-//   0 s    barra 100% cheia e um número sorteado entre 20 e 30, em preto, que
+//   0 s    barra 100% cheia e um número sorteado entre 19 e 37, em preto, que
 //          fica FIXO enquanto a barra desce (não conta para baixo);
 //   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
 //   +3 s   parada, o fundo do número fica vermelho com a fonte preta e some
 //          em 1 s (fade out);
 //   +1 s   o número cai uma unidade e a barra perde o pedaço dessa unidade.
-// O sorteio nunca passa do estoque real da variação; sem estoque, não aparece.
-const ESTOQUE_SORTEIO_MIN = 20;
-const ESTOQUE_SORTEIO_MAX = 30;
+// O sorteio é novo a cada carregamento da página e NUNCA passa de 37 (regra
+// do Lira em 2026-10-23, exemplos 19, 26, 35), nem do estoque real da
+// variação; sem estoque, não aparece.
+const ESTOQUE_SORTEIO_MIN = 19;
+const ESTOQUE_SORTEIO_MAX = 37;
 const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada.value.stock) || 0));
 const estoqueBaixo = ref(null);
 const estoqueBarra = ref(ESTOQUE_BAIXO);
@@ -360,7 +362,7 @@ const animarEstoque = () => {
         return;
     }
     const sorteio = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
-    const numero = Math.min(real, sorteio);
+    const numero = Math.min(real, sorteio, ESTOQUE_SORTEIO_MAX);
     estoqueBaixo.value = numero;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         estoqueBarra.value = numero;

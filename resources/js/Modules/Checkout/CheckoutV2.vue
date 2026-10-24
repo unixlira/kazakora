@@ -88,8 +88,10 @@ const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
 const numeroInput = ref(null);
 
 const onCep = async (event) => {
-    endereco.zip = maskCep(event.target.value);
-    if (endereco.zip.replace(/\D/g, '').length !== 8) return;
+    const zip = maskCep(event.target.value);
+    rolarAteFrete = zip.replace(/\D/g, '').length === 8;
+    endereco.zip = zip;
+    if (!rolarAteFrete) return;
     const result = await lookupCep(endereco.zip);
     if (result) {
         endereco.street = result.street || endereco.street;
@@ -129,6 +131,21 @@ const descontoPlataforma = ref(0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
+// Rolagem até as opções de frete (pedido 2026-10-23, igual à página do
+// produto): só depois que o cliente digita o CEP, não ao abrir a tela nem ao
+// trocar de endereço salvo. Rola o mínimo para a caixa aparecer inteira.
+const opcoesFreteEl = ref(null);
+let rolarAteFrete = false;
+const mostrarOpcoesFrete = async () => {
+    await nextTick();
+    const el = opcoesFreteEl.value;
+    if (!el) return;
+    const caixa = el.getBoundingClientRect();
+    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight) return;
+    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'nearest' });
+};
+
 const atualizarFrete = async (zip) => {
     const cep = (zip ?? '').replace(/\D/g, '');
     if (cep.length !== 8) {
@@ -151,6 +168,10 @@ const atualizarFrete = async (zip) => {
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
         if (cupomAplicado.value) descontoCupom.value = Number(data.discount_amount) || 0;
+        if (rolarAteFrete) {
+            rolarAteFrete = false;
+            mostrarOpcoesFrete();
+        }
     } catch {
         entregaExpressa.value = null;
         turbo.value = null;
@@ -904,7 +925,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                             </div>
 
                             <!-- Opções de frete -->
-                            <div class="mt-5">
+                            <div ref="opcoesFreteEl" class="mt-5 scroll-mb-4">
                                 <p class="mb-2 text-sm font-bold text-slate-900">Forma de entrega</p>
                                 <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                                     <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}

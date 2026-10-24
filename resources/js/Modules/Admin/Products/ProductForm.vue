@@ -128,6 +128,9 @@ const regenerateSku = async () => {
 // Estimado tira também o frete. Sem Lucro Mínimo nem trava (pedido do Lira).
 const FRETE_ESTIMADO = 30;
 const taxas = computed(() => usePage().props.taxasLucro ?? { imposto: 4.5, taxa_pix: 0.99, taxa_cartao: 4.98 });
+// Cupom automático do checkout (BEMVINDO, 2026-10-24): 3% em qualquer
+// pagamento, sobre o preço com o Desconto Site, somando com o do Pix.
+const cupomAutomatico = computed(() => usePage().props.cupomAutomatico ?? { codigo: '', percentual: 0 });
 
 const moeda = (valor) => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const percentual = (valor) => `${Number(valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -144,7 +147,8 @@ const resumo = computed(() => {
     const valorCheckout = checkoutDiscountType.value === 'amount'
         ? Math.min(precoSite, Math.max(0, Number(props.form.checkout_discount_amount) || 0))
         : centavos(precoSite * limitarPct(props.form.checkout_discount_percentage) / 100);
-    const precoFinal = centavos(precoSite - valorCheckout);
+    const valorCupom = centavos(precoSite * limitarPct(cupomAutomatico.value.percentual) / 100);
+    const precoFinal = centavos(Math.max(0, precoSite - valorCheckout - valorCupom));
     const imposto = centavos(precoFinal * taxas.value.imposto / 100);
     const taxa = centavos(precoFinal * taxas.value.taxa_pix / 100);
     const lucroSemFrete = centavos(precoFinal - imposto - taxa - custo);
@@ -156,6 +160,7 @@ const resumo = computed(() => {
         valorSite,
         descontoCheckout: precoSite > 0 ? valorCheckout * 100 / precoSite : 0,
         valorCheckout,
+        valorCupom,
         precoFinal,
         imposto,
         taxa,
@@ -440,10 +445,10 @@ const resumo = computed(() => {
                 <input v-if="checkoutDiscountType === 'amount'" id="checkout_discount_amount" v-model="form.checkout_discount_amount" type="number" step="0.01" min="0"
                     placeholder="Ex: 10,00" class="w-full rounded border border-gray-300 px-3 py-2">
                 <input v-else id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
-                    placeholder="Ex: 5" :disabled="checkoutDiscountType === ''"
+                    placeholder="Ex: 2" :disabled="checkoutDiscountType === ''"
                     class="w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
                 <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
-                <p class="text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Valor fixo é por unidade. Sem desconto = preço cheio no Pix.</p>
+                <p class="text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix, somado ao cupom automático (BEMVINDO, 3% em qualquer pagamento): 2% aqui = 5% no Pix. Valor fixo é por unidade.</p>
             </div>
         </div>
 
@@ -478,6 +483,10 @@ const resumo = computed(() => {
                     <dd class="resumo-negativo font-semibold tabular-nums">
                         -{{ checkoutDiscountType === 'amount' ? moeda(resumo.valorCheckout) : percentual(resumo.descontoCheckout) }}
                     </dd>
+                </div>
+                <div v-if="resumo.valorCupom > 0" class="flex justify-between gap-3">
+                    <dt>Cupom {{ cupomAutomatico.codigo }} ({{ percentual(cupomAutomatico.percentual) }})</dt>
+                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ moeda(resumo.valorCupom) }}</dd>
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Imposto ({{ percentual(taxas.imposto) }})</dt>

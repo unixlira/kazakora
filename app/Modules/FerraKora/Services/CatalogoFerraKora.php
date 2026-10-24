@@ -58,7 +58,8 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'categoria' => $registro->categoria,
             'kazakora_url' => filled($pai->slug) ? route('produtos.ver', $pai->slug) : null,
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
-            'desconto_pix' => DescontoPix::percentualDo($pai),
+            // Pix + cupom automático (BEMVINDO), que o checkout aplica sozinho (2026-10-24).
+            'desconto_pix' => DescontoPix::percentualNaVitrine($pai),
         ];
     }
 

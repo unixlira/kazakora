@@ -5,7 +5,22 @@ return [
     | Desconto no Pix: desde 2026-10-18 é por produto ("Desconto Checkout (%)"
     | no cadastro, products.checkout_discount_percentage), sem % fixo aqui.
     | O preço da loja (products.price) é o valor digitado no cadastro.
+    |
+    | Desde 2026-10-24 (pedido do Lira) os 5% do Pix viraram 3% + 2%: o cupom
+    | automático (abaixo) dá 3% em qualquer forma de pagamento e o "Desconto
+    | Checkout" de cada produto passou de 5% para 2%, só no Pix, calculado
+    | sobre o valor antes do cupom (3% + 2% = 5% no Pix).
     */
+
+    /*
+    | Cupom que entra sozinho no campo de cupom do checkout (pedido do Lira
+    | 2026-10-24): código de um cupom JÁ cadastrado em Admin > Cupons (a
+    | migração 2026_10_24_150000 cria o BEMVINDO de 3%). Só entra quando não
+    | há outro cupom, ele vale para o carrinho e o cliente não tirou ele
+    | nesta compra. Outro cupom digitado troca o automático (não somam).
+    | Vazio desliga.
+    */
+    'cupom_automatico' => env('LOJA_CUPOM_AUTOMATICO', 'BEMVINDO'),
 
     /*
     | Selo "Verificada por Reclame AQUI" (2026-10-11). Verificação aprovada:

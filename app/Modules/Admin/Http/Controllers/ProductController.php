@@ -73,6 +73,8 @@ class ProductController extends Controller
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'parent' => $parent,
             'taxasLucro' => LucroProduto::taxas(),
+            // Cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24): entra no resumo do lucro no Pix.
+            'cupomAutomatico' => ['codigo' => \App\Support\CupomAutomatico::codigo(), 'percentual' => \App\Support\CupomAutomatico::percentualNaVitrine()],
         ]);
     }
 
@@ -201,6 +203,8 @@ class ProductController extends Controller
             'variations' => $variationsPayload,
             'linkableOrphans' => $orphans,
             'taxasLucro' => LucroProduto::taxas(),
+            // Cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24): entra no resumo do lucro no Pix.
+            'cupomAutomatico' => ['codigo' => \App\Support\CupomAutomatico::codigo(), 'percentual' => \App\Support\CupomAutomatico::percentualNaVitrine()],
         ]);
     }
 

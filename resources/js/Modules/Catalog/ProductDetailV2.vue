@@ -8,6 +8,7 @@ import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // não oferece (desconto no Pix, boleto, sorteio, brindes). A v1
 // (ProductDetail.vue) segue no código; o CatalogController escolhe qual mostrar.
 import '../../../css/fontes-poppins.css';
+import '../../../css/fontes-manrope.css';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
@@ -782,6 +783,44 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
+                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
+                                 sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
+                            <ul class="fretefundo">
+                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
+                                     já fica no campo "Calcular o prazo de entrega" logo abaixo. -->
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
+                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
+                                </li>
+                                <!-- Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
+                                <li v-if="isFreeShipping">
+                                    <span class="selo-icone"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
+                                    <span><b>Frete Grátis com entrega expressa</b> para São Paulo/SP e região. Consulte seu CEP abaixo.</span>
+                                </li>
+                                <li v-if="isFreeShipping || DESCONTO_PIX">
+                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping && DESCONTO_PIX"><b>Frete Grátis + desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                    <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
+                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                </li>
+                                <!-- Formato da Mavo (pedido 2026-10-23) com os prazos da política de trocas:
+                                     7 dias para desistir (art. 49 CDC) e 30 dias com defeito (art. 26). -->
+                                <li class="devolucao">
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro em até 7 dias após o recebimento, ou 30 dias se o produto vier com defeito.</span>
+                                </li>
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
+                                </li>
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
+                                </li>
+                            </ul>
+
+                            <!-- Calcular o prazo por último na coluna, como na Mavo (pedido 2026-10-23). -->
                             <form class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
@@ -805,43 +844,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </table>
                                 </div>
                             </form>
-
-                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo
-                                 as frases e o negrito azul daqui. -->
-                            <ul class="fretefundo">
-                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
-                                     já fica no campo "Consultar prazo de entrega" logo acima. -->
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
-                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
-                                </li>
-                                <!-- Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
-                                <li v-if="isFreeShipping">
-                                    <span class="selo-icone"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
-                                    <span><b>Frete Grátis com entrega expressa</b> para São Paulo/SP e região. Consulte seu CEP acima.</span>
-                                </li>
-                                <li v-if="isFreeShipping || DESCONTO_PIX">
-                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping && DESCONTO_PIX"><b>Frete Grátis + desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
-                                    <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
-                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
-                                </li>
-                                <!-- Formato da Mavo (pedido 2026-10-23) com os prazos da política de trocas:
-                                     7 dias para desistir (art. 49 CDC) e 30 dias com defeito (art. 26). -->
-                                <li class="devolucao">
-                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro em até 7 dias após o recebimento, ou 30 dias se o produto vier com defeito.</span>
-                                </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
-                                </li>
-                            </ul>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1579,32 +1581,33 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .tag-tempo, .pd2 .estoque-barra span, .pd2 .estoque-barra span::after { animation: none; }
 }
 
-/* Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h): medidas,
-   cores e espaçamentos tirados do print. Vem por último para valer sobre as regras
+/* Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h; medidas
+   conferidas na página da Mavo no ar em 23/10 22h: Manrope, caixa com borda fina
+   #f1f1f1 e cantos de 10px, preço 28px/600, botão 64px). Vem por último para valer sobre as regras
    antigas da caixa (e as do celular). */
-.pd2 .compra { padding: 20px 20px 22px; color: #222; font-family: 'DM Sans', Poppins, system-ui, sans-serif; }
+.pd2 .compra { padding: 30px; color: #1c1c1c; font-family: Manrope, 'DM Sans', system-ui, sans-serif; border: 1px solid #f1f1f1; border-radius: 10px; box-shadow: none; }
 /* Faixa "Novo | +N vendidos / EXCLUSIVO / POR TEMPO LIMITADO!" com os valores lidos da Mavo
    no ar (2026-10-23 21h45): Manrope 400, 13px #a7a5a5 no texto, tags 10px com 3px 5px. */
-.pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-family: Manrope, 'DM Sans', sans-serif; font-size: 13px; line-height: 1.4; }
-.pd2 .compra .cond-texto { color: #a7a5a5; font-size: 13px; font-weight: 400; margin-right: 0; }
-.pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 3px 5px; border-radius: 3px; font-size: 10px; font-weight: 400; line-height: 1.3; letter-spacing: normal; }
+.pd2 .compra .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 13px; line-height: 1.4; }
+.pd2 .compra .cond-texto { color: #a7a5a5; font-weight: 400; margin-right: 2px; }
+.pd2 .compra .tag-exclusivo, .pd2 .compra .tag-tempo { padding: 3px 5px; border-radius: 3px; font-size: 10px; font-weight: 400; line-height: 1.2; letter-spacing: -.1px; }
 .pd2 .compra .tag-exclusivo { background: #000; color: #fff600; }
-.pd2 .compra h1 { font-size: 20px; font-weight: 600; line-height: 1.48; color: #222; text-transform: none; letter-spacing: -.1px; margin: 0; }
+.pd2 .compra h1 { font-size: 20px; font-weight: 700; line-height: 1.45; color: #1c1c1c; text-transform: none; letter-spacing: -.1px; margin: 0; }
 .pd2 .compra .nota { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin: 12px 0 0; font-size: 15px; font-weight: 400; color: #555; line-height: 1.4; text-decoration: none; }
 .pd2 .compra .nota .estrelas { color: #fcbd10; font-size: 16px; letter-spacing: 2px; }
 .pd2 .compra .nota .media { font-size: 15px; font-weight: 400; color: #555; }
-.pd2 .compra .divisor { border: 0; border-top: 1px solid #ececec; opacity: 1; margin: 14px 0 18px; }
+.pd2 .compra .divisor { border: 0; border-top: 1px solid #e9e9e9; opacity: 1; margin: 14px 0 18px; }
 .pd2 .compra .preco { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 28px; }
 .pd2 .compra .a-partir { font-size: 13px; color: #777; }
 .pd2 .compra .linha-por { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
-.pd2 .compra .por { color: #111; font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -.3px; }
+.pd2 .compra .por { color: #000; font-size: 28px; font-weight: 600; line-height: 1.15; letter-spacing: 0; }
 .pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; text-decoration: line-through; }
-.pd2 .compra .parc { display: flex; align-items: center; gap: 4px; color: #222; font-size: 15px; line-height: 1.35; }
-.pd2 .compra .parc i { color: #222; font-size: 14px; margin: 0; }
-.pd2 .compra .parc strong { color: #12a14b; font-weight: 700; }
-.pd2 .compra .linha-pix { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: #222; font-size: 15px; font-weight: 600; line-height: 1.35; }
-.pd2 .compra .linha-pix i { color: #12a14b; font-size: 17px; width: 18px; }
-.pd2 .compra .linha-pix b { color: #12a14b; font-weight: 700; }
+.pd2 .compra .parc { display: flex; align-items: center; gap: 4px; color: #1c1c1c; font-size: 15px; line-height: 1.35; }
+.pd2 .compra .parc i { color: #1c1c1c; font-size: 14px; margin: 0; }
+.pd2 .compra .parc strong { color: #0aac48; font-weight: 700; }
+.pd2 .compra .linha-pix { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: #1c1c1c; font-size: 15px; font-weight: 700; line-height: 1.35; }
+.pd2 .compra .linha-pix i { color: #0aac48; font-size: 17px; width: 18px; }
+.pd2 .compra .linha-pix b { color: #0aac48; font-weight: 600; }
 .pd2 .compra .variacoes, .pd2 .compra .leve-mais { margin: 0 0 22px; }
 .pd2 .compra .subtitulo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; font-weight: 400; color: #555; margin: 0 0 12px; }
 .pd2 .compra .valor-escolhido { color: #555; }
@@ -1622,16 +1625,32 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
-.pd2 .compra .comprar-agora { width: 100%; min-height: 62px; border: 0; border-radius: 999px; background: #0aac47; color: #fff; font: 700 17px/1.2 'DM Sans', Poppins, system-ui, sans-serif; letter-spacing: .1px; text-transform: uppercase; }
+.pd2 .compra .comprar-agora { width: 100%; min-height: 64px; padding: 0 14px; border: 0; border-radius: 50px; background: #0aac48; color: #fff; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; letter-spacing: 0; text-transform: uppercase; }
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
 .pd2 .compra .total { margin: 10px 0 0; text-align: center; }
-.pd2 .compra .pagamento-seguro { margin: 16px 0 18px; border: 1px solid #efefef; border-radius: 8px; padding: 4px 4px 10px; background: #fff; }
-.pd2 .compra .ps-topo { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: 6px; background: #f4f4f5; color: #555; font-size: 12px; font-weight: 600; letter-spacing: .1px; }
+.pd2 .compra .pagamento-seguro { margin: 18px 0 10px; border: 1px solid #f6f6f8; border-radius: 6px; padding: 2px 2px 10px; background: #fff; }
+.pd2 .compra .ps-topo { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border-radius: 6px; background: #f6f6f8; color: #565656; font-size: 12px; font-weight: 700; letter-spacing: 0; }
 .pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
 .pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
 .pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
-.pd2 .compra .checks { margin: 0 0 16px; font-size: 15px; }
+.pd2 .compra .checks { margin: 0 0 10px; font-size: 14px; }
+/* Selos em caixinhas separadas, como "Frete Grátis" e "Devoluções Gratuitas" da Mavo:
+   borda #f5f5f5, cantos de 6px, título 13px em negrito preto e texto 12px. */
+.pd2 .compra .fretefundo { display: flex; flex-direction: column; gap: 10px; margin: 0 0 10px; padding: 0; border: 0; border-radius: 0; background: none; }
+.pd2 .compra .fretefundo li { grid-template-columns: 38px 1fr; gap: 9px; padding: 10px 10px 10px 8px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; font-size: 12px; line-height: 1.4; color: #1c1c1c; }
+.pd2 .compra .fretefundo li + li { border-top: 1px solid #f5f5f5; }
+.pd2 .compra .fretefundo b { color: #1c1c1c; font-size: 13px; font-weight: 600; }
+.pd2 .compra .fretefundo .selo-img { width: 38px; height: 38px; }
+.pd2 .compra .fretefundo .selo-icone { width: 38px; height: 30px; border-radius: 6px; background: #0d1b3e; }
+.pd2 .compra .fretefundo .selo-icone i { color: #fff; font-size: 17px; }
+.pd2 .compra .fretefundo .escudo { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
+.pd2 .compra .fretefundo .escudo i { color: #0aac48; font-size: 16px; }
+.pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
+.pd2 .compra .prazo-cep { margin: 0; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
+.pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
+.pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
+.pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
 .dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }
@@ -1643,6 +1662,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .compra .estoque-barra span { background: #e5e7eb; }
 .dark .pd2 .compra .pagamento-seguro { background: var(--card); border-color: var(--line); }
 .dark .pd2 .compra .ps-topo { background: var(--sunk); }
+.dark .pd2 .compra { border-color: var(--line); }
+.dark .pd2 .compra .fretefundo li, .dark .pd2 .compra .prazo-cep { background: var(--card); border-color: var(--line); color: var(--text); }
+.dark .pd2 .compra .fretefundo b, .dark .pd2 .compra .prazo-cep label { color: var(--ink); }
+.dark .pd2 .compra .prazo-cep input { background: var(--sunk); border-color: var(--line); }
 @media (max-width: 767px) {
     .pd2 .compra { padding: 18px 18px 20px; }
     .pd2 .compra h1 { font-size: 19px; }

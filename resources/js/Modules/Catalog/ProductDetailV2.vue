@@ -333,55 +333,15 @@ const vendidosLegenda = computed(() => {
     if (total < 1) return null;
     return total === 1 ? '1 vendido' : `+${total} vendidos`;
 });
-// "Só N unidades!" no efeito que o Lira mostrou na tela (2026-10-23 23h, como
-// a Mavo): a barra abre cheia (50), desce até um número sorteado entre 4 e 9
-// e, alguns segundos depois, cai mais uma unidade e fica vermelha. O sorteio
-// nunca passa do estoque real da variação; sem estoque, não aparece.
-const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada.value.stock) || 0));
-const estoqueBaixo = ref(null);
-const estoqueVermelho = ref(false);
-let estoqueTimers = [];
-const pararEstoque = () => {
-    estoqueTimers.forEach((id) => clearTimeout(id));
-    estoqueTimers = [];
-};
-const animarEstoque = () => {
-    pararEstoque();
-    estoqueVermelho.value = false;
-    const real = estoqueReal.value;
-    if (real < 1) {
-        estoqueBaixo.value = null;
-        return;
-    }
-    const alvo = Math.min(real, 4 + Math.floor(Math.random() * 6));
-    const cair = () => {
-        if (alvo < 2) return;
-        estoqueTimers.push(setTimeout(() => {
-            estoqueBaixo.value = alvo - 1;
-            estoqueVermelho.value = true;
-        }, 5000 + Math.random() * 5000));
-    };
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-        estoqueBaixo.value = alvo;
-        cair();
-        return;
-    }
-    // Desce uma unidade por passo em ~2,5 s, como um contador.
-    estoqueBaixo.value = ESTOQUE_BAIXO;
-    const passo = Math.round(2500 / (ESTOQUE_BAIXO - alvo));
-    const descer = () => {
-        if (estoqueBaixo.value <= alvo) {
-            cair();
-            return;
-        }
-        estoqueBaixo.value -= 1;
-        estoqueTimers.push(setTimeout(descer, passo));
-    };
-    estoqueTimers.push(setTimeout(descer, 400));
-};
-onMounted(animarEstoque);
-onUnmounted(pararEstoque);
-watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
+// "Só N unidades!" com o estoque REAL da variação (ex.: "Só 37 unidades!"),
+// como o Lira mostrou: aparece abaixo de 50 e some sem estoque. O número
+// sorteado entre 4 e 9 do #1014 saiu em 2026-10-23: estoque inventado seria
+// publicidade enganosa (mesma regra do vendidos fixo).
+const estoqueBaixo = computed(() => {
+    if (faltaVariacao.value) return null;
+    const estoque = Number(selecionada.value.stock) || 0;
+    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
+});
 const barraEstoque = computed(() => (estoqueBaixo.value
     ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
     : 0));
@@ -851,7 +811,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <div v-if="estoqueBaixo" class="estoque-baixo" :class="{ vermelho: estoqueVermelho }">
+                                <div v-if="estoqueBaixo" class="estoque-baixo">
                                     <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
@@ -1323,8 +1283,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
 /* Animação da barra: enche do zero ao abrir a página e as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .08s linear, background-color .3s; }
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; animation: estoque-enche 1.2s ease-out both; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
+@keyframes estoque-enche { from { width: 0; } }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }
@@ -1715,8 +1676,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo .num { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
-/* Queda de uma unidade: barra vermelha (efeito pedido pelo Lira, 2026-10-23). */
-.pd2 .compra .estoque-baixo.vermelho .estoque-barra span, .dark .pd2 .compra .estoque-baixo.vermelho .estoque-barra span { background: #e11d2a; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
 /* Preso no rodapé da tela enquanto a caixa rola; encaixa no fim do card, depois do frete/prazo.

@@ -355,6 +355,44 @@ const pararEstoque = () => {
 };
 const depois = (ms, fn) => estoqueTimers.push(setTimeout(fn, ms));
 const ESTOQUE_DESCIDA_MS = 1200;
+// No celular a barra fica abaixo da dobra e a animação acabava antes de a
+// pessoa chegar nela (Lira, 2026-10-23: "não aparece"). Lá ela espera cheia,
+// com o número sorteado, e só roda quando a barra chega na faixa do meio da
+// tela (30% centrais). Uma vez por página; trocar a variação depois roda na hora.
+const estoqueEl = ref(null);
+const ESTOQUE_ESPERA_MEIO = '(max-width: 900px)';
+let estoqueVisto = false;
+let observadorEstoque = null;
+const esperaMeio = () => !estoqueVisto && 'IntersectionObserver' in window && window.matchMedia?.(ESTOQUE_ESPERA_MEIO).matches;
+const rodarEstoque = (numero) => {
+    pararEstoque();
+    depois(60, () => { estoqueBarra.value = numero; });
+    if (numero < 2) return;
+    const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
+    depois(parada, () => {
+        estoqueFundo.value = true;
+        estoqueVermelho.value = true;
+        estoqueBaixo.value = numero - 1;
+        estoqueBarra.value = numero - 1;
+    });
+};
+const pararObservadorEstoque = () => {
+    observadorEstoque?.disconnect();
+    observadorEstoque = null;
+};
+watch(estoqueEl, (el) => {
+    pararObservadorEstoque();
+    if (!el || !esperaMeio()) return;
+    observadorEstoque = new IntersectionObserver(([entrada]) => {
+        // Também dispara se a barra já passou do meio (rolagem rápida ou link com âncora).
+        const passou = entrada.rootBounds && entrada.boundingClientRect.top < entrada.rootBounds.top;
+        if (estoqueVisto || !(entrada.isIntersecting || passou)) return;
+        estoqueVisto = true;
+        pararObservadorEstoque();
+        if (estoqueBaixo.value) rodarEstoque(estoqueBaixo.value);
+    }, { rootMargin: '-35% 0px -35% 0px', threshold: 0 });
+    observadorEstoque.observe(el);
+});
 const animarEstoque = () => {
     pararEstoque();
     estoqueFundo.value = false;
@@ -373,18 +411,11 @@ const animarEstoque = () => {
     }
     // Pinta a barra cheia primeiro; o recolhimento sai no tick seguinte para a transição rodar.
     estoqueBarra.value = ESTOQUE_BAIXO;
-    depois(60, () => { estoqueBarra.value = numero; });
-    if (numero < 2) return;
-    const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
-    depois(parada, () => {
-        estoqueFundo.value = true;
-        estoqueVermelho.value = true;
-        estoqueBaixo.value = numero - 1;
-        estoqueBarra.value = numero - 1;
-    });
+    if (esperaMeio()) return;
+    rodarEstoque(numero);
 };
 onMounted(animarEstoque);
-onUnmounted(pararEstoque);
+onUnmounted(() => { pararEstoque(); pararObservadorEstoque(); });
 watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
 const barraEstoque = computed(() => Math.max(4, Math.round((estoqueBarra.value / ESTOQUE_BAIXO) * 100)));
 // Só cita o que vale para o produto: frete grátis e desconto do Pix.
@@ -883,7 +914,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <div v-if="estoqueBaixo" class="estoque-baixo">
+                                <div v-if="estoqueBaixo" ref="estoqueEl" class="estoque-baixo">
                                     <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO":aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>

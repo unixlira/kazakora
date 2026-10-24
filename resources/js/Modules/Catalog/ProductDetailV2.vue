@@ -325,8 +325,8 @@ const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuanti
 // Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
 // no lugar de números fixos): vendidos com o número exato desde a 1ª venda
 // ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
-// "POR TEMPO LIMITADO!" só com Oferta do Dia
-// ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
+// "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão do Lira em
+// 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar); "Só restam" com o estoque da
 // variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
 const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => {
@@ -334,7 +334,6 @@ const vendidosLegenda = computed(() => {
     if (total < 1) return null;
     return total === 1 ? '1 vendido' : `+${total} vendidos`;
 });
-const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
 const estoqueBaixo = computed(() => {
     if (faltaVariacao.value) return null;
     const estoque = Number(selecionada.value.stock) || 0;
@@ -690,10 +689,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                  os números reais: vendidos, oferta no ar, nota, estoque e desconto do Pix. -->
                             <div class="condicao">
                                 <span class="cond-texto">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
-                                <template v-if="tempoLimitado">
-                                    <span class="tag-exclusivo">EXCLUSIVO</span>
-                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
-                                </template>
+                                <span class="tag-exclusivo">EXCLUSIVO</span>
+                                <span class="tag-tempo">POR TEMPO LIMITADO!</span>
                             </div>
 
                             <h1>{{ selecionada.name }}</h1>

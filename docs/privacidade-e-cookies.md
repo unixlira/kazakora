@@ -133,6 +133,26 @@ rolagem máxima, e o pedido criado (servidor).
   pseudônimo. Leitura só pelo comando `php artisan checkout:funil --dias=7`
   (equipe e robôs fora).
 
+### Carrinho abandonado (`lead_checkout`, pedido 2026-10-24)
+Quem preenche a Identificação do checkout e clica em "Ir para Entrega" (e de
+novo em "Ir para Pagamento") fica gravado com nome, e-mail, CPF, celular, os
+itens do carrinho (produto, variação, quantidade, preço), loja (`site`), sessão,
+IP, navegador e origem/UTM da visita. Vira "convertido" com o `order_id` quando
+o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
+- Rota `POST /finalizacao/lead`: com CSRF, 10 por minuto, responde sempre 204
+  sem corpo (não revela se o e-mail/CPF existe). Itens e preços vêm do
+  carrinho do servidor. Falha vira log `checkout.lead.falhou` só com a classe
+  do erro, nunca com o dado da pessoa.
+- Leitura só no admin: `/admin/carrinhos-abandonados` (permissão `pedidos.view`),
+  somente consulta. Nenhuma mensagem de recuperação sai daqui: falar com o
+  cliente pede OK do Lira.
+- Base legal: procedimentos preliminares do contrato que a pessoa começou
+  (art. 7º V). Mensagem de recuperação, quando o Lira decidir ligar, precisa
+  ser avaliada à parte (legítimo interesse com opção de sair, art. 7º IX).
+- Prazo de guarda: ainda sem limpeza automática; decidir com o Lira (sugestão:
+  aberto há mais de 6 meses apagado em `privacidade:limpar`) e citar na
+  Política de Privacidade.
+
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Medição do checkout (`checkout_eventos`) com mais de 6 meses: apagada.
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do

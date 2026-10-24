@@ -554,6 +554,23 @@ const errosDosDados = () => {
     return lista;
 };
 
+// Carrinho abandonado (pedido 2026-10-24): manda o contato para o servidor
+// sem esperar a resposta. Falhou? Tanto faz para o cliente: nada aparece na
+// tela e a compra segue. CSRF pelo X-XSRF-TOKEN, como o resto da página.
+const gravarLead = () => {
+    try {
+        fetch('/finalizacao/lead', {
+            method: 'POST',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: JSON.stringify({ nome: pessoa.name, email: pessoa.email, cpf: pessoa.cpf, telefone: pessoa.phone }),
+        }).catch(() => {});
+    } catch {
+        // nunca atrapalha o checkout
+    }
+};
+
 const irParaEntrega = () => {
     tentouAqui.value = true;
     erroGeral.value = null;
@@ -562,6 +579,7 @@ const irParaEntrega = () => {
         irParaErro();
         return;
     }
+    gravarLead();
     irPara(2);
 };
 

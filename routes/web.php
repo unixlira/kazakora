@@ -247,6 +247,8 @@ Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamen
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');
+    // Carrinho abandonado (pedido 2026-10-24): contato de quem clicou "Ir para Entrega". Com CSRF; ver LeadCheckoutController.
+    Route::post('/lead', [\App\Modules\Checkout\Http\Controllers\LeadCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('lead.salvar');
     Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
     Route::patch('/itens/{product}', [CheckoutController::class, 'updateItem'])->whereNumber('product')->middleware('throttle:60,1')->name('itens.atualizar');
@@ -637,6 +639,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:pedidos.view');
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
+    // Carrinho abandonado (pedido 2026-10-24): só leitura, nada é enviado ao cliente daqui.
+    Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');

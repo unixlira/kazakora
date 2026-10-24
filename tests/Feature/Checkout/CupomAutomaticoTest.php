@@ -77,8 +77,6 @@ class CupomAutomaticoTest extends TestCase
             ->component('Checkout/CheckoutV2', false)
             ->where('couponCode', 'BEMVINDO')
             ->where('discountAmount', 6)
-            ->where('cupomAutomatico.code', 'BEMVINDO')
-            ->where('cupomAutomatico.descricao', '3% de desconto')
             ->where('pixDiscountPercentage', 2));
         $this->assertSame('BEMVINDO', session('checkout_draft.coupon_code'));
     }
@@ -139,7 +137,7 @@ class CupomAutomaticoTest extends TestCase
 
         $this->postJson('/finalizacao/cupom', ['code' => 'DEZOFF'])->assertOk()->assertJson(['discount_amount' => 20]);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF')->where('cupomAutomatico', null));
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF'));
     }
 
     public function test_cupom_desligado_nao_entra(): void

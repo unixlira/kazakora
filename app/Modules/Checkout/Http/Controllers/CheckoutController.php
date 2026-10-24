@@ -1988,11 +1988,6 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
-            // Destaque "cupom já aplicado" (pedido 2026-10-24): só quando o cupom do rascunho é o automático.
-            'cupomAutomatico' => $coupon && CupomAutomatico::eh($coupon->code) ? [
-                'code' => $coupon->code,
-                'descricao' => $coupon->descricaoDesconto(),
-            ] : null,
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),

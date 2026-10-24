@@ -385,8 +385,9 @@ class CheckoutController extends Controller
             }
         }
 
-        // Um CPF e um e-mail por conta (pedido 2026-10-12): dado já cadastrado
-        // volta como aviso, em vez de estourar o índice único (erro 500).
+        // CPF já cadastrado não trava mais (2026-10-24): a compra vai para a
+        // conta dona do CPF. Só avisa o que não dá para vincular (conta apagada
+        // ou e-mail de outra conta), em vez de estourar o índice único (500).
         if (! $request->user() && $emUso = $this->dadosEmUso($data['guest'])) {
             return redirect()->route('finalizacao.entrega')->withErrors($emUso);
         }
@@ -1747,18 +1748,28 @@ class CheckoutController extends Controller
      *
      * @return array<string, string>
      */
+    /**
+     * Só o que NÃO dá para vincular: CPF preso numa conta apagada, ou e-mail de
+     * uma conta com outro CPF (pedido 2026-10-24: CPF ou e-mail já cadastrado
+     * deixou de travar; a compra vai para a conta dona do CPF).
+     */
     private function dadosEmUso(array $guest): array
     {
-        $emailEmUso = User::emailEmUso($guest['email'] ?? null);
-        $cpfEmUso = User::cpfEmUso($guest['cpf'] ?? null);
+        if (User::contaDoCpf($guest['cpf'] ?? null)) {
+            return [];
+        }
 
-        if ($emailEmUso && $cpfEmUso) {
+        $cpfPreso = User::cpfEmUso($guest['cpf'] ?? null);
+        $dono = User::withTrashed()->where('email', trim((string) ($guest['email'] ?? '')))->first();
+        $emailPreso = $dono && ($dono->trashed() || preg_replace('/\D/', '', (string) $dono->cpf) !== '');
+
+        if ($emailPreso && $cpfPreso) {
             return ['guest.email' => 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.', 'guest.cpf' => self::MSG_CPF_EM_USO];
         }
 
         return array_filter([
-            'guest.email' => $emailEmUso ? self::MSG_EMAIL_EM_USO : null,
-            'guest.cpf' => $cpfEmUso ? self::MSG_CPF_EM_USO : null,
+            'guest.email' => $emailPreso ? self::MSG_EMAIL_EM_USO : null,
+            'guest.cpf' => $cpfPreso ? self::MSG_CPF_EM_USO : null,
         ]);
     }
 
@@ -1803,6 +1814,27 @@ class CheckoutController extends Controller
     {
         if ($this->dadosEmUso($guest)) {
             throw new GuestEmailAlreadyExistsException();
+        }
+
+        // CPF já cadastrado (2026-10-24): a compra entra na conta existente, sem
+        // mexer em nome, e-mail ou senha dela e sem abrir sessão. Só completa o
+        // telefone se estiver vazio.
+        if ($existente = User::contaDoCpf($guest['cpf'] ?? null)) {
+            if (blank($existente->phone) && ! empty($guest['phone'])) {
+                $existente->forceFill(['phone' => $guest['phone']])->save();
+            }
+
+            return $existente;
+        }
+
+        // E-mail de conta sem CPF: o CPF informado completa o cadastro dela.
+        if ($semCpf = User::where('email', trim((string) ($guest['email'] ?? '')))->first()) {
+            $semCpf->forceFill(['cpf' => $guest['cpf']])->save();
+            if (blank($semCpf->phone) && ! empty($guest['phone'])) {
+                $semCpf->forceFill(['phone' => $guest['phone']])->save();
+            }
+
+            return $semCpf;
         }
 
         // Pedido 2026-10-10: quem compra sem conta recebe uma senha

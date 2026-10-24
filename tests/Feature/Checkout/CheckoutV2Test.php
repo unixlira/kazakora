@@ -185,39 +185,35 @@ class CheckoutV2Test extends TestCase
             ->assertOk();
     }
 
-    public function test_email_que_ja_tem_conta_pede_login(): void
+    // Pedido 2026-10-24: e-mail ou CPF já cadastrado não trava mais o checkout.
+    public function test_email_de_conta_sem_cpf_segue_para_o_pagamento(): void
     {
-        User::factory()->create(['email' => 'ja@exemplo.com']);
+        User::factory()->create(['email' => 'ja@exemplo.com', 'cpf' => null]);
         $this->noCarrinho();
 
         $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['guest.email' => 'Este e-mail já está em uso. Entre na sua conta para continuar.'])
-            ->assertJsonPath('message', 'Este e-mail já está em uso. Entre na sua conta para continuar.');
+            ->assertOk();
     }
 
-    // Erro 500 real (2026-10-12): CPF de outra conta estourava o índice único.
-    public function test_cpf_de_outra_conta_avisa_em_vez_de_erro_500(): void
+    public function test_cpf_de_outra_conta_nao_trava_a_entrega(): void
     {
         User::factory()->create(['email' => 'dono@exemplo.com', 'cpf' => '123.456.789-09']);
         $this->noCarrinho();
 
         // Mesmo CPF sem máscara e com outro e-mail.
         $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'outro@exemplo.com', 'cpf' => '12345678909']]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['guest.cpf' => 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.'])
-            ->assertJsonMissingValidationErrors(['guest.email']);
+            ->assertOk();
     }
 
-    public function test_cpf_e_email_ja_cadastrados_avisam_os_dois(): void
+    public function test_email_de_conta_com_outro_cpf_ainda_avisa(): void
     {
-        User::factory()->create(['email' => 'ja@exemplo.com', 'cpf' => '12345678909']);
+        // Sem CPF em comum não há conta para vincular, e o e-mail é único.
+        User::factory()->create(['email' => 'ja@exemplo.com', 'cpf' => '529.982.247-25']);
         $this->noCarrinho();
 
         $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['guest.email', 'guest.cpf'])
-            ->assertJsonPath('message', 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.');
+            ->assertJsonValidationErrors(['guest.email']);
     }
 
     public function test_conta_apagada_tambem_segura_cpf_e_email(): void
@@ -230,23 +226,34 @@ class CheckoutV2Test extends TestCase
             ->assertJsonValidationErrors(['guest.email']);
     }
 
-    public function test_cpf_cadastrado_depois_da_entrega_volta_com_aviso_no_pagamento(): void
+    public function test_convidado_com_cpf_ja_cadastrado_compra_na_conta_existente(): void
     {
-        $this->noCarrinho();
+        Mail::fake();
+        $this->noCarrinho(105);
+        $dono = User::factory()->create(['name' => 'Dono Original', 'email' => 'dono@exemplo.com', 'cpf' => '12345678909', 'phone' => null]);
+        $senha = $dono->password;
+
         $this->mock(MercadoPagoPaymentService::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
-            $mock->shouldNotReceive('createPixPayment');
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 79, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
         });
 
-        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09']]))->assertOk();
-        User::factory()->create(['email' => 'outra@exemplo.com', 'cpf' => '12345678909']);
-
-        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
-            ->assertRedirect(route('finalizacao.entrega'))
-            ->assertSessionHasErrors(['guest.cpf']);
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
 
         $this->assertGuest();
-        $this->assertSame(0, Order::count());
+        $this->assertSame(1, User::count());
+        $this->assertSame($dono->id, Order::firstOrFail()->user_id);
+        $dono->refresh();
+        // Nome, e-mail e senha da conta existente não mudam; telefone vazio é completado.
+        $this->assertSame('Dono Original', $dono->name);
+        $this->assertSame('dono@exemplo.com', $dono->email);
+        $this->assertSame($senha, $dono->password);
+        $this->assertSame('(11) 99999-0000', $dono->phone);
+        Mail::assertNotSent(WelcomeEmail::class);
     }
 
     public function test_logado_nao_pode_usar_cpf_de_outra_conta(): void
@@ -261,20 +268,6 @@ class CheckoutV2Test extends TestCase
             ->assertJsonValidationErrors(['cpf']);
 
         $this->assertNull($user->fresh()->cpf);
-    }
-
-    public function test_cpf_que_ja_tem_conta_com_outro_email_pede_login_sem_erro_500(): void
-    {
-        // BUG REAL 2026-10-12: e-mail "gmail.com.br" + CPF de conta existente = 500.
-        User::factory()->create(['email' => 'dono@exemplo.com', 'cpf' => '123.456.789-09']);
-        $this->noCarrinho();
-
-        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'dono@exemplo.com.br', 'cpf' => '12345678909']]))
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.')
-            ->assertJsonValidationErrors(['guest.cpf']);
-
-        $this->assertSame(1, User::count());
     }
 
     public function test_cupom_aplicado_antes_da_entrega_nao_se_perde(): void

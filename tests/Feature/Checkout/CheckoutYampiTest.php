@@ -103,6 +103,41 @@ class CheckoutYampiTest extends TestCase
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('avaliacoesCarrossel', []));
     }
 
+    public function test_carrossel_so_mostra_avaliacoes_do_produto_do_carrinho_e_a_uf_real(): void
+    {
+        $product = $this->produto();
+        $variacao = Product::factory()->create(['parent_product_id' => $product->id, 'is_active' => true]);
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $daVariacao = Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'mg', 'product_id' => $variacao->id, 'rating' => 5, 'comment' => 'A cor é igual à da foto, adorei.']);
+        $semUf = Review::create(['reviewer_name' => 'Bruno Dias', 'product_id' => $product->id, 'rating' => 4, 'comment' => 'Bom custo-benefício, chegou antes.']);
+        // Avaliação ótima de outro produto não completa mais o carrossel (2026-10-24).
+        Review::create(['reviewer_name' => 'Caio Reis', 'uf' => 'SP', 'product_id' => $this->produto()->id, 'rating' => 5, 'comment' => 'Outro produto, muito bom mesmo.']);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('avaliacoesCarrossel', 2)
+            ->where('avaliacoesCarrossel.0.id', $daVariacao->id)
+            ->where('avaliacoesCarrossel.0.uf', 'MG')
+            ->where('avaliacoesCarrossel.1.id', $semUf->id)
+            ->where('avaliacoesCarrossel.1.uf', null));
+    }
+
+    public function test_avaliacao_do_site_grava_a_uf_do_pedido(): void
+    {
+        $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $product = $this->produto();
+        $pedido = \App\Modules\Checkout\Models\Order::create([
+            'user_id' => $cliente->id, 'status' => \App\Modules\Checkout\Models\Order::STATUS_COMPLETED,
+            'shipping_name' => 'C', 'shipping_phone' => '1', 'shipping_zip' => '1', 'shipping_street' => 'R',
+            'shipping_number' => '1', 'shipping_neighborhood' => 'B', 'shipping_city' => 'Recife', 'shipping_state' => 'PE',
+            'subtotal' => 100, 'total' => 100,
+        ]);
+        $pedido->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 100, 'quantity' => 1, 'subtotal' => 100]);
+
+        $this->actingAs($cliente)->post("/produtos/{$product->id}/avaliacoes", ['rating' => 5, 'comment' => 'Muito bom, recomendo.']);
+
+        $this->assertSame('PE', Review::query()->where('user_id', $cliente->id)->value('uf'));
+    }
+
     public function test_popup_de_cupom_so_aparece_com_cupom_cadastrado_e_valido(): void
     {
         $product = $this->produto();

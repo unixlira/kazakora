@@ -127,8 +127,9 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.0.avatar'));
     }
 
-    public function test_resumo_completa_avaliacoes_so_com_produtos_do_site(): void
+    public function test_resumo_so_traz_avaliacoes_do_produto_do_carrinho(): void
     {
+        // Outro produto do site e produto fora do site: nenhum completa o carrossel (2026-10-24).
         $batom = Product::factory()->create(['is_active' => true]);
         BeautyKoraProduto::create(['product_id' => $batom->id, 'ordem' => 2, 'ativo' => true, 'clonado' => false]);
         $parafusadeira = Product::factory()->create(['is_active' => true]);
@@ -137,8 +138,14 @@ class CheckoutBeautyKoraTest extends TestCase
 
         $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertOk()
+            ->assertJsonCount(0, 'avaliacoes');
+
+        Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'RJ', 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Pele macia já no primeiro uso.']);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertJsonCount(1, 'avaliacoes')
-            ->assertJsonPath('avaliacoes.0.texto', 'Cor linda e dura o dia todo.');
+            ->assertJsonPath('avaliacoes.0.nome', 'Ana Lima')
+            ->assertJsonPath('avaliacoes.0.uf', 'RJ');
     }
 
     public function test_fora_da_grande_sp_mostra_correios_turbo_e_loggi_pela_diferenca(): void

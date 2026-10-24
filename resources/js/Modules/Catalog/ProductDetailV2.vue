@@ -329,53 +329,59 @@ const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuanti
 // do Lira em 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => '+1.538 vendidos');
-// "Só N unidades!" com o estoque REAL da variação (ex.: "Só 37 unidades!"),
-// como o Lira mostrou: aparece abaixo de 50 e some sem estoque. O número
-// sorteado entre 4 e 9 do #1014 saiu em 2026-10-23: estoque inventado seria
-// publicidade enganosa (mesma regra do vendidos fixo).
-const estoqueReal = computed(() => {
-    if (faltaVariacao.value) return null;
-    const estoque = Number(selecionada.value.stock) || 0;
-    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
-});
-// Ao abrir, a barra começa CHEIA com o número inicial (30, ou o estoque real
-// se for maior) e desce uma unidade por passo até parar no estoque real
-// (pedido do Lira, 2026-10-23). O número que fica na tela é sempre o real.
-const ESTOQUE_INICIAL = 30;
+// "Só N unidades!" no fluxo que o Lira detalhou (2026-10-23, decisão dele,
+// no lugar do estoque real do #1020):
+//   0 s  barra 100% cheia e um número sorteado entre 20 e 30, em preto;
+//   3 s  a barra recolhe até o tamanho proporcional ao número (de 50);
+//   6 s  o número cai uma unidade com o fundo vermelho;
+//   7 s  o fundo some, a fonte fica vermelha e a barra perde mais um pedaço.
+// O sorteio nunca passa do estoque real da variação; sem estoque, não aparece.
+const ESTOQUE_SORTEIO_MIN = 20;
+const ESTOQUE_SORTEIO_MAX = 30;
+const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada.value.stock) || 0));
 const estoqueBaixo = ref(null);
-const estoqueTopo = ref(ESTOQUE_INICIAL);
-let estoqueTimer = null;
+const estoqueBarra = ref(ESTOQUE_BAIXO);
+const estoqueFundo = ref(false);
+const estoqueVermelho = ref(false);
+let estoqueTimers = [];
 const pararEstoque = () => {
-    clearTimeout(estoqueTimer);
-    estoqueTimer = null;
+    estoqueTimers.forEach((id) => clearTimeout(id));
+    estoqueTimers = [];
 };
+const depois = (ms, fn) => estoqueTimers.push(setTimeout(fn, ms));
 const animarEstoque = () => {
     pararEstoque();
+    estoqueFundo.value = false;
+    estoqueVermelho.value = false;
     const real = estoqueReal.value;
-    if (!real) {
+    if (real < 1) {
         estoqueBaixo.value = null;
         return;
     }
-    estoqueTopo.value = Math.max(ESTOQUE_INICIAL, real);
+    const sorteio = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
+    const numero = Math.min(real, sorteio);
+    estoqueBaixo.value = numero;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-        estoqueBaixo.value = real;
+        estoqueBarra.value = numero;
         return;
     }
-    estoqueBaixo.value = estoqueTopo.value;
-    const passo = Math.max(40, Math.round(2500 / Math.max(1, estoqueTopo.value - real)));
-    const descer = () => {
-        if (estoqueBaixo.value <= real) return;
-        estoqueBaixo.value -= 1;
-        estoqueTimer = setTimeout(descer, passo);
-    };
-    estoqueTimer = setTimeout(descer, 800);
+    estoqueBarra.value = ESTOQUE_BAIXO;
+    depois(3000, () => { estoqueBarra.value = numero; });
+    if (numero < 2) return;
+    depois(6000, () => {
+        estoqueBaixo.value = numero - 1;
+        estoqueFundo.value = true;
+    });
+    depois(7000, () => {
+        estoqueFundo.value = false;
+        estoqueVermelho.value = true;
+        estoqueBarra.value = numero - 1;
+    });
 };
 onMounted(animarEstoque);
 onUnmounted(pararEstoque);
-watch(estoqueReal, animarEstoque);
-const barraEstoque = computed(() => (estoqueBaixo.value
-    ? Math.max(6, Math.round((estoqueBaixo.value / estoqueTopo.value) * 100))
-    : 0));
+watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
+const barraEstoque = computed(() => Math.max(4, Math.round((estoqueBarra.value / ESTOQUE_BAIXO) * 100)));
 // Só cita o que vale para o produto: frete grátis e desconto do Pix.
 const complementoEstoque = computed(() => {
     if (isFreeShipping.value && DESCONTO_PIX) return 'Frete grátis + desconto no checkout.';
@@ -871,8 +877,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <template v-if="inStock">
                                 <div v-if="estoqueBaixo" class="estoque-baixo">
-                                    <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
-                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="estoqueTopo" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
+                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
+                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO":aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
                                 </div>
@@ -1342,8 +1348,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .estoque-baixo p { color: var(--text); }
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
-/* Barra abre cheia e desce até o estoque real; as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .08s linear; }
+/* Barra abre cheia e recolhe em dois passos (3 s e 7 s); as listras correm por cima. */
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .7s ease-in-out; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
@@ -1732,7 +1738,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
 .pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
 .pd2 .compra .estoque-baixo p { font-weight: 700; }
-.pd2 .compra .estoque-baixo .num { color: #e11d2a; }
+/* Número em preto; na queda de uma unidade, 1 s de fundo vermelho e depois a fonte vermelha. */
+.pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; transition: background-color .2s, color .2s; }
+.pd2 .compra .estoque-baixo .num.fundo { background: #e11d2a; color: #fff; }
+.pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }

@@ -1513,7 +1513,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 /* Barra presa no rodapé: no computador entra quando o botão da caixa sai da tela,
    com o miolo na mesma largura da página (1320px). */
-.pd2 .barra { display: flex; align-items: center; gap: 24px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 12px max(24px, calc((100% - 1320px) / 2 + 24px)); box-shadow: 0 0 10px 1px rgba(0, 0, 0, .2); transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
+/* À direita sobra espaço para o botão flutuante do WhatsApp (right 24px, 56px). */
+.pd2 .barra { display: flex; align-items: center; gap: 24px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 12px max(104px, calc((100% - 1320px) / 2 + 24px)) 12px max(24px, calc((100% - 1320px) / 2 + 24px)); box-shadow: 0 0 10px 1px rgba(0, 0, 0, .2); transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
 .pd2 .barra.visivel { transform: none; visibility: visible; }
 @media (min-width: 768px) {
     .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 8px; }

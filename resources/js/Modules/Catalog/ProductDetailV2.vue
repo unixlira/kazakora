@@ -454,19 +454,29 @@ const enderecoPrazo = computed(() => {
 // R$ 19,90". O prazo e o valor vêm do servidor: Frete = entrega grátis
 // (Full, Flex ou Padrão, "geralmente a até" dias); Prioritário = Turbo (SEDEX),
 // com o mesmo valor cobrado no checkout.
+// Regras do Lira (2026-10-23 21:31): no raio do Full a primeira coluna diz
+// "Full" em azul; depois do corte das 13h (Full = "Amanhã") entra embaixo
+// "Turbo | Chegará em até 3 horas" no lugar do Prioritário, pelo valor que
+// ele deu para o Turbo de 3h. O checkout ainda não tem esse serviço.
+const PRECO_TURBO_3H = 39.9;
 const linhasEntrega = computed(() => {
     const opcoes = prazo.value?.opcoes ?? [];
     const gratis = opcoes.find((opcao) => opcao.tipo !== 'turbo');
     const turbo = opcoes.find((opcao) => opcao.tipo === 'turbo');
+    const full = gratis?.tipo === 'full';
     const linhas = [];
     if (gratis) {
         let quando;
-        if (gratis.tipo === 'full') quando = gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã';
+        if (full) quando = gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã';
         else if (gratis.geralmente && gratis.geralmente < gratis.ate) quando = `${gratis.geralmente} a ${gratis.ate} dias`;
         else quando = `Até ${gratis.ate} ${gratis.ate === 1 ? 'dia' : 'dias'}`;
-        linhas.push({ tipo: 'frete', nome: 'Frete', quando, valor: 'Grátis' });
+        linhas.push({ tipo: full ? 'full' : 'frete', nome: full ? 'Full' : 'Frete', quando, valor: 'Grátis' });
     }
-    if (turbo) linhas.push({ tipo: 'prioritario', nome: 'Envio Prioritário', quando: 'Postagem em 24h', valor: formatPrice(turbo.preco) });
+    if (full && gratis.quando !== 'hoje') {
+        linhas.push({ tipo: 'turbo', nome: 'Turbo', quando: 'Chegará em até 3 horas', valor: formatPrice(PRECO_TURBO_3H) });
+    } else if (turbo) {
+        linhas.push({ tipo: 'prioritario', nome: 'Envio Prioritário', quando: 'Postagem em 24h', valor: formatPrice(turbo.preco) });
+    }
     return linhas;
 });
 
@@ -772,7 +782,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="linha in linhasEntrega" :key="linha.tipo">
+                                            <tr v-for="linha in linhasEntrega" :key="linha.tipo" :class="`linha-${linha.tipo}`">
                                                 <td class="nome">{{ linha.nome }}</td>
                                                 <td class="quando">{{ linha.quando }}</td>
                                                 <td class="valor">{{ linha.valor }}</td>
@@ -1334,6 +1344,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .tabela-entrega .nome { color: #444; font-weight: 500; }
 .pd2 .tabela-entrega .quando { color: #111; font-weight: 700; }
 .pd2 .tabela-entrega .valor { color: #13bce6; font-weight: 700; white-space: nowrap; }
+/* "Full" em azul (pedido 2026-10-23 21:31). */
+.pd2 .tabela-entrega .linha-full .nome { color: #2563eb; font-weight: 700; }
 @media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 10px 6px; font-size: 14px; } }
 .dark .pd2 .prazo-cep { background: #141a24; }
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
@@ -1343,6 +1355,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .tabela-entrega td { background: #27272a; border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
 .dark .pd2 .tabela-entrega .nome { color: #d4d4d8; }
+.dark .pd2 .tabela-entrega .linha-full .nome { color: #60a5fa; }
 .dark .pd2 .tabela-entrega .quando { color: #f4f4f5; }
 .dark .pd2 .prazo-cep .normal { color: #4ade80; }
 .pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }

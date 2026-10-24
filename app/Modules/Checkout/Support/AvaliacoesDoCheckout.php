@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Support;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Support\NomeBrasileiro;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -29,10 +30,14 @@ class AvaliacoesDoCheckout
     public const AVATARES_MASCULINOS = 3;
 
     /**
+     * $catalogo (ids de produto pai publicados no site): os outros sites só
+     * completam com avaliações do próprio catálogo (2026-10-24: a Beauty Kora
+     * mostrava "Torque forte" de parafusadeira).
+     *
      * @param  Collection<int, int>|array<int, int>  $productIds  produtos do carrinho
      * @return list<array{id: int, nota: int, nome: string, texto: string, avatar: string}>
      */
-    public function paraProdutos(Collection|array $productIds): array
+    public function paraProdutos(Collection|array $productIds, ?Builder $catalogo = null): array
     {
         $ids = collect($productIds)->filter()->unique();
         $grupos = $ids->isEmpty() ? collect() : Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
@@ -47,7 +52,8 @@ class AvaliacoesDoCheckout
             ->orderByRaw('images_count > 0 desc')
             ->orderByDesc('rating')
             ->latest()
-            ->orderByDesc('id');
+            ->orderByDesc('id')
+            ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')));
 
         $avaliacoes = $grupos->isEmpty() ? collect() : $base()
             ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))

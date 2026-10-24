@@ -370,7 +370,10 @@ abstract class CheckoutOutroSite
             // nome oculto vira só "Cliente" (o site não é a KazaKora).
             'avaliacoes' => array_map(
                 fn (array $avaliacao) => ['nome' => $avaliacao['nome'] === 'Cliente KazaKora' ? 'Cliente' : $avaliacao['nome']] + $avaliacao,
-                app(AvaliacoesDoCheckout::class)->paraProdutos($itens->map(fn (array $item) => $item['product']->id)),
+                app(AvaliacoesDoCheckout::class)->paraProdutos(
+                    $itens->map(fn (array $item) => $item['product']->id),
+                    $this->modeloPublicado()::query()->where('ativo', true)->select('product_id'),
+                ),
             ),
         ];
     }

@@ -334,10 +334,10 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 //   0 s    barra 100% cheia e um número sorteado entre 19 e 37, em preto, que
 //          fica FIXO enquanto a barra desce (não conta para baixo);
 //   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
-//   +3 s   parada, o fundo do número fica vermelho com a fonte preta e some
-//          em 1 s (fade out);
-//   +1 s   o número cai uma unidade, fica com a fonte vermelha, e a barra
-//          perde o pedaço dessa unidade.
+//   +3 s   parada; o número cai uma unidade e a barra perde o pedaço dessa
+//          unidade. No momento da queda o fundo do número fica vermelho com a
+//          fonte branca e some em 1 s (fade out); a fonte fica vermelha e
+//          continua vermelha (correção do Lira em 2026-10-23).
 // O sorteio é novo a cada carregamento da página e NUNCA passa de 37 (regra
 // do Lira em 2026-10-23, exemplos 19, 26, 35), nem do estoque real da
 // variação; sem estoque, não aparece.
@@ -376,9 +376,8 @@ const animarEstoque = () => {
     depois(60, () => { estoqueBarra.value = numero; });
     if (numero < 2) return;
     const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
-    depois(parada, () => { estoqueFundo.value = true; });
-    depois(parada + 1000, () => {
-        estoqueFundo.value = false;
+    depois(parada, () => {
+        estoqueFundo.value = true;
         estoqueVermelho.value = true;
         estoqueBaixo.value = numero - 1;
         estoqueBarra.value = numero - 1;
@@ -1744,10 +1743,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
 .pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
 .pd2 .compra .estoque-baixo p { font-weight: 700; }
-/* Número em preto; antes de cair uma unidade, fundo vermelho com fonte preta que some em 1 s. */
+/* Número em preto; ao cair uma unidade, fundo vermelho com fonte branca que some em 1 s e deixa a fonte vermelha. */
 .pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; }
-.pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in forwards; }
-@keyframes estoque-fundo { from { background-color: #e11d2a; color: #111; } to { background-color: transparent; } }
+.pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in; }
+@keyframes estoque-fundo { from { background-color: #e11d2a; color: #fff; } to { background-color: transparent; color: #e11d2a; } }
 .pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }

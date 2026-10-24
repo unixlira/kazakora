@@ -776,39 +776,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
-                            <ul v-if="highlights.length" class="checks">
-                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                            </ul>
-
-                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
-                                 sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
-                            <ul class="fretefundo">
-                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
-                                     já fica no campo "Calcular o prazo de entrega" logo abaixo. -->
-                                <!-- Três cards com as frases da Mavo (pedido 2026-10-23). O primeiro leva o
-                                     FULL em destaque: expressa é a entrega própria da Grande SP
-                                     (config/entrega_expressa.php), não os Correios. -->
-                                <li v-if="isFreeShipping" class="destaque-full">
-                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> <b>Frete grátis com entrega expressa</b> para São Paulo e região, consulte seu CEP abaixo</span>
-                                </li>
-                                <li v-else>
-                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
-                                    <span><b>Entrega</b> para todo o Brasil.</span>
-                                </li>
-                                <li>
-                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
-                                    <span><b>Pagamento seguro e rápido</b></span>
-                                </li>
-                                <li class="devolucao">
-                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Empresa 100% legal</b></span>
-                                </li>
-                            </ul>
-
-                            <!-- Calcular o prazo logo depois de Devoluções Gratuitas, na mesma posição da Mavo
-                                 (Pagamento › Frete Grátis › Devoluções › Calcular; pedido 2026-10-23).
-                                 Pagamento seguro e Empresa legal subiram para antes do frete (pedido 2026-10-23). -->
+                            <!-- Calcular o prazo logo abaixo das bandeiras de pagamento (pedido do Lira 2026-10-23;
+                                 antes ficava depois dos cards, na posição da Mavo). -->
                             <form class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
@@ -832,6 +801,36 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </table>
                                 </div>
                             </form>
+
+                            <ul v-if="highlights.length" class="checks">
+                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
+                            </ul>
+
+                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
+                                 sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
+                            <ul class="fretefundo">
+                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
+                                     já fica no campo "Calcular o prazo de entrega" logo acima. -->
+                                <!-- Três cards com as frases da Mavo (pedido 2026-10-23). O primeiro leva o
+                                     FULL em destaque: expressa é a entrega própria da Grande SP
+                                     (config/entrega_expressa.php), não os Correios. -->
+                                <li v-if="isFreeShipping" class="destaque-full">
+                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> <b>Frete grátis com entrega expressa</b> para São Paulo e região, consulte seu CEP acima</span>
+                                </li>
+                                <li v-else>
+                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Entrega</b> para todo o Brasil.</span>
+                                </li>
+                                <li>
+                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
+                                    <span><b>Pagamento seguro e rápido</b></span>
+                                </li>
+                                <li class="devolucao">
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Empresa 100% legal</b></span>
+                                </li>
+                            </ul>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1638,7 +1637,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo .destaque-full { border-color: #0aac48; background: #f1fbf5; box-shadow: 0 0 0 1px #0aac48 inset; }
 .pd2 .compra .fretefundo .destaque-full .selo-full { display: inline-block; margin-right: 4px; padding: 1px 7px; border-radius: 50px; background: #0aac48; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .5px; }
 .dark .pd2 .compra .fretefundo .destaque-full { background: rgba(10, 172, 72, .12); border-color: #0aac48; }
-.pd2 .compra .prazo-cep { margin: 0; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
+.pd2 .compra .prazo-cep { margin: 0 0 10px; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }

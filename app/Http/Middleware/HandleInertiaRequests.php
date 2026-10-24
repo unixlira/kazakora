@@ -93,6 +93,7 @@ class HandleInertiaRequests extends Middleware
             'menuLoja' => fn () => $request->is('admin*') ? null : rescue(fn () => [
                 'departamentos' => \App\Modules\Catalog\Support\MenuDaLoja::departamentos(),
                 'maiorDesconto' => \App\Modules\Catalog\Support\MenuDaLoja::maiorDesconto(),
+                'utilidadesLink' => app(\App\Modules\Catalog\Support\VitrineHome::class)->utilidadesLink(),
             ], null, false),
             // Checkout com o Mercado Pago em modo teste: faixa amarela avisando.
             'pagamentoTeste' => fn () => $request->is('finalizacao*') && \App\Services\MercadoPago\CredenciaisCheckout::emTeste(),

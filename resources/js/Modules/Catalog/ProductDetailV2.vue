@@ -329,12 +329,14 @@ const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuanti
 // do Lira em 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => '+1.538 vendidos');
-// "Só N unidades!" no fluxo que o Lira detalhou (2026-10-23, decisão dele,
+// "Só N unidades!" no fluxo que o Lira corrigiu (2026-10-23, decisão dele,
 // no lugar do estoque real do #1020):
-//   0 s  barra 100% cheia e um número sorteado entre 20 e 30, em preto;
-//   3 s  a barra recolhe até o tamanho proporcional ao número (de 50);
-//   6 s  o número cai uma unidade com o fundo vermelho;
-//   7 s  o fundo some, a fonte fica vermelha e a barra perde mais um pedaço.
+//   0 s    barra 100% cheia e um número sorteado entre 20 e 30, em preto, que
+//          fica FIXO enquanto a barra desce (não conta para baixo);
+//   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
+//   +3 s   parada, o fundo do número fica vermelho com a fonte preta e some
+//          em 1 s (fade out);
+//   +1 s   o número cai uma unidade e a barra perde o pedaço dessa unidade.
 // O sorteio nunca passa do estoque real da variação; sem estoque, não aparece.
 const ESTOQUE_SORTEIO_MIN = 20;
 const ESTOQUE_SORTEIO_MAX = 30;
@@ -342,17 +344,16 @@ const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada
 const estoqueBaixo = ref(null);
 const estoqueBarra = ref(ESTOQUE_BAIXO);
 const estoqueFundo = ref(false);
-const estoqueVermelho = ref(false);
 let estoqueTimers = [];
 const pararEstoque = () => {
     estoqueTimers.forEach((id) => clearTimeout(id));
     estoqueTimers = [];
 };
 const depois = (ms, fn) => estoqueTimers.push(setTimeout(fn, ms));
+const ESTOQUE_DESCIDA_MS = 1200;
 const animarEstoque = () => {
     pararEstoque();
     estoqueFundo.value = false;
-    estoqueVermelho.value = false;
     const real = estoqueReal.value;
     if (real < 1) {
         estoqueBaixo.value = null;
@@ -365,16 +366,15 @@ const animarEstoque = () => {
         estoqueBarra.value = numero;
         return;
     }
+    // Pinta a barra cheia primeiro; o recolhimento sai no tick seguinte para a transição rodar.
     estoqueBarra.value = ESTOQUE_BAIXO;
-    depois(3000, () => { estoqueBarra.value = numero; });
+    depois(60, () => { estoqueBarra.value = numero; });
     if (numero < 2) return;
-    depois(6000, () => {
-        estoqueBaixo.value = numero - 1;
-        estoqueFundo.value = true;
-    });
-    depois(7000, () => {
+    const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
+    depois(parada, () => { estoqueFundo.value = true; });
+    depois(parada + 1000, () => {
         estoqueFundo.value = false;
-        estoqueVermelho.value = true;
+        estoqueBaixo.value = numero - 1;
         estoqueBarra.value = numero - 1;
     });
 };
@@ -877,7 +877,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <template v-if="inStock">
                                 <div v-if="estoqueBaixo" class="estoque-baixo">
-                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
+                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO":aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
@@ -1348,8 +1348,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .estoque-baixo p { color: var(--text); }
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
-/* Barra abre cheia e recolhe em dois passos (3 s e 7 s); as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .7s ease-in-out; }
+/* Barra abre cheia, recolhe até o número (1,2 s) e depois perde uma unidade; as listras correm por cima. */
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width 1.2s ease-in-out; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
@@ -1738,10 +1738,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
 .pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
 .pd2 .compra .estoque-baixo p { font-weight: 700; }
-/* Número em preto; na queda de uma unidade, 1 s de fundo vermelho e depois a fonte vermelha. */
-.pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; transition: background-color .2s, color .2s; }
-.pd2 .compra .estoque-baixo .num.fundo { background: #e11d2a; color: #fff; }
-.pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
+/* Número em preto; antes de cair uma unidade, fundo vermelho com fonte preta que some em 1 s. */
+.pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; }
+.pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in forwards; }
+@keyframes estoque-fundo { from { background-color: #e11d2a; color: #111; } to { background-color: transparent; } }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }

@@ -600,6 +600,19 @@ const teclaFoto = (evento) => {
 };
 onMounted(() => window.addEventListener('keydown', teclaFoto));
 onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
+
+// Barra do rodapé no computador (pedido 2026-10-23): a caixa de compra deixou de
+// ficar presa no meio da tela; quando o COMPRAR AGORA da caixa sai da tela, a
+// barra com preço e botão aparece presa embaixo. No celular a barra fica sempre.
+const botaoCompraEl = ref(null);
+const botaoNaTela = ref(true);
+let observadorBotao = null;
+onMounted(() => {
+    if (!botaoCompraEl.value || !('IntersectionObserver' in window)) { botaoNaTela.value = false; return; }
+    observadorBotao = new IntersectionObserver(([entrada]) => { botaoNaTela.value = entrada.isIntersecting; });
+    observadorBotao.observe(botaoCompraEl.value);
+});
+onUnmounted(() => observadorBotao?.disconnect());
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 const submitReview = () => {
@@ -691,7 +704,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <h1>{{ selecionada.name }}</h1>
 
-                            <!-- Linha de estrelas sempre abaixo do título, como na Mavo (tarefa 2656, print
+                            <!-- Três checks logo abaixo do título, antes das estrelas e do preço (pedido 2026-10-23). -->
+                            <ul v-if="highlights.length" class="checks">
+                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
+                            </ul>
+
+                            <!-- Linha de estrelas abaixo do título e dos checks, como na Mavo (tarefa 2656, print
                                  das 21h22). Sem avaliação: estrelas vazias e "(0 Avaliações)", nunca nota inventada. -->
                             <component :is="showReviews ? 'a' : 'span'" :href="showReviews ? '#avaliacoes' : undefined" class="nota" :class="{ 'sem-aval': reviewsCount === 0 }">
                                 <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
@@ -758,12 +776,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </div>
                                 </div>
                                 <!-- Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
-                                <div class="acao" :class="{ 'sem-variacao': faltaVariacao }">
+                                <div ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
                                     <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
                                 </div>
                                 <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
-                            <p v-else class="esgotado">Produto esgotado</p>
+                            <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
 
                             <div class="pagamento-seguro">
                                 <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
@@ -819,10 +837,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </table>
                                 </div>
                             </form>
-
-                            <ul v-if="highlights.length" class="checks">
-                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                            </ul>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1082,9 +1096,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 </section>
             </div>
 
-            <!-- Botão fixo no celular -->
-            <!-- Barra fixa do celular (pedido 2026-10-23): valor no Pix à esquerda, botão com ~60%. -->
-            <div class="barra">
+            <!-- Barra fixa no rodapé (pedido 2026-10-23): valor no Pix à esquerda, botão à direita.
+                 No celular fica sempre; no computador aparece quando o botão da caixa sai da tela. -->
+            <div class="barra" :class="{ visivel: !botaoNaTela }">
                 <div class="barra-preco">
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
@@ -1168,7 +1182,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
 .pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
 .pd2 .col-principal > .card { grid-column: 1; }
-.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
+/* Sem sticky (pedido 2026-10-23): a caixa rola com a página e o botão vai para a barra do rodapé. */
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; box-shadow: var(--shadow-strong); }
 .pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
@@ -1496,8 +1511,21 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
 .pd2 .relacionados h2 { margin-top: 10px; }
 
-/* botão fixo no celular */
-.pd2 .barra { display: none; }
+/* Barra presa no rodapé: no computador entra quando o botão da caixa sai da tela,
+   com o miolo na mesma largura da página (1320px). */
+.pd2 .barra { display: flex; align-items: center; gap: 24px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 12px max(24px, calc((100% - 1320px) / 2 + 24px)); box-shadow: 0 0 10px 1px rgba(0, 0, 0, .2); transform: translateY(110%); visibility: hidden; transition: transform .25s ease, visibility .25s; }
+.pd2 .barra.visivel { transform: none; visibility: visible; }
+@media (min-width: 768px) {
+    .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+    .pd2 .barra-preco strong { font-size: 22px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pd2 .barra-preco span { font-size: 14px; color: #575757; }
+    .dark .pd2 .barra-preco strong { color: var(--green); }
+    .dark .pd2 .barra-preco span { color: var(--text); }
+    .pd2 .barra .btn { flex: 0 0 360px; min-height: 52px; border: 0; border-radius: 50px; background: #0aac48; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; }
+    .pd2 .barra .btn:hover { background: #089a3f; }
+    /* Espaço para a barra não cobrir o fim da página quando aparece. */
+    .pd2 { padding-bottom: 76px; }
+}
 
 @media (max-width: 1024px) {
     .pd2 .card { padding: 30px; }
@@ -1546,7 +1574,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 6px; font-size: 14px; padding: 18px 12px; }
     .pd2 .confianca i { font-size: 40px; }
     .pd2 .confianca strong { font-size: 16px; }
-    .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }
+    .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); transform: none; visibility: visible; transition: none; }
     .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
     .pd2 .barra-preco strong { font-size: 17px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pd2 .barra-preco span { font-size: 11px; color: #575757; }
@@ -1613,7 +1641,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
 .pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
 .pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
-.pd2 .compra .checks { margin: 0 0 10px; font-size: 14px; }
+.pd2 .compra .checks { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
 /* Selos em caixinhas separadas, como "Frete Grátis" e "Devoluções Gratuitas" da Mavo:
    borda #f5f5f5, cantos de 6px, título 13px em negrito preto e texto 12px. */
 .pd2 .compra .fretefundo { display: flex; flex-direction: column; gap: 10px; margin: 0 0 10px; padding: 0; border: 0; border-radius: 0; background: none; }

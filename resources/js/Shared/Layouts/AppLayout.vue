@@ -468,7 +468,11 @@ const REDES = [
                         <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
                         <span>Mandar mensagem</span>
                     </Link>
-                    <!-- Pedido 2026-10-24: abaixo de Departamentos (linha de baixo, 1ª coluna). -->
+                    <!-- Pedido 2026-10-24: Ofertas do Dia abaixo de Departamentos (linha de baixo, 1ª coluna), leva à seção da home; Utilidades para Casa ao lado. -->
+                    <a href="/#ofertas" class="menu-mobile-icone">
+                        <i class="fa-solid fa-stopwatch text-xl text-[#E02424]"></i>
+                        <span>Ofertas do Dia</span>
+                    </a>
                     <a v-if="utilidadesLink" :href="`/?categoria=${utilidadesLink}#produtos`" class="menu-mobile-icone">
                         <i class="fas fa-house text-xl text-[#10b981]"></i>
                         <span>Utilidades para Casa</span>

@@ -314,26 +314,25 @@ const seloPix = computed(() => {
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
 // Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
-// no lugar de números fixos): vendidos só a partir de 50, com o número exato
-// ("+1538 vendidos", formato da referência, pedido 2026-10-23); "EXCLUSIVO" e
+// no lugar de números fixos): vendidos com o número exato desde a 1ª venda
+// ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
 // "POR TEMPO LIMITADO!" só com Oferta do Dia
 // ou Relâmpago no ar (têm data para acabar); "Só restam" com o estoque da
-// variação escolhida, só quando for 30 ou menos.
-const VENDIDOS_MINIMO = 50;
-const ESTOQUE_BAIXO = 30;
+// variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
+const ESTOQUE_BAIXO = 50;
 const vendidosLegenda = computed(() => {
     const total = Number(props.salesCount) || 0;
-    if (total < VENDIDOS_MINIMO) return null;
-    return `+${total} vendidos`;
+    if (total < 1) return null;
+    return total === 1 ? '1 vendido' : `+${total} vendidos`;
 });
 const tempoLimitado = computed(() => !!(precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago));
 const estoqueBaixo = computed(() => {
     if (faltaVariacao.value) return null;
     const estoque = Number(selecionada.value.stock) || 0;
-    return estoque > 0 && estoque <= ESTOQUE_BAIXO ? estoque : null;
+    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
 });
 // Barra do "Só N unidades!" (formato da Mavo, pedido 2026-10-23): enche pelo
-// estoque real em relação ao limite de 30, com um mínimo para não sumir.
+// estoque real numa barra de tamanho fixo 50, com um mínimo para não sumir.
 const barraEstoque = computed(() => (estoqueBaixo.value
     ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
     : 0));
@@ -644,6 +643,22 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
                         <aside id="comprar" class="card compra">
+                            <!-- Em cima do título, como na referência da Mavo (pedido 2026-10-23, tarefa 2648):
+                                 "Novo | +N vendidos" amarelo e preto (vendas reais), EXCLUSIVO e
+                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar, e as estrelas. -->
+                            <div class="condicao">
+                                <span class="tag-novo">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
+                                <template v-if="tempoLimitado">
+                                    <span class="tag-exclusivo">EXCLUSIVO</span>
+                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
+                                </template>
+                            </div>
+                            <div v-if="reviewsCount > 0" class="nota">
+                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
+                            </div>
+
                             <div class="titulo">
                                 <h1>{{ selecionada.name }}</h1>
                                 <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
@@ -651,23 +666,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click="toggleFavorite(product.id)">
                                     <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                 </button>
-                            </div>
-
-                            <!-- "Novo | +N vendidos" (reais, a partir de 50) e, ao lado, as tags EXCLUSIVO e
-                                 POR TEMPO LIMITADO! só com oferta que tem data para acabar (pedido 2026-10-23). -->
-                            <div class="condicao">
-                                <span class="vendidos">Novo<template v-if="vendidosLegenda"> | {{ vendidosLegenda }}</template></span>
-                                <template v-if="tempoLimitado">
-                                    <span class="tag-exclusivo">EXCLUSIVO</span>
-                                    <span class="tag-tempo">POR TEMPO LIMITADO!</span>
-                                </template>
-                            </div>
-
-                            <!-- Estrelas em destaque. -->
-                            <div v-if="reviewsCount > 0" class="nota">
-                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
-                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <a href="#avaliacoes">({{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação de cliente' : 'avaliações de clientes' }})</a>
                             </div>
 
                             <ul v-if="highlights.length" class="checks">
@@ -1211,12 +1209,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fav.favorito-ativo { background: #f2540d; border-color: #f2540d; color: #fff; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
-.pd2 .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; color: var(--text); }
-.pd2 .condicao .vendidos { color: var(--text); margin-right: 2px; }
-/* Tags da referência (pedido 2026-10-23): EXCLUSIVO preto com amarelo, TEMPO LIMITADO amarelo com preto. */
-.pd2 .tag-exclusivo, .pd2 .tag-tempo { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: 800; letter-spacing: .3px; line-height: 1.3; }
-.pd2 .tag-exclusivo { background: #000; color: #ffd400; }
-.pd2 .tag-tempo { background: #ffd400; color: #000; }
+.pd2 .condicao { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 4px; font-size: 14px; color: var(--text); }
+.pd2 .condicao + .nota { margin: 4px 0 8px; }
+/* Tags copiadas da Mavo no ar (2026-10-23): mesmas cores (#fff600/#000), 3px 5px, cantos de 3px, 13px e 10px.
+   POR TEMPO LIMITADO! = degradê amarelo que corre em 3s sem parar (featureAnimation da Mavo). */
+.pd2 .tag-novo, .pd2 .tag-exclusivo, .pd2 .tag-tempo { display: inline-block; padding: 3px 5px; border-radius: 3px; font-size: 10px; font-weight: 400; line-height: 1.3; white-space: nowrap; }
+.pd2 .tag-novo { background: #fff600; color: #000; font-size: 13px; }
+.pd2 .tag-exclusivo { background: #000; color: #fff600; }
+.pd2 .tag-tempo { color: #000; background: linear-gradient(90deg, #fff600 0, #dca201 50%, #fef777 100%); background-size: 300% 100%; animation: tag-tempo-corre 3s linear infinite; }
+@keyframes tag-tempo-corre { 0% { background-position: 0 center; } 50% { background-position: 150% center; } 100% { background-position: 300% center; } }
 /* "Só N unidades!" no formato da Mavo com as cores da loja (azul e marinho). */
 .pd2 .estoque-baixo { margin: 12px 0 0; }
 .pd2 .estoque-baixo p { margin: 0 0 6px; font-size: 15px; color: var(--navy); }
@@ -1225,7 +1226,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .estoque-baixo p { color: var(--text); }
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); }
+/* Animação da barra: enche do zero ao abrir a página e as listras correm por cima. */
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; animation: estoque-enche 1.2s ease-out both; }
+.pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
+@keyframes estoque-enche { from { width: 0; } }
+@keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
@@ -1556,5 +1561,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 }
 @media (prefers-reduced-motion: reduce) {
     .pd2 * { transition: none !important; }
+    .pd2 .tag-tempo, .pd2 .estoque-barra span, .pd2 .estoque-barra span::after { animation: none; }
 }
 </style>

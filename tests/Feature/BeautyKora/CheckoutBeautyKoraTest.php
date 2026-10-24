@@ -8,6 +8,7 @@ use App\Modules\BeautyKora\Models\BeautyKoraCliente;
 use App\Modules\BeautyKora\Models\BeautyKoraPedido;
 use App\Modules\BeautyKora\Models\BeautyKoraProduto;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
@@ -109,6 +110,21 @@ class CheckoutBeautyKoraTest extends TestCase
             ['id' => 31, 'name' => 'Express', 'price' => (string) $loggi, 'delivery_time' => 3, 'company' => ['name' => 'Loggi']],
             ['id' => 32, 'name' => 'Coleta', 'error' => 'Transportadora não atende este trecho.', 'company' => ['name' => 'Loggi']],
         ])]);
+    }
+
+    public function test_resumo_traz_avaliacoes_do_carrossel_com_avatar_e_sem_o_nome_da_kazakora(): void
+    {
+        $cliente = User::factory()->create(['name' => 'Carla Souza']);
+        Review::create(['user_id' => $cliente->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Chegou rápido e funciona muito bem.']);
+        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $this->produto->id, 'rating' => 4, 'comment' => 'Gostei bastante, recomendo a todos.', 'ocultar_nome' => true]);
+
+        $resposta = $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
+            ->assertOk()
+            ->assertJsonCount(2, 'avaliacoes')
+            ->assertJsonPath('avaliacoes.0.nome', 'Carla Souza')
+            ->assertJsonPath('avaliacoes.1.nome', 'Cliente');
+
+        $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.0.avatar'));
     }
 
     public function test_fora_da_grande_sp_mostra_correios_turbo_e_loggi_pela_diferenca(): void

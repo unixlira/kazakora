@@ -77,7 +77,8 @@ class CheckoutYampiTest extends TestCase
             ->has('avaliacoesCarrossel', 1)
             ->where('avaliacoesCarrossel.0.id', $boa->id)
             ->where('avaliacoesCarrossel.0.nome', 'Carla Souza')
-            ->where('avaliacoesCarrossel.0.nota', 5));
+            ->where('avaliacoesCarrossel.0.nota', 5)
+            ->where('avaliacoesCarrossel.0.avatar', fn (string $url) => (bool) preg_match('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $url)));
     }
 
     public function test_sem_avaliacao_o_carrossel_fica_vazio(): void

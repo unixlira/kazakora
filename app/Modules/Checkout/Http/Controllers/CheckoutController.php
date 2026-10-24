@@ -18,6 +18,7 @@ use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
+use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
@@ -2002,7 +2003,7 @@ class CheckoutController extends Controller
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
             // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais e
             // pop-up do cupom de 1ª compra (só com cupom cadastrado e válido).
-            'avaliacoesCarrossel' => fn () => $this->avaliacoesDoCarrossel($cartItems),
+            'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos($cartItems->map(fn ($item) => data_get($item, 'product.id'))),
             'cupomPrimeiraCompra' => fn () => $coupon ? null : $this->cupomPrimeiraCompra($subtotal, $user),
         ];
     }
@@ -2024,57 +2025,6 @@ class CheckoutController extends Controller
         $item = $this->cart->items()->first(fn ($item) => (int) data_get($item, 'product.id') === $product);
 
         return response()->json(['ok' => (bool) $item, 'quantity' => $item['quantity'] ?? null]);
-    }
-
-    /**
-     * Avaliações do carrossel embaixo do resumo: só as que existem no banco,
-     * nota 4 ou 5 e com texto. Primeiro as dos produtos do carrinho (anúncio
-     * pai e variações), completando com as melhores da loja; com foto antes.
-     * O nome segue a mesma regra da página do produto (reviewer_display_name).
-     *
-     * @return list<array{id: int, nota: int, nome: string, texto: string, foto: ?string}>
-     */
-    private function avaliacoesDoCarrossel(Collection $cartItems): array
-    {
-        $limite = 8;
-        $ids = $cartItems->map(fn ($item) => data_get($item, 'product.id'))->filter()->unique();
-        $grupos = $ids->isEmpty() ? collect() : Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
-            ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)->unique()->values();
-
-        $base = fn () => Review::query()
-            ->where('rating', '>=', 4)
-            ->whereNotNull('comment')
-            ->whereRaw('LENGTH(TRIM(comment)) >= 15')
-            ->with(['user:id,name', 'images'])
-            ->withCount('images')
-            ->orderByRaw('images_count > 0 desc')
-            ->orderByDesc('rating')
-            ->latest()
-            ->orderByDesc('id');
-
-        $avaliacoes = $grupos->isEmpty() ? collect() : $base()
-            ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
-            ->limit($limite)
-            ->get();
-
-        if ($avaliacoes->count() < $limite) {
-            $avaliacoes = $avaliacoes->concat($base()->whereNotIn('id', $avaliacoes->pluck('id'))->limit($limite - $avaliacoes->count())->get());
-        }
-
-        return $avaliacoes->map(function (Review $review) {
-            if ($review->ocultar_nome) {
-                $review->setRelation('user', null);
-            }
-            $foto = $review->images->first(fn ($imagem) => ! preg_match('/\.(mp4|mov|webm|m4v)(\?|$)/i', (string) $imagem->image_url));
-
-            return [
-                'id' => $review->id,
-                'nota' => (int) $review->rating,
-                'nome' => $review->reviewer_display_name,
-                'texto' => Str::limit(trim((string) $review->comment), 220),
-                'foto' => $foto?->image_url,
-            ];
-        })->values()->all();
     }
 
     /**

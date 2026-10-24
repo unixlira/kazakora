@@ -336,7 +336,8 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 //   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
 //   +3 s   parada, o fundo do número fica vermelho com a fonte preta e some
 //          em 1 s (fade out);
-//   +1 s   o número cai uma unidade e a barra perde o pedaço dessa unidade.
+//   +1 s   o número cai uma unidade, fica com a fonte vermelha, e a barra
+//          perde o pedaço dessa unidade.
 // O sorteio é novo a cada carregamento da página e NUNCA passa de 37 (regra
 // do Lira em 2026-10-23, exemplos 19, 26, 35), nem do estoque real da
 // variação; sem estoque, não aparece.
@@ -346,6 +347,7 @@ const estoqueReal = computed(() => (faltaVariacao.value ? 0 : Number(selecionada
 const estoqueBaixo = ref(null);
 const estoqueBarra = ref(ESTOQUE_BAIXO);
 const estoqueFundo = ref(false);
+const estoqueVermelho = ref(false);
 let estoqueTimers = [];
 const pararEstoque = () => {
     estoqueTimers.forEach((id) => clearTimeout(id));
@@ -356,6 +358,7 @@ const ESTOQUE_DESCIDA_MS = 1200;
 const animarEstoque = () => {
     pararEstoque();
     estoqueFundo.value = false;
+    estoqueVermelho.value = false;
     const real = estoqueReal.value;
     if (real < 1) {
         estoqueBaixo.value = null;
@@ -376,6 +379,7 @@ const animarEstoque = () => {
     depois(parada, () => { estoqueFundo.value = true; });
     depois(parada + 1000, () => {
         estoqueFundo.value = false;
+        estoqueVermelho.value = true;
         estoqueBaixo.value = numero - 1;
         estoqueBarra.value = numero - 1;
     });
@@ -879,7 +883,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <template v-if="inStock">
                                 <div v-if="estoqueBaixo" class="estoque-baixo">
-                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
+                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
                                     <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO":aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
@@ -1744,6 +1748,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; }
 .pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in forwards; }
 @keyframes estoque-fundo { from { background-color: #e11d2a; color: #111; } to { background-color: transparent; } }
+.pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }

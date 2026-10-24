@@ -127,6 +127,20 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.0.avatar'));
     }
 
+    public function test_resumo_completa_avaliacoes_so_com_produtos_do_site(): void
+    {
+        $batom = Product::factory()->create(['is_active' => true]);
+        BeautyKoraProduto::create(['product_id' => $batom->id, 'ordem' => 2, 'ativo' => true, 'clonado' => false]);
+        $parafusadeira = Product::factory()->create(['is_active' => true]);
+        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $batom->id, 'rating' => 5, 'comment' => 'Cor linda e dura o dia todo.']);
+        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $parafusadeira->id, 'rating' => 5, 'comment' => 'Torque forte, bateria boa.']);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
+            ->assertOk()
+            ->assertJsonCount(1, 'avaliacoes')
+            ->assertJsonPath('avaliacoes.0.texto', 'Cor linda e dura o dia todo.');
+    }
+
     public function test_fora_da_grande_sp_mostra_correios_turbo_e_loggi_pela_diferenca(): void
     {
         $this->comLoggi(27.5);

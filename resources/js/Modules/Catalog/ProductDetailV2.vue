@@ -806,6 +806,20 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
+                            <!-- Frete grátis e Devoluções trocaram de posição com Pagamento seguro e Empresa
+                                 100% legal (pedido 2026-10-23): textos e ícones de cada card são os mesmos. -->
+                            <ul class="fretefundo">
+                                <li v-if="isFreeShipping || DESCONTO_PIX">
+                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping"><b>Frete grátis</b> mais desconto no checkout</span>
+                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
+                                </li>
+                                <li class="devolucao">
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Devoluções gratuitas</b></span>
+                                </li>
+                            </ul>
+
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), cada um na
                                  sua caixinha como os de Frete e Devoluções da Mavo (pedido 2026-10-23). -->
                             <ul class="fretefundo">
@@ -823,12 +837,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
-                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
-                                    <span><b>Pagamento seguro e rápido</b></span>
+                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Pagamento seguro e rápido.</b> Compra garantida: receba o produto que está esperando ou devolvemos o dinheiro.</span>
                                 </li>
-                                <li class="devolucao">
-                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Empresa 100% legal</b></span>
+                                <li>
+                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
                         </aside>

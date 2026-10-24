@@ -610,6 +610,10 @@ const salvarEntrega = async () => {
     }
 };
 
+// A frase do aceite fica debaixo do "Ir para Pagamento" (modelo Mavo,
+// 2026-10-24); quem caiu direto no pagamento sem passar por ele a vê no
+// Finalizar pedido.
+const aceiteMostrado = ref(false);
 const irParaPagamento = async () => {
     if (freteCarregando.value || salvandoEntrega.value) return;
     tentouAqui.value = true;
@@ -623,7 +627,10 @@ const irParaPagamento = async () => {
     salvandoEntrega.value = true;
     const ok = await salvarEntrega();
     salvandoEntrega.value = false;
-    if (ok) irPara(3);
+    if (ok) {
+        aceiteMostrado.value = true;
+        irPara(3);
+    }
 };
 
 const enderecoResumo = computed(() => {
@@ -851,7 +858,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
 <template>
     <Head title="Finalize sua compra" />
 
-    <CheckoutLayout :oferta-fim="props.order ? null : ofertaFim">
+    <CheckoutLayout :oferta-fim="props.order ? null : ofertaFim" :sem-relogio="!!props.order">
         <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
         <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
             :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">
@@ -882,9 +889,6 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         </header>
 
                         <template v-if="etapa === 1">
-                            <p v-if="!isLoggedIn" class="mt-1 text-sm text-slate-500">
-                                Já tem conta? <Link href="/entrar" class="font-semibold text-sky-700 hover:underline">Entrar</Link>
-                            </p>
                             <!-- Pessoa física / jurídica (pedido 2026-10-24, modelo Mavo). -->
                             <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
                                 <button v-for="[valor, rotulo, icone] in [['pf', 'Pessoa física', 'fa-user'], ['pj', 'Pessoa jurídica', 'fa-building']]" :key="valor"
@@ -1051,7 +1055,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
                                     <span class="flex-1 text-sm text-slate-700">
                                         <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete Grátis</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
-                                        <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
+                                        <span v-if="!entregaExpressa" class="ml-1 text-slate-500">· PAC ({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                                     </span>
                                     <span class="text-sm font-bold text-emerald-700">Grátis</span>
                                 </label>
@@ -1063,7 +1067,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
                                     <span class="flex-1 text-sm text-slate-700">
                                         <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> Envio Prioritário</strong>
-                                        <span class="ml-1 text-slate-500">
+                                        <span class="ml-1 text-slate-500">· SEDEX 
                                             <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
                                             <template v-else>entrega mais rápida pelo SEDEX</template>
                                         </span>
@@ -1077,6 +1081,10 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 <i v-if="salvandoEntrega" class="fa-solid fa-spinner animate-spin"></i>
                                 {{ salvandoEntrega ? 'Salvando...' : 'Ir para Pagamento' }}
                             </button>
+                            <!-- Aceite dos termos e dos cookies (2026-10-24): no lugar do aviso flutuante; o servidor grava a prova ao finalizar. -->
+                            <p class="mt-3 text-center text-[11px] leading-snug text-slate-500">
+                                Ao prosseguir com a compra, você declara que leu e aceita as <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">políticas de privacidade</Link> (incluindo a captação de dados por <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>) e os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>.
+                            </p>
                         </template>
 
                         <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
@@ -1183,9 +1191,8 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
                                 {{ processando ? 'Processando...' : 'Finalizar pedido' }}
                             </button>
-                            <p class="mt-3 text-center text-xs text-slate-500">
-                                <!-- Aceite dos termos e dos cookies (2026-10-24): no lugar do aviso flutuante; o servidor grava a prova ao finalizar. -->
-                                Ao clicar em Finalizar pedido, você declara que leu e aceita os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>, a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link> e o uso de <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>, conforme a LGPD (Lei 13.709/2018).
+                            <p v-if="!aceiteMostrado" class="mt-3 text-center text-[11px] leading-snug text-slate-500">
+                                Ao prosseguir com a compra, você declara que leu e aceita as <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">políticas de privacidade</Link> (incluindo a captação de dados por <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>) e os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>.
                             </p>
                         </div>
                     </section>

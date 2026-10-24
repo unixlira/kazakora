@@ -15,7 +15,7 @@ const props = defineProps({
     reviewableProductIds: { type: Array, default: () => [] },
     reviewedProductIds: { type: Array, default: () => [] },
     // Celular: slide com 2 cards por tela, do tamanho dos outros (Ofertas do dia,
-    // pedido 2026-10-10; eram 1 por tela até 2026-10-22).
+    // pedido 2026-10-10; eram 1 por tela até 2026-10-22) e Utilidades para casa (2026-10-24).
     slider: { type: Boolean, default: false },
 });
 
@@ -70,14 +70,14 @@ const irPara = (indice) => {
                 </div>
             </div>
             <!-- Setas laranja (pedido 2026-10-10): fica claro que é ali que passa. -->
-            <button v-if="atual > 0" type="button" aria-label="Oferta anterior"
+            <button v-if="atual > 0" type="button" aria-label="Produtos anteriores"
                 class="absolute left-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual - 1)"><i class="fas fa-angle-left"></i></button>
-            <button v-if="atual < paginas - 1" type="button" aria-label="Próxima oferta"
+            <button v-if="atual < paginas - 1" type="button" aria-label="Próximos produtos"
                 class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual + 1)"><i class="fas fa-angle-right"></i></button>
             <div class="mt-2 flex justify-center">
-                <button v-for="indice in paginas" :key="indice" type="button" :aria-label="`Ofertas ${indice * 2 - 1} e ${indice * 2}`"
+                <button v-for="indice in paginas" :key="indice" type="button" :aria-label="`Produtos ${indice * 2 - 1} e ${indice * 2}`"
                     class="flex h-6 min-w-6 items-center justify-center"
                     @click="irPara(indice - 1)"><span class="h-2 rounded-full transition-all" :class="indice - 1 === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"></span></button>
             </div>

@@ -333,13 +333,48 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 // como o Lira mostrou: aparece abaixo de 50 e some sem estoque. O número
 // sorteado entre 4 e 9 do #1014 saiu em 2026-10-23: estoque inventado seria
 // publicidade enganosa (mesma regra do vendidos fixo).
-const estoqueBaixo = computed(() => {
+const estoqueReal = computed(() => {
     if (faltaVariacao.value) return null;
     const estoque = Number(selecionada.value.stock) || 0;
     return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
 });
+// Ao abrir, a barra começa CHEIA com o número inicial (30, ou o estoque real
+// se for maior) e desce uma unidade por passo até parar no estoque real
+// (pedido do Lira, 2026-10-23). O número que fica na tela é sempre o real.
+const ESTOQUE_INICIAL = 30;
+const estoqueBaixo = ref(null);
+const estoqueTopo = ref(ESTOQUE_INICIAL);
+let estoqueTimer = null;
+const pararEstoque = () => {
+    clearTimeout(estoqueTimer);
+    estoqueTimer = null;
+};
+const animarEstoque = () => {
+    pararEstoque();
+    const real = estoqueReal.value;
+    if (!real) {
+        estoqueBaixo.value = null;
+        return;
+    }
+    estoqueTopo.value = Math.max(ESTOQUE_INICIAL, real);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        estoqueBaixo.value = real;
+        return;
+    }
+    estoqueBaixo.value = estoqueTopo.value;
+    const passo = Math.max(40, Math.round(2500 / Math.max(1, estoqueTopo.value - real)));
+    const descer = () => {
+        if (estoqueBaixo.value <= real) return;
+        estoqueBaixo.value -= 1;
+        estoqueTimer = setTimeout(descer, passo);
+    };
+    estoqueTimer = setTimeout(descer, 800);
+};
+onMounted(animarEstoque);
+onUnmounted(pararEstoque);
+watch(estoqueReal, animarEstoque);
 const barraEstoque = computed(() => (estoqueBaixo.value
-    ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
+    ? Math.max(6, Math.round((estoqueBaixo.value / estoqueTopo.value) * 100))
     : 0));
 // Só cita o que vale para o produto: frete grátis e desconto do Pix.
 const complementoEstoque = computed(() => {
@@ -837,7 +872,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <template v-if="inStock">
                                 <div v-if="estoqueBaixo" class="estoque-baixo">
                                     <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
-                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
+                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="estoqueTopo" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
                                 </div>
@@ -1307,10 +1342,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .estoque-baixo p { color: var(--text); }
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
-/* Animação da barra: enche do zero ao abrir a página e as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; animation: estoque-enche 1.2s ease-out both; }
+/* Barra abre cheia e desce até o estoque real; as listras correm por cima. */
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width .08s linear; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
-@keyframes estoque-enche { from { width: 0; } }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }

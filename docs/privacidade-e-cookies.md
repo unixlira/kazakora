@@ -16,12 +16,23 @@ visita a loja.
 
 ## Como está montado
 
-### Aviso de cookies
-- Componente: `resources/js/Shared/Components/AvisoCookies.vue` (na loja e no checkout).
-- Simples, **só o botão OK** (decisão do Lira). Link "Saiba mais" → `/politica-de-cookies`.
-- Sem OK a loja funciona normal com os cookies necessários. **Nenhum cookie
-  não necessário é criado antes do OK.**
-- O OK chama `POST /cookies/aceitar` (`CookiesController`), que:
+### Aceite dos cookies (desde 24/10/2026: no checkout, sem aviso flutuante)
+- Pedido do Lira em 24/10/2026: saiu o aviso flutuante (`AvisoCookies.vue`,
+  botão OK). O aceite agora é a frase abaixo do **Finalizar pedido**
+  (`CheckoutV2.vue`; no checkout antigo, a caixinha do `Payment.vue`): "Ao
+  clicar em Finalizar pedido, você declara que leu e aceita os termos de uso,
+  a política de privacidade e o uso de cookies, conforme a LGPD".
+- Ao finalizar (`CheckoutController`, antes de criar o pedido),
+  `Cookies::registrarAceite()` grava a prova e cria os cookies, igual ao OK
+  antigo. Beauty Kora e FerraKora: a API de pedido
+  (`CheckoutOutroSiteController::pedido`) grava só a prova, com `origem` do site.
+- **Efeito:** quem só navega e não compra fica só com os cookies necessários.
+  Pixel da Meta (PageView, ViewContent, AddToCart, no navegador e no servidor)
+  só roda para quem já comprou ou deu OK no aviso antigo (versão 2026-10-18,
+  que continua valendo: `Cookies::VERSOES_ANTERIORES`).
+- Sem aceite a loja funciona normal com os cookies necessários. **Nenhum cookie
+  não necessário é criado antes do aceite.**
+- `POST /cookies/aceitar` (`CookiesController`) continua existindo para o OK vindo de outro lugar e:
   - grava a prova em `consentimentos_cookies` (visitante, usuário, versão do aviso, IP, navegador, data/hora);
   - cria `kazakora_cookies` = versão do aviso e `kazakora_visitor` (12 meses).
 - Versão do aviso: `App\Support\Privacidade\Cookies::VERSAO`. **Mudou o que a

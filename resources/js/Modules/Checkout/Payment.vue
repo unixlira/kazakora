@@ -480,8 +480,10 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                         <label class="mt-6 flex items-start gap-3 text-sm">
                             <input v-model="chooseForm.terms_accepted" type="checkbox" class="mt-0.5 h-4 w-4 accent-store-accent">
                             <span>
-                                Li e estou ciente das condições desta compra e dos
-                                <Link href="/termos-de-uso" target="_blank" class="text-store-accent hover:underline">termos de uso</Link>.
+                                Li e aceito as condições desta compra, os
+                                <Link href="/termos-de-uso" target="_blank" class="text-store-accent hover:underline">termos de uso</Link>, a
+                                <Link href="/politica-de-privacidade" target="_blank" class="text-store-accent hover:underline">política de privacidade</Link> e o uso de
+                                <Link href="/politica-de-cookies" target="_blank" class="text-store-accent hover:underline">cookies</Link>, conforme a LGPD (Lei 13.709/2018).
                             </span>
                         </label>
                         <InputError v-if="chooseForm.errors.terms_accepted" :message="chooseForm.errors.terms_accepted" />

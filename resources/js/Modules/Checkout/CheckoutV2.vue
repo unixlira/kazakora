@@ -1184,7 +1184,8 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 {{ processando ? 'Processando...' : 'Finalizar pedido' }}
                             </button>
                             <p class="mt-3 text-center text-xs text-slate-500">
-                                Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
+                                <!-- Aceite dos termos e dos cookies (2026-10-24): no lugar do aviso flutuante; o servidor grava a prova ao finalizar. -->
+                                Ao clicar em Finalizar pedido, você declara que leu e aceita os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>, a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link> e o uso de <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>, conforme a LGPD (Lei 13.709/2018).
                             </p>
                         </div>
                     </section>

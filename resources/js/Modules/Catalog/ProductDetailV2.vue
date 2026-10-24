@@ -827,21 +827,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <ul v-if="highlights.length" class="checks">
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
-
-                            <!-- Fora do quadro dos quatro selos ficam só os cards que não estão nele.
-                                 Expressa é a entrega própria na Grande SP (config/entrega_expressa.php), não os Correios. -->
-                            <ul v-if="isFreeShipping || DESCONTO_PIX" class="fretefundo">
-                                <li v-if="isFreeShipping">
-                                    <span class="selo-icone"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
-                                    <span><b>Frete Grátis com entrega expressa</b> para São Paulo/SP e região. Consulte seu CEP acima.</span>
-                                </li>
-                                <li v-if="isFreeShipping || DESCONTO_PIX">
-                                    <span class="selo-icone"><i class="fas fa-tags" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping && DESCONTO_PIX"><b>Frete Grátis + desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
-                                    <span v-else-if="isFreeShipping"><b>Frete Grátis</b> em todo o Brasil.</span>
-                                    <span v-else><b>Desconto no checkout</b>: {{ DESCONTO_PIX }} a menos pagando no Pix.</span>
-                                </li>
-                            </ul>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o

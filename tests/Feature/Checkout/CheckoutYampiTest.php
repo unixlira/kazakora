@@ -100,7 +100,8 @@ class CheckoutYampiTest extends TestCase
         // Chave com cupom que não existe: nada de pop-up (e nada é criado).
         config(['loja.cupom_primeira_compra' => 'BEMVINDO3']);
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
-        $this->assertSame(0, Coupon::query()->count());
+        // Só o BEMVINDO, que a migração cria (cupom automático, 2026-10-24).
+        $this->assertSame(0, Coupon::query()->where('code', '<>', 'BEMVINDO')->count());
 
         // Cupom inativo: nada de pop-up.
         $coupon = Coupon::create(['code' => 'BEMVINDO3', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 3, 'is_active' => false]);

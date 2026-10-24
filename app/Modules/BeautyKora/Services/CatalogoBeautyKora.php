@@ -58,7 +58,8 @@ class CatalogoBeautyKora extends CatalogoOutroSite
         return [
             'clonado' => (bool) $registro->clonado,
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
-            'desconto_pix' => DescontoPix::percentualDo($pai),
+            // Pix + cupom automático (BEMVINDO), que o checkout aplica sozinho (2026-10-24).
+            'desconto_pix' => DescontoPix::percentualNaVitrine($pai),
         ];
     }
 }

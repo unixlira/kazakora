@@ -302,9 +302,14 @@ const removerCupom = async () => {
 
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
-const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0
-    ? round2((subtotalAtual.value - descontoCupom.value - descontoPlataforma.value) * props.pixDiscountPercentage / 100)
-    : 0));
+// Pix desde 2026-10-24: o % sobre os produtos ANTES do cupom (3% do BEMVINDO
+// + 2% do Pix = 5%), sem passar do que sobrou depois do cupom. Mesma conta do
+// DescontoPix::descontoSobreCupom.
+const descontoPixCalculado = computed(() => {
+    const base = Math.max(0, subtotalAtual.value - descontoPlataforma.value);
+    return Math.min(round2(base * props.pixDiscountPercentage / 100), round2(Math.max(0, base - descontoCupom.value)));
+});
+const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0 ? descontoPixCalculado.value : 0));
 const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value - descontoPlataforma.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
 const parcela12 = computed(() => totalCartao.value / 12);
@@ -844,7 +849,7 @@ const ofertaFim = computed(() => itens.value
     .sort((a, b) => new Date(a) - new Date(b))[0] ?? null);
 
 const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
-    ? round2(totalCartao.value - round2((subtotalAtual.value - descontoCupom.value - descontoPlataforma.value) * props.pixDiscountPercentage / 100))
+    ? round2(totalCartao.value - descontoPixCalculado.value)
     : totalCartao.value));
 
 // Campos em pílula com fundo cinza claro (modelo Yampi).

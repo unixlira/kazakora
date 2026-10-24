@@ -23,6 +23,7 @@ use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\CredenciaisCheckout;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
+use App\Support\CupomAutomatico;
 use App\Support\DescontoPix;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -212,7 +213,9 @@ abstract class CheckoutOutroSite
         $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
         $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
         $pixPercentual = DescontoPix::percentualDosItens($itens);
-        $pix = DescontoPix::desconto(max(0, $total), $pixPercentual);
+        // Desde 2026-10-24 o Pix desconta do valor antes do cupom (3% do
+        // BEMVINDO + 2% do Pix = 5%), sem passar do total.
+        $pix = DescontoPix::descontoSobreCupom($subtotal - $plataforma + $valorDoFrete, $descontoCupom, $pixPercentual);
 
         return [
             'subtotal' => $subtotal,
@@ -271,14 +274,24 @@ abstract class CheckoutOutroSite
 
     /**
      * Cupom pedido pelo site, conferido com as regras da KazaKora (ativo,
-     * validade, mínimo, limite de usos, um por cliente pelo e-mail).
+     * validade, mínimo, limite de usos, um por cliente pelo e-mail). Sem
+     * código, entra o cupom automático (BEMVINDO, 2026-10-24) quando vale,
+     * como no checkout da KazaKora; o site manda sem_cupom_automatico quando
+     * o cliente tira o cupom.
      *
      * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
      */
-    public function cupom(?string $codigo, Collection $itens, ?string $email = null): array
+    public function cupom(?string $codigo, Collection $itens, ?string $email = null, bool $automatico = true): array
     {
+        $email = filled($email) ? trim($email) : null;
+
         if (blank($codigo)) {
-            return [null, null];
+            if (! $automatico || ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0)) {
+                return [null, null];
+            }
+            $conta = $email ? User::query()->where('email', $email)->first() : null;
+
+            return [CupomAutomatico::para(round($itens->sum('subtotal'), 2), $conta, $email), null];
         }
 
         $cupom = Coupon::buscar($codigo);
@@ -286,7 +299,6 @@ abstract class CheckoutOutroSite
             return [null, 'Cupom não encontrado. Confira o código.'];
         }
 
-        $email = filled($email) ? trim($email) : null;
         $conta = $email ? User::query()->where('email', $email)->first() : null;
         if ($motivo = $cupom->motivoInvalido(round($itens->sum('subtotal'), 2), $conta, $email)) {
             return [null, $motivo];
@@ -305,10 +317,10 @@ abstract class CheckoutOutroSite
     }
 
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */
-    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null): array
+    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null, bool $cupomAutomatico = true): array
     {
         $itens = $this->itens($pedidos, $cep);
-        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email);
+        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email, $cupomAutomatico);
         $valores = $this->valores($itens, $cep, $frete, $cupom);
 
         return [
@@ -373,7 +385,7 @@ abstract class CheckoutOutroSite
             // Trava a linha do cupom antes de conferir o limite de usos.
             Coupon::travar($dados['cupom'] ?? null);
             // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
-            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
+            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email'], empty($dados['sem_cupom_automatico']));
             if ($cupomErro) {
                 throw ValidationException::withMessages(['cupom' => $cupomErro.' O desconto foi removido: confira o total e finalize de novo.']);
             }

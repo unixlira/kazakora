@@ -44,8 +44,6 @@ const props = defineProps({
     quadrosPromocao: { type: Object, default: () => ({}) },
     // Unidades vendidas de verdade, todos os canais (pedido 2026-10-23).
     salesCount: { type: Number, default: 0 },
-    // % do cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24).
-    cupomAutomaticoPercentual: { type: Number, default: 0 },
 });
 
 const page = usePage();
@@ -53,11 +51,10 @@ const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const PARCELAS = 12;
 // Desconto no Pix: "Desconto Checkout" do produto, em % ou R$ (2026-10-18).
-// Desde 2026-10-24 o % soma o cupom automático (2% do Pix + 3% do BEMVINDO).
-const itemEmOferta = (item) => !!(item?.oferta_do_dia || item?.oferta_relampago);
-const cupomNaVitrine = (item) => (itemEmOferta(item) ? 0 : Number(props.cupomAutomaticoPercentual) || 0);
+// Só o desconto da forma de pagamento (2% OFF), sem o cupom automático
+// (pedido 2026-10-24, revendo o 2% + 3% do mesmo dia).
 const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
-    ? `${Number((Number(props.product.checkout_discount_percentage) + cupomNaVitrine(props.product)).toFixed(2)).toLocaleString('pt-BR')}%`
+    ? `${Number(Number(props.product.checkout_discount_percentage).toFixed(2)).toLocaleString('pt-BR')}%`
     : (Number(props.product.checkout_discount_amount ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
@@ -304,9 +301,9 @@ const installmentValue = computed(() => Number(precoBase.value.final_price) / PA
 // e desconto arredondado no centavo, sobre o subtotal.
 const percentualPix = (item, unitario) => {
     const pct = Number(item?.checkout_discount_percentage ?? 0);
-    if (pct > 0) return Math.min(100, pct + cupomNaVitrine(item));
+    if (pct > 0) return Math.min(100, pct);
     const valor = Number(item?.checkout_discount_amount ?? 0);
-    if (valor > 0 && unitario > 0) return Math.min(100, Math.round(((valor * 100) / unitario) * 10000) / 10000 + cupomNaVitrine(item));
+    if (valor > 0 && unitario > 0) return Math.min(100, Math.round(((valor * 100) / unitario) * 10000) / 10000);
     return 0;
 };
 const precoPixPara = (item, unitario, qtd = 1) => {
@@ -323,7 +320,7 @@ const precoPix = computed(() => {
 // Selo ao lado do valor no Pix: o % real do produto ou "R$ N OFF" quando é valor fixo.
 const seloPix = computed(() => {
     const pct = Number(precoBase.value.checkout_discount_percentage ?? 0);
-    if (pct > 0) return `${Number((pct + cupomNaVitrine(precoBase.value)).toFixed(2)).toLocaleString('pt-BR')}% OFF`;
+    if (pct > 0) return `${Number(pct.toFixed(2)).toLocaleString('pt-BR')}% OFF`;
     const valor = Number(precoBase.value.checkout_discount_amount ?? 0);
     return valor > 0 ? `${formatPrice(valor).replace(/,00$/, '')} OFF` : '';
 });

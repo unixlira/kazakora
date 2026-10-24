@@ -17,7 +17,6 @@ use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
-use App\Support\CupomAutomatico;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -489,8 +488,6 @@ class CatalogController extends Controller
             // Custo é dado interno: não vai no JSON da página pública.
             // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
             'product' => $product->makeHidden('cost_price')->append('preco_pix'),
-            // % do cupom automático (BEMVINDO, 2026-10-24): soma no preço do Pix de kits e totais.
-            'cupomAutomaticoPercentual' => CupomAutomatico::percentualNaVitrine(),
             'variations' => $variations,
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),

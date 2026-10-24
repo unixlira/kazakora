@@ -170,15 +170,12 @@ class CupomAutomaticoTest extends TestCase
         $this->assertEquals(2.0, DescontoPix::descontoSobreCupom(200, 198, 2));
     }
 
-    public function test_pagina_de_produto_mostra_5_por_cento_no_pix(): void
+    public function test_pagina_de_produto_mostra_so_os_2_por_cento_do_pix_sem_o_cupom(): void
     {
         $product = Product::factory()->create(['price' => 200, 'stock' => 5, 'is_active' => true, 'checkout_discount_percentage' => 2, 'discount_percentage' => null, 'discount_amount' => null]);
 
-        $this->assertEquals(round((float) $product->final_price * 0.95, 2), DescontoPix::precoPix($product));
-
-        config(['loja.cupom_automatico' => '']);
-        \Illuminate\Support\Once::flush();
-        $this->assertEquals(round((float) $product->final_price * 0.98, 2), DescontoPix::precoPix($product->fresh()));
+        $this->assertEquals(round((float) $product->final_price * 0.98, 2), DescontoPix::precoPix($product));
+        $this->assertEquals(2.0, DescontoPix::percentualNaVitrine($product));
     }
 
     public function test_ferrakora_so_tem_cupom_quando_o_site_manda(): void

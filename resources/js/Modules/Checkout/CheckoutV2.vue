@@ -818,6 +818,9 @@ const fotoDoItem = (item) => {
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
 };
 const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item.quantity, 0));
+// Contador do resumo (pedido do Lira 2026-10-24): o combo de livros digitais
+// conta como um item a mais. O aviso de "itens na mesma caixa" segue só com os físicos.
+const totalProdutosResumo = computed(() => totalItens.value + (props.livrosBrinde ? 1 : 0));
 const precoUnitario = (item) => (item.quantity > 0 ? item.subtotal / item.quantity : item.subtotal);
 // Selo do item e relógio do topo só com oferta de verdade: Oferta Relâmpago
 // (fim vindo do servidor) ou Oferta do Dia (vale até 23:59:59 de hoje em SP).
@@ -855,7 +858,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
         <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
         <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
             :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">
-            <span class="text-sm font-bold text-slate-900">Resumo ({{ totalItens }})</span>
+            <span class="text-sm font-bold text-slate-900">Resumo ({{ totalProdutosResumo }})</span>
             <span class="flex items-center gap-2 text-base font-bold text-slate-900">
                 {{ formatPrice(totalAPagar) }}
                 <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }" aria-hidden="true"></i>
@@ -1239,7 +1242,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                     </div>
 
                     <dl class="mt-4 space-y-2 text-sm text-slate-600">
-                        <div class="flex justify-between"><dt>Produtos ({{ totalItens }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
+                        <div class="flex justify-between"><dt>Produtos ({{ totalProdutosResumo }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>

@@ -939,10 +939,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <p v-if="prazo.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <!-- Flex no formato do Full com texto fixo "Receba de 1 a 7 dias" e Turbo como rádio desmarcado,
                                          os dois na largura toda e centralizados (pedido do Lira 2026-10-24). -->
-                                    <p v-else-if="ehFlex" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Flex</span> Receba de 1 a 7 dias<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
+                                    <!-- Flex com o rádio (marcado até escolher o Turbo), no mesmo grupo do Turbo (pedido do Lira 2026-10-24). -->
+                                    <label v-else-if="ehFlex" class="expressa flex-radio">
+                                        <input type="radio" name="frete-turbo" :checked="!turboMarcado" @change="turboMarcado = false">
+                                        <span><span class="full"><i class="fas fa-bolt"></i> Flex</span> Receba de 1 a 7 dias<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></span>
+                                    </label>
                                     <p v-else class="normal">{{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <label v-if="isFreeShipping && prazo.turbo" class="turbo" :class="{ marcado: turboMarcado }">
-                                        <input type="radio" name="frete-turbo" :checked="turboMarcado" @click="turboMarcado = !turboMarcado">
+                                        <input type="radio" name="frete-turbo" :checked="turboMarcado" @click="turboMarcado = ehFlex ? true : !turboMarcado">
                                         <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> {{ textoTurbo }}</span>
                                     </label>
                                 </div>
@@ -1477,6 +1481,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep .turbo.marcado { border-color: #F44D00; background: #fff4ec; box-shadow: 0 0 0 1px #F44D00; }
 .dark .pd2 .prazo-cep .turbo { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .dark .pd2 .prazo-cep .turbo.marcado { background: rgba(244, 77, 0, .15); border-color: #F44D00; }
+/* Flex como rádio (2026-10-24): mesma caixa verde do Full, largura toda, rádio e texto centralizados. */
+.pd2 .prazo-cep .flex-radio { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 0; font-size: 15px; font-weight: 700; color: #00801a; cursor: pointer; }
+.pd2 .prazo-cep .flex-radio input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; accent-color: #00801a; cursor: pointer; }
+.dark .pd2 .prazo-cep .flex-radio { color: #4ade80; }
+.dark .pd2 .prazo-cep .flex-radio input { accent-color: #4ade80; }
 
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }

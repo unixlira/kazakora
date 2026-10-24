@@ -12,7 +12,7 @@ import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.v
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
-import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
+import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -779,21 +779,6 @@ onMounted(() => {
 });
 onUnmounted(() => window.removeEventListener('keydown', fecharComEsc));
 
-// ---------- Carrossel de avaliações (só as reais, do banco) ----------
-const avaliacaoAtual = ref(0);
-let carrosselTimer = null;
-const passarAvaliacao = (passo = 1) => {
-    const total = props.avaliacoesCarrossel.length;
-    if (total) avaliacaoAtual.value = (avaliacaoAtual.value + passo + total) % total;
-};
-const pararCarrossel = () => { clearInterval(carrosselTimer); carrosselTimer = null; };
-const iniciarCarrossel = () => {
-    pararCarrossel();
-    if (props.avaliacoesCarrossel.length > 1) carrosselTimer = setInterval(() => passarAvaliacao(1), 6000);
-};
-onMounted(iniciarCarrossel);
-onUnmounted(pararCarrossel);
-
 // ---------- Resumo ----------
 // Aberto no celular (pedido 2026-10-24, modelo Mavo; desfaz o de 23/10): a
 // barra "Resumo (n)" no topo recolhe e abre, e já nasce aberta com o cupom,
@@ -1162,6 +1147,9 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                         </div>
                     </section>
 
+                    <!-- Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24). -->
+                    <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" />
+
                     <!-- Celular: selos de confiança debaixo das etapas (pedido 2026-10-21). -->
                     <ul class="space-y-3 lg:hidden">
                         <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
@@ -1299,27 +1287,8 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                     </div>
                 </div>
 
-                <!-- Carrossel de avaliações reais (modelo Yampi): estrelas, nome, texto e foto. -->
-                <section v-if="avaliacoesCarrossel.length" class="mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
-                    aria-roledescription="carrossel" aria-label="Avaliações de clientes" @mouseenter="pararCarrossel" @mouseleave="iniciarCarrossel">
-                    <template v-for="(avaliacao, indice) in avaliacoesCarrossel" :key="avaliacao.id">
-                        <article v-show="indice === avaliacaoAtual" class="flex min-h-[132px] gap-3" :aria-label="`Avaliação ${indice + 1} de ${avaliacoesCarrossel.length}`">
-                            <div class="min-w-0 flex-1">
-                                <p class="text-amber-500" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
-                                    <i v-for="estrela in 5" :key="estrela" class="text-sm" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
-                                </p>
-                                <p class="mt-1 text-xs font-bold text-slate-900">{{ avaliacao.nome }}</p>
-                                <p class="mt-2 text-sm leading-relaxed text-slate-700">{{ avaliacao.texto }}</p>
-                            </div>
-                            <img v-if="avaliacao.foto" :src="miniaturaAvaliacao(avaliacao.foto)" alt="Foto enviada pelo cliente" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 shrink-0 rounded-xl object-cover">
-                        </article>
-                    </template>
-                    <div v-if="avaliacoesCarrossel.length > 1" class="mt-3 flex items-center justify-center gap-1.5">
-                        <button v-for="(avaliacao, indice) in avaliacoesCarrossel" :key="`ponto-${avaliacao.id}`" type="button"
-                            class="h-2 rounded-full transition-all" :class="indice === avaliacaoAtual ? 'w-5 bg-slate-800' : 'w-2 bg-slate-300 hover:bg-slate-400'"
-                            :aria-label="`Ver avaliação ${indice + 1}`" :aria-current="indice === avaliacaoAtual" @click="avaliacaoAtual = indice"></button>
-                    </div>
-                </section>
+                <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
+                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block" />
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10). No celular ficam debaixo das etapas (2026-10-21). -->
                 <ul class="mt-4 hidden space-y-3 lg:block">

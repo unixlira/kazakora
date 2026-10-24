@@ -584,6 +584,15 @@ abstract class CheckoutOutroSite
     private function cliente(array $cliente): User
     {
         $cpf = preg_replace('/\D/', '', $cliente['cpf']);
+        // CPF já cadastrado (2026-10-24): a compra vai para a conta dona do CPF.
+        if ($doCpf = User::contaDoCpf($cpf)) {
+            if (blank($doCpf->phone)) {
+                $doCpf->forceFill(['phone' => $cliente['phone']])->save();
+            }
+
+            return $doCpf;
+        }
+
         $conta = User::withTrashed()->where('email', trim($cliente['email']))->first();
 
         if ($conta) {

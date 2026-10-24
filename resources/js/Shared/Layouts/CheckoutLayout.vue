@@ -66,13 +66,13 @@ const tempo = computed(() => [Math.floor(restante.value / 3600), Math.floor((res
                     </li>
                 </ul>
 
-                <!-- Selos sem link no checkout (pedido 2026-10-21): o cliente não sai da tela de pagamento. -->
+                <!-- Selos do checkout. RA Verificada: o mesmo selo oficial do rodapé da loja (2026-10-24, no lugar da imagem com QR Code); abre em outra aba, o cliente não sai do pagamento. -->
                 <div class="mt-5 flex items-center justify-center gap-2">
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-7 w-auto">
                     </div>
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
-                        <SeloReclameAqui :altura="28" sem-link />
+                        <SeloReclameAqui :altura="28" />
                     </div>
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-6 w-auto">

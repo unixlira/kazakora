@@ -114,4 +114,11 @@ return [
     'ads_alerta_percentual' => (float) env('LOJA_ADS_ALERTA_PERCENTUAL', 6),
     'ads_meta_percentual' => (float) env('LOJA_ADS_META_PERCENTUAL', 4),
     'queda_vendas_percentual' => (float) env('LOJA_QUEDA_VENDAS_PERCENTUAL', 30),
+
+    /*
+    | Carrinho abandonado (lead_checkout, 2026-10-24): prazo de guarda decidido
+    | pelo Lira, 3 meses desde a última interação (updated_at). Depois disso o
+    | lead sai do banco, aberto ou convertido (leads:limpar, todo dia).
+    */
+    'lead_checkout_dias_guarda' => (int) env('LOJA_LEAD_CHECKOUT_DIAS_GUARDA', 90),
 ];

@@ -28,8 +28,9 @@ use Illuminate\Support\Facades\Log;
  * BeautyKoraCheckoutController).
  *
  * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo), cupom?, sem_cupom_automatico?, email?}
- *              (sem cupom entra o automático, BEMVINDO; sem_cupom_automatico=true quando o cliente tira)
- *              → cupom{codigo, descricao, desconto} ou cupom_erro
+ *              (sem cupom não entra nenhum; sem_cupom_automatico é aceito e ignorado desde 2026-10-24)
+ *              → cupom{codigo, descricao, desconto} ou cupom_erro; cupom_boas_vindas{codigo, descricao}
+ *              ou null: o cupom que o pop-up de boas-vindas do site oferece
  * POST pedido  {itens, frete?, turbo?, cupom?, total_esperado (centavos), cliente{name,email,cpf,phone},
  *               endereco{zip,street,number,complement,neighborhood,city,state},
  *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
@@ -57,7 +58,7 @@ abstract class CheckoutOutroSiteController extends Controller
         ]);
 
         try {
-            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null, empty($dados['sem_cupom_automatico']))));
+            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null)));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }
@@ -125,7 +126,7 @@ abstract class CheckoutOutroSiteController extends Controller
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         } catch (PrecoMudouException $e) {
-            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'], empty($dados['sem_cupom_automatico']))], 409);
+            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'])], 409);
         } catch (UniqueConstraintViolationException) {
             return response()->json(['message' => 'Este CPF ou e-mail já tem cadastro na KazaKora. Use os dados da sua conta.'], 422);
         } catch (MercadoPagoException $e) {

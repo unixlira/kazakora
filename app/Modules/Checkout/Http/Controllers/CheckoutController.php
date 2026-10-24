@@ -503,10 +503,6 @@ class CheckoutController extends Controller
     public function removeCouponJson(Request $request): JsonResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY, []);
-        // Tirou o cupom automático: ele não volta sozinho nesta compra.
-        if (CupomAutomatico::eh($draft['coupon_code'] ?? null)) {
-            $draft['cupom_automatico_removido'] = true;
-        }
         unset($draft['coupon_code']);
         $request->session()->put(self::SESSION_KEY, $draft);
 
@@ -558,28 +554,6 @@ class CheckoutController extends Controller
     private function subtotalParaCupom($cartItems): float
     {
         return round($cartItems->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
-    }
-
-    /**
-     * Põe o cupom automático (BEMVINDO, config loja.cupom_automatico) no
-     * rascunho quando ainda não há cupom, ele vale para o carrinho (não só
-     * Oferta do Dia/Relâmpago) e o cliente não tirou ele nesta compra
-     * (pedido do Lira 2026-10-24). A tela já abre com o cupom aplicado.
-     */
-    private function comCupomAutomatico(Request $request, array $draft, $cartItems, float $subtotal): array
-    {
-        if (! empty($draft['coupon_code']) || ! empty($draft['cupom_automatico_removido']) || $this->subtotalParaCupom($cartItems) <= 0) {
-            return $draft;
-        }
-
-        $user = $request->user();
-        $coupon = CupomAutomatico::para($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
-        if ($coupon) {
-            $draft['coupon_code'] = $coupon->code;
-            $request->session()->put(self::SESSION_KEY, $draft);
-        }
-
-        return $draft;
     }
 
     /**
@@ -1640,7 +1614,6 @@ class CheckoutController extends Controller
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
-        $draft = $this->comCupomAutomatico(request(), $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
         $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
@@ -1979,7 +1952,6 @@ class CheckoutController extends Controller
         }
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $draft = $this->comCupomAutomatico($request, $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
 
         return [
@@ -2002,9 +1974,9 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
             // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais e
-            // pop-up do cupom de 1ª compra (só com cupom cadastrado e válido).
+            // pop-up do cupom de boas-vindas (só com cupom cadastrado e válido).
             'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos($cartItems->map(fn ($item) => data_get($item, 'product.id'))),
-            'cupomPrimeiraCompra' => fn () => $coupon ? null : $this->cupomPrimeiraCompra($subtotal, $user),
+            'cupomPrimeiraCompra' => fn () => $coupon || $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomPrimeiraCompra($subtotal, $user),
         ];
     }
 
@@ -2028,16 +2000,17 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Cupom do pop-up "Você ganhou um cupom para sua 1ª compra!" (config
-     * loja.cupom_primeira_compra). Null (sem pop-up) quando a chave está
-     * vazia, o cupom não existe, não vale para este carrinho ou o cliente
-     * logado já comprou. Nunca cria cupom.
+     * Cupom do pop-up de boas-vindas (config loja.cupom_primeira_compra; sem
+     * ela, o BEMVINDO de loja.cupom_automatico, pedido do Lira 2026-10-24:
+     * o cupom deixou de entrar sozinho e passou a ser oferecido aqui). Null
+     * (sem pop-up) quando não há código, o cupom não existe, não vale para
+     * este carrinho ou o cliente logado já comprou. Nunca cria cupom.
      *
      * @return array{code: string, descricao: string}|null
      */
     private function cupomPrimeiraCompra(float $subtotal, ?User $user): ?array
     {
-        $codigo = (string) config('loja.cupom_primeira_compra');
+        $codigo = (string) config('loja.cupom_primeira_compra') ?: CupomAutomatico::codigo();
         $coupon = $codigo !== '' ? Coupon::buscar($codigo) : null;
 
         if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email)) {

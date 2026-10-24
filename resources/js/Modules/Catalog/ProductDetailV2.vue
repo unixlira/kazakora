@@ -668,11 +668,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <h1>{{ selecionada.name }}</h1>
 
-                            <a v-if="reviewsCount > 0" href="#avaliacoes" class="nota">
+                            <!-- Linha de estrelas sempre abaixo do título, como na Mavo (tarefa 2656, print
+                                 das 21h22). Sem avaliação: estrelas vazias e "(0 Avaliações)", nunca nota inventada. -->
+                            <component :is="showReviews ? 'a' : 'span'" :href="showReviews ? '#avaliacoes' : undefined" class="nota" :class="{ 'sem-aval': reviewsCount === 0 }">
                                 <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <span class="media">{{ ratingAvg.toFixed(1) }}</span>
+                                <span v-if="reviewsCount > 0" class="media">{{ ratingAvg.toFixed(1) }}</span>
                                 <span class="qtd-aval-topo">({{ reviewsCount }} {{ reviewsCount === 1 ? 'Avaliação' : 'Avaliações' }})</span>
-                            </a>
+                            </component>
 
                             <hr class="divisor">
 

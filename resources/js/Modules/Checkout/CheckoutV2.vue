@@ -96,7 +96,13 @@ const endereco = reactive({
 });
 
 const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
+const cepInput = ref(null);
+const ruaInput = ref(null);
 const numeroInput = ref(null);
+// Modelo Mavo (pedido 2026-10-24): endereço novo começa só com o CEP; o resto
+// aparece depois da consulta, preenchido se achou e em branco se não achou.
+// Rascunho com rua já preenchida (voltou para a tela) mostra tudo direto.
+const cepConsultado = ref(Boolean(endereco.street));
 
 const onCep = async (event) => {
     const zip = maskCep(event.target.value);
@@ -104,14 +110,15 @@ const onCep = async (event) => {
     endereco.zip = zip;
     if (!rolarAteFrete) return;
     const result = await lookupCep(endereco.zip);
+    cepConsultado.value = true;
     if (result) {
         endereco.street = result.street || endereco.street;
         endereco.neighborhood = result.neighborhood || endereco.neighborhood;
         endereco.city = result.city;
         endereco.state = result.state;
-        await nextTick();
-        numeroInput.value?.focus();
     }
+    await nextTick();
+    (result?.street ? numeroInput : ruaInput).value?.focus();
 };
 
 const enderecoSelecionado = computed(() => props.addresses.find((address) => address.id === addressId.value) ?? null);
@@ -529,7 +536,11 @@ etapa.value = (() => {
 
 const irPara = (numero) => {
     etapa.value = numero;
-    nextTick(() => document.getElementById(`etapa-${numero}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    nextTick(() => {
+        document.getElementById(`etapa-${numero}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Entrega abre com o cursor piscando no CEP (modelo Mavo, 2026-10-24).
+        if (numero === 2 && !endereco.zip) cepInput.value?.focus({ preventScroll: true });
+    });
 };
 
 const errosDosDados = () => {
@@ -813,6 +824,10 @@ const inputClass = 'mt-1 w-full rounded-full border border-transparent bg-[#F1F2
 const inputErroClass = 'border-red-500 bg-red-50 ring-1 ring-red-200';
 const botaoVerde = 'flex w-full items-center justify-center gap-2 rounded-full bg-[#00843f] px-6 py-4 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.28)] transition hover:brightness-105 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60';
 const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-7';
+// Celular (modelo Mavo, pedido 2026-10-24): só a etapa atual aparece; a feita
+// fecha (volta pelo "Voltar") e a próxima não fica apagada na tela. No
+// computador as três seguem à mostra, a próxima esmaecida.
+const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden lg:block', etapa.value < numero && 'lg:opacity-60'];
 </script>
 
 <template>
@@ -842,7 +857,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
 
                 <div class="space-y-4">
                     <!-- 1 de 3: Identificação -->
-                    <section id="etapa-1" ref="secaoDados" :class="caixaClass">
+                    <section id="etapa-1" ref="secaoDados" :class="classeEtapa(1)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold text-slate-900">Identificação</h2>
                             <span class="text-xs text-slate-500">1 de 3</span>
@@ -919,13 +934,16 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                     </section>
 
                     <!-- 2 de 3: Entrega -->
-                    <section id="etapa-2" :class="[caixaClass, etapa < 2 && 'opacity-60']">
+                    <section id="etapa-2" :class="classeEtapa(2)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="flex items-center gap-2 text-xl font-extrabold" :class="etapa < 2 ? 'text-slate-500' : 'text-slate-900'">
                                 Entrega
                                 <i v-if="freteCarregando && etapa === 2" class="fa-solid fa-spinner animate-spin text-sm text-slate-400"></i>
                             </h2>
-                            <span class="text-xs text-slate-500">2 de 3</span>
+                            <span class="flex items-baseline gap-3 text-xs text-slate-500">
+                                <button v-if="etapa === 2" type="button" class="text-sm font-semibold text-slate-900 hover:underline" @click="irPara(1)">Voltar</button>
+                                2 de 3
+                            </span>
                         </header>
 
                         <p v-if="etapa < 2" class="mt-2 text-sm text-slate-500">Preencha suas informações pessoais para continuar</p>
@@ -950,15 +968,16 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                                 <label class="col-span-6 sm:col-span-3" :data-erro="erro('new_address.zip') ? 1 : 0">
                                     <span class="sr-only">CEP</span>
                                     <div class="relative">
-                                        <input :value="endereco.zip" data-medir="cep" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="CEP" @input="onCep">
+                                        <input ref="cepInput" :value="endereco.zip" data-medir="cep" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="9" :class="[inputClass, erro('new_address.zip') && inputErroClass]" placeholder="CEP" @input="onCep">
                                         <i v-if="cepLoading" class="fa-solid fa-spinner absolute right-4 top-1/2 mt-0.5 -translate-y-1/2 animate-spin text-slate-400"></i>
                                     </div>
                                     <small v-if="cepError || erro('new_address.zip')" class="ml-4 text-xs text-red-600">{{ cepError || erro('new_address.zip') }}</small>
                                 </label>
                                 <a href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener" class="col-span-6 self-center text-xs font-medium text-sky-700 hover:underline sm:col-span-3">Não sei meu CEP</a>
+                                <template v-if="cepConsultado || errosEndereco.length">
                                 <label class="col-span-6" :data-erro="erro('new_address.street') ? 1 : 0">
                                     <span class="sr-only">Endereço</span>
-                                    <input v-model="endereco.street" data-medir="endereco" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Endereço (rua, avenida...)">
+                                    <input ref="ruaInput" v-model="endereco.street" data-medir="endereco" type="text" autocomplete="address-line1" :class="[inputClass, erro('new_address.street') && inputErroClass]" placeholder="Endereço (rua, avenida...)">
                                 </label>
                                 <label class="col-span-2" :data-erro="erro('new_address.number') ? 1 : 0">
                                     <span class="sr-only">Número</span>
@@ -980,6 +999,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                                     <span class="sr-only">UF</span>
                                     <input v-model="endereco.state" data-medir="uf" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]" placeholder="UF">
                                 </label>
+                                </template>
                                 <!-- Diz exatamente o que falta (antes era só "Preencha o endereço completo"). -->
                                 <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
                                     <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ errosEndereco.join(' ') }}
@@ -990,8 +1010,9 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                             </div>
 
                             <!-- Opções de frete -->
-                            <div ref="opcoesFreteEl" class="mt-5 scroll-mb-4">
-                                <p class="mb-2 text-sm font-bold text-slate-900">Forma de entrega</p>
+                            <!-- Endereço novo: as opções aparecem depois da consulta do CEP (modelo Mavo, 2026-10-24). -->
+                            <div v-if="!usarNovoEndereco || cepConsultado || erro('shipping_method_id')" ref="opcoesFreteEl" class="mt-5 scroll-mb-4">
+                                <p class="mb-2 text-sm font-bold text-slate-900"><i class="fa-solid fa-house mr-1 text-slate-500"></i>Receba em casa</p>
                                 <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                                     <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                                 </p>
@@ -1011,19 +1032,19 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                                     :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
                                     <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
                                     <span class="flex-1 text-sm text-slate-700">
-                                        <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                        <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete Grátis</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
                                         <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                                     </span>
                                     <span class="text-sm font-bold text-emerald-700">Grátis</span>
                                 </label>
 
-                                <!-- TURBO: SEDEX pagando só a diferença, também na área FULL (2026-10-23). Escolhido = laranja do tema. -->
+                                <!-- Envio Prioritário (o TURBO de 2026-10-23, nome da Mavo desde 2026-10-24): SEDEX pagando só a diferença, também na área FULL. Escolhido = laranja do tema. -->
                                 <label v-if="turbo"
                                     class="mt-2 flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
                                     :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
                                     <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
                                     <span class="flex-1 text-sm text-slate-700">
-                                        <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
+                                        <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> Envio Prioritário</strong>
                                         <span class="ml-1 text-slate-500">
                                             <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
                                             <template v-else>entrega mais rápida pelo SEDEX</template>
@@ -1044,7 +1065,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                             <div class="min-w-0">
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ enderecoResumo }}</p>
                                 <p>
-                                    <template v-if="turboEscolhido && turbo">TURBO: + {{ formatPrice(turbo.preco) }}</template>
+                                    <template v-if="turboEscolhido && turbo">Envio Prioritário: + {{ formatPrice(turbo.preco) }}</template>
                                     <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
                                 </p>
                             </div>
@@ -1053,10 +1074,13 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                     </section>
 
                     <!-- 3 de 3: Pagamento. O conteúdo fica montado (v-show) para o campo seguro do cartão não se perder ao editar outra etapa. -->
-                    <section id="etapa-3" :class="[caixaClass, etapa < 3 && 'opacity-60']">
+                    <section id="etapa-3" :class="classeEtapa(3)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold" :class="etapa < 3 ? 'text-slate-500' : 'text-slate-900'">Pagamento</h2>
-                            <span class="text-xs text-slate-500">3 de 3</span>
+                            <span class="flex items-baseline gap-3 text-xs text-slate-500">
+                                <button v-if="etapa === 3 && !order" type="button" class="text-sm font-semibold text-slate-900 hover:underline" @click="irPara(2)">Voltar</button>
+                                3 de 3
+                            </span>
                         </header>
                         <p v-if="etapa < 3" class="mt-2 text-sm text-slate-500">Preencha suas informações de entrega para continuar</p>
 
@@ -1200,7 +1224,7 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
+                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Prioritário</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
                             <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
                         <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
                             <dt class="text-base font-extrabold">Total</dt>

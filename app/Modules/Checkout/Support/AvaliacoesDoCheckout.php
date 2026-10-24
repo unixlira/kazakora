@@ -89,6 +89,10 @@ class AvaliacoesDoCheckout
             : ['m', self::AVATARES_MASCULINOS];
 
         $inicio = hexdec(substr(sha1('avatar-avaliacao:'.$semente), 0, 8)) % $total;
+        // Todos do gênero já saíram: começa outra rodada (revezando, sem cair sempre no mesmo).
+        if (count(array_filter(array_keys($usados), fn (string $usado) => $usado[0] === $prefixo)) >= $total) {
+            $usados = array_filter($usados, fn (string $usado) => $usado[0] !== $prefixo, ARRAY_FILTER_USE_KEY);
+        }
         $arquivo = null;
         for ($passo = 0; $passo < $total; $passo++) {
             $candidato = sprintf('%s%02d.webp', $prefixo, (($inicio + $passo) % $total) + 1);
@@ -97,7 +101,6 @@ class AvaliacoesDoCheckout
                 break;
             }
         }
-        $arquivo ??= sprintf('%s%02d.webp', $prefixo, $inicio + 1);
         $usados[$arquivo] = true;
 
         return $arquivo;

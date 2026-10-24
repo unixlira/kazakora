@@ -200,14 +200,15 @@ const REDES = [
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
             :class="{ 'loja-topo-fume': topoFlutuando }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
-            <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
+            <!-- max-lg:relative: no celular o logo fica centralizado em cima da linha (pedido do Lira 2026-10-23); no computador não, para o mega menu seguir com a largura do topo. -->
+            <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 max-lg:relative md:px-6 lg:gap-8 lg:py-4">
                 <!-- Celular: menu (três listras) à esquerda do logo (pedido do Lira 2026-10-23). -->
                 <button type="button" class="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
                     <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
                 </button>
 
-                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
-                <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. Centralizado no celular (2026-10-23). -->
+                <Link href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
                     <picture>
                         <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
                         <img :src="marca.logoNav" alt="KazaKora" class="h-6 w-auto md:h-8" width="160" height="28" fetchpriority="high">
@@ -305,9 +306,10 @@ const REDES = [
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
                     -->
-                    <!-- Celular: carrinho no topo, à direita, onde ficava o botão do menu (pedido do Lira 2026-10-23). -->
+                    <!-- Celular: carrinho no topo, à direita, onde ficava o botão do menu (pedido do Lira 2026-10-23).
+                         Sacolinha de mão no lugar do carrinho de supermercado, o mesmo desenho da Mavo (feather shopping-bag, 2026-10-23). -->
                     <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
-                        <i class="fas fa-cart-shopping text-base"></i>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-[22px] w-[22px]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
 

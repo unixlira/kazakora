@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Support\Privacidade\Cookies;
 use Closure;
@@ -34,7 +35,11 @@ use Symfony\Component\HttpFoundation\Response;
  *   IP que deu OK no dia entra no cookie (SiteVisit::visitantesPorDia). A
  *   página do OK conta (registrarOk).
  *
- * Depois de 6 meses o IP e o navegador são apagados (privacidade:limpar).
+ * - Em todos: latitude, longitude e CEP aproximados do IP, da Cloudflare
+ *   (LocalizacaoDaVisita, pedido 2026-10-24).
+ *
+ * Depois de 6 meses o IP, o navegador e a localização são apagados
+ * (privacidade:limpar).
  */
 class TrackSiteVisit
 {
@@ -130,6 +135,7 @@ class TrackSiteVisit
             'referer' => $referer,
             'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
             'ip' => $request->ip(),
+            ...LocalizacaoDaVisita::doRequest($request),
             ...$utm,
             'origem' => OrigemVisita::classificar($refererCompleto, $utm, $clique[0]),
             'click_id_param' => $clique[0],

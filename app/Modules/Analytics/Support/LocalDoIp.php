@@ -50,7 +50,7 @@ class LocalDoIp
     /**
      * Null = sem a base ou IP sem registro.
      *
-     * @return array{pais: ?string, uf: ?string, estado: ?string, cidade: ?string}|null
+     * @return array{pais: ?string, uf: ?string, estado: ?string, cidade: ?string, latitude: ?float, longitude: ?float}|null
      */
     public function buscar(string $ip): ?array
     {
@@ -83,6 +83,9 @@ class LocalDoIp
             'uf' => $pais === 'BR' && $estado !== null ? (self::UFS[IbgeMunicipio::normalizar($estado)] ?? null) : null,
             'estado' => $estado,
             'cidade' => $cidade !== '' ? $cidade : null,
+            // Centro da cidade na base (card de localização do olho, 2026-10-24).
+            'latitude' => isset($registro['location']['latitude']) ? (float) $registro['location']['latitude'] : null,
+            'longitude' => isset($registro['location']['longitude']) ? (float) $registro['location']['longitude'] : null,
         ];
     }
 }

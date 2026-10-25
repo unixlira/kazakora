@@ -5,6 +5,8 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\LocalDoIp;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Audit\Models\AuditLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -113,8 +115,8 @@ class OutroSiteVisitLogController extends Controller
         ]);
     }
 
-    /** O olho: os horários das páginas que o IP abriu no período, paginados. */
-    public function visitante(Request $request): JsonResponse
+    /** O olho: os horários das páginas que o IP abriu no período, paginados, e a localização do IP. */
+    public function visitante(Request $request, LocalDoIp $local): JsonResponse
     {
         $validated = $this->validarVisitante($request);
         $request->validate(['page' => ['nullable', 'integer', 'min:1']]);
@@ -139,6 +141,7 @@ class OutroSiteVisitLogController extends Controller
             'paginas' => $paginas,
             'por_pagina' => self::POR_PAGINA_HISTORICO,
             'cliente' => $cliente,
+            'localizacao' => LocalizacaoDaVisita::resumo($query, $validated['ip'], $local),
             'visitas' => $query->orderBy('created_at')->orderBy('id')->forPage($paginaAtual, self::POR_PAGINA_HISTORICO)->get()
                 ->map(fn (SiteVisit $v) => ['id' => $v->id, 'quando' => $v->created_at?->format('d/m/Y H:i:s')]),
         ]);

@@ -495,6 +495,10 @@ const highlights = computed(() => {
     return [];
 });
 
+// Medidas da embalagem no fim da descrição (pedido 2026-10-25), no lugar da
+// tabela Informação adicional; seguem a variação escolhida.
+const dimensoesEmbalagem = computed(() => selecionada.value.dimensoes_embalagem ?? props.product.dimensoes_embalagem ?? null);
+
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
 // Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
@@ -1042,6 +1046,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </template>
                                 </div>
                             </div>
+
+                            <p v-if="dimensoesEmbalagem" class="dimensoes-embalagem"><strong>Dimensões da embalagem:</strong> {{ dimensoesEmbalagem }}</p>
                         </section>
 
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
@@ -1502,6 +1508,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }
+.pd2 .dimensoes-embalagem { margin: 16px 0 0; font-size: 15px; color: #000; }
+.dark .pd2 .dimensoes-embalagem { color: var(--text); }
 .dark .pd2 .descricao { color: var(--text); }
 .pd2 .descricao h3 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
 .pd2 .bloco + .bloco { margin-top: 22px; }

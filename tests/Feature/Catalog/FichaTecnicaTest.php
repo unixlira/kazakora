@@ -68,4 +68,18 @@ class FichaTecnicaTest extends TestCase
             ->where('variations.0.ficha_tecnica', fn ($ficha) => collect($ficha)->contains(fn ($l) => $l[0] === 'Voltagem')
                 || collect($ficha)->contains(fn ($l) => $l[1] === '2 kg')));
     }
+
+    public function test_descricao_leva_as_dimensoes_da_embalagem_no_formato_c_l_a(): void
+    {
+        $produto = Product::factory()->create(['is_active' => true, 'stock' => 4]);
+        ProductFiscalData::create(['product_id' => $produto->id, 'peso_bruto' => 2, 'altura_cm' => 23, 'largura_cm' => 8, 'profundidade_cm' => 28]);
+        $semMedida = Product::factory()->create();
+
+        $this->assertSame('28C x 8L x 23A CM', FichaTecnica::dimensoesEmbalagem($produto->fresh()));
+        $this->assertNull(FichaTecnica::dimensoesEmbalagem($semMedida->fresh()));
+
+        $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Catalog/ProductDetailV2', false)
+            ->where('product.dimensoes_embalagem', '28C x 8L x 23A CM'));
+    }
 }

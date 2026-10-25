@@ -478,7 +478,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span class="w-10 text-center text-sm font-semibold">{{ quantity }}</span>
                                     <button type="button" class="flex h-11 w-11 items-center justify-center text-store-fg-muted hover:text-store-fg" :disabled="quantity >= product.stock" @click="quantity = Math.min(product.stock, quantity + 1)"><i class="fas fa-plus text-xs"></i></button>
                                 </div>
-                                <p class="text-xs text-store-fg-muted">{{ Math.max(0, product.stock - quantity) }} disponíve{{ product.stock - quantity === 1 ? 'l' : 'is' }}</p>
+                                <!-- Quantidade em estoque nunca aparece para o cliente (pedido 2026-10-25). -->
                             </div>
                             <p v-if="product.stock > 0 && quantityDiscounts.length" class="mt-2 text-sm font-semibold text-store-fg">Total: {{ formatPrice(currentTotal) }}</p>
 

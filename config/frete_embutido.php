@@ -35,6 +35,12 @@ return [
     'trava_dias' => (int) env('FRETE_TRAVA_DIAS', 30),
     'trava_cookie' => 'kz_aparelho',
 
+    // Preço fixo na navegação (pedido do Lira em 2026-10-25): o frete somado
+    // na primeira tela em que o visitante viu o produto (CEP digitado ou
+    // estado pelo IP) vale até o pagamento, mesmo trocando o CEP. A loja paga
+    // a diferença do frete real. false volta ao frete do CEP atual.
+    'fixo_na_navegacao' => (bool) env('FRETE_FIXO_NAVEGACAO', true),
+
     // Tabela de entrega da página do produto (pedido do Lira em 2026-10-23):
     // "em até (prazo dos Correios + folga) dias úteis (mas geralmente chega
     // no prazo dos Correios)". Sem prazo dos Correios, vale o padrão.

@@ -188,7 +188,37 @@ class FreteEmbutido
     {
         $frete = $this->freteDoProduto($product);
 
-        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $frete;
+        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->fixoNaNavegacao($product, $frete);
+    }
+
+    /**
+     * Preço fixo na navegação (pedido do Lira em 2026-10-25): o frete somado
+     * ao produto na primeira tela em que o visitante o viu (pela região dele:
+     * CEP digitado ou estado pelo IP) fica guardado na sessão e vale na
+     * vitrine, no produto, no carrinho, no checkout e no pagamento, mesmo que
+     * o CEP mude depois. O custo real da caixa (correios) continua o do
+     * destino atual: a loja paga a diferença.
+     */
+    private function fixoNaNavegacao(Product $product, array $frete): array
+    {
+        if (! $this->ligado || ! config('frete_embutido.fixo_na_navegacao', true)
+            || $this->site() !== SiteAtual::KAZAKORA || ! $this->request->hasSession()) {
+            return $frete;
+        }
+
+        $chave = 'frete_embutido.fixo.'.$product->id;
+        $fixo = $this->request->session()->get($chave);
+        if ($fixo === null) {
+            $this->request->session()->put($chave, $frete['embutido']);
+
+            return $frete;
+        }
+
+        if (abs((float) $fixo - $frete['embutido']) < 0.005) {
+            return $frete;
+        }
+
+        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => (float) $fixo, 'fixo' => true];
     }
 
     /**

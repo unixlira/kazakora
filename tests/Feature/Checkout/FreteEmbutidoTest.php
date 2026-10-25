@@ -31,7 +31,9 @@ class FreteEmbutidoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['frete_embutido.ativo' => true]);
+        // Os testes abaixo conferem a conta do frete pelo CEP atual; o preço
+        // fixo na navegação tem testes próprios no fim.
+        config(['frete_embutido.ativo' => true, 'frete_embutido.fixo_na_navegacao' => false]);
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
         $this->frete = ShippingMethod::factory()->create(['price' => 0, 'is_active' => true]);
     }
@@ -363,5 +365,66 @@ class FreteEmbutidoTest extends TestCase
         $this->assertEquals(100.0, (float) $order->items->first()->product_price);
         $this->assertEquals(0.0, (float) $order->shipping_cost);
         $this->assertEquals(0.0, (float) $order->items->first()->frete_embutido);
+    }
+    public function test_preco_fica_fixo_da_vitrine_ao_pagamento_mesmo_trocando_o_cep(): void
+    {
+        Mail::fake();
+        $this->comCorreios();
+        config(['app.url' => 'https://kazakora.com', 'frete_embutido.fixo_na_navegacao' => true]);
+        $produto = $this->produto(100);
+        $saoPaulo = ['CF-IPCountry' => 'BR', 'CF-Region-Code' => 'SP'];
+
+        // Pedido 2026-10-25: pelo IP de SP o cliente vê 100 + 9,94 (SEDEX de SP).
+        $this->get("/produtos/{$produto->slug}", $saoPaulo)
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 109.94));
+
+        // CEP do Ceará digitado no produto: o preço não muda.
+        app()->forgetScopedInstances();
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$produto->id, $saoPaulo)
+            ->assertOk()
+            ->assertJsonPath('final_price', 109.94);
+
+        app()->forgetScopedInstances();
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 1], $saoPaulo);
+        $this->get('/carrinho', $saoPaulo)
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('total', 109.94));
+
+        app()->forgetScopedInstances();
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000', $saoPaulo)
+            ->assertOk()
+            ->assertJsonPath('subtotal', 109.94);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 79, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        app()->forgetScopedInstances();
+        $this->postJson('/finalizacao/entrega', $this->entrega(self::CEP_CE), $saoPaulo)->assertOk();
+        app()->forgetScopedInstances();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true], $saoPaulo)->assertOk();
+
+        $order = Order::with('items')->firstOrFail();
+        $this->assertEquals(109.94, (float) $order->items->first()->product_price);
+    }
+
+    public function test_preco_fixo_vale_por_visitante_e_nao_para_o_admin(): void
+    {
+        $this->comCorreios();
+        config(['frete_embutido.fixo_na_navegacao' => true]);
+        $produto = $this->produto(100);
+
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$produto->id)->assertJsonPath('final_price', 120);
+
+        // Outro visitante (sessão nova) em SP vê o frete dele.
+        $this->flushSession();
+        app()->forgetScopedInstances();
+        $this->getJson('/frete/prazo?cep=03187040&produto='.$produto->id)->assertJsonPath('final_price', 109.94);
+
+        app()->forgetScopedInstances();
+        $this->assertSame(100.0, Product::find($produto->id)->final_price);
     }
 }

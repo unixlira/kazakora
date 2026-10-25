@@ -49,7 +49,11 @@ use Inertia\Response;
  * cada visita abre as cidades do estado daquele IP (cidades(), paginado).
  * O estado vem da base DB-IP no servidor (LocalDoIp), a lista do IBGE
  * (ibge_municipios). O histórico mostra CPF sim/não do cliente logado no
- * lugar de página, aparelho, origem e navegador.
+ * lugar de aparelho, origem e navegador.
+ *
+ * Rotas do visitante (pedido 2026-10-25): o histórico volta a mostrar a
+ * página (path, com link para a loja) de cada acesso, numerado em ordem
+ * de horário.
  */
 class SiteVisitLogController extends Controller
 {

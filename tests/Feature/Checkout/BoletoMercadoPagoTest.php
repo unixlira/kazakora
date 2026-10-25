@@ -93,11 +93,11 @@ class BoletoMercadoPagoTest extends TestCase
         $order = Order::firstOrFail();
 
         Http::assertSent(function (HttpRequest $request) use ($order, $user) {
-            $payer = $request['payer'];
+            $payer = $request['payer'] ?? null;
 
             return $request->method() === 'POST'
                 && str_ends_with($request->url(), 'v1/payments')
-                && $request['payment_method_id'] === 'bolbradesco'
+                && ($request['payment_method_id'] ?? null) === 'bolbradesco'
                 && $request['date_of_expiration'] === '2026-10-17T23:59:59.000-03:00'
                 && $payer['email'] === "pedido-{$order->id}@kazakora.com"
                 && $payer['first_name'] === 'Maria' && $payer['last_name'] === 'Da Silva'
@@ -129,6 +129,53 @@ class BoletoMercadoPagoTest extends TestCase
 
         // Pedido feito: o carrinho esvazia.
         $this->assertSame(0, app(CartManager::class)->items()->count());
+    }
+
+    public function test_email_do_boleto_vai_para_quem_comprou_com_o_pdf_anexado(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+        $fpdf = new \setasign\Fpdi\Fpdi('P', 'pt');
+        $fpdf->AddPage();
+        $fpdf->SetFont('Helvetica', '', 10);
+        $fpdf->Text(40, 200, 'Bradesco 237');
+        Http::fake([
+            'api.mercadopago.com/v1/payments' => Http::response($this->respostaDoBoleto(), 201),
+            'www.mercadopago.com.br/*' => Http::response($fpdf->Output('S'), 200, ['Content-Type' => 'application/pdf']),
+        ]);
+        [$user, $product, $metodo, $address] = $this->cenario();
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->withSession(['checkout_draft' => ['shipping_method_id' => $metodo->id, 'address_id' => $address->id]])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'boleto', 'terms_accepted' => true]);
+
+        $order = Order::firstOrFail();
+
+        Mail::assertSent(BoletoAguardandoPagamento::class, function (BoletoAguardandoPagamento $mail) use ($order) {
+            $mail->build();
+
+            return $mail->hasTo('cliente@exemplo.com')
+                && str_starts_with((string) $mail->pdf, '%PDF')
+                && $mail->hasAttachedData($mail->pdf, "boleto-pedido-{$order->numero}.pdf", ['mime' => 'application/pdf']);
+        });
+    }
+
+    public function test_sem_o_pdf_do_mercado_pago_o_email_do_boleto_sai_sem_anexo(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+        Http::fake([
+            'api.mercadopago.com/v1/payments' => Http::response($this->respostaDoBoleto(), 201),
+            'www.mercadopago.com.br/*' => Http::response('fora do ar', 503),
+        ]);
+        [$user, $product, $metodo, $address] = $this->cenario();
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->withSession(['checkout_draft' => ['shipping_method_id' => $metodo->id, 'address_id' => $address->id]])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'boleto', 'terms_accepted' => true]);
+
+        Mail::assertSent(BoletoAguardandoPagamento::class, fn (BoletoAguardandoPagamento $mail) => $mail->hasTo('cliente@exemplo.com')
+            && $mail->pdf === null && $mail->linhaDigitavel === self::LINHA);
     }
 
     public function test_boleto_nao_pode_ser_dividido_com_cartao(): void

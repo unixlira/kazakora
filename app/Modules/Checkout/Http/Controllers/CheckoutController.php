@@ -27,7 +27,6 @@ use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
-use App\Modules\Checkout\Support\CepUf;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -2106,8 +2105,7 @@ class CheckoutController extends Controller
             return $request->session()->get($chave) ?: null;
         }
 
-        $destino = app(FreteEmbutido::class)->destino();
-        $uf = $destino['uf'] ?? CepUf::porCep($destino['cep'] ?? null);
+        $uf = app(FreteEmbutido::class)->ufDaNavegacao();
         $request->session()->put($chave, $uf ?? '');
 
         return $uf;

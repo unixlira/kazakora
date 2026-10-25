@@ -7,7 +7,9 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoComMarca;
 use App\Modules\Checkout\Support\CartStockChangedException;
+use App\Modules\Checkout\Support\CepUf;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
@@ -58,8 +60,15 @@ abstract class CheckoutOutroSiteController extends Controller
             'email' => ['nullable', 'string', 'max:255'],
         ]);
 
+        // Região de quem navega (IP) antes de o resumo trocar pelo CEP da entrega.
+        $ufNavegacao = rescue(fn () => app(FreteEmbutido::class)->ufDaNavegacao(), null, false);
+
         try {
-            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null)));
+            $resumo = $this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null);
+            $ufEntrega = CepUf::porCep($dados['cep'] ?? null);
+
+            // Aviso de entrega fora da região do cliente (pedido 2026-10-25).
+            return $this->semCache(response()->json([...$resumo, 'outra_regiao' => $ufNavegacao !== null && $ufEntrega !== null && $ufNavegacao !== $ufEntrega]));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }

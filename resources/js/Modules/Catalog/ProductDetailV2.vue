@@ -72,7 +72,7 @@ const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
-    ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
+    ['O frete é grátis?', 'Sim. Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
@@ -771,7 +771,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <div class="pd2">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
-                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></span>
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></span>
                 <span class="sep">|</span>
                 <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
             </div>
@@ -930,7 +930,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <ul class="selos-compra">
                                 <li>
                                     <img src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> para a sua casa!</span>
+                                    <!-- Texto do frete com FULL e FLEX e o aviso do estoque por estado (pedido 2026-10-24). -->
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FLEX</span> para a sua casa!<small class="aviso-frete">(Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado)</small></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
@@ -1236,7 +1237,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- FAIXA DE CONFIANÇA -->
                 <div class="confianca">
-                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></strong>Entrega em todo Brasil</span></div>
+                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></strong>Entrega em todo Brasil</span></div>
                     <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
                     <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>
                     <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>
@@ -1792,6 +1793,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .selos-compra b { color: #1846c7; font-weight: 700; }
 .pd2 .compra .selos-compra .selo-full { color: #0aac48; font-style: italic; font-weight: 800; }
 .pd2 .compra .selos-compra .selo-full i { margin: 0 2px 0 0; font-size: .95em; color: inherit; }
+.pd2 .compra .selos-compra .aviso-frete { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: #777; }
 .dark .pd2 .compra .selos-compra { background: var(--card); border-color: var(--line); }
 .dark .pd2 .compra .selos-compra li { color: var(--text); }
 .dark .pd2 .compra .selos-compra li + li { border-color: var(--line); }

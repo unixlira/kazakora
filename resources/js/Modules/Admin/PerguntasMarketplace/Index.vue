@@ -4,18 +4,21 @@
 // pergunta e rascunho da Manuela à direita, onde o atendente edita e envia
 // pela API. A Manuela atende primeiro; o que ela não sabe fica em "Pra você",
 // com alerta no topo do admin. Aba "Chat da Shopee" (2026-10-25): conversas
-// dos compradores da Shopee na mesma tela (ChatShopee.vue).
+// dos compradores da Shopee na mesma tela (ChatShopee.vue). Abas Amazon e
+// TikTok Shop (2026-10-25): mensagens de comprador (ChatMarketplace.vue).
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { notifyError, notifySuccess } from '@/Shared/notify';
 import { canalPergunta } from '@/Shared/canaisPerguntas';
 import ChatShopee from './ChatShopee.vue';
+import ChatMarketplace from './ChatMarketplace.vue';
 
 const props = defineProps({
     aba: { type: String, default: 'perguntas' },
     abas: { type: Object, default: () => ({}) },
     chat: { type: Object, default: null },
+    chatMarketplace: { type: Object, default: null },
     perguntas: { type: Array, required: true },
     filtro: { type: String, default: 'humano' },
     busca: { type: String, default: '' },
@@ -39,6 +42,8 @@ const LIMITE = 2000;
 const ABAS = [
     ['perguntas', 'Perguntas dos anúncios', 'fas fa-comment-dots', 'pra você'],
     ['chat-shopee', 'Chat da Shopee', 'fas fa-bag-shopping', 'não lidas'],
+    ['chat-amazon', 'Amazon', 'fab fa-amazon', 'não lidas'],
+    ['chat-tiktok', 'TikTok Shop', 'fab fa-tiktok', 'não lidas'],
 ];
 const trocarAba = (aba) => router.get('/admin/perguntas-marketplace', aba === 'perguntas' ? {} : { aba });
 
@@ -163,7 +168,7 @@ onUnmounted(() => clearInterval(timer));
                     <div>
                         <!-- Título em DM Sans (sans-serif moderna do admin) no lugar da Fraunces serifada (Lira, 2026-10-25). -->
                         <h1 class="text-2xl font-bold tracking-tight">Perguntas MK Place</h1>
-                        <p class="text-sm text-slate-500">Perguntas dos anúncios e chat da Shopee. A Manuela atende as perguntas primeiro; o que ela não souber fica em "Pra você".</p>
+                        <p class="text-sm text-slate-500">Perguntas dos anúncios e mensagens dos compradores (Shopee, Amazon e TikTok Shop). A Manuela atende as perguntas primeiro; o que ela não souber fica em "Pra você".</p>
                     </div>
                 </div>
                 <div v-if="aba === 'perguntas'" class="flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-2 shadow-sm">
@@ -180,8 +185,8 @@ onUnmounted(() => clearInterval(timer));
                 </div>
             </div>
 
-            <!-- Abas: perguntas dos anúncios | chat da Shopee -->
-            <nav class="flex gap-1 border-b border-[var(--surface-border)]" aria-label="Tipo de atendimento">
+            <!-- Abas: perguntas dos anúncios | chat da Shopee | Amazon | TikTok Shop -->
+            <nav class="flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Tipo de atendimento">
                 <button v-for="[k, rotulo, icone, pendente] in ABAS" :key="k" type="button"
                     class="-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold tracking-tight transition-colors"
                     :class="aba === k ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'"
@@ -192,6 +197,8 @@ onUnmounted(() => clearInterval(timer));
             </nav>
 
             <ChatShopee v-if="aba === 'chat-shopee' && chat" v-bind="chat" />
+
+            <ChatMarketplace v-else-if="(aba === 'chat-amazon' || aba === 'chat-tiktok') && chatMarketplace" :key="chatMarketplace.canal" v-bind="chatMarketplace" />
 
             <template v-else>
             <div class="flex flex-wrap items-center gap-2">

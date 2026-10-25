@@ -542,6 +542,33 @@ return [
         'path' => env('FFPROBE_PATH'),
     ],
 
+    // Mensagens de comprador da Amazon por e-mail (2026-10-25): a SP-API não
+    // lê mensagem de comprador. E-mail AUTORIZADO na Seller Central (Permissões
+    // de mensagens), lido por IMAP; a resposta sai pelo mailer amazon_mensagens.
+    'amazon_mensagens' => [
+        'email' => env('AMAZON_MENSAGENS_EMAIL'),
+        'nome' => env('AMAZON_MENSAGENS_NOME', 'KazaKora'),
+        'imap_host' => env('AMAZON_MENSAGENS_IMAP_HOST'),
+        'imap_porta' => (int) env('AMAZON_MENSAGENS_IMAP_PORTA', 993),
+        'imap_ssl' => (bool) env('AMAZON_MENSAGENS_IMAP_SSL', true),
+        'imap_usuario' => env('AMAZON_MENSAGENS_IMAP_USUARIO'),
+        'imap_senha' => env('AMAZON_MENSAGENS_SENHA'),
+        'imap_pasta' => env('AMAZON_MENSAGENS_IMAP_PASTA', 'INBOX'),
+        'dias_inicio' => (int) env('AMAZON_MENSAGENS_DIAS_INICIO', 7),
+    ],
+
+    // TikTok Shop pelo app próprio (2026-10-25), hoje só o chat (Customer
+    // Service API, escopo seller.customer_service). Pedidos seguem pelo Bling.
+    'tiktok_shop' => [
+        'app_key' => env('TIKTOK_SHOP_APP_KEY'),
+        'app_secret' => env('TIKTOK_SHOP_APP_SECRET'),
+        'service_id' => env('TIKTOK_SHOP_SERVICE_ID'),
+        'api_url' => env('TIKTOK_SHOP_API_URL', 'https://open-api.tiktokglobalshop.com'),
+        'auth_url' => env('TIKTOK_SHOP_AUTH_URL', 'https://auth.tiktok-shops.com'),
+        'authorize_url' => env('TIKTOK_SHOP_AUTHORIZE_URL', 'https://services.tiktokshop.com/open/authorize'),
+        'versao_atendimento' => env('TIKTOK_SHOP_VERSAO_ATENDIMENTO', '202309'),
+    ],
+
     // Relatórios do TikTok enviados pelo app de auditoria (2026-10-11).
     'tiktok_reports' => [
         'token' => env('TIKTOK_REPORTS_TOKEN'),

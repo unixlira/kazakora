@@ -969,6 +969,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('chat-shopee/pendentes', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'pendentes'])->name('chat-shopee.pendentes');
         Route::post('chat-shopee/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'enviar'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-shopee.enviar');
         Route::post('chat-shopee/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'lida'])->whereNumber('conversa')->name('chat-shopee.lida');
+        // Abas Amazon e TikTok Shop de Perguntas MK Place (2026-10-25). Enviar só por ação do atendente.
+        Route::post('chat-marketplace/{canal}/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'enviar'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-marketplace.enviar');
+        Route::post('chat-marketplace/{canal}/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'lida'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->name('chat-marketplace.lida');
         // Perguntas MK Place (pedido 2026-10-20): Manuela atende, humano assume quando precisa.
         Route::get('perguntas-marketplace', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'index'])->name('perguntas-marketplace.index');
         Route::get('perguntas-marketplace/chegando', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'chegando'])->name('perguntas-marketplace.chegando');
@@ -1081,6 +1084,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('integracoes/amazon/conectar', [IntegrationController::class, 'connectAmazon'])->name('integracoes.amazon.conectar');
         Route::post('integracoes/shopee/importar-produtos', [IntegrationController::class, 'importShopeeProducts'])->name('integracoes.shopee.importar-produtos');
         Route::post('integracoes/bling/loja-tiktok', [IntegrationController::class, 'saveBlingTiktokLoja'])->name('integracoes.bling.loja-tiktok');
+        // App próprio do TikTok Shop (chat em Perguntas MK Place, 2026-10-25): autorizar a loja.
+        // O retorno é a URL de callback cadastrada no app do Partner Center.
+        Route::get('integracoes/tiktok-shop/conectar', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'conectarTikTok'])->name('integracoes.tiktok-shop.conectar');
+        Route::get('integracoes/tiktok-shop/retorno', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'retornoTikTok'])->name('integracoes.tiktok-shop.retorno');
 
         Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
         Route::post('integracoes/webhooks/{channel_webhook_log}/reprocessar', [WebhookLogController::class, 'reprocess'])->name('integracoes.webhooks.reprocessar');

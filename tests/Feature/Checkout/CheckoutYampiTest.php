@@ -103,6 +103,17 @@ class CheckoutYampiTest extends TestCase
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('avaliacoesCarrossel', []));
     }
 
+    public function test_produto_sem_avaliacao_mostra_as_melhores_da_loja(): void
+    {
+        $product = $this->produto();
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $daLoja = Review::create(['reviewer_name' => 'Kelly Taylor', 'product_id' => $this->produto()->id, 'rating' => 5, 'comment' => 'Amei meu pedido. Chegou certinho.']);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('avaliacoesCarrossel', 1)
+            ->where('avaliacoesCarrossel.0.id', $daLoja->id));
+    }
+
     public function test_carrossel_so_mostra_avaliacoes_do_produto_do_carrinho_e_a_uf_real(): void
     {
         $product = $this->produto();

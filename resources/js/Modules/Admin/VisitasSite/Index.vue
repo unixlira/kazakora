@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import CardLocalizacao from '@/Modules/Admin/VisitasSite/CardLocalizacao.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
@@ -227,7 +228,7 @@ const confirmarApagar = () => {
                 <h1 class="mb-1 text-2xl font-bold">Visitas Kazakora</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     Quem visitou o kazakora.com, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
-                    O olho mostra o histórico da pessoa e o mapa, as cidades do estado do IP. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).
+                    O olho mostra o histórico da pessoa, com latitude, longitude e CEP aproximados do IP, e o mapa, as cidades do estado do IP. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).
                 </p>
             </div>
             <button type="button"
@@ -425,6 +426,7 @@ const confirmarApagar = () => {
                             Só navegação interna nesse período (a entrada no site foi antes do período escolhido).
                         </p>
                     </section>
+                    <CardLocalizacao v-if="detalhe.dados && !detalhe.carregando" :localizacao="detalhe.dados.localizacao" :total="detalhe.dados.total" />
                     <section v-if="detalhe.dados" class="mx-2 mb-3 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3"
                         aria-labelledby="cookies-titulo">
                         <h3 id="cookies-titulo" class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">

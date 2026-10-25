@@ -524,14 +524,16 @@ const resultadoPrazoEl = ref(null);
 // Opções de frete da página do produto (pedido do Lira 2026-10-24), em caixas de rádio:
 // - Fora do Full: Flex "Receba de 1 a 7 dias" (texto fixo) e Turbo juntos.
 // - No Full, sábado depois das 13h e domingo: o Flex aparece também, abaixo do Full.
-// - Turbo: "Receba em 1 dia" pela diferença SEDEX − PAC (turbo.preco já é só o que
-//   passa do grátis); na área do Full em horário comercial (servidor manda `motoboy`),
-//   "Receba em até 3 horas" pelo preço fixo do motoboy.
+// - Turbo dos Correios: "Receba em X dias por + R$ Y", com o prazo do SEDEX e só a
+//   diferença SEDEX − PAC (turbo.preco já é só o que passa do grátis; pedido do Lira
+//   2026-10-24, CEP do Maranhão); na área do Full em horário comercial (servidor manda
+//   `motoboy`), "Receba em até 3 horas" pelo preço fixo do motoboy.
 // Nasce no grátis; a finalização continua nascendo no grátis (pedido 2026-10-12).
 const mostrarFlex = computed(() => Boolean(prazo.value) && (!prazo.value.expressa || prazo.value.fimDeSemana));
+const prazoTurbo = (dias) => (dias ? `Receba em ${dias} ${dias === 1 ? 'dia' : 'dias'}` : 'Receba mais rápido');
 const opcaoTurbo = computed(() => {
-    if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco };
-    if (isFreeShipping.value && prazo.value?.turbo) return { texto: 'Receba em 1 dia', preco: prazo.value.turbo.preco };
+    if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco, excedente: false };
+    if (isFreeShipping.value && prazo.value?.turbo) return { texto: prazoTurbo(prazo.value.turbo.prazo), preco: prazo.value.turbo.preco, excedente: true };
     return null;
 });
 const escolhaFrete = ref('flex');
@@ -935,15 +937,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                          Full e Flex em verde, Turbo em laranja (caixa branca até ser marcado); marcar uma desmarca as outras. -->
                                     <label v-if="prazo.expressa" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>grátis</b></span>
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>
                                     <label v-if="mostrarFlex" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'flex' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="flex">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>Receba de 1 a 7 dias</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>grátis</b></span>
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>Receba de 1 a 7 dias</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>
                                     <label v-if="opcaoTurbo" class="opcao-frete turbo" :class="{ marcado: escolhaFrete === 'turbo' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="turbo">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Turbo</b><span>{{ opcaoTurbo.texto }}</span><span class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcaoTurbo.preco) }}</b></span>
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Turbo</b><span>{{ opcaoTurbo.texto }}</span><span v-if="opcaoTurbo.excedente" class="valor">por <b>+ {{ formatPrice(opcaoTurbo.preco) }}</b></span><span v-else class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcaoTurbo.preco) }}</b></span>
                                     </label>
                                 </div>
                             </form>

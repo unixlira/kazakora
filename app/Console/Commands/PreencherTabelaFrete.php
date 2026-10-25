@@ -5,12 +5,14 @@ namespace App\Console\Commands;
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
 use Illuminate\Console\Command;
+use Throwable;
 
 /**
  * Tabela de frete por localidade (pedido do Lira em 2026-10-25): importa as
  * localidades dos Correios e cota PAC/SEDEX das 4 categorias para cada uma.
  * Por padrão só agenda o PreencherTabelaFreteJob (segundo plano); --agora
- * roda aqui mesmo, mostrando o andamento.
+ * roda aqui mesmo, mostrando o andamento. Erro (fila fora, Correios
+ * recusando) vira alerta no painel do admin e o comando sai com falha.
  */
 class PreencherTabelaFrete extends Command
 {
@@ -26,6 +28,19 @@ class PreencherTabelaFrete extends Command
     {
         $ufs = $this->option('sem-importar') ? [] : ($this->option('uf') ?: null);
 
+        try {
+            return $this->executar($tabela, $ufs);
+        } catch (Throwable $e) {
+            PreencherTabelaFreteJob::alertar('O comando frete:tabela-localidades falhou: '.$e->getMessage());
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+    }
+
+    /** @param  list<string>|null  $ufs */
+    private function executar(TabelaFreteLocalidades $tabela, ?array $ufs): int
+    {
         if (! $this->option('agora')) {
             PreencherTabelaFreteJob::iniciar($ufs);
             $this->info('Tabela de frete agendada na fila (acompanhe em Logística → Frete por localidade).');

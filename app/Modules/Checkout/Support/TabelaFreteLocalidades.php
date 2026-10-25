@@ -66,9 +66,7 @@ class TabelaFreteLocalidades
 
     private const VERSAO = 'frete-tabela:versao';
 
-    public function __construct(private readonly CorreiosTokenService $tokens)
-    {
-    }
+    public function __construct(private readonly CorreiosTokenService $tokens) {}
 
     // ------------------------------------------------------------------
     // 1. Localidades
@@ -248,7 +246,8 @@ class TabelaFreteLocalidades
      * Cota PAC e SEDEX das categorias para os CEPs e grava em frete_tabela.
      * Item com erro dos Correios (CEP não atendido, medida fora do limite)
      * fica gravado com o erro; falha da API (HTTP) não grava nada e o CEP
-     * continua pendente.
+     * continua pendente. Lote em que os Correios recusam todas as cotações
+     * lança exceção sem gravar (o job tenta de novo e alerta no painel).
      *
      * @param  list<string>  $ceps
      * @return int quantos CEPs ficaram gravados
@@ -343,6 +342,16 @@ class TabelaFreteLocalidades
                     }
                 }
             }
+        }
+
+        // Correios responderam mas recusaram todas as cotações do lote
+        // (contrato, credencial, serviço fora do cartão): não grava, para
+        // não trocar o preço bom salvo por linhas só com erro.
+        $respondidos = array_diff($ceps, array_keys($semResposta));
+        if ($precos !== [] && $respondidos !== [] && ! collect($dados)->contains(fn ($d) => isset($d['preco']))) {
+            $erro = collect($dados)->pluck('erro')->filter()->first() ?? 'sem preço na resposta';
+
+            throw new RuntimeException('Os Correios recusaram todas as cotações do lote: '.$erro);
         }
 
         $agora = now();

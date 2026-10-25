@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -74,7 +75,9 @@ class BoletoMercadoPago
         // No kazakora.com o link vai para o boleto com o logo da loja (BoletoComMarca).
         $boleto['pdfUrl'] = BoletoComMarca::url($payment) ?? $boleto['pdfUrl'];
 
-        DB::afterCommit(fn () => self::enviarEmail($user, $order, $boleto, $valor));
+        // Depois da resposta ao cliente: baixar e carimbar o PDF para anexar
+        // leva alguns segundos e não pode segurar a tela do checkout.
+        DB::afterCommit(fn () => app()->terminating(fn () => self::enviarEmail($user, $order, $payment, $boleto, $valor)));
 
         return $mp;
     }
@@ -97,21 +100,57 @@ class BoletoMercadoPago
         ];
     }
 
-    /** "Seu boleto está pronto", mesmo esquema do Pix. Falha de e-mail não trava o pedido. */
-    private static function enviarEmail(?User $user, Order $order, array $boleto, float $valor): void
+    /**
+     * "Seu boleto está pronto", mesmo esquema do Pix, para o e-mail de quem
+     * fez a compra, com o boleto em PDF anexado (2026-10-25). Sem o PDF (Mercado
+     * Pago fora do ar), vai só com a linha digitável e o link. Falha de e-mail
+     * não trava o pedido, mas fica no log.
+     */
+    private static function enviarEmail(?User $user, Order $order, Payment $payment, array $boleto, float $valor): void
     {
         if (empty($boleto['linhaDigitavel']) && empty($boleto['pdfUrl'])) {
             return;
         }
 
         // Pedido de site com cliente separado (FerraKora): sem User, vai ao e-mail do pedido.
-        rescue(fn () => Mail::to($user?->email ?: $order->shipping_email)->send(new BoletoAguardandoPagamento(
-            $order,
-            $valor,
-            $boleto['linhaDigitavel'],
-            $boleto['pdfUrl'],
-            $boleto['vencimento'],
-        )), null, false);
+        $email = $user?->email ?: $order->shipping_email;
+
+        if (! $email) {
+            Log::channel('mercadopago')->warning('mercadopago.boleto.email_sem_destinatario', ['order_id' => $order->id]);
+
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new BoletoAguardandoPagamento(
+                $order,
+                $valor,
+                $boleto['linhaDigitavel'],
+                $boleto['pdfUrl'],
+                $boleto['vencimento'],
+                self::pdfParaAnexo($payment),
+            ));
+        } catch (\Throwable $e) {
+            Log::channel('mercadopago')->error('mercadopago.boleto.email_falhou', [
+                'order_id' => $order->id,
+                'payment_id' => $payment->mercadopago_payment_id,
+                'erro' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** O boleto com o topo da loja; se o carimbo falhar, o PDF original do Mercado Pago. */
+    private static function pdfParaAnexo(Payment $payment): ?string
+    {
+        $pdf = rescue(fn () => app(BoletoComMarca::class)->pdf($payment), null, false);
+
+        if ($pdf !== null || ! $payment->boleto_url) {
+            return $pdf;
+        }
+
+        $original = rescue(fn () => Http::timeout(20)->get($payment->boleto_url), null, false);
+
+        return $original?->successful() && str_starts_with($original->body(), '%PDF') ? $original->body() : null;
     }
 
     public function sincronizar(Payment $payment): string

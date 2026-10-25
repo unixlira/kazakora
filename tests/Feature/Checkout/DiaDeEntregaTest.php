@@ -4,6 +4,7 @@ namespace Tests\Feature\Checkout;
 
 use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
@@ -14,6 +15,8 @@ use Tests\TestCase;
  */
 class DiaDeEntregaTest extends TestCase
 {
+    use RefreshDatabase;
+
     private function em(string $data): Carbon
     {
         return Carbon::parse($data, 'America/Sao_Paulo');
@@ -70,6 +73,20 @@ class DiaDeEntregaTest extends TestCase
         $this->assertSame('Receba TERÇA', $dia->fraseCorreios(3, $this->em('2026-10-28 10:00')));
         // Longe demais para o nome do dia: data.
         $this->assertSame('Receba em 06/11', $dia->fraseCorreios(8, $this->em('2026-10-26 10:00')));
+    }
+
+    public function test_pagina_do_produto_no_sabado_a_noite(): void
+    {
+        Carbon::setTestNow($this->em('2026-10-24 21:30'));
+
+        // Grande SP: o grátis sai pelo Full, na segunda.
+        $this->getJson('/frete/prazo?cep=01001-000')
+            ->assertJsonPath('entrega_expressa.mensagem', 'Receba SEGUNDA')
+            ->assertJsonPath('flex_mensagem', 'Receba SEGUNDA');
+        // Fora dela: Correios postam na segunda.
+        $this->getJson('/frete/prazo?cep=20040-020')->assertJsonPath('flex_mensagem', 'Receba a partir de TERÇA');
+
+        Carbon::setTestNow();
     }
 
     public function test_hora_em_utc_vira_brasilia(): void

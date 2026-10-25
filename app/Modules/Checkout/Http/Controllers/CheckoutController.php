@@ -240,8 +240,9 @@ class CheckoutController extends Controller
             ] : null,
             'prazo_gratis' => $entrega['prazo'] ?? null,
             // Prazo em dia de verdade (pedido do Lira 2026-10-24): sábado à noite,
-            // domingo e feriado não prometem "1 dia", dizem "a partir de SEGUNDA".
-            'flex_mensagem' => app(DiaDeEntrega::class)->fraseFlex(),
+            // domingo e feriado não prometem "1 dia", dizem "a partir de TERÇA". Na
+            // área do Full o grátis sai pelo Full: mesmo dia dele ("Receba SEGUNDA").
+            'flex_mensagem' => $prazo['entrega_expressa']['mensagem'] ?? app(DiaDeEntrega::class)->fraseFlex(),
             'turbo' => $turbo,
             'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
             // Página do produto (pedido 2026-10-24): Turbo de motoboy na Grande SP em

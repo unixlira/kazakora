@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import CidadesDoEstado from './CidadesDoEstado.vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -8,7 +9,12 @@ const props = defineProps({
     produtos: { type: Array, default: () => [] },
     pacotePadrao: { type: Object, required: true },
     melhorEnvio: { type: Object, default: () => ({ conectado: false, ambiente: 'sandbox' }) },
+    cidadesComRegra: { type: Object, default: () => ({}) },
 });
+
+// Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades do estado.
+const cidadesAbertas = ref(null);
+const regrasPorUf = reactive({ ...props.cidadesComRegra });
 
 // Duas abas (2026-10-12): Correios (contrato próprio) e Melhor Envio. A aba
 // fica na URL (?aba=melhor-envio) para dar F5 sem voltar para a primeira.
@@ -290,6 +296,7 @@ const campos = [
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">Prazo PAC</th>
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">SEDEX</th>
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">Prazo SEDEX</th>
+                                <th scope="col" class="px-4 py-2 text-center font-semibold">Cidades</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -320,9 +327,25 @@ const campos = [
                                     </template>
                                 </td>
                                 <td class="px-4 py-2 text-right tabular-nums">{{ dias(l.sedex.prazo) }}</td>
+                                <td class="px-4 py-2 text-center">
+                                    <button
+                                        type="button"
+                                        class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
+                                        :title="`Ver as cidades de ${l.estado}`"
+                                        :aria-label="`Ver as cidades de ${l.estado}`"
+                                        @click="cidadesAbertas = l"
+                                    >
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                        <span
+                                            v-if="regrasPorUf[l.uf]"
+                                            class="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-green-600 px-1 text-[10px] font-bold leading-4 text-white"
+                                            :title="`${regrasPorUf[l.uf]} com regra própria`"
+                                        >{{ regrasPorUf[l.uf] }}</span>
+                                    </button>
+                                </td>
                             </tr>
                             <tr v-if="!filtradas.length">
-                                <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Nenhum estado encontrado.</td>
+                                <td colspan="7" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Nenhum estado encontrado.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -331,6 +354,7 @@ const campos = [
                     <i class="fas fa-star text-amber-500" aria-hidden="true"></i> = serviço mais barato para o estado.
                     Cor do preço: verde é dos mais baratos do país, vermelho dos mais caros. Média: PAC {{ dinheiro(faixaPac?.media) }}, SEDEX {{ dinheiro(faixaSedex?.media) }}.
                     Prazo em dias úteis depois da postagem. Valores guardados por 6 horas.
+                    <i class="fas fa-eye ml-1 text-primary" aria-hidden="true"></i> = cidades do estado e o frete próprio de cada uma (número verde: cidades com regra).
                 </p>
             </section>
         </template>
@@ -469,5 +493,13 @@ const campos = [
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Consultando o Melhor Envio para os 27 estados…
             </div>
         </div>
+
+        <CidadesDoEstado
+            v-if="cidadesAbertas"
+            :uf="cidadesAbertas.uf"
+            :estado="cidadesAbertas.estado"
+            @fechar="cidadesAbertas = null"
+            @contagem="(uf, n) => (regrasPorUf[uf] = n)"
+        />
     </AdminLayout>
 </template>

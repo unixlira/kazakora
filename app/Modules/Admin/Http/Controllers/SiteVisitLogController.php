@@ -67,6 +67,9 @@ class SiteVisitLogController extends Controller
     /** Visitas de fora (não internas) lidas para o "De onde veio" do olho. */
     private const MAX_ENTRADAS = 500;
 
+    /** Rotas diferentes listadas no "Rotas visitadas" do olho. */
+    private const MAX_ROTAS = 200;
+
     /** Agrupa visitas sem IP (anonimizadas) pelo cookie; com IP, o IP basta. */
     private const CHAVE_ANONIMO = 'CASE WHEN ip IS NULL THEN visitor_id END';
 
@@ -253,7 +256,26 @@ class SiteVisitLogController extends Controller
             ->map(fn (array $e) => array_diff_key($e, ['assinatura' => 1]))
             ->values();
 
+        // Rotas visitadas no período inteiro (pedido 2026-10-25): cada página
+        // diferente com quantas vezes foi aberta, da mais vista para a menos.
+        $rotas = (clone $query)->toBase()
+            ->selectRaw('path, COUNT(*) as vezes, MAX(created_at) as ultima')
+            ->groupBy('path')
+            ->orderByDesc('vezes')
+            ->orderBy('path')
+            ->get();
+
         return response()->json([
+            'rotas' => [
+                'distintas' => $rotas->count(),
+                'lista' => $rotas->take(self::MAX_ROTAS)->map(fn ($r) => [
+                    'path' => $r->path,
+                    'url' => $site.$r->path,
+                    'vezes' => (int) $r->vezes,
+                    'ultima' => Carbon::parse($r->ultima)->format('d/m/Y H:i'),
+                ])->values(),
+            ],
+            'visitantes' => (clone $query)->distinct()->count('visitor_id'),
             'entradas' => $entradas,
             // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
             'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),

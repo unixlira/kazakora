@@ -13,7 +13,10 @@ use Illuminate\Support\Str;
  *
  * - Necessários (sessão, XSRF-TOKEN e este cookie de OK): funcionam sem o
  *   OK — sem eles a loja não abre carrinho, login nem checkout.
- * - Estatística (kazakora_visitor): só depois do OK.
+ * - Visitante (kazakora_visitor): desde 2026-10-25 criado no primeiro
+ *   acesso (garantirVisitante), para o histórico de páginas existir desde a
+ *   entrada. Navegador completo, valor do clique e cookies de terceiros no
+ *   log continuam só depois do OK.
  *
  * Desde 2026-10-24 não há mais aviso flutuante: o aceite vem junto com o
  * "Finalizar pedido" (frase abaixo do botão) e é gravado por registrarAceite().
@@ -58,9 +61,63 @@ class Cookies
     /** Tamanho máximo do valor gravado (caractere). */
     public const LIMITE_VALOR_COOKIE = 200;
 
+    /** Chave na sessão com o código do visitante, para quando o navegador recusa o cookie. */
+    public const SESSAO_VISITANTE = 'kazakora_visitante';
+
     public static function aceitou(Request $request): bool
     {
         return in_array($request->cookie(self::COOKIE_OK), [self::VERSAO, ...self::VERSOES_ANTERIORES], true);
+    }
+
+    /**
+     * Cria o kazakora_visitor já no primeiro acesso, antes de qualquer aceite
+     * (pedido 2026-10-25: o histórico de navegação do visitante, todas as
+     * páginas, tem que existir desde a entrada no site, não só depois do
+     * checkout). Código aleatório do próprio site, sem dado pessoal e sem
+     * terceiro; base legal: legítimo interesse (art. 7º IX), descrito na
+     * Política de Cookies. O mesmo código fica na sessão para o navegador
+     * que recusa cookie continuar com um visitante só.
+     */
+    public static function garantirVisitante(Request $request): string
+    {
+        $visitante = self::visitante($request);
+
+        if (! is_string($request->cookie(self::COOKIE_VISITANTE)) || $request->cookie(self::COOKIE_VISITANTE) === '') {
+            if (str_starts_with($visitante, 's-')) {
+                $visitante = (string) Str::uuid();
+            }
+            Cookie::queue(self::COOKIE_VISITANTE, $visitante, self::DURACAO_MINUTOS);
+            $request->cookies->set(self::COOKIE_VISITANTE, $visitante);
+        }
+
+        if ($request->hasSession()) {
+            $request->session()->put(self::SESSAO_VISITANTE, $visitante);
+        }
+
+        return $visitante;
+    }
+
+    /**
+     * Visitante da loja, o mesmo em site_visits, checkout, lead e
+     * geolocalização: o cookie kazakora_visitor; sem ele, o código guardado
+     * na sessão; sem os dois, o código tirado da sessão (s-...). Nunca cria cookie.
+     */
+    public static function visitante(Request $request): string
+    {
+        $cookie = $request->cookie(self::COOKIE_VISITANTE);
+        if (is_string($cookie) && $cookie !== '') {
+            return substr($cookie, 0, 36);
+        }
+
+        if (! $request->hasSession()) {
+            return 's-'.substr(hash('sha256', (string) $request->ip().$request->userAgent()), 0, 34);
+        }
+
+        $guardado = $request->session()->get(self::SESSAO_VISITANTE);
+
+        return is_string($guardado) && $guardado !== ''
+            ? substr($guardado, 0, 36)
+            : 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
     }
 
     /**

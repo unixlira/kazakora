@@ -45,10 +45,10 @@ const cookies = [
     },
     {
         nome: 'kazakora_visitor',
-        tipo: 'Estatística',
-        finalidade: 'Código aleatório que conta visitas e páginas vistas para melhorarmos a loja. Não identifica você pelo nome e só é criado depois do seu aceite ao finalizar a compra.',
+        tipo: 'Navegação',
+        finalidade: 'Código aleatório criado no primeiro acesso que liga as páginas abertas no site (quais páginas e quantas) para melhorarmos a loja, atendermos melhor e prevenirmos fraude. É do próprio site, não vai a terceiros e não identifica você pelo nome.',
         duracao: '12 meses',
-        base: 'Consentimento (art. 7º, I)',
+        base: 'Legítimo interesse (art. 7º, IX)',
     },
     {
         nome: '_fbp, _fbc',
@@ -109,14 +109,15 @@ const cookies = [
                 <LegalCard title="Quando você aceita">
                     <p>
                         Os cookies necessários funcionam desde o primeiro acesso, porque sem eles a loja não abre o carrinho nem o
-                        pagamento. Os de estatística e de publicidade só são criados quando você clica em
+                        pagamento. O de navegação (kazakora_visitor) também é criado no primeiro acesso e registra as páginas que
+                        você abre no site. Os de publicidade só são criados quando você clica em
                         <strong>Finalizar pedido</strong>: a frase abaixo do botão informa que, ao finalizar, você aceita os termos de
                         uso, a política de privacidade e o uso de cookies. Guardamos a data, a hora, o IP, o navegador e a versão do
                         texto aceito, como a LGPD exige.
                     </p>
                     <p>
-                        Para desfazer, apague os cookies do site nas configurações do seu navegador: nada de estatística ou
-                        publicidade é registrado até uma nova compra. Você também pode pedir pelo e-mail {{ COMPANY.email }}
+                        Para desfazer, apague os cookies do site nas configurações do seu navegador: nada de publicidade é
+                        registrado até uma nova compra, e o código de navegação recomeça do zero. Você também pode pedir pelo e-mail {{ COMPANY.email }}
                         ou pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>.
                     </p>
                 </LegalCard>

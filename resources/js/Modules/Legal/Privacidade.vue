@@ -9,7 +9,7 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança) e, com o seu aceite ao finalizar a compra, de estatística de visitas e do Pixel da Meta (publicidade). Com esse aceite, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e, com o seu aceite ao finalizar a compra, do Pixel da Meta (publicidade). Com esse aceite, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
@@ -97,16 +97,17 @@ const direitos = [
                         Cookies são pequenos arquivos que a Loja grava no seu navegador. Usamos três tipos.
                         <strong>Necessários</strong>: mantêm o login, o carrinho, o CEP digitado para calcular o frete e a
                         proteção contra fraudes nos formulários; funcionam desde o primeiro acesso, porque sem eles a Loja não
-                        abre o carrinho nem o pagamento (LGPD, art. 7º, V e IX). <strong>Estatística</strong>: um código
-                        aleatório de visitante, que não leva o seu nome, para contarmos visitas e páginas vistas.
+                        abre o carrinho nem o pagamento (LGPD, art. 7º, V e IX). <strong>Navegação</strong>: um código
+                        aleatório de visitante, criado no primeiro acesso e que não leva o seu nome, para registrarmos as
+                        páginas abertas no site e quantas foram (LGPD, art. 7º, IX, legítimo interesse).
                         <strong>Publicidade</strong>: o Pixel da Meta (Facebook e Instagram), que mede as visitas, os produtos
-                        colocados no carrinho e as compras vindas dos nossos anúncios. Estatística e publicidade dependem do
-                        seu consentimento (LGPD, art. 7º, I).
+                        colocados no carrinho e as compras vindas dos nossos anúncios. Publicidade depende do seu
+                        consentimento (LGPD, art. 7º, I).
                     </p>
                     <p>
                         O consentimento é dado no momento em que você finaliza a compra: a frase abaixo do botão
                         <strong>Finalizar pedido</strong> informa que, ao clicar, você aceita os termos de uso, esta Política de
-                        Privacidade e o uso de cookies. Antes disso, nenhum cookie de estatística ou de publicidade é criado.
+                        Privacidade e o uso de cookies. Antes disso, nenhum cookie de publicidade é criado; o histórico das páginas abertas no site é registrado desde o primeiro acesso, por legítimo interesse (LGPD, art. 7º, IX), com um código aleatório do próprio site.
                         Como prova do aceite (LGPD, art. 8º, § 2º), guardamos a data, a hora, o endereço IP, o navegador e a
                         versão do texto aceito, por 5 anos.
                     </p>
@@ -124,7 +125,7 @@ const direitos = [
                         onde vêm as visitas e medir os nossos anúncios. Não vendemos esses dados. O IP, a data e a hora de
                         cada acesso ficam guardados por 6 meses, em sigilo, por obrigação do Marco Civil da Internet
                         (Lei nº 12.965/14, art. 15); depois disso, IP, navegador e códigos de visitante e de clique são
-                        apagados e sobram só números gerais. Os cookies de estatística duram 12 meses e os da Meta até 90 dias.
+                        apagados e sobram só números gerais. O cookie de navegação dura 12 meses e os da Meta até 90 dias.
                     </p>
                     <p>
                         Você pode apagar ou bloquear os cookies a qualquer momento nas configurações do seu navegador, e pedir

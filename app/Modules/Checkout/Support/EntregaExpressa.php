@@ -63,6 +63,63 @@ class EntregaExpressa
         return $faixa ? $this->consultar((string) $faixa['inicio'], $agora) : null;
     }
 
+    /**
+     * Turbo de motoboy (pedido 2026-10-24): CEP na área e compra em horário
+     * comercial (seg a sex e sábado até 13h, horários em config).
+     *
+     * @return array{preco: float, mensagem: string}|null
+     */
+    public function motoboy(?string $cep, ?CarbonInterface $agora = null): ?array
+    {
+        if (! $this->faixa($cep)) {
+            return null;
+        }
+
+        $agora = Carbon::instance($agora ?? now())->setTimezone('America/Sao_Paulo');
+        $janela = match (true) {
+            $agora->isSunday() => null,
+            $agora->isSaturday() => config('entrega_expressa.motoboy.sabado'),
+            default => config('entrega_expressa.motoboy.semana'),
+        };
+
+        if (! $janela) {
+            return null;
+        }
+
+        [$inicio, $fim] = array_map(function (string $horario) use ($agora) {
+            [$hora, $minuto] = array_map('intval', explode(':', $horario));
+
+            return $agora->copy()->setTime($hora, $minuto);
+        }, $janela);
+
+        if ($agora->lt($inicio) || $agora->gte($fim)) {
+            return null;
+        }
+
+        return [
+            'preco' => (float) config('entrega_expressa.motoboy.preco', 39.00),
+            'mensagem' => (string) config('entrega_expressa.motoboy.mensagem', 'Receba em até 3 horas'),
+        ];
+    }
+
+    /** Sábado a partir do fim do expediente (13h) ou domingo, no horário de Brasília. */
+    public function fimDeSemana(?CarbonInterface $agora = null): bool
+    {
+        $agora = Carbon::instance($agora ?? now())->setTimezone('America/Sao_Paulo');
+
+        if ($agora->isSunday()) {
+            return true;
+        }
+
+        if (! $agora->isSaturday()) {
+            return false;
+        }
+
+        [$hora, $minuto] = array_map('intval', explode(':', (string) (config('entrega_expressa.motoboy.sabado')[1] ?? '13:00')));
+
+        return $agora->gte($agora->copy()->setTime($hora, $minuto));
+    }
+
     public function atende(?string $cep): bool
     {
         return $this->faixa($cep) !== null;

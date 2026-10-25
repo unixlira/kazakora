@@ -96,12 +96,19 @@ const pararDeOuvir = router.on('start', () => {
 });
 onUnmounted(pararDeOuvir);
 
-// "Entrar em Contato" do menu do celular (pedido 2026-10-24): fecha o menu e
-// desliza a página até o bloco Atendimento do rodapé, que existe em toda página.
-const irParaContato = () => {
+// "Entrar em Contato" do menu do celular (pedido 2026-10-24, 2ª versão): em vez
+// de rolar até o rodapé, fecha o menu e abre um modal com "Por e-mail" (página
+// Fale conosco) e "Mais rápido" (WhatsApp com a mensagem já escrita).
+const contatoModalAberto = ref(false);
+const WHATSAPP_CONTATO = `${COMPANY.whatsappLink}?text=${encodeURIComponent('Olá, vim pelo site e tenho dúvidas.')}`;
+const abrirContato = () => {
     mobileMenuOpen.value = false;
-    nextTick(() => document.getElementById('contato')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    contatoModalAberto.value = true;
 };
+const fecharContato = () => { contatoModalAberto.value = false; };
+const escFechaContato = (e) => { if (e.key === 'Escape') fecharContato(); };
+onMounted(() => window.addEventListener('keydown', escFechaContato));
+onUnmounted(() => window.removeEventListener('keydown', escFechaContato));
 
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
 // a lista de resultados abre logo no topo. Ao digitar, a BuscaInstantanea
@@ -392,7 +399,7 @@ const REDES = [
             <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
-                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e WhatsApp. -->
+                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e Entrar em Contato (abre o modal de contato). -->
                 <div class="grid grid-cols-3 gap-2">
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
@@ -468,10 +475,10 @@ const REDES = [
                         <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
                         <span>Produtos</span>
                     </a>
-                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" class="menu-mobile-icone">
-                        <i class="fa-brands fa-whatsapp text-xl text-[#25D366]"></i>
-                        <span>WhatsApp</span>
-                    </a>
+                    <button type="button" class="menu-mobile-icone" aria-haspopup="dialog" @click="abrirContato">
+                        <i class="fas fa-headset text-xl text-[#3b82f6]"></i>
+                        <span>Entrar em Contato</span>
+                    </button>
                 </nav>
             </div>
         </header>
@@ -613,6 +620,35 @@ const REDES = [
                     <div class="mt-5 grid gap-2 sm:grid-cols-2">
                         <Link href="/?todos=1#produtos" class="rounded-full bg-store-accent px-5 py-3 text-center text-sm font-bold text-store-accent-contrast no-underline" @click="closeDiscountModal">Ver ofertas</Link>
                         <button type="button" class="rounded-full border border-store-border-strong px-5 py-3 text-sm font-bold text-store-fg hover:bg-store-bg-sunken" @click="closeDiscountModal">Continuar navegando</button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Entrar em Contato do menu do celular (pedido 2026-10-24): duas saídas, e-mail ou WhatsApp. -->
+        <Teleport to="body">
+            <div v-if="contatoModalAberto" class="fixed inset-0 z-[115] flex items-end justify-center p-4 sm:items-center">
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="fecharContato"></div>
+                <div role="dialog" aria-modal="true" aria-labelledby="contato-modal-titulo" class="relative w-full max-w-[400px] rounded-[1.5rem] border border-store-border bg-store-bg-raised p-5 text-store-fg shadow-2xl">
+                    <button type="button" class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-sunken text-store-fg-muted hover:text-store-fg" aria-label="Fechar" @click="fecharContato">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                    <h3 id="contato-modal-titulo" class="pr-10 text-lg font-semibold">Como prefere falar com a gente?</h3>
+                    <div class="mt-4 flex flex-col gap-2">
+                        <Link href="/fale-conosco" class="flex items-center gap-3 rounded-xl border border-store-border p-3 no-underline hover:bg-store-bg-sunken" @click="fecharContato">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3b82f6] text-xl text-white"><i class="fas fa-envelope"></i></span>
+                            <span>
+                                <span class="block text-sm font-semibold text-store-fg">Por e-mail</span>
+                                <span class="block text-xs text-store-fg-muted">Formulário da página de contato</span>
+                            </span>
+                        </Link>
+                        <a :href="WHATSAPP_CONTATO" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-store-border p-3 no-underline hover:bg-store-bg-sunken" @click="fecharContato">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white"><i class="fa-brands fa-whatsapp"></i></span>
+                            <span>
+                                <span class="block text-sm font-semibold text-store-fg">Mais rápido</span>
+                                <span class="block text-xs text-store-fg-muted">WhatsApp {{ COMPANY.whatsappDisplay }}</span>
+                            </span>
+                        </a>
                     </div>
                 </div>
             </div>

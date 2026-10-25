@@ -6,6 +6,7 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { secoesComEquipes } from '@/Shared/adminSidebarItems';
+import { iniciarContadorCliques } from '@/Shared/contadorCliques';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 import PerguntasMarketplaceToasts from '@/Shared/Components/PerguntasMarketplaceToasts.vue';
@@ -122,6 +123,8 @@ const markAllNotificationsRead = () => {
 
 onMounted(() => {
     sidebarCollapsed.value = localStorage.getItem('admin_sidebar_collapsed') === '1';
+    // Contador de cliques do painel (2026-10-25): um listener só, mesmo com o layout remontando.
+    iniciarContadorCliques();
 });
 
 const toggleSidebar = () => {
@@ -332,7 +335,7 @@ watch(
                             :class="secaoExpandida(section.heading)
                                 ? 'text-[var(--surface-foreground)]'
                                 : 'text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
-                            :aria-expanded="secaoExpandida(section.heading)" @click="alternarSecao(section.heading)">
+                            :aria-expanded="secaoExpandida(section.heading)" :data-clique="`Menu (grupo): ${section.heading}`" @click="alternarSecao(section.heading)">
                             <span class="flex-1 truncate">{{ section.heading }}</span>
                             <span v-if="alertaDaSecao(section) > 0" class="relative flex h-2.5 w-2.5" :title="`${alertaDaSecao(section)} pergunta(s) esperando alguém da equipe`">
                                 <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-75"></span>
@@ -352,7 +355,7 @@ watch(
                                 Item dentro de grupo (2026-10-19): recuo antes do ícone e fonte
                                 13px para ler como submenu do título; itens diretos ficam como estão. -->
                                 <div class="flex items-center">
-                                    <Link :href="item.href" :title="item.label"
+                                    <Link :href="item.href" :title="item.label" :data-clique="`Menu: ${item.label}`"
                                         class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] font-medium transition-colors"
                                         :class="[!sidebarCollapsed && !section.direto ? 'py-2 pl-3 text-[13px]' : 'py-2.5 text-sm', isActive(item.href)
                                             ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
@@ -369,7 +372,7 @@ watch(
                                     <button v-if="item.children && !sidebarCollapsed" type="button"
                                         class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
                                         :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"
-                                        :aria-expanded="submenuAberto(item)" @click="alternarSubmenu(item)">
+                                        :aria-expanded="submenuAberto(item)" :data-clique="`Menu (expandir): ${item.label}`" @click="alternarSubmenu(item)">
                                         <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeIcone(item), { 'rotate-180': submenuAberto(item) }]"></i>
                                     </button>
                                 </div>
@@ -378,7 +381,7 @@ watch(
                                 Espaço antes do ícone e fonte menor (2026-10-19) para ler como item de dentro. -->
                                 <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
                                     <li v-for="filho in item.children" :key="filho.href">
-                                        <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
+                                        <Link :href="filho.href" :title="`${item.label} › ${filho.label}`" :data-clique="`Menu: ${item.label} › ${filho.label}`"
                                             class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-[13px] font-medium transition-colors"
                                             :class="[{ 'pl-3': !sidebarCollapsed }, isActive(filho.href)
                                                 ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
@@ -471,7 +474,7 @@ watch(
 
                     <div class="ml-auto flex items-center gap-1">
                         <!-- Alerta de atendimento humano (Perguntas MK Place). -->
-                        <Link v-if="perguntasHumano > 0" href="/admin/perguntas-marketplace?filtro=humano"
+                        <Link v-if="perguntasHumano > 0" href="/admin/perguntas-marketplace?filtro=humano" data-clique="Topo: perguntas para você"
                             class="mr-1 inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800 ring-1 ring-red-300 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-500/40"
                             :title="`${perguntasHumano} pergunta(s) de marketplace esperando atendimento humano`">
                             <span class="relative flex h-2 w-2">
@@ -485,14 +488,14 @@ watch(
 
                         <!-- Dark mode toggle -->
                         <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                            title="Alternar tema" :aria-label="isDark ? 'Usar tema claro' : 'Usar tema escuro'" @click="toggleDarkMode">
+                            title="Alternar tema" data-clique="Topo: alternar tema" :aria-label="isDark ? 'Usar tema claro' : 'Usar tema escuro'" @click="toggleDarkMode">
                             <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
                         </button>
 
                         <!-- Notifications -->
                         <div ref="notifMenuRef" class="relative">
                             <button type="button" class="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                                title="Notificações" :aria-label="`Notificações (${unreadNotifications})`" :aria-expanded="notifMenuOpen" @click="notifMenuOpen = !notifMenuOpen">
+                                title="Notificações" data-clique="Topo: notificações" :aria-label="`Notificações (${unreadNotifications})`" :aria-expanded="notifMenuOpen" @click="notifMenuOpen = !notifMenuOpen">
                                 <i class="fas fa-bell"></i>
                                 <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-error px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
                             </button>
@@ -504,7 +507,7 @@ watch(
                                 </div>
                                 <div class="flex items-center justify-between px-4 py-2">
                                     <h5 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Notificações</h5>
-                                    <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-primary hover:underline" @click="markAllNotificationsRead" :disabled="marcandoTodas">
+                                    <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-primary hover:underline" data-clique="Topo: marcar notificações como lidas" @click="markAllNotificationsRead" :disabled="marcandoTodas">
                                         Marcar todas como lidas
                                     </button>
                                 </div>
@@ -520,7 +523,7 @@ watch(
                                 <div class="max-h-[60vh] overflow-y-auto overscroll-contain border-y border-[var(--surface-border)]">
                                 <div v-for="item in notifications" :key="item.id"
                                     class="group flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]">
-                                    <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="openNotification(item)">
+                                    <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" data-clique="Topo: abrir notificação" @click="openNotification(item)">
                                         <span class="mt-1.5 shrink-0 rounded-full"
                                             :class="item.nivel === 'erro' ? 'h-2.5 w-2.5 bg-red-500 ring-2 ring-red-200' : item.nivel === 'sucesso' ? 'h-2.5 w-2.5 bg-green-500 ring-2 ring-green-200' : 'h-1.5 w-1.5 bg-primary'"></span>
                                         <span class="min-w-0">
@@ -528,7 +531,7 @@ watch(
                                             <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
                                         </span>
                                     </button>
-                                    <button type="button" title="Excluir"
+                                    <button type="button" title="Excluir" data-clique="Topo: excluir notificação"
                                         class="shrink-0 rounded-full p-1.5 text-slate-300 opacity-0 hover:bg-error/10 hover:text-error group-hover:opacity-100"
                                         @click.stop="removeNotification(item)">
                                         <i class="fas fa-xmark text-xs"></i>
@@ -544,7 +547,7 @@ watch(
                         </div>
 
                         <div ref="userMenuRef" class="relative ml-1 sm:ml-2">
-                            <button type="button" class="flex items-center text-sm" aria-label="Menu do usuário" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen">
+                            <button type="button" class="flex items-center text-sm" aria-label="Menu do usuário" data-clique="Topo: menu do usuário" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen">
                                 <img v-if="user?.avatar_url" :src="user.avatar_url" class="mr-2 h-9 w-9 rounded-full object-cover" alt="">
                                 <span v-else class="mr-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-lightprimary text-sm font-semibold text-primary">
                                     {{ user?.initials }}

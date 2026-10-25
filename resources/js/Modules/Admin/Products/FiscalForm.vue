@@ -202,7 +202,7 @@ const submit = () => {
             </div>
         </div>
 
-        <button type="submit" :disabled="form.processing"
+        <button type="submit" data-clique="Produto: salvar fiscal" :disabled="form.processing"
             class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">
             Salvar dados fiscais
         </button>

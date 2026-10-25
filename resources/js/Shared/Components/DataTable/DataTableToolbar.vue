@@ -23,7 +23,7 @@ defineEmits(['update:activeTab']);
                     class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none">
             </div>
 
-            <Link v-if="createLabel && createHref" :href="createHref"
+            <Link v-if="createLabel && createHref" :href="createHref" :data-clique="`Botão: ${createLabel}`"
                 class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
                 <i class="fas fa-plus text-xs"></i>
                 {{ createLabel }}
@@ -36,6 +36,7 @@ defineEmits(['update:activeTab']);
                 :class="activeTab === tab.value
                     ? 'bg-primary text-white'
                     : 'bg-[var(--surface-muted)] text-slate-500 hover:bg-[var(--surface-border)]'"
+                :data-clique="`Aba: ${String(tab.label).replace(/\s*\(?\d+\)?/g, '').trim()}`"
                 @click="$emit('update:activeTab', tab.value)">
                 {{ tab.label }}
             </button>

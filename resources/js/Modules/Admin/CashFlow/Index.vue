@@ -148,13 +148,14 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
             </div>
             <button v-if="can('financeiro.create')" type="button"
                 class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-emphasis"
+                data-clique="Fluxo de Caixa: novo lançamento"
                 @click="novoLancamento">
                 <i class="fas fa-plus text-xs" aria-hidden="true"></i> Novo lançamento
             </button>
         </header>
 
         <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Abas do Fluxo de Caixa">
-            <Link v-for="a in ABAS" :key="a.chave" :href="hrefAba(a.chave)" preserve-scroll
+            <Link v-for="a in ABAS" :key="a.chave" :href="hrefAba(a.chave)" preserve-scroll :data-clique="`Fluxo de Caixa: aba ${a.rotulo}`"
                 class="shrink-0 border-b-2 px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
                 :class="filtro.aba === a.chave ? 'border-[var(--color-primary)] text-[var(--surface-foreground)]' : 'border-transparent text-[var(--texto-suave)] hover:text-[var(--surface-foreground)]'"
                 :aria-current="filtro.aba === a.chave ? 'page' : undefined">{{ a.rotulo }}</Link>

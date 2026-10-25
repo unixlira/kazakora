@@ -10,38 +10,38 @@ use setasign\Fpdi\Fpdi;
 use setasign\Fpdi\PdfParser\StreamReader;
 
 /**
- * Boleto com o logo da KazaKora (pedido do Lira 2026-10-24). O PDF é do
+ * Boleto com o topo da KazaKora (pedido do Lira 2026-10-24). O PDF é do
  * Mercado Pago (Bradesco 237) e a API não aceita logo; então a loja baixa o
- * PDF original e só carimba o logo oficial (v5: dois K laranja, resto
- * branco, o mesmo do rodapé) no espaço vazio do topo, sobre o preto do
- * rodapé do site. Linha digitável, código de barras e Bradesco não mudam.
+ * PDF original e só carimba o topo no espaço vazio acima da linha que separa
+ * o topo do corpo. Linha digitável, código de barras e Bradesco não mudam.
  *
- * Abaixo do logo (2º pedido do Lira em 2026-10-24) vão os dados da empresa no
- * padrão do rodapé do checkout (site, copyright, CNPJ e endereço completo),
- * tudo acima da linha que separa o topo do corpo. Para caber, a página do
- * Mercado Pago desce DESCIDA pt sem reduzir (o código de barras fica no
- * tamanho que o banco lê); o rodapé dela tem folga para isso.
+ * Topo (3º pedido do Lira, 2026-10-24): fundo branco, o símbolo (só os dois K
+ * da casinha do favicon, laranja) encostado na margem esquerda, "KazaKora" em
+ * preto ao lado e, à direita, copyright, CNPJ e endereço completo da loja.
+ * Para caber, a página do Mercado Pago desce DESCIDA pt sem reduzir (o código
+ * de barras fica no tamanho que o banco lê); o rodapé dela tem folga.
  *
- * Só pedido do kazakora.com (site_origem nulo): FerraKora e Beauty Kora
- * seguem com o link do Mercado Pago. Se o PDF não vier, o cliente vai para
+ * Vale para as três lojas (kazakora.com, FerraKora e Beauty Kora): a conta do
+ * Mercado Pago e o CNPJ são os mesmos. Se o PDF não vier, o cliente vai para
  * o boleto original, que é o que vale para pagar.
  */
 class BoletoComMarca
 {
-    private const LOGO = 'images/marca/logo-rodape.png';
+    /** Os dois K do símbolo, recortados do favicon (sem a casinha), laranja em fundo transparente. */
+    private const SIMBOLO = 'images/marca/simbolo-kk.png';
 
-    /** Faixa preta no topo da página A4 (595 x 842 pt), dentro das margens do boleto. */
-    private const FAIXA = ['x' => 16.0, 'y' => 8.0, 'largura' => 563.0, 'altura' => 79.0];
+    /** Topo da página A4 (595 x 842 pt), dentro das margens do boleto. */
+    private const TOPO = ['x' => 16.0, 'y' => 8.0, 'largura' => 563.0, 'altura' => 79.0];
 
-    private const ALTURA_LOGO = 30.0;
+    private const ALTURA_SIMBOLO = 44.0;
 
     /** Quanto o PDF do Mercado Pago desce (pt): a linha do topo dele sai de 69 para 93, abaixo da faixa. */
     public const DESCIDA = 24.0;
 
     /** Versão do desenho: muda a pasta dos PDFs guardados, para não servir o carimbo antigo. */
-    private const PASTA = 'boletos/v2';
+    private const PASTA = 'boletos/v3';
 
-    /** Link que o cliente recebe: o boleto da loja (assinado) ou, fora do kazakora.com, o do Mercado Pago. */
+    /** Link que o cliente recebe: o boleto com o topo da loja (assinado). */
     public static function url(Payment $payment): ?string
     {
         if (! $payment->boleto_url) {
@@ -58,7 +58,6 @@ class BoletoComMarca
     public static function temMarca(Payment $payment): bool
     {
         return $payment->method_type === Payment::METHOD_BOLETO
-            && $payment->site_origem === null
             && (bool) $payment->boleto_url;
     }
 
@@ -112,31 +111,31 @@ class BoletoComMarca
 
     private function cabecalho(Fpdi $fpdi): void
     {
-        $faixa = self::FAIXA;
-        [$larguraPx, $alturaPx] = getimagesize(public_path(self::LOGO));
-        $largura = self::ALTURA_LOGO * $larguraPx / $alturaPx;
-        $topoLogo = $faixa['y'] + 7;
+        $topo = self::TOPO;
+        [$larguraPx, $alturaPx] = getimagesize(public_path(self::SIMBOLO));
+        $larguraSimbolo = self::ALTURA_SIMBOLO * $larguraPx / $alturaPx;
+        $meio = $topo['y'] + $topo['altura'] / 2;
 
-        $fpdi->SetFillColor(11, 11, 11);
-        $fpdi->Rect($faixa['x'], $faixa['y'], $faixa['largura'], $faixa['altura'], 'F');
-        $fpdi->Image(
-            public_path(self::LOGO),
-            $faixa['x'] + ($faixa['largura'] - $largura) / 2,
-            $topoLogo,
-            $largura,
-            self::ALTURA_LOGO,
-        );
+        $fpdi->SetFillColor(255, 255, 255);
+        $fpdi->Rect($topo['x'], $topo['y'], $topo['largura'], $topo['altura'], 'F');
+        $fpdi->Image(public_path(self::SIMBOLO), $topo['x'], $meio - self::ALTURA_SIMBOLO / 2, $larguraSimbolo, self::ALTURA_SIMBOLO);
 
-        $fpdi->SetXY($faixa['x'], $topoLogo + self::ALTURA_LOGO + 3);
-        foreach (self::dadosDaEmpresa() as $i => $linha) {
-            $fpdi->SetFont('Helvetica', $i === 0 ? 'B' : '', $i === 0 ? 8 : 7.5);
-            $i === 0 ? $fpdi->SetTextColor(255, 255, 255) : $fpdi->SetTextColor(200, 200, 200);
-            $fpdi->Cell($faixa['largura'], 8.5, (string) iconv('UTF-8', 'windows-1252//TRANSLIT', $linha), 0, 2, 'C');
+        $fpdi->SetFont('Helvetica', 'B', 26);
+        $fpdi->SetTextColor(0, 0, 0);
+        $fpdi->SetXY($topo['x'] + $larguraSimbolo + 10, $meio - 13);
+        $fpdi->Cell(150, 26, 'KazaKora', 0, 0, 'L');
+
+        $linhas = self::dadosDaEmpresa();
+        $fpdi->SetXY($topo['x'], $meio - count($linhas) * 11 / 2);
+        foreach ($linhas as $i => $linha) {
+            $fpdi->SetFont('Helvetica', $i === 0 ? 'B' : '', 8.5);
+            $fpdi->SetTextColor(60, 60, 60);
+            $fpdi->Cell($topo['largura'], 11, (string) iconv('UTF-8', 'windows-1252//TRANSLIT', $linha), 0, 2, 'R');
         }
     }
 
     /**
-     * As linhas abaixo do logo, as mesmas do rodapé do checkout
+     * As linhas do lado direito do topo, as mesmas do rodapé do checkout
      * (CheckoutLayout.vue e resources/js/Shared/company.js).
      *
      * @return list<string>
@@ -144,7 +143,6 @@ class BoletoComMarca
     public static function dadosDaEmpresa(): array
     {
         return [
-            'KazaKora: kazakora.com',
             '© '.now('America/Sao_Paulo')->format('Y').' KazaKora | Grupo AlphaKora',
             'CNPJ: '.config('loja.empresa.cnpj'),
             (string) config('loja.empresa.endereco_completo'),

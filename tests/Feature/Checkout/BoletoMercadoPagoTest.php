@@ -322,17 +322,16 @@ class BoletoMercadoPagoTest extends TestCase
         // Página do Mercado Pago importada + o logo (imagem PNG com transparência).
         $this->assertStringContainsString('/XObject', $pdf);
         $this->assertStringContainsString('/SMask', $pdf);
-        Storage::disk('local')->assertExists("boletos/v2/{$payment->id}.pdf");
+        Storage::disk('local')->assertExists("boletos/v3/{$payment->id}.pdf");
 
         // Segunda vez sai do arquivo guardado, sem baixar de novo.
         $this->get($url)->assertOk();
         Http::assertSentCount(1);
     }
 
-    public function test_dados_da_empresa_abaixo_do_logo_seguem_o_rodape_do_checkout(): void
+    public function test_dados_da_empresa_no_topo_seguem_o_rodape_do_checkout(): void
     {
         $this->assertSame([
-            'KazaKora: kazakora.com',
             '© '.now('America/Sao_Paulo')->format('Y').' KazaKora | Grupo AlphaKora',
             'CNPJ: 65.604.590/0001-07',
             'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
@@ -355,10 +354,17 @@ class BoletoMercadoPagoTest extends TestCase
         $this->get(BoletoComMarca::url($payment))->assertRedirect($payment->boleto_url);
     }
 
-    public function test_boleto_de_outro_site_continua_com_o_link_do_mercado_pago(): void
+    public function test_boleto_da_ferrakora_e_da_beauty_kora_tambem_sai_com_o_topo(): void
     {
-        $payment = $this->boletoDoPedido(Order::SITE_FERRAKORA);
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response($this->pdfDoMercadoPago(), 200, ['Content-Type' => 'application/pdf'])]);
 
-        $this->assertSame($payment->boleto_url, BoletoComMarca::url($payment));
+        foreach ([Order::SITE_FERRAKORA, Order::SITE_BEAUTYKORA] as $site) {
+            $payment = $this->boletoDoPedido($site);
+
+            $this->assertNotSame($payment->boleto_url, BoletoComMarca::url($payment));
+            $this->get(BoletoComMarca::url($payment))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            $payment->forceDelete();
+        }
     }
 }

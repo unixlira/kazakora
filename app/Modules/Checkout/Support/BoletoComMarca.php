@@ -15,9 +15,10 @@ use setasign\Fpdi\PdfParser\StreamReader;
  * PDF original e só carimba o topo no espaço vazio acima da linha que separa
  * o topo do corpo. Linha digitável, código de barras e Bradesco não mudam.
  *
- * Topo (3º pedido do Lira, 2026-10-24): fundo branco, o símbolo (só os dois K
- * da casinha do favicon, laranja) encostado na margem esquerda, "KazaKora" em
- * preto ao lado e, à direita, copyright, CNPJ e endereço completo da loja.
+ * Topo (3º pedido do Lira, 2026-10-24): fundo branco, o logo encostado na
+ * margem esquerda e, à direita, copyright, CNPJ e endereço completo da loja.
+ * Desde 2026-10-25 o logo é o oficial "fiel" (KazaKora em preto com os dois K
+ * laranja), no lugar do símbolo KK com o nome escrito em Helvetica.
  * Para caber, a página do Mercado Pago desce DESCIDA pt sem reduzir (o código
  * de barras fica no tamanho que o banco lê); o rodapé dela tem folga.
  *
@@ -27,19 +28,19 @@ use setasign\Fpdi\PdfParser\StreamReader;
  */
 class BoletoComMarca
 {
-    /** Os dois K do símbolo, recortados do favicon (sem a casinha), laranja em fundo transparente. */
-    private const SIMBOLO = 'images/marca/simbolo-kk.png';
+    /** Logo oficial fiel (logo-kazakora-fiel-preto-laranja-master.png), fundo transparente. */
+    private const LOGO = 'images/marca/logo-kazakora-fiel.png';
 
     /** Topo da página A4 (595 x 842 pt), dentro das margens do boleto. */
     private const TOPO = ['x' => 16.0, 'y' => 8.0, 'largura' => 563.0, 'altura' => 79.0];
 
-    private const ALTURA_SIMBOLO = 44.0;
+    private const ALTURA_LOGO = 40.0;
 
     /** Quanto o PDF do Mercado Pago desce (pt): a linha do topo dele sai de 69 para 93, abaixo da faixa. */
     public const DESCIDA = 24.0;
 
     /** Versão do desenho: muda a pasta dos PDFs guardados, para não servir o carimbo antigo. */
-    private const PASTA = 'boletos/v3';
+    private const PASTA = 'boletos/v4';
 
     /** Link que o cliente recebe: o boleto com o topo da loja (assinado). */
     public static function url(Payment $payment): ?string
@@ -112,18 +113,13 @@ class BoletoComMarca
     private function cabecalho(Fpdi $fpdi): void
     {
         $topo = self::TOPO;
-        [$larguraPx, $alturaPx] = getimagesize(public_path(self::SIMBOLO));
-        $larguraSimbolo = self::ALTURA_SIMBOLO * $larguraPx / $alturaPx;
+        [$larguraPx, $alturaPx] = getimagesize(public_path(self::LOGO));
+        $larguraLogo = self::ALTURA_LOGO * $larguraPx / $alturaPx;
         $meio = $topo['y'] + $topo['altura'] / 2;
 
         $fpdi->SetFillColor(255, 255, 255);
         $fpdi->Rect($topo['x'], $topo['y'], $topo['largura'], $topo['altura'], 'F');
-        $fpdi->Image(public_path(self::SIMBOLO), $topo['x'], $meio - self::ALTURA_SIMBOLO / 2, $larguraSimbolo, self::ALTURA_SIMBOLO);
-
-        $fpdi->SetFont('Helvetica', 'B', 26);
-        $fpdi->SetTextColor(0, 0, 0);
-        $fpdi->SetXY($topo['x'] + $larguraSimbolo + 10, $meio - 13);
-        $fpdi->Cell(150, 26, 'KazaKora', 0, 0, 'L');
+        $fpdi->Image(public_path(self::LOGO), $topo['x'], $meio - self::ALTURA_LOGO / 2, $larguraLogo, self::ALTURA_LOGO);
 
         $linhas = self::dadosDaEmpresa();
         $fpdi->SetXY($topo['x'], $meio - count($linhas) * 11 / 2);

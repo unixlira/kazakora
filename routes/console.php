@@ -353,4 +353,5 @@ Schedule::command('geoip:atualizar')->monthlyOn(5, '04:30')->withoutOverlapping(
 
 // Tabela de frete por localidade (2026-10-25): localidades dos Correios e
 // PAC/SEDEX das 4 categorias de tamanho, de novo todo mês (só agenda o job).
-Schedule::command('frete:tabela-localidades')->monthlyOn(1, '03:30');
+// Dia 1 às 06:00 de São Paulo (pedido do Lira 2026-10-25).
+Schedule::command('frete:tabela-localidades')->monthlyOn(1, '06:00')->timezone('America/Sao_Paulo')->withoutOverlapping(60);

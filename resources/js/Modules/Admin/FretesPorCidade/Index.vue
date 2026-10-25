@@ -1,7 +1,8 @@
 <script setup>
-// Fretes por cidade (pedido 2026-10-24): tela própria no lugar da janela de
-// Fretes por estado. Cidades do estado com a regra de cada categoria de
-// pacote; a cidade abre a página dela para criar ou trocar as regras.
+// Cidades do estado (pedido 2026-10-24) com a regra de cada categoria de
+// pacote; a cidade abre a página dela com o PAC e o SEDEX de cada categoria e
+// as regras. Desde 2026-10-25 fica dentro de Fretes por estado (sem item
+// próprio no menu): o olho do estado abre esta lista.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
@@ -33,10 +34,10 @@ const filtradas = computed(() => {
 });
 
 function ir(params) {
-    router.get('/admin/logistica/fretes-por-cidade', { site: props.site, uf: props.uf, ...params }, { preserveState: false });
+    router.get('/admin/logistica/fretes-por-estado/cidades', { site: props.site, uf: props.uf, ...params }, { preserveState: false });
 }
 
-const linkCidade = (c) => `/admin/logistica/fretes-por-cidade/${c.id}?site=${props.site}`;
+const linkCidade = (c) => `/admin/logistica/fretes-por-estado/cidades/${c.id}?site=${props.site}`;
 
 // Limites das categorias (a última fica sem limite).
 const editandoCategorias = ref(false);
@@ -48,7 +49,7 @@ function editarCategorias() {
     editandoCategorias.value = true;
 }
 function salvarCategorias() {
-    router.put('/admin/logistica/fretes-por-cidade/categorias', { categorias: formCategorias.categorias.slice(0, -1) }, {
+    router.put('/admin/logistica/fretes-por-estado/categorias', { categorias: formCategorias.categorias.slice(0, -1) }, {
         preserveScroll: true,
         onSuccess: () => (editandoCategorias.value = false),
         onError: (e) => (erroCategorias.value = Object.values(e).join(' ')),
@@ -57,17 +58,20 @@ function salvarCategorias() {
 </script>
 
 <template>
-    <Head title="Fretes por cidade" />
+    <Head :title="`Fretes por estado - ${estado}`" />
 
     <AdminLayout>
-        <div class="mb-2 flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-2xl font-bold">Fretes por cidade</h1>
-            <Link href="/admin/logistica/fretes-por-estado" class="text-sm font-semibold text-primary hover:underline">
-                <i class="fas fa-map-location-dot mr-1" aria-hidden="true"></i>Fretes por estado
+        <nav class="mb-2 text-sm" aria-label="Caminho">
+            <Link href="/admin/logistica/fretes-por-estado" class="font-semibold text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Fretes por estado
             </Link>
-        </div>
+        </nav>
+        <h1 class="mb-2 text-2xl font-bold">
+            <span class="mr-2 inline-flex w-10 justify-center rounded bg-lightprimary py-0.5 align-middle text-sm font-bold text-primary">{{ uf }}</span>Cidades de {{ estado }}
+        </h1>
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Regra de frete de cada cidade, por tamanho do pacote. Sem regra, vale o frete normal dos Correios.
+            Clique na cidade para ver o PAC e o SEDEX de cada categoria e criar ou trocar a regra.
             A regra muda o frete embutido no preço da loja para quem tem CEP da cidade; o custo real continua o dos Correios.
         </p>
 

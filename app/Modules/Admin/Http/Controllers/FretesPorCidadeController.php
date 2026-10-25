@@ -8,6 +8,7 @@ use App\Models\IbgeMunicipio;
 use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Models\FreteRegiao;
 use App\Modules\Checkout\Support\RegrasDeFrete;
+use App\Modules\Checkout\Support\TabelaFreteLocalidades;
 use App\Support\SiteAtual;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -19,8 +20,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Logística → Fretes por cidade (pedido do Lira em 2026-10-24): tela própria
- * no lugar da janela que abria em Fretes por estado. Lista as cidades do
+ * Fretes por cidade (pedido do Lira em 2026-10-24): lista as cidades do
  * estado com a regra de frete de cada categoria de pacote (Pequena, Média,
  * Grande, Extra Grande) e abre a página da cidade para criar, trocar ou tirar
  * as regras. A página da cidade traz também os distritos (regra própria por
@@ -29,6 +29,11 @@ use Inertia\Response;
  * Uma regra = FreteRegiao com um local só (o município) e categoria null
  * (todas as categorias) ou a chave de uma categoria. Vale no frete embutido
  * do site escolhido (KazaKora, FerraKora ou Beauty Kora).
+ *
+ * Desde 2026-10-25 sem item próprio no menu: fica dentro de Logística →
+ * Fretes por estado (o olho do estado abre as cidades) e a página da cidade
+ * mostra em cima o PAC e o SEDEX de cada categoria, da tabela de Frete por
+ * localidade, para a cidade e os distritos dela.
  */
 class FretesPorCidadeController extends Controller
 {
@@ -78,7 +83,7 @@ class FretesPorCidadeController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $municipio): Response
+    public function show(Request $request, int $municipio, TabelaFreteLocalidades $tabela): Response
     {
         $cidade = IbgeMunicipio::query()->findOrFail($municipio);
         $site = self::site($request);
@@ -90,9 +95,21 @@ class FretesPorCidadeController extends Controller
         return Inertia::render('Admin/FretesPorCidade/Cidade', [
             'site' => $site,
             'sites' => SiteAtual::SITES,
-            'cidade' => ['id' => $cidade->id, 'nome' => $cidade->nome, 'uf' => $cidade->uf],
+            'cidade' => [
+                'id' => $cidade->id,
+                'nome' => $cidade->nome,
+                'uf' => $cidade->uf,
+                'estado' => IbgeEstado::query()->whereKey($cidade->estado_id)->value('nome') ?? $cidade->uf,
+            ],
             'categorias' => self::categoriasComProdutos(),
             'regras' => self::regrasPorCategoria($regras),
+            // A cidade e, embaixo, os distritos e povoados dela.
+            'localidades' => $tabela->paraTela(DB::table('frete_localidades')
+                ->where('municipio_id', $cidade->id)
+                ->orderByRaw("case tipo when 'M' then 0 when 'D' then 1 else 2 end")
+                ->orderBy('nome')
+                ->limit(200)
+                ->get()),
         ]);
     }
 

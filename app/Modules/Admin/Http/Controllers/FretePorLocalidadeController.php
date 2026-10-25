@@ -157,32 +157,9 @@ class FretePorLocalidadeController extends Controller
             ->limit(200)
             ->get();
 
-        $cotacoes = DB::table('frete_tabela')
-            ->whereIn('cep_destino', $todas->pluck('cep_cotacao')->filter()->unique())
-            ->where('cep_origem', $tabela->origem())
-            ->get()
-            ->groupBy('cep_destino');
-
         return response()->json([
             'achadas' => $ids,
-            'localidades' => $todas->map(fn ($l) => [
-                'id' => $l->id,
-                'uf' => $l->uf,
-                'nome' => $l->nome,
-                'tipo' => $l->tipo,
-                'municipio' => $l->municipio_nome,
-                'cep' => $l->cep,
-                'cep_cotacao' => $l->cep_cotacao,
-                'cep_herdado' => (bool) $l->cep_herdado,
-                'regras' => collect($cotacoes[$l->cep_cotacao] ?? [])->mapWithKeys(fn ($t) => [$t->categoria => [
-                    'pac' => $t->pac_preco !== null ? (float) $t->pac_preco : null,
-                    'pac_prazo' => $t->pac_prazo,
-                    'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
-                    'sedex_prazo' => $t->sedex_prazo,
-                    'erro' => $t->erro,
-                    'cotado_em' => $t->cotado_em,
-                ]]),
-            ])->values(),
+            'localidades' => $tabela->paraTela($todas),
         ]);
     }
 

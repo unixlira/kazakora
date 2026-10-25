@@ -50,6 +50,8 @@ return [
         'whatsapp_exibicao' => '(11) 96572-3990',
         'whatsapp_link' => 'https://wa.me/5511965723990',
         'endereco' => 'Rua Mogi Mirim, 20, Mooca, São Paulo/SP',
+        // Completo, como no rodapé do checkout (cabeçalho do boleto, 2026-10-24).
+        'endereco_completo' => 'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
     ],
 
     /*

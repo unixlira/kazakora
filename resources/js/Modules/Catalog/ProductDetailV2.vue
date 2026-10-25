@@ -532,13 +532,15 @@ const ehFlex = computed(() => Boolean(prazo.value?.flex));
 // Turbo como opção de rádio abaixo do grátis (pedido do Lira 2026-10-24):
 // mesmo TURBO do checkout (SEDEX pela diferença, preço e prazo reais do CEP).
 // Nasce desmarcado; a finalização continua nascendo no grátis (pedido 2026-10-12).
+// turbo.preco já é só o que passa do grátis (SEDEX − PAC): aparece como valor a
+// mais, igual ao "+ R$" do checkout (pedido do Lira 2026-10-24).
 const turboMarcado = ref(false);
 const textoTurbo = computed(() => {
     const turbo = prazo.value?.turbo;
     if (!turbo) return '';
     const dias = Number(turbo.prazo) || 0;
     const quando = dias ? `em ${dias} dia${dias === 1 ? '' : 's'}` : 'mais rápido';
-    return `Receba ${quando} por`;
+    return `para receber ${quando}`;
 });
 
 const onCepPrazo = (event) => {
@@ -947,7 +949,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <p v-else class="normal">{{ prazoNormal }}<span v-if="isFreeShipping" class="gratis"> • GRÁTIS</span></p>
                                     <label v-if="isFreeShipping && prazo.turbo" class="turbo" :class="{ marcado: turboMarcado }">
                                         <input type="radio" name="frete-turbo" :checked="turboMarcado" @click="turboMarcado = ehFlex ? true : !turboMarcado">
-                                        <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> {{ textoTurbo }} <span class="preco-turbo">{{ formatPrice(prazo.turbo.preco) }}</span></span>
+                                        <span><span class="full"><i class="fas fa-bolt"></i> Turbo</span> <span class="preco-turbo">+ {{ formatPrice(prazo.turbo.preco) }}</span> {{ textoTurbo }}</span>
                                     </label>
                                 </div>
                             </form>

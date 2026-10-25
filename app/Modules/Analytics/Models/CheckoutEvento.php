@@ -43,17 +43,13 @@ class CheckoutEvento extends Model
     protected $fillable = ['visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem'];
 
     /**
-     * Mesmo visitante do log de visitas (TrackSiteVisit): cookie
-     * kazakora_visitor se a pessoa deu OK nos cookies, senão um código tirado
-     * da sessão. Aqui nunca se cria cookie.
+     * Mesmo visitante do log de visitas (TrackSiteVisit, Cookies::visitante):
+     * cookie kazakora_visitor, criado no primeiro acesso desde 2026-10-25.
+     * Aqui nunca se cria cookie.
      */
     public static function visitante(Request $request): string
     {
-        if (Cookies::aceitou($request) && is_string($cookie = $request->cookie(Cookies::COOKIE_VISITANTE)) && $cookie !== '') {
-            return substr($cookie, 0, 36);
-        }
-
-        return 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
+        return Cookies::visitante($request);
     }
 
     /**

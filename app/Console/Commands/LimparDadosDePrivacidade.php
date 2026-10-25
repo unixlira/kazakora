@@ -6,6 +6,7 @@ use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Analytics\Models\ConsentimentoCookie;
 use App\Modules\Analytics\Models\FerraKoraVisit;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Models\VisitanteGeo;
 use App\Modules\Checkout\Models\Order;
 use Illuminate\Console\Command;
 
@@ -17,12 +18,13 @@ use Illuminate\Console\Command;
  * - OK dos cookies: prova guardada por 5 anos, depois apagada.
  * - orders.meta_rastreio (API de Conversões da Meta): 30 dias.
  * - Medição do checkout (checkout_eventos, 2026-10-23): 6 meses, apagada.
+ * - Lugar do IP por sessão (visitante_geolocalizacoes, 2026-10-24): 6 meses, apagado.
  */
 class LimparDadosDePrivacidade extends Command
 {
     protected $signature = 'privacidade:limpar';
 
-    protected $description = 'Apaga IP/navegador/cookies de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos e eventos do checkout com mais de 6 meses';
+    protected $description = 'Apaga IP/navegador/cookies de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos e eventos do checkout e lugares de IP com mais de 6 meses';
 
     public function handle(): int
     {
@@ -47,9 +49,12 @@ class LimparDadosDePrivacidade extends Command
         // Medição do checkout (2026-10-23): estatística de curto prazo, 6 meses.
         $eventosCheckout = CheckoutEvento::query()->where('created_at', '<', now()->subMonths(6)->subDay())->delete();
 
+        // Lugar aproximado do IP por sessão (2026-10-24): mesmo prazo do IP, apagado.
+        $lugares = VisitanteGeo::query()->where('updated_at', '<', now()->subMonths(6)->subDay())->delete();
+
         $consentimentos = ConsentimentoCookie::query()->where('aceito_em', '<', now()->subYears(5))->delete();
 
-        $this->info("Visitas anonimizadas: {$visitas}. OKs de cookies apagados: {$consentimentos}. Rastreios da Meta apagados: {$rastreios}. Eventos do checkout apagados: {$eventosCheckout}.");
+        $this->info("Visitas anonimizadas: {$visitas}. OKs de cookies apagados: {$consentimentos}. Rastreios da Meta apagados: {$rastreios}. Eventos do checkout apagados: {$eventosCheckout}. Lugares de IP apagados: {$lugares}.");
 
         return self::SUCCESS;
     }

@@ -127,6 +127,30 @@ Cloudflare (regra "Add visitor location headers"). Não é o GPS do aparelho nem
 pede permissão ao navegador. Base legal: execução do contrato e prevenção a
 fraude (art. 7º V e IX). Sem Cloudflare fica nulo.
 
+### Localização do visitante por sessão (`visitante_geolocalizacoes`, pedido 2026-10-24)
+Latitude, longitude e CEP aproximados pelo IP, uma linha por sessão, para
+depois mostrar o frete já com o lugar do cliente (por enquanto só grava, nada
+na tela usa). Código: `GeoDoVisitante`, middleware `RegistrarGeoDoVisitante`.
+- **De onde vem:** cabeçalhos da Cloudflare (`CF-IPLatitude`, `CF-IPLongitude`,
+  `CF-Postal-Code`, `CF-IPCity`, `CF-Region-Code`, `CF-IPCountry`,
+  `CF-Timezone`), aceitos só quando a requisição chega de um IP da Cloudflare.
+  Sem eles, a base DB-IP do servidor (`LocalDoIp`: cidade, UF e centro da
+  cidade, sem CEP). O IP não vai a nenhuma API de terceiro. Não é GPS e não
+  pede permissão ao navegador.
+- **O que grava:** site, código da sessão (o mesmo `s-...` de `site_visits`,
+  nunca o id da sessão), visitante (`kazakora_visitor` com OK), `user_id` se
+  logado, IP, fonte, país, UF, cidade, CEP (às vezes só os 5 primeiros
+  dígitos), latitude, longitude e fuso. Também fica na própria sessão (chave
+  `visitante_geo`). Grava de novo só se o IP ou o login mudarem.
+- Loja: só o domínio da loja, GET, sem admin e sem robô. FerraKora e Beauty
+  Kora: pela rota de visita (`/api/{site}/visita`); a "sessão" é o visitante
+  tirado do IP.
+- Sem cookie novo. Base legal: procedimentos preliminares do contrato
+  (mostrar frete e prazo, art. 7º V) e legítimo interesse (art. 7º IX), dado
+  aproximado e mínimo.
+- Guarda: **6 meses** desde a última atualização, depois apagado
+  (`privacidade:limpar`). Falta citar na Política de Privacidade pública.
+
 ### Medição do checkout (`checkout_eventos`, pedido 2026-10-23)
 O que a pessoa fez na `/finalizacao`, para entender quem sai sem comprar:
 abriu, viu o formulário, rolagem (25/50/75/100%), primeiro foco em cada
@@ -175,6 +199,8 @@ o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do
   clique (`click_id`) apagados (`visitor_id = anonimo`). A estatística
   (página, dia, origem) fica.
+- Localização do visitante por sessão (`visitante_geolocalizacoes`) sem
+  atualização há mais de 6 meses: apagada.
 - Prova de OK com mais de 5 anos: apagada.
 
 ## Regras para quem for mexer (Claude Code e Naia)

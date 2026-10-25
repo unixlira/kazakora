@@ -331,4 +331,37 @@ class FreteEmbutidoTest extends TestCase
         $this->assertEquals(round(320 - $pix, 2), (float) $order->total);
         $this->assertEquals(round(40 + $pix, 2), (float) $order->discount_amount);
     }
+
+    public function test_produto_sem_frete_mostra_o_preco_do_cadastro_no_produto_carrinho_e_pedido(): void
+    {
+        Mail::fake();
+        $this->comCorreios();
+        $produto = $this->produto(100);
+        config(['frete_embutido.produtos_sem_frete' => [$produto->id]]);
+
+        $this->get("/produtos/{$produto->slug}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 100));
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$produto->id)->assertJsonPath('final_price', 100);
+
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 1]);
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000')
+            ->assertOk()
+            ->assertJsonPath('subtotal', 100)
+            ->assertJsonPath('desconto_plataforma', 0);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 78, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+        $this->postJson('/finalizacao/entrega', $this->entrega(self::CEP_CE))->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
+
+        $order = Order::with('items')->firstOrFail();
+        $this->assertEquals(100.0, (float) $order->items->first()->product_price);
+        $this->assertEquals(0.0, (float) $order->shipping_cost);
+        $this->assertEquals(0.0, (float) $order->items->first()->frete_embutido);
+    }
 }

@@ -93,12 +93,13 @@ class FretePorLocalidadeTest extends TestCase
         $this->assertSame(3200169, (int) $santaLuzia->municipio_id);
         $this->assertSame('Água Doce do Norte', $santaLuzia->municipio_nome);
 
-        // Cidade com CEP por rua: cota pelo início da faixa total.
-        $this->assertSame('29000000', DB::table('frete_localidades')->where('nome', 'Vitória')->value('cep_cotacao'));
+        // Cidade com CEP por rua: cota pelo primeiro CEP da faixa de
+        // logradouros (C), não pelo 000 da faixa total (Cachoeiro, 25/10).
+        $this->assertSame('29000001', DB::table('frete_localidades')->where('nome', 'Vitória')->value('cep_cotacao'));
 
         // Povoado sem CEP próprio: herda o do município.
         $baia = DB::table('frete_localidades')->where('nome', 'Baía Nova')->first();
-        $this->assertSame('29000000', $baia->cep_cotacao);
+        $this->assertSame('29000001', $baia->cep_cotacao);
         $this->assertTrue((bool) $baia->cep_herdado);
 
         $this->assertSame(3, DB::table('frete_localidade_faixas')->count());

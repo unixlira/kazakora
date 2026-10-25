@@ -13,9 +13,9 @@ use Illuminate\Support\Str;
  * Avaliações do carrossel do checkout (modelo Mavo): o da loja e o dos outros
  * sites (FerraKora e Beauty Kora) pela API de resumo. Só as que existem no
  * banco, nota 4 ou 5 e com texto, só dos produtos do carrinho (anúncio pai e
- * variações); com foto antes. Produto sem avaliação não mostra o carrossel: as
- * "melhores da loja" de outro produto saíram (pedido 2026-10-24, depois do
- * PR #1080). O nome segue a mesma regra da página do produto
+ * variações); com foto antes. As "melhores da loja" não se misturam com as do
+ * produto (pedido 2026-10-24, depois do PR #1080), mas voltam sozinhas quando
+ * o produto não tem nenhuma: sem isso o carrossel sumia (2026-10-25). O nome segue a mesma regra da página do produto
  * (reviewer_display_name) e a UF só aparece quando é a real (reviews.uf).
  *
  * Foto redonda (pedido 2026-10-24): avatar do pacote da vitrine em
@@ -54,7 +54,7 @@ class AvaliacoesDoCheckout
             return [];
         }
 
-        $avaliacoes = Review::query()
+        $base = fn () => Review::query()
             ->where('rating', '>=', 4)
             ->whereNotNull('comment')
             ->whereRaw('LENGTH(TRIM(comment)) >= 15')
@@ -65,9 +65,18 @@ class AvaliacoesDoCheckout
             ->latest()
             ->orderByDesc('id')
             ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')))
+            ->limit(self::CANDIDATAS);
+
+        $avaliacoes = $base()
             ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
-            ->limit(self::CANDIDATAS)
             ->get();
+
+        // Produto do carrinho sem avaliação: o carrossel não some, mostra as
+        // melhores da loja (pedido 2026-10-25). Com avaliação, só as do produto.
+        // Só na KazaKora: os outros sites ($catalogo) seguem sem completar.
+        if ($avaliacoes->isEmpty() && $catalogo === null) {
+            $avaliacoes = $base()->get();
+        }
 
         $usados = [];
         $resultado = [];

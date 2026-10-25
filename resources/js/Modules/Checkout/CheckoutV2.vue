@@ -653,10 +653,15 @@ const irParaPagamento = async () => {
     }
 };
 
+// Em duas linhas (pedido 2026-10-24): rua/número/complemento e bairro/cidade/CEP,
+// quebrando quando a coluna fica estreita no computador largo.
 const enderecoResumo = computed(() => {
     const a = usarNovoEndereco.value ? endereco : enderecoSelecionado.value;
-    if (!a) return '';
-    return `${a.street}, ${a.number}${a.complement ? ` - ${a.complement}` : ''} · ${a.neighborhood} · ${a.city}/${a.state} · CEP ${a.zip}`;
+    if (!a) return null;
+    return {
+        rua: `${a.street}, ${a.number}${a.complement ? ` - ${a.complement}` : ''}`,
+        cidade: `${a.neighborhood} · ${a.city}/${a.state} · CEP ${a.zip}`,
+    };
 });
 
 const finalizar = async () => {
@@ -897,11 +902,15 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
         </button>
 
         <!-- Computador (pedido 2026-10-24): grade de 12 colunas. Identificação num card
-             de 3, Entrega e Pagamento em 5 e o resumo em 4. -->
-        <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-12 lg:items-start lg:gap-6 lg:py-9">
+             de 3, Entrega e Pagamento em 5 e o resumo em 4.
+             Computador largo, a partir de 1280px (pedido 2026-10-24): Pagamento com os valores
+             (cupom e Pix) ao lado em cima; Identificação e Entrega lado a lado embaixo; itens,
+             avaliações e selos na coluna da direita. main, aside e os blocos de dentro viram
+             "contents" para os filhos entrarem direto nas áreas da grade. -->
+        <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-12 lg:items-start lg:gap-6 lg:py-9 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_380px] xl:grid-rows-[auto_auto_auto_auto_auto_1fr] xl:[grid-template-areas:'erro_erro_erro'_'pag_pag_fin'_'ident_entrega_itens'_'ident_entrega_aval'_'ident_entrega_selos'_'ident_entrega_fim']">
             <!-- ETAPAS -->
-            <main class="order-2 min-w-0 lg:order-1 lg:col-span-8">
-                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <main class="order-2 min-w-0 lg:order-1 lg:col-span-8 xl:contents">
+                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 xl:mb-0 xl:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
@@ -909,9 +918,9 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                     </div>
                 </div>
 
-                <div class="space-y-4 lg:grid lg:grid-cols-8 lg:items-start lg:gap-6 lg:space-y-0">
-                    <!-- 1 de 3: Identificação (no computador, card de 3 das 12 colunas, fixo ao rolar) -->
-                    <section id="etapa-1" ref="secaoDados" :class="[classeEtapa(1), 'lg:sticky lg:top-6 lg:col-span-3 lg:p-5']">
+                <div class="space-y-4 lg:grid lg:grid-cols-8 lg:items-start lg:gap-6 lg:space-y-0 xl:contents">
+                    <!-- 1 de 3: Identificação (no computador, card de 3 das 12 colunas, fixo ao rolar; no largo, metade da linha de baixo) -->
+                    <section id="etapa-1" ref="secaoDados" :class="[classeEtapa(1), 'lg:sticky lg:top-6 lg:col-span-3 lg:p-5 xl:static xl:p-7 xl:[grid-area:ident]']">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold text-slate-900">Identificação</h2>
                             <span class="text-xs text-slate-500">1 de 3</span>
@@ -926,7 +935,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i><span class="lg:hidden">{{ rotulo }}</span><span class="hidden lg:inline">{{ curto }}</span>
+                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i><span class="lg:hidden xl:inline">{{ rotulo }}</span><span class="hidden lg:inline xl:hidden">{{ curto }}</span>
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">
@@ -953,7 +962,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="E-mail">
                                     <small v-if="erro('guest.email')" class="ml-4 text-xs text-red-600">{{ erro('guest.email') }}</small>
                                 </label>
-                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                                     <label v-if="pedirCpf" class="block" :data-erro="erro(campoCpf) ? 1 : 0">
                                         <span class="sr-only">{{ ehPj ? 'CPF do responsável' : 'CPF' }}</span>
                                         <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" :placeholder="ehPj ? 'CPF do responsável' : 'CPF'" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
@@ -974,11 +983,11 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                             </p>
                         </template>
 
-                        <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
-                            <div class="min-w-0">
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600">
+                            <div class="min-w-0 break-words">
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
                                 <p v-if="ehPj">{{ empresa.razaoSocial }} · CNPJ {{ empresa.cnpj }}</p>
-                                <p v-if="!isLoggedIn" class="truncate">{{ pessoa.email }}</p>
+                                <p v-if="!isLoggedIn" class="break-all">{{ pessoa.email }}</p>
                                 <!-- Um por linha no card estreito, sem quebrar o número no meio. -->
                                 <p class="flex flex-wrap gap-x-2">
                                     <span v-if="pedirCpf && pessoa.cpf" class="whitespace-nowrap">{{ pessoa.cpf }}</span>
@@ -989,9 +998,9 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         </div>
                     </section>
 
-                    <div class="space-y-4 lg:col-span-5">
+                    <div class="space-y-4 lg:col-span-5 xl:contents">
                     <!-- 2 de 3: Entrega -->
-                    <section id="etapa-2" :class="classeEtapa(2)">
+                    <section id="etapa-2" class="xl:[grid-area:entrega]" :class="classeEtapa(2)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="flex items-center gap-2 text-xl font-extrabold" :class="etapa < 2 ? 'text-slate-500' : 'text-slate-900'">
                                 Entrega
@@ -1011,9 +1020,9 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     class="flex cursor-pointer items-start gap-3 rounded-2xl border p-3 transition"
                                     :class="addressId === address.id ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300'">
                                     <input v-model="addressId" type="radio" :value="address.id" class="mt-1 h-4 w-4 accent-emerald-600">
-                                    <span class="text-sm text-slate-700">
+                                    <span class="min-w-0 break-words text-sm text-slate-700">
                                         <strong class="block text-slate-900">{{ address.street }}, {{ address.number }}<template v-if="address.complement"> - {{ address.complement }}</template></strong>
-                                        {{ address.neighborhood }} · {{ address.city }}/{{ address.state }} · CEP {{ address.zip }}
+                                        <span class="block">{{ address.neighborhood }} · {{ address.city }}/{{ address.state }} · CEP {{ address.zip }}</span>
                                     </span>
                                 </label>
                                 <button type="button" class="mt-1 text-sm font-medium text-sky-700 hover:underline" @click="usarNovoEndereco = true">
@@ -1122,20 +1131,24 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                             </p>
                         </template>
 
-                        <div v-else class="mt-3 flex items-start justify-between gap-3 text-sm text-slate-600">
-                            <div class="min-w-0">
-                                <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ enderecoResumo }}</p>
-                                <p>
-                                    <template v-if="turboEscolhido && turbo">Envio Prioritário: + {{ formatPrice(turbo.preco) }}</template>
-                                    <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
-                                </p>
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600">
+                            <div class="flex min-w-0 items-start gap-1.5 break-words">
+                                <i class="fa-solid fa-circle-check mt-1 text-[#00843f]"></i>
+                                <div class="min-w-0">
+                                    <p v-if="enderecoResumo" class="font-semibold text-slate-900">{{ enderecoResumo.rua }}</p>
+                                    <p v-if="enderecoResumo">{{ enderecoResumo.cidade }}</p>
+                                    <p class="mt-1 font-semibold text-slate-700">
+                                        <template v-if="turboEscolhido && turbo">Envio Prioritário: + {{ formatPrice(turbo.preco) }}</template>
+                                        <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
+                                    </p>
+                                </div>
                             </div>
                             <button v-if="!order" type="button" class="shrink-0 text-sm font-semibold text-sky-700 hover:underline" @click="irPara(2)">Editar</button>
                         </div>
                     </section>
 
                     <!-- 3 de 3: Pagamento. O conteúdo fica montado (v-show) para o campo seguro do cartão não se perder ao editar outra etapa. -->
-                    <section id="etapa-3" :class="classeEtapa(3)">
+                    <section id="etapa-3" class="xl:[grid-area:pag]" :class="classeEtapa(3)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold" :class="etapa < 3 ? 'text-slate-500' : 'text-slate-900'">Pagamento</h2>
                             <span class="flex items-baseline gap-3 text-xs text-slate-500">
@@ -1250,134 +1263,148 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
             </main>
 
             <!-- RESUMO DA COMPRA (fixo ao rolar no computador) -->
-            <aside id="resumo-compra" class="order-1 lg:sticky lg:top-6 lg:order-2 lg:col-span-4" :class="{ 'hidden lg:block': !resumoAberto }">
-                <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6">
-                    <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
+            <aside id="resumo-compra" class="order-1 lg:sticky lg:top-6 lg:order-2 lg:col-span-4 xl:contents" :class="{ 'hidden lg:block': !resumoAberto }">
+                <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6 xl:contents">
+                    <!-- Computador largo: cupom, Pix e totais num cartão ao lado do Pagamento. -->
+                    <div class="xl:self-start xl:rounded-[24px] xl:bg-white xl:p-6 xl:shadow-[0_4px_24px_rgba(15,23,42,0.07)] xl:[grid-area:fin]">
+                        <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
-                    <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
-                         (o BEMVINDO vem do pop-up de boas-vindas) fica dentro do campo: borda verde e X para tirar. -->
-                    <div class="mt-4">
-                        <form class="flex gap-2" @submit.prevent="aplicarCupom">
-                            <label class="relative min-w-0 flex-1">
-                                <span class="sr-only">Cupom de desconto</span>
-                                <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters"
-                                    :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado"
-                                    ref="campoCupom"
-                                    class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
-                                    :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
-                                    @input="cupom = $event.target.value; cupomErro = null">
-                                <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
-                                    class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
-                                    @click="limparCupom">
-                                    <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
+                        <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
+                             (o BEMVINDO vem do pop-up de boas-vindas) fica dentro do campo: borda verde e X para tirar. -->
+                        <div class="mt-4">
+                            <form class="flex gap-2" @submit.prevent="aplicarCupom">
+                                <label class="relative min-w-0 flex-1">
+                                    <span class="sr-only">Cupom de desconto</span>
+                                    <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters"
+                                        :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado"
+                                        ref="campoCupom"
+                                        class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
+                                        :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
+                                        @input="cupom = $event.target.value; cupomErro = null">
+                                    <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
+                                        class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
+                                        @click="limparCupom">
+                                        <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
+                                    </button>
+                                </label>
+                                <button type="submit" :disabled="!!cupomAplicado || cupomCarregando"
+                                    class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
+                                    <i v-if="cupomCarregando && !cupomAplicado" class="fa-solid fa-spinner animate-spin"></i>
+                                    {{ cupomCarregando && !cupomAplicado ? 'Buscando' : 'Aplicar' }}
                                 </button>
-                            </label>
-                            <button type="submit" :disabled="!!cupomAplicado || cupomCarregando"
-                                class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
-                                <i v-if="cupomCarregando && !cupomAplicado" class="fa-solid fa-spinner animate-spin"></i>
-                                {{ cupomCarregando && !cupomAplicado ? 'Buscando' : 'Aplicar' }}
-                            </button>
-                        </form>
-                        <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
-                    </div>
-
-                    <dl class="mt-4 space-y-2 text-sm text-slate-600">
-                        <div class="flex justify-between"><dt>Produtos ({{ totalProdutosResumo }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
-                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
-                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
-                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Prioritário</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
-                            <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
-                        <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
-                            <dt class="text-base font-extrabold">Total</dt>
-                            <dd class="text-right">
-                                <span class="block text-xl font-extrabold">{{ formatPrice(totalAPagar) }}</span>
-                                <span v-if="!order" class="block text-xs font-semibold text-slate-600">em até 12x no cartão</span>
-                            </dd>
+                            </form>
+                            <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
                         </div>
-                    </dl>
 
-                    <ul class="mt-3 divide-y divide-slate-100 border-t border-slate-100">
-                        <li v-for="item in itens" :key="item.product.id" class="flex gap-3 py-4">
-                            <img v-if="fotoDoItem(item)" :src="fotoDoItem(item)" :alt="item.product.name" width="64" height="64" class="h-16 w-16 shrink-0 rounded-xl border border-slate-200 object-cover">
-                            <span v-else class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-sm leading-snug text-slate-700">{{ item.product.name }}</p>
-                                <!-- Unidade, preço e selo da oferta no modelo Mavo (pedido 2026-10-24). -->
-                                <p class="mt-1 text-xs text-slate-500">Unid.: {{ item.quantity }}x<template v-if="item.product.variation"> {{ item.product.variation }}</template></p>
-                                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">
-                                    {{ formatPrice(precoUnitario(item)) }}
-                                    <span v-if="ofertaDoItem(item)" class="rounded-md bg-[#141414] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">{{ ofertaDoItem(item).nome }}</span>
-                                </p>
-                                <p v-if="item.quantity > 1" class="text-xs text-slate-500">Total: {{ formatPrice(item.subtotal) }}</p>
-                                <div class="mt-2 inline-flex items-center rounded-full border border-slate-200" role="group" :aria-label="`Quantidade de ${item.product.name}`">
-                                    <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
-                                        :disabled="item.quantity <= 1 || !!alterandoItem || !!order" aria-label="Diminuir quantidade" @click="alterarQuantidade(item, -1)">
-                                        <i class="fa-solid fa-minus text-xs"></i>
-                                    </button>
-                                    <span class="min-w-8 text-center text-sm font-semibold tabular-nums" aria-live="polite">
-                                        <i v-if="alterandoItem === item.product.id" class="fa-solid fa-spinner animate-spin text-xs text-slate-400"></i>
-                                        <template v-else>{{ item.quantity }}</template>
-                                    </span>
-                                    <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
-                                        :disabled="item.quantity >= Number(item.product.stock ?? Infinity) || !!alterandoItem || !!order" aria-label="Aumentar quantidade" @click="alterarQuantidade(item, 1)">
-                                        <i class="fa-solid fa-plus text-xs"></i>
-                                    </button>
-                                </div>
+                        <dl class="mt-4 space-y-2 text-sm text-slate-600">
+                            <div class="flex justify-between"><dt>Produtos ({{ totalProdutosResumo }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
+                            <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
+                            <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
+                            <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
+                            <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Prioritário</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
+                                <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
+                            <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
+                                <dt class="text-base font-extrabold">Total</dt>
+                                <dd class="text-right">
+                                    <span class="block text-xl font-extrabold">{{ formatPrice(totalAPagar) }}</span>
+                                    <span v-if="!order" class="block text-xs font-semibold text-slate-600">em até 12x no cartão</span>
+                                </dd>
                             </div>
-                        </li>
-                        <!-- Livros de brinde como uma linha de produto, com GRÁTIS no lugar do valor (pedido do Lira 2026-10-21). -->
-                        <li v-if="livrosBrinde" class="flex items-center gap-3 py-4">
-                            <span class="relative shrink-0">
-                                <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 rounded-xl border border-slate-200 bg-white object-cover">
-                                <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ livrosBrinde.quantidade }}</span>
-                            </span>
-                            <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
-                            <!-- Valor de referência riscado antes do GRÁTIS (pedido do Lira 2026-10-22); GRÁTIS no tamanho do Total, verde mantido (2026-10-24). -->
-                            <span class="flex shrink-0 items-baseline gap-2 lg:flex-col lg:items-end lg:gap-0 xl:flex-row xl:items-baseline xl:gap-2">
-                                <s class="whitespace-nowrap text-sm text-slate-500"><span class="sr-only">De </span>R$ 97,50</s>
-                                <span class="text-xl font-extrabold text-[#00843f]">GRÁTIS</span>
-                            </span>
-                        </li>
-                    </ul>
-                    <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). -->
-                    <div class="flex items-center justify-between gap-2">
-                        <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
-                        <span v-if="avaliacaoItens" class="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
-                            <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
-                                <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
-                                    <i class="fa-regular fa-star text-slate-400"></i>
-                                    <span class="absolute left-0 top-0 h-full overflow-hidden" :style="{ width: `${preenchimentoEstrela(estrela)}%` }">
-                                        <i class="fa-solid fa-star text-amber-500"></i>
-                                    </span>
-                                </span>
-                            </span>
-                            <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
-                            <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? ' avaliação' : ' avaliações' }}</span>)</span>
-                        </span>
+                        </dl>
+
+                        <!-- Computador largo: o preço no Pix à mostra enquanto outra forma está escolhida. -->
+                        <button v-if="pixDiscountPercentage > 0 && metodo !== 'pix' && !order" type="button"
+                            class="mt-4 hidden w-full items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900 hover:bg-emerald-100 xl:flex"
+                            @click="metodo = 'pix'">
+                            <span><i class="fa-brands fa-pix mr-1.5 text-[#32BCAD]"></i>No Pix: <strong>{{ formatPrice(totalNoPix) }}</strong></span>
+                            <span class="rounded-full bg-[#00843f] px-2.5 py-1 text-xs font-bold text-white">-{{ pixPercentualTexto }}%</span>
+                        </button>
                     </div>
 
-                    <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974). -->
-                    <div class="mt-4 border-t border-slate-100 pt-4">
-                        <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
-                            <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
-                                <svg class="h-[18px] w-[18px] fill-[#1d9bf0] stroke-white" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
-                                </svg>
-                                {{ rotulo }}
+                    <div class="xl:self-start xl:rounded-[24px] xl:bg-white xl:p-6 xl:shadow-[0_4px_24px_rgba(15,23,42,0.07)] xl:[grid-area:itens]">
+                        <h2 class="hidden text-base font-extrabold text-slate-900 xl:block">Itens do pedido</h2>
+                        <ul class="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+                            <li v-for="item in itens" :key="item.product.id" class="flex gap-3 py-4">
+                                <img v-if="fotoDoItem(item)" :src="fotoDoItem(item)" :alt="item.product.name" width="64" height="64" class="h-16 w-16 shrink-0 rounded-xl border border-slate-200 object-cover">
+                                <span v-else class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm leading-snug text-slate-700">{{ item.product.name }}</p>
+                                    <!-- Unidade, preço e selo da oferta no modelo Mavo (pedido 2026-10-24). -->
+                                    <p class="mt-1 text-xs text-slate-500">Unid.: {{ item.quantity }}x<template v-if="item.product.variation"> {{ item.product.variation }}</template></p>
+                                    <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">
+                                        {{ formatPrice(precoUnitario(item)) }}
+                                        <span v-if="ofertaDoItem(item)" class="rounded-md bg-[#141414] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">{{ ofertaDoItem(item).nome }}</span>
+                                    </p>
+                                    <p v-if="item.quantity > 1" class="text-xs text-slate-500">Total: {{ formatPrice(item.subtotal) }}</p>
+                                    <div class="mt-2 inline-flex items-center rounded-full border border-slate-200" role="group" :aria-label="`Quantidade de ${item.product.name}`">
+                                        <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
+                                            :disabled="item.quantity <= 1 || !!alterandoItem || !!order" aria-label="Diminuir quantidade" @click="alterarQuantidade(item, -1)">
+                                            <i class="fa-solid fa-minus text-xs"></i>
+                                        </button>
+                                        <span class="min-w-8 text-center text-sm font-semibold tabular-nums" aria-live="polite">
+                                            <i v-if="alterandoItem === item.product.id" class="fa-solid fa-spinner animate-spin text-xs text-slate-400"></i>
+                                            <template v-else>{{ item.quantity }}</template>
+                                        </span>
+                                        <button type="button" class="flex h-8 w-9 items-center justify-center text-slate-600 hover:text-slate-900 disabled:opacity-40"
+                                            :disabled="item.quantity >= Number(item.product.stock ?? Infinity) || !!alterandoItem || !!order" aria-label="Aumentar quantidade" @click="alterarQuantidade(item, 1)">
+                                            <i class="fa-solid fa-plus text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </li>
+                            <!-- Livros de brinde como uma linha de produto, com GRÁTIS no lugar do valor (pedido do Lira 2026-10-21). -->
+                            <li v-if="livrosBrinde" class="flex items-center gap-3 py-4">
+                                <span class="relative shrink-0">
+                                    <img :src="livrosBrinde.imagem" :alt="livrosBrindeAlt" width="64" height="64" loading="lazy" decoding="async" class="h-16 w-16 rounded-xl border border-slate-200 bg-white object-cover">
+                                    <span class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-700 px-1 text-[11px] font-bold text-white">{{ livrosBrinde.quantidade }}</span>
+                                </span>
+                                <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
+                                <!-- Valor de referência riscado antes do GRÁTIS (pedido do Lira 2026-10-22); GRÁTIS no tamanho do Total, verde mantido (2026-10-24). -->
+                                <span class="flex shrink-0 items-baseline gap-2 lg:flex-col lg:items-end lg:gap-0 xl:flex-row xl:items-baseline xl:gap-2">
+                                    <s class="whitespace-nowrap text-sm text-slate-500"><span class="sr-only">De </span>R$ 97,50</s>
+                                    <span class="text-xl font-extrabold text-[#00843f]">GRÁTIS</span>
+                                </span>
                             </li>
                         </ul>
-                        <ul class="mt-3 space-y-1 text-sm text-slate-700">
-                            <li v-for="item in CHECKS_LOJA" :key="item"><i class="fas fa-check mr-1.5 text-[1.1em] text-[#00a650] [-webkit-text-stroke:0.8px_#00a650]" aria-hidden="true"></i>{{ item }}</li>
-                        </ul>
+                        <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). -->
+                        <div class="flex items-center justify-between gap-2">
+                            <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
+                            <span v-if="avaliacaoItens" class="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
+                                <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
+                                    <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
+                                        <i class="fa-regular fa-star text-slate-400"></i>
+                                        <span class="absolute left-0 top-0 h-full overflow-hidden" :style="{ width: `${preenchimentoEstrela(estrela)}%` }">
+                                            <i class="fa-solid fa-star text-amber-500"></i>
+                                        </span>
+                                    </span>
+                                </span>
+                                <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
+                                <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? ' avaliação' : ' avaliações' }}</span>)</span>
+                            </span>
+                        </div>
+
+                        <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974). -->
+                        <div class="mt-4 border-t border-slate-100 pt-4">
+                            <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
+                                <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
+                                    <svg class="h-[18px] w-[18px] fill-[#1d9bf0] stroke-white" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
+                                    </svg>
+                                    {{ rotulo }}
+                                </li>
+                            </ul>
+                            <ul class="mt-3 space-y-1 text-sm text-slate-700">
+                                <li v-for="item in CHECKS_LOJA" :key="item"><i class="fas fa-check mr-1.5 text-[1.1em] text-[#00a650] [-webkit-text-stroke:0.8px_#00a650]" aria-hidden="true"></i>{{ item }}</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
-                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block" />
+                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block xl:mt-0 xl:self-start xl:[grid-area:aval]" />
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10). No celular ficam debaixo das etapas (2026-10-21). -->
-                <ul class="mt-4 hidden space-y-3 lg:block">
+                <ul class="mt-4 hidden space-y-3 lg:block xl:mt-0 xl:self-start xl:[grid-area:selos]">
                     <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">

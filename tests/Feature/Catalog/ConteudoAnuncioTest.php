@@ -280,6 +280,47 @@ class ConteudoAnuncioTest extends TestCase
         });
     }
 
+    public function test_prompt_leva_a_ficha_tecnica_cadastrada_e_a_regra_para_qualquer_produto(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'blocos' => [['titulo' => 'Organiza tudo', 'texto' => 'Cabe em qualquer canto.', 'imagem' => null]],
+        ]))]);
+        $product = $this->produto();
+        $product->update(['brand' => 'Bambu Casa', 'model' => 'BC-30', 'color' => 'Natural']);
+        $product->fiscalData()->create(['peso_liquido' => 1.25, 'altura_cm' => 20, 'largura_cm' => 30, 'profundidade_cm' => 15]);
+
+        app(AnuncioConteudoService::class)->gerar($product->fresh(), forcar: true);
+
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return str_contains($prompt, '- Marca: Bambu Casa')
+                && str_contains($prompt, '- Modelo: BC-30')
+                && str_contains($prompt, '- Cor: Natural')
+                && str_contains($prompt, '- Peso do produto: 1,25 kg')
+                && str_contains($prompt, '20 x 30 x 15 cm')
+                && str_contains($prompt, 'Ficha técnica (vale para qualquer tipo de produto)')
+                && str_contains($prompt, 'voltagem');
+        });
+    }
+
+    public function test_prompt_sem_dados_tecnicos_cadastrados_nao_inventa_secao(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'blocos' => [['titulo' => 'Pele macia', 'texto' => 'Hidrata.', 'imagem' => null]],
+        ]))]);
+
+        app(AnuncioConteudoService::class)->gerarViaGemini('Beauty Kora (beleza e skincare)', 'Sérum', 'Sérum facial 30 ml.', [], 0);
+
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return ! str_contains($prompt, 'Dados técnicos cadastrados') && str_contains($prompt, 'Ficha técnica (vale para qualquer tipo de produto)');
+        });
+    }
+
     public function test_comando_completa_so_o_cta_de_conteudo_antigo(): void
     {
         $product = $this->produto();

@@ -116,15 +116,15 @@ class CheckoutBeautyKoraTest extends TestCase
     {
         $cliente = User::factory()->create(['name' => 'Carla Souza']);
         Review::create(['user_id' => $cliente->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Chegou rápido e funciona muito bem.']);
-        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $this->produto->id, 'rating' => 4, 'comment' => 'Gostei bastante, recomendo a todos.', 'ocultar_nome' => true]);
+        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Gostei bastante, recomendo a todos.', 'ocultar_nome' => true]);
 
         $resposta = $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertOk()
             ->assertJsonCount(2, 'avaliacoes')
-            ->assertJsonPath('avaliacoes.0.nome', 'Carla Souza')
-            ->assertJsonPath('avaliacoes.1.nome', 'Cliente');
+            ->assertJsonPath('avaliacoes.0.nome', 'Cliente')
+            ->assertJsonPath('avaliacoes.1.nome', 'Carla Souza');
 
-        $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.0.avatar'));
+        $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.1.avatar'));
     }
 
     public function test_resumo_so_traz_avaliacoes_do_produto_do_carrinho(): void
@@ -140,7 +140,7 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'avaliacoes');
 
-        Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'RJ', 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Pele macia já no primeiro uso.']);
+        Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'RJ', 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Pele macia já no primeiro uso, amei.']);
 
         $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertJsonCount(1, 'avaliacoes')

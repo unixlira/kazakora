@@ -168,6 +168,8 @@ export const sidebarSections = [
         heading: 'Atendimento',
         items: [
             { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
+            // Chat da Shopee (2026-10-25): conversas do sellerchat, sincronizadas a cada 2 min.
+            { label: 'Shopee', href: '/admin/chat-shopee', icon: 'fas fa-bag-shopping', cor: 'laranja', permission: 'pedidos.view', badgeKey: 'shopeeChatNaoLidas' },
             { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
             // Perguntas MK Place (2026-10-20): perguntas dos anúncios; a Manuela
             // atende e o contador mostra as que esperam uma pessoa. alertaFixo:

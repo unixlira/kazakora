@@ -131,6 +131,8 @@ class HandleInertiaRequests extends Middleware
                     'perguntasMkplace' => rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->aguardandoHumano()->count(), 0, false),
                     // Criativos de anúncio esperando o Lira (Marketing › Validação de criativos).
                     'criativosAguardando' => rescue(fn () => \App\Modules\Admin\Models\CriativoValidacao::query()->where('status', \App\Modules\Admin\Models\CriativoValidacao::AGUARDANDO)->count(), 0, false),
+                    // Chat da Shopee (Atendimento > Shopee): conversas com mensagem não lida.
+                    'shopeeChatNaoLidas' => rescue(fn () => \App\Modules\Marketplace\Models\ShopeeChatConversa::query()->comNaoLidas()->count(), 0, false),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

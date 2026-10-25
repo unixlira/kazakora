@@ -95,6 +95,8 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
 
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
+// Chat da Shopee no admin (Atendimento > Shopee): não lidas e recentes a cada 2 min.
+Schedule::command('shopee:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
 // Rede de segurança do webhook (2026-10-11, produção na VPS): venda de hoje
 // da Shopee e do Mercado Livre a cada 2 min, como já é no TikTok. Se o aviso
 // do canal se perder (painel apontando pro lugar errado, canal fora do ar),

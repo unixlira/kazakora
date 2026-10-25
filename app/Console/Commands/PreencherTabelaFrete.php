@@ -47,7 +47,6 @@ class PreencherTabelaFrete extends Command
             }
         }
 
-        $this->line('Padrão por estado: '.$tabela->aplicarPadroes().' linhas copiadas da cidade de referência');
         $this->info("Pronto: {$total} CEPs cotados.");
 
         return self::SUCCESS;

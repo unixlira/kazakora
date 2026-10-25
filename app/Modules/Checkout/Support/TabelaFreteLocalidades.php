@@ -37,12 +37,6 @@ use Throwable;
  * 3. Consulta: CEP do cliente → localidade (CEP exato do distrito ou faixa
  *    do município) → linha da categoria do produto.
  *
- * 4. Padrão por estado (frete_embutido.padrao_por_uf, 25/10): na UF com
- *    cidade de referência (ES: Afonso Cláudio), só a referência vai para os
- *    Correios e as outras localidades recebem cópia dela (aplicarPadroes),
- *    depois de cada cotação e de cada importação. Assim a cotação mensal e
- *    as recotações em lote não desfazem o padrão.
- *
  * Quem roda: PreencherTabelaFreteJob (fila default), comando
  * frete:tabela-localidades e o agendamento mensal.
  */
@@ -172,7 +166,6 @@ class TabelaFreteLocalidades
             }
         });
 
-        $this->aplicarPadroes([$uf]);
         $this->novaVersao();
 
         return count($linhas);
@@ -233,14 +226,8 @@ class TabelaFreteLocalidades
             ->whereColumn('t.categoria_versao', 'c.versao')
             ->selectRaw('count(*)');
 
-        // UF com padrão: só a referência vai para os Correios.
-        $copias = collect($this->referencias())->map(fn ($ref, $uf) => DB::table('frete_localidades')
-            ->where('uf', $uf)->where('cep_cotacao', '!=', $ref)->whereNotNull('cep_cotacao')->pluck('cep_cotacao'))
-            ->flatten()->unique()->values()->all();
-
         return DB::table('frete_localidades')
             ->whereNotNull('cep_cotacao')
-            ->when($copias !== [], fn ($q) => $q->whereNotIn('cep_cotacao', $copias))
             ->whereRaw('('.$emDia->toSql().') < ?', [...$emDia->getBindings(), $categorias])
             ->distinct()
             ->orderBy('cep_cotacao')
@@ -405,122 +392,9 @@ class TabelaFreteLocalidades
             throw new RuntimeException('A API de Preço/Prazo dos Correios não respondeu.');
         }
 
-        // Lote com CEP de UF com padrão: a cópia volta a valer por cima.
-        $ufs = DB::table('frete_localidades')->whereIn('cep_cotacao', $ceps)
-            ->whereIn('uf', array_keys($this->referencias()))->distinct()->pluck('uf')->all();
-        $this->aplicarPadroes($ufs);
         $this->novaVersao();
 
         return $gravados;
-    }
-
-    // ------------------------------------------------------------------
-    // 4. Padrão por estado
-    // ------------------------------------------------------------------
-
-    /**
-     * CEP de cotação da cidade de referência de cada UF com padrão
-     * (frete_embutido.padrao_por_uf). UF cuja referência ainda não foi
-     * importada fica de fora: segue a cotação normal.
-     *
-     * @return array<string, string> UF => CEP de cotação da referência
-     */
-    public function referencias(): array
-    {
-        $saida = [];
-        foreach ((array) config('frete_embutido.padrao_por_uf', []) as $uf => $ibge) {
-            $cep = DB::table('frete_localidades')
-                ->where('uf', strtoupper((string) $uf))
-                ->where('tipo', 'M')
-                ->where('municipio_id', (int) $ibge)
-                ->value('cep_cotacao');
-            if ($cep) {
-                $saida[strtoupper((string) $uf)] = $cep;
-            }
-        }
-
-        return $saida;
-    }
-
-    /**
-     * Copia o PAC e o SEDEX (valor, prazo, erro, data da cotação e versão da
-     * caixa) da referência para todos os CEPs de cotação da UF. Referência
-     * ainda sem cotação não copia nada (as localidades ficam como estão).
-     *
-     * @param  list<string>|null  $ufs  null = todas as UFs com padrão
-     * @return int quantas linhas de frete_tabela foram gravadas
-     */
-    public function aplicarPadroes(?array $ufs = null): int
-    {
-        $origem = $this->origem();
-        $referencias = $this->referencias();
-        if (! $origem || $referencias === []) {
-            return 0;
-        }
-
-        $gravadas = 0;
-        foreach ($referencias as $uf => $cepReferencia) {
-            if ($ufs !== null && ! in_array($uf, array_map('strtoupper', $ufs), true)) {
-                continue;
-            }
-
-            $modelo = DB::table('frete_tabela')
-                ->where('cep_destino', $cepReferencia)
-                ->where('cep_origem', $origem)
-                ->get();
-            if ($modelo->isEmpty()) {
-                continue;
-            }
-
-            $ceps = DB::table('frete_localidades')
-                ->where('uf', $uf)
-                ->whereNotNull('cep_cotacao')
-                ->where('cep_cotacao', '!=', $cepReferencia)
-                ->distinct()
-                ->pluck('cep_cotacao');
-
-            $agora = now();
-            $linhas = [];
-            foreach ($ceps as $cep) {
-                foreach ($modelo as $m) {
-                    $linhas[] = [
-                        'cep_destino' => $cep,
-                        'categoria' => $m->categoria,
-                        'categoria_versao' => $m->categoria_versao,
-                        'cep_origem' => $m->cep_origem,
-                        'pac_preco' => $m->pac_preco,
-                        'pac_prazo' => $m->pac_prazo,
-                        'sedex_preco' => $m->sedex_preco,
-                        'sedex_prazo' => $m->sedex_prazo,
-                        'erro' => $m->erro,
-                        'cotado_em' => $m->cotado_em,
-                        'created_at' => $agora,
-                        'updated_at' => $agora,
-                    ];
-                }
-            }
-
-            DB::transaction(function () use ($uf, $cepReferencia, $modelo, $linhas) {
-                // Categoria que a referência não tem não fica sobrando nas cópias.
-                DB::table('frete_tabela')
-                    ->whereIn('cep_destino', DB::table('frete_localidades')->where('uf', $uf)->where('cep_cotacao', '!=', $cepReferencia)->whereNotNull('cep_cotacao')->select('cep_cotacao'))
-                    ->whereNotIn('categoria', $modelo->pluck('categoria'))
-                    ->delete();
-
-                foreach (array_chunk($linhas, 500) as $lote) {
-                    DB::table('frete_tabela')->upsert($lote, ['cep_destino', 'categoria'], [
-                        'categoria_versao', 'cep_origem', 'pac_preco', 'pac_prazo', 'sedex_preco', 'sedex_prazo', 'erro', 'cotado_em', 'updated_at',
-                    ]);
-                }
-            });
-            $gravadas += count($linhas);
-        }
-
-        if ($gravadas > 0) {
-            $this->novaVersao();
-        }
-
-        return $gravadas;
     }
 
     /** Motivo de a caixa não ir para os Correios (null = dentro do limite). */

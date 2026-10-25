@@ -176,7 +176,42 @@ class FreteEmbutido
     /** Valor somado ao preço do produto (0 com o serviço desligado). */
     public function acrescimo(Product $product): float
     {
-        return $this->ligado ? $this->paraProduto($product)['embutido'] : 0.0;
+        if (! $this->ligado) {
+            return 0.0;
+        }
+
+        return $this->precoFixo()
+            ? $this->noDestinoFixo(fn () => $this->paraProduto($product)['embutido'])
+            : $this->paraProduto($product)['embutido'];
+    }
+
+    /** KazaKora com preço fixo (frete_embutido.cep_fixo): o preço não muda com o CEP/IP do cliente. */
+    public function precoFixo(): bool
+    {
+        return $this->site() === SiteAtual::KAZAKORA && strlen(self::digitos(config('frete_embutido.cep_fixo'))) === 8;
+    }
+
+    /**
+     * Roda $callback com o destino trocado pelo CEP de referência e volta ao
+     * do cliente. Origem "fixo": sem trava e sem regra de cidade do visitante.
+     *
+     * @template T
+     *
+     * @param  \Closure(): T  $callback
+     * @return T
+     */
+    private function noDestinoFixo(\Closure $callback): mixed
+    {
+        [$destino, $regras] = [$this->destino, $this->regras];
+        $cep = self::digitos(config('frete_embutido.cep_fixo'));
+        $this->destino = ['cep' => $cep, 'uf' => CepUf::porCep($cep), 'origem' => 'fixo'];
+        $this->regras = null;
+
+        try {
+            return $callback();
+        } finally {
+            [$this->destino, $this->regras] = [$destino, $regras];
+        }
     }
 
     /**
@@ -370,6 +405,20 @@ class FreteEmbutido
      * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int}
      */
     public function entregaDoCarrinho(Collection $itens): array
+    {
+        $entrega = $this->entregaNoDestino($itens);
+
+        // Preço fixo: o desconto da caixa única também sai do CEP de
+        // referência, senão o total mudaria com o CEP digitado no checkout.
+        if ($this->ligado && $this->precoFixo()) {
+            $entrega['desconto_plataforma'] = $this->noDestinoFixo(fn () => $this->entregaNoDestino($itens)['desconto_plataforma']);
+        }
+
+        return $entrega;
+    }
+
+    /** Entrega do carrinho (entregaDoCarrinho) para o destino atual, sem a regra do preço fixo. */
+    private function entregaNoDestino(Collection $itens): array
     {
         $embutido = 0.0;
         $extraItemAItem = 0.0;

@@ -23,17 +23,23 @@ return [
     | Turbo de motoboy na página do produto (pedido 2026-10-24): CEP nas
     | faixas abaixo e compra em horário comercial (seg a sex no horário de
     | "semana", sábado até o fim do "sabado") = "Receba em até 3 horas" pelo
-    | preço fixo. Sábado depois do fim e domingo, a página mostra também o
-    | Flex "Receba de 1 a 7 dias" abaixo do Full.
+    | preço fixo, junto com o Full e sem o Flex. Fora da área ou do horário:
+    | Flex "Receba de 1 a 7 dias" e Turbo dos Correios (SEDEX pelo excedente).
+    |
+    | "faixas_extra": CEPs da Grande SP com motoboy mas fora do Full (Mauá,
+    | pedido 2026-10-24). Lá o Flex continua como opção grátis.
     */
     'motoboy' => [
         'preco' => (float) env('ENTREGA_MOTOBOY_PRECO', 39.00),
         'mensagem' => 'Receba em até 3 horas',
         'semana' => ['08:00', '18:00'],
         'sabado' => ['08:00', '13:00'],
-        // TEMPORÁRIO (Lira, 2026-10-24): teste no fim de semana, o Turbo do motoboy
-        // aparece a qualquer hora. Para voltar ao horário comercial: false.
-        'ignorar_horario' => (bool) env('ENTREGA_MOTOBOY_IGNORAR_HORARIO', true),
+        // Teste do fim de semana (2026-10-24) encerrado no mesmo dia: true volta a
+        // mostrar o motoboy a qualquer hora.
+        'ignorar_horario' => (bool) env('ENTREGA_MOTOBOY_IGNORAR_HORARIO', false),
+        'faixas_extra' => [
+            ['inicio' => '09300000', 'fim' => '09399999', 'local' => 'Mauá'],
+        ],
     ],
 
     'faixas' => [

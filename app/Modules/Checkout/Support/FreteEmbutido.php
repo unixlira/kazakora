@@ -221,6 +221,28 @@ class FreteEmbutido
      */
     public function paraProduto(Product $product): array
     {
+        $frete = $this->freteDoProduto($product);
+
+        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $frete;
+    }
+
+    /**
+     * Produto com preço fixo na tela do KazaKora (frete_embutido.produtos_sem_frete,
+     * pedido 2026-10-25): nada somado ao preço; a loja paga o frete da caixa.
+     */
+    public function semFreteEmbutido(Product $product): bool
+    {
+        $ids = array_map('intval', (array) config('frete_embutido.produtos_sem_frete', []));
+        if ($ids === [] || $this->site() !== SiteAtual::KAZAKORA) {
+            return false;
+        }
+
+        return in_array((int) $product->id, $ids, true)
+            || ($product->parent_product_id && in_array((int) $product->parent_product_id, $ids, true));
+    }
+
+    private function freteDoProduto(Product $product): array
+    {
         $peso = $this->pesoTarifavel($product);
         $categoria = $this->categoria($product);
 

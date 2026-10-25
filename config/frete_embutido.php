@@ -61,4 +61,10 @@ return [
     // CEP escolhido pelo cliente (cookie necessário: serve ao cálculo do
     // frete que ele pediu; ver docs/privacidade-e-cookies.md).
     'cookie' => 'kazakora_cep',
+
+    // Produtos com preço fixo na tela (pedido do Lira em 2026-10-25): o card,
+    // a página, o carrinho e o checkout mostram o preço do cadastro, sem frete
+    // somado, para qualquer CEP. A loja paga o frete da caixa. 262 =
+    // parafusadeira leve 18V (riscado 179,34, venda 143,47).
+    'produtos_sem_frete' => [262],
 ];

@@ -240,6 +240,9 @@ Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGr
 // sem o que ela digitou. Fora do CSRF (sendBeacon); ver CheckoutEventosController.
 Route::post('/finalizacao/eventos', [\App\Modules\Analytics\Http\Controllers\CheckoutEventosController::class, 'store'])->middleware('throttle:60,1')->name('finalizacao.eventos');
 
+// Clique nos selos de segurança do rodapé (2026-10-25), soma na visita; ver SeloCliqueController.
+Route::post('/selos/clique', [\App\Modules\Analytics\Http\Controllers\SeloCliqueController::class, 'store'])->middleware('throttle:30,1')->name('selos.clique');
+
 // Checkout no subdomínio seguro (pedido 2026-10-23): https://seguro.<loja>/pagamento
 // é a mesma tela de /finalizacao (RedirecionarCheckoutSeguro, App\Support\CheckoutSeguro).
 Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamento.seguro');

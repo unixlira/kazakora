@@ -258,6 +258,12 @@ class SiteVisitLogController extends Controller
             // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
             'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),
             'cookies' => $cookies,
+            // Cliques nos selos do rodapé, somados nas visitas do período (2026-10-25).
+            'selos' => [
+                'google' => (int) (clone $query)->sum('cliques_selo_google'),
+                'reclame_aqui' => (int) (clone $query)->sum('cliques_selo_reclame_aqui'),
+                'norton' => (int) (clone $query)->sum('cliques_selo_norton'),
+            ],
             'localizacao' => LocalizacaoDaVisita::resumo($query, $validated['ip'] ?? null, $local),
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],

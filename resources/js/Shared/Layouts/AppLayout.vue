@@ -9,6 +9,7 @@ import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import ModalAvaliacao from '@/Shared/Components/ModalAvaliacao.vue';
+import { cliqueSelo } from '@/Shared/cliqueSelo';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 
@@ -569,7 +570,7 @@ const REDES = [
                     <div class="lg:text-right">
                         <h2 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h2>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
-                            <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
+                            <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener" @click="cliqueSelo('google')"
                                 class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a verificação do Google Safe Browsing">
                                 <img :src="imagensLiberadas ? '/images/selos/selo-google-safe.webp' : undefined" :alt="imagensLiberadas ? 'Google Safe Browsing' : ''" width="139" height="45" loading="lazy" decoding="async"
@@ -578,12 +579,13 @@ const REDES = [
                             <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma
                                  escala do Google: caixa branca da mesma altura e o selo com a altura
                                  do logo do Google dentro dela (pedido 2026-10-14). -->
-                            <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]">
+                            <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                @click.capture="$event.target.closest('a') && cliqueSelo('reclame_aqui')">
                                 <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
                             </div>
                             <!-- Norton Safe Web (2026-10-23): classificação "Seguro" para kazakora.com.
                                  SVG vetorial de 5 KB, mesma caixa branca e altura dos outros selos. -->
-                            <a href="https://safeweb.norton.com/report?url=kazakora.com" target="_blank" rel="noopener"
+                            <a href="https://safeweb.norton.com/report?url=kazakora.com" target="_blank" rel="noopener" @click="cliqueSelo('norton')"
                                 class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a classificação do Norton Safe Web">
                                 <img :src="imagensLiberadas ? '/images/selos/selo-norton.svg' : undefined" :alt="imagensLiberadas ? 'Norton Safe Web' : ''" width="104" height="40" loading="lazy" decoding="async"

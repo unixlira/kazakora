@@ -8,11 +8,20 @@
 // Card mais baixo (2026-10-24): foto de 40px, nome e estrelas na mesma linha,
 // texto em até 3 linhas e menos respiro; UF real do cliente ao lado do nome
 // (só quando a avaliação veio de um pedido nosso, ver reviews.uf).
-import { onMounted, onUnmounted, ref } from 'vue';
+// Loop contínuo (2026-10-25): uma cópia da 1ª avaliação fica depois da última.
+// Da última o trilho anda para a cópia, como mais um passo para a frente, e ao
+// chegar nela pula sem animação para a 1ª de verdade (iguais, ninguém vê). Antes
+// voltava rolando por todas ("rebobinando"), o que o Lira achou feio.
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     avaliacoes: { type: Array, default: () => [] },
 });
+
+// Com 2 ou mais, a cópia da 1ª vai no fim.
+const cartoes = computed(() => (props.avaliacoes.length > 1
+    ? [...props.avaliacoes.map((avaliacao) => ({ avaliacao, copia: false })), { avaliacao: props.avaliacoes[0], copia: true }]
+    : props.avaliacoes.map((avaliacao) => ({ avaliacao, copia: false }))));
 
 const trilho = ref(null);
 const atual = ref(0);
@@ -27,12 +36,18 @@ const largura = () => trilho.value?.clientWidth || 1;
 const irPara = (indice) => {
     const total = props.avaliacoes.length;
     if (!trilho.value || !total) return;
-    const alvo = (indice + total) % total;
+    // Até `total`, que é a cópia da 1ª; aoRolar faz o pulo de volta.
+    const alvo = Math.max(0, Math.min(total, indice));
     trilho.value.scrollTo({ left: alvo * largura(), behavior: 'smooth' });
 };
 const aoRolar = () => {
     if (!trilho.value) return;
-    atual.value = Math.min(props.avaliacoes.length - 1, Math.round(trilho.value.scrollLeft / largura()));
+    const total = props.avaliacoes.length;
+    // Chegou na cópia (pelo automático ou pelo dedo): mesma posição na 1ª, sem animação.
+    if (total > 1 && !pressionado && trilho.value.scrollLeft >= total * largura() - 2) {
+        trilho.value.scrollTo({ left: trilho.value.scrollLeft - total * largura(), behavior: 'instant' });
+    }
+    atual.value = Math.round(trilho.value.scrollLeft / largura()) % Math.max(1, total);
 };
 
 const parar = () => { clearInterval(timer); timer = null; };
@@ -65,7 +80,7 @@ const aoSoltar = () => {
     pressionado = false;
     if (!moveu) return;
     const passou = trilho.value.scrollLeft - scrollInicial;
-    const total = props.avaliacoes.length;
+    const total = props.avaliacoes.length > 1 ? props.avaliacoes.length : 0;
     // Arrasto de mais de 1/6 da largura vira o cartão do lado; senão volta ao atual.
     const indice = Math.round(scrollInicial / largura()) + (Math.abs(passou) > largura() / 6 ? Math.sign(passou) : 0);
     arrastando.value = false;
@@ -86,8 +101,8 @@ onUnmounted(parar);
         <div ref="trilho" class="flex select-none overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             :class="arrastando ? 'cursor-grabbing' : 'cursor-grab snap-x snap-mandatory'"
             @scroll.passive="aoRolar" @pointerdown="aoPressionar" @pointermove="aoMover" @pointerup="aoSoltar" @pointercancel="aoSoltar" @click.capture="aoClicar" @dragstart.prevent>
-            <article v-for="(avaliacao, indice) in avaliacoes" :key="avaliacao.id" class="flex w-full shrink-0 snap-start gap-3"
-                :aria-label="`Avaliação ${indice + 1} de ${avaliacoes.length}`">
+            <article v-for="({ avaliacao, copia }, indice) in cartoes" :key="copia ? 'copia' : avaliacao.id" class="flex w-full shrink-0 snap-start gap-3"
+                :aria-hidden="copia ? 'true' : undefined" :aria-label="copia ? undefined : `Avaliação ${indice + 1} de ${avaliacoes.length}`">
                 <img :src="avaliacao.avatar" alt="" width="40" height="40" loading="lazy" decoding="async" draggable="false" class="h-10 w-10 shrink-0 rounded-full bg-slate-100 object-cover">
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-x-2">

@@ -522,14 +522,16 @@ const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
 // Opções de frete da página do produto (pedido do Lira 2026-10-24), em caixas de rádio:
-// - Fora do Full: Flex "Receba de 1 a 7 dias" (texto fixo) e Turbo juntos.
-// - No Full, sábado depois das 13h e domingo: o Flex aparece também, abaixo do Full.
-// - Turbo dos Correios: "Receba em X dias por + R$ Y", com o prazo do SEDEX e só a
+// - Grande SP em horário comercial (servidor manda `motoboy`: seg a sex 8h-18h, sáb
+//   8h-13h): Full e Turbo do motoboy "Receba em até 3 horas" pelo preço fixo, SEM o Flex.
+// - Fora da área ou do horário do motoboy: Flex "Receba de 1 a 7 dias" (texto fixo) e
+//   Turbo dos Correios "Receba em X dias por + R$ Y", com o prazo do SEDEX e só a
 //   diferença SEDEX − PAC (turbo.preco já é só o que passa do grátis; pedido do Lira
-//   2026-10-24, CEP do Maranhão); na área do Full em horário comercial (servidor manda
-//   `motoboy`), "Receba em até 3 horas" pelo preço fixo do motoboy.
+//   2026-10-24, CEP do Maranhão).
+// - CEP com motoboy fora do Full (Mauá): Flex no lugar do Full, para sempre haver o grátis.
 // Nasce no grátis; a finalização continua nascendo no grátis (pedido 2026-10-12).
-const mostrarFlex = computed(() => Boolean(prazo.value) && (!prazo.value.expressa || prazo.value.fimDeSemana));
+const mostrarFull = computed(() => Boolean(prazo.value?.expressa && prazo.value.motoboy));
+const mostrarFlex = computed(() => Boolean(prazo.value) && !mostrarFull.value);
 const prazoTurbo = (dias) => (dias ? `Receba em ${dias} ${dias === 1 ? 'dia' : 'dias'}` : 'Receba mais rápido');
 const opcaoTurbo = computed(() => {
     if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco, excedente: false };
@@ -537,7 +539,7 @@ const opcaoTurbo = computed(() => {
     return null;
 });
 const escolhaFrete = ref('flex');
-const freteGratisPadrao = () => (prazo.value?.expressa ? 'full' : 'flex');
+const freteGratisPadrao = () => (mostrarFull.value ? 'full' : 'flex');
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
@@ -605,7 +607,7 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null, fimDeSemana: Boolean(data.fim_de_semana) };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null };
         escolhaFrete.value = freteGratisPadrao();
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
@@ -935,7 +937,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <!-- Opções em caixas de rádio, uma por linha, centralizadas (pedido do Lira 2026-10-24):
                                          Full e Flex em verde, Turbo em laranja da logo; marcar uma desmarca as outras. -->
-                                    <label v-if="prazo.expressa" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
+                                    <label v-if="mostrarFull" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
                                         <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>

@@ -124,6 +124,24 @@ class EntregaExpressaTest extends TestCase
         $this->assertNull($servico->motoboy('20040-020', $dia('2026-10-11 10:00')));
     }
 
+    /** Mauá (pedido 2026-10-24): motoboy em horário comercial, mas fora do Full e da etiqueta da J3. */
+    public function test_maua_tem_motoboy_sem_entrar_no_full(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        $this->assertNotNull($servico->motoboy('09310-000', $dia('2026-10-08 10:00')));
+        $this->assertNull($servico->motoboy('09310-000', $dia('2026-10-10 21:30')));
+        $this->assertNull($servico->consultar('09310-000', $dia('2026-10-08 10:00')));
+        $this->assertFalse($servico->atende('09310-000'));
+    }
+
+    public function test_horario_comercial_vale_sem_configurar(): void
+    {
+        $this->assertNull(app(EntregaExpressa::class)->motoboy('01001-000', Carbon::parse('2026-10-10 21:30', 'America/Sao_Paulo')));
+    }
+
     public function test_fim_de_semana_e_sabado_depois_das_13h_ou_domingo(): void
     {
         $servico = app(EntregaExpressa::class);

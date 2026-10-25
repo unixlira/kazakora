@@ -64,14 +64,15 @@ class EntregaExpressa
     }
 
     /**
-     * Turbo de motoboy (pedido 2026-10-24): CEP na área e compra em horário
-     * comercial (seg a sex e sábado até 13h, horários em config).
+     * Turbo de motoboy (pedido 2026-10-24): CEP na área (faixas do Full mais
+     * motoboy.faixas_extra, ex.: Mauá) e compra em horário comercial (seg a
+     * sex e sábado até 13h, horários em config).
      *
      * @return array{preco: float, mensagem: string}|null
      */
     public function motoboy(?string $cep, ?CarbonInterface $agora = null): ?array
     {
-        if (! $this->faixa($cep)) {
+        if (! $this->faixa($cep) && ! $this->faixa($cep, config('entrega_expressa.motoboy.faixas_extra', []))) {
             return null;
         }
 
@@ -135,7 +136,7 @@ class EntregaExpressa
     /**
      * @return array{inicio: string, fim: string, local: string}|null
      */
-    private function faixa(?string $cep): ?array
+    private function faixa(?string $cep, ?array $faixas = null): ?array
     {
         if (! config('entrega_expressa.ativa', true)) {
             return null;
@@ -149,7 +150,7 @@ class EntregaExpressa
 
         $numero = (int) $digitos;
 
-        foreach (config('entrega_expressa.faixas', []) as $faixa) {
+        foreach ($faixas ?? config('entrega_expressa.faixas', []) as $faixa) {
             if ($numero >= (int) $faixa['inicio'] && $numero <= (int) $faixa['fim']) {
                 return $faixa;
             }

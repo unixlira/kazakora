@@ -115,8 +115,10 @@ class CheckoutBeautyKoraTest extends TestCase
     public function test_resumo_traz_avaliacoes_do_carrossel_com_avatar_e_sem_o_nome_da_kazakora(): void
     {
         $cliente = User::factory()->create(['name' => 'Carla Souza']);
-        Review::create(['user_id' => $cliente->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Chegou rápido e funciona muito bem.']);
-        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $this->produto->id, 'rating' => 4, 'comment' => 'Gostei bastante, recomendo a todos.', 'ocultar_nome' => true]);
+        // Carrossel só com nota 5 e elogio claro (#1185): a mais recente vem primeiro.
+        Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Gostei bastante, recomendo a todos.', 'ocultar_nome' => true]);
+        $this->travel(1)->minutes();
+        Review::create(['user_id' => $cliente->id, 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Chegou rápido e funciona muito bem, recomendo.']);
 
         $resposta = $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertOk()
@@ -140,7 +142,7 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'avaliacoes');
 
-        Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'RJ', 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Pele macia já no primeiro uso.']);
+        Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'RJ', 'product_id' => $this->produto->id, 'rating' => 5, 'comment' => 'Pele macia já no primeiro uso, adorei.']);
 
         $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
             ->assertJsonCount(1, 'avaliacoes')

@@ -2074,7 +2074,8 @@ class CheckoutController extends Controller
      * ela, o BEMVINDO de loja.cupom_automatico, pedido do Lira 2026-10-24:
      * o cupom deixou de entrar sozinho e passou a ser oferecido aqui). Null
      * (sem pop-up) quando não há código, o cupom não existe, não vale para
-     * este carrinho ou o cliente logado já comprou. Nunca cria cupom.
+     * este carrinho ou o cliente já usou (BEMVINDO, pelo CPF) ou já comprou
+     * (cupom próprio de primeira compra). Nunca cria cupom.
      *
      * @return array{code: string, descricao: string}|null
      */
@@ -2083,10 +2084,13 @@ class CheckoutController extends Controller
         $codigo = (string) config('loja.cupom_primeira_compra') ?: CupomAutomatico::codigo();
         $coupon = $codigo !== '' ? Coupon::buscar($codigo) : null;
 
-        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email)) {
+        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email, $user?->cpf)) {
             return null;
         }
-        if ($user && $user->orders()->whereIn('status', Coupon::STATUS_USO)->exists()) {
+        // BEMVINDO vale para todo cliente que ainda não usou (2026-10-25):
+        // quem já usou cai no motivoInvalido pelo CPF. Cupom próprio de
+        // primeira compra continua só para quem nunca comprou.
+        if ($user && ! CupomAutomatico::eh($coupon->code) && $user->orders()->whereIn('status', Coupon::STATUS_USO)->exists()) {
             return null;
         }
 

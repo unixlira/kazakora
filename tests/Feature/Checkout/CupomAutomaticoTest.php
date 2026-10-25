@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Checkout;
 
+use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Coupon;
+use App\Modules\Checkout\Models\CupomUso;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
@@ -66,7 +70,71 @@ class CupomAutomaticoTest extends TestCase
         $this->assertSame(Coupon::TYPE_PERCENTAGE, $cupom->discount_type);
         $this->assertEquals(3, (float) $cupom->discount_value);
         $this->assertNull($cupom->max_uses);
-        $this->assertFalse($cupom->one_per_customer);
+        // Uso único por CPF/CNPJ desde 2026-10-25 (migração cupom_usos).
+        $this->assertTrue($cupom->one_per_customer);
+    }
+
+    private function pedido(array $extra = []): Order
+    {
+        return Order::create(array_merge([
+            'status' => Order::STATUS_AWAITING_PAYMENT, 'origin' => Order::ORIGIN_STORE, 'coupon_code' => 'BEMVINDO',
+            'shipping_name' => 'X', 'shipping_phone' => '11999990000', 'shipping_zip' => '01000000', 'shipping_street' => 'Rua',
+            'shipping_number' => '1', 'shipping_neighborhood' => 'Centro', 'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
+            'subtotal' => 100, 'shipping_cost' => 0, 'total' => 97,
+        ], $extra));
+    }
+
+    public function test_bemvindo_so_fica_usado_quando_o_pagamento_confirma(): void
+    {
+        Bus::fake();
+        $cupom = Coupon::buscar('BEMVINDO');
+        $ana = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'ana@exemplo.com', 'cpf' => '123.456.789-09']);
+        $order = $this->pedido(['user_id' => $ana->id]);
+        $order->payments()->create(['mercadopago_payment_id' => '123', 'provider' => Payment::PROVIDER_MERCADOPAGO, 'method_type' => Payment::METHOD_PIX, 'amount' => 97, 'status' => Payment::STATUS_REQUIRES_CONFIRMATION]);
+
+        // Pedido aberto (Pix ainda não pago) não tira o cupom de ninguém.
+        $this->assertNull($cupom->motivoInvalido(100, $ana));
+        $this->assertSame(0, CupomUso::count());
+
+        $order->payments()->update(['status' => Payment::STATUS_CAPTURED]);
+        $this->assertTrue(app(OrderPaymentFinalizer::class)->finalize($order->fresh()));
+
+        $uso = CupomUso::sole();
+        $this->assertSame([$cupom->id, '12345678909', $order->id], [$uso->coupon_id, $uso->documento, $uso->order_id]);
+        // Mesmo CPF com outra conta e outro e-mail: barrado.
+        $this->assertSame(Coupon::MSG_JA_USOU, $cupom->motivoInvalido(100, null, 'nova@exemplo.com', '12345678909'));
+        $this->assertNull($cupom->motivoInvalido(100, null, 'nova@exemplo.com', '98765432100'));
+
+        // Webhook repetido não duplica.
+        app(OrderPaymentFinalizer::class)->finalize($order->fresh());
+        $this->assertSame(1, CupomUso::count());
+    }
+
+    public function test_bemvindo_registra_cnpj_do_comprador(): void
+    {
+        Bus::fake();
+        $order = $this->pedido(['buyer_document' => '12.345.678/0001-95']);
+        $order->payments()->create(['mercadopago_payment_id' => '124', 'provider' => Payment::PROVIDER_MERCADOPAGO, 'method_type' => Payment::METHOD_PIX, 'amount' => 97, 'status' => Payment::STATUS_CAPTURED]);
+
+        app(OrderPaymentFinalizer::class)->finalize($order->fresh());
+
+        $this->assertSame('12345678000195', CupomUso::sole()->documento);
+        $this->assertSame(Coupon::MSG_JA_USOU, Coupon::buscar('BEMVINDO')->motivoInvalido(100, null, null, '12345678000195'));
+    }
+
+    public function test_popup_do_bemvindo_vale_para_quem_ja_comprou_sem_ele(): void
+    {
+        $ana = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '12345678909']);
+        $this->pedido(['user_id' => $ana->id, 'status' => Order::STATUS_PAID, 'coupon_code' => null]);
+        $this->actingAs($ana);
+        $this->noCarrinho(200);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra.code', 'BEMVINDO'));
+
+        CupomUso::create(['coupon_id' => Coupon::buscar('BEMVINDO')->id, 'documento' => '12345678909']);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
+        $this->postJson('/finalizacao/cupom', ['code' => 'BEMVINDO'])->assertStatus(422)->assertJsonFragment(['message' => Coupon::MSG_JA_USOU]);
     }
 
     public function test_checkout_abre_sem_cupom_e_oferece_o_bemvindo_no_popup(): void

@@ -148,10 +148,10 @@ class FreteEmbutido
      */
     public function paraProduto(Product $product): array
     {
-        $tabela = $this->tabela($this->destino()['cep']);
+        $cep = $this->destino()['cep'];
         $peso = $this->pesoTarifavel($product);
 
-        $faixa = $this->faixa($tabela, $peso);
+        $faixa = $this->faixa($cep, $peso);
 
         if (! $faixa) {
             $pac = (float) config('frete_embutido.fallback_pac', 30);
@@ -212,7 +212,7 @@ class FreteEmbutido
         }
 
         // A caixa inteira (peso somado) na tabela do destino.
-        $caixa = $estimado ? null : $this->faixa($this->tabela($this->destino()['cep']), $peso);
+        $caixa = $estimado ? null : $this->faixa($this->destino()['cep'], $peso);
 
         if (! $caixa) {
             // Sem cotação (ou acima de 30 kg): fica o frete item a item, sem
@@ -270,12 +270,18 @@ class FreteEmbutido
         return $turbo && $turbo['preco'] <= (float) config('frete_embutido.turbo_max', 60) ? $turbo : null;
     }
 
-    /** Linha da tabela que comporta o peso (null = sem tabela ou acima da última faixa). */
-    private function faixa(?array $tabela, int $peso): ?array
+    /**
+     * Linha da tabela do CEP que comporta o peso (null = sem tabela ou acima
+     * da última faixa), já com a regra de frete por cidade/região do destino
+     * (FreteRegioes, pedido 2026-10-24; sem regra cadastrada, fica a cotação).
+     */
+    private function faixa(?string $cep, int $peso): ?array
     {
-        foreach ($tabela ?? [] as $limite => $linha) {
+        foreach ($this->tabela($cep) ?? [] as $limite => $linha) {
             if ($peso <= $limite) {
-                return $linha['pac'] !== null && $linha['sedex'] !== null ? $linha : null;
+                return $linha['pac'] !== null && $linha['sedex'] !== null
+                    ? app(FreteRegioes::class)->aplicar($linha, $cep, $peso)
+                    : null;
             }
         }
 

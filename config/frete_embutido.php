@@ -24,6 +24,12 @@ return [
     // a primeira faixa que comporta o peso dele.
     'faixas_g' => [300, 500, 1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000],
 
+    // Frete por cidade/região (pedido do Lira em 2026-10-24): regras nas
+    // tabelas frete_regioes/frete_regiao_locais mexem na cotação dos Correios
+    // do CEP (valor fixo, acréscimo, desconto ou teto). Sem regra cadastrada
+    // nada muda; false desliga todas de uma vez.
+    'regioes_ativo' => env('FRETE_REGIOES_ATIVO', true),
+
     // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
     'turbo_max' => 60.0,
 

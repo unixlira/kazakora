@@ -863,9 +863,9 @@ onUnmounted(() => medicao.parar());
 // ---------- Pop-up do cupom de boas-vindas (modelo Yampi, 2026-10-23) ----------
 // Desde 2026-10-24 oferece o BEMVINDO, que não entra mais sozinho: "Aplicar
 // cupom" põe o código no campo e aplica; fechar não aplica nada. Só com cupom
-// cadastrado e válido (o servidor manda null se não houver). Uma vez por
-// navegador (cookie).
-const COOKIE_CUPOM = 'kazakora_cupom_1a';
+// cadastrado e válido (o servidor manda null se não houver). Desde
+// 2026-10-25 aparece toda vez que o checkout abre sem cupom (antes era uma
+// vez por navegador, por cookie, e quem já tinha visto não via mais).
 const popupCupom = ref(false);
 const botaoAplicarPopup = ref(null);
 const fecharPopupCupom = () => { popupCupom.value = false; };
@@ -877,8 +877,6 @@ const aplicarCupomDoPopup = async () => {
 const fecharComEsc = (evento) => { if (evento.key === 'Escape') fecharPopupCupom(); };
 onMounted(() => {
     if (!props.cupomPrimeiraCompra || props.order || cupomAplicado.value) return;
-    if (document.cookie.split('; ').some((item) => item.startsWith(`${COOKIE_CUPOM}=`))) return;
-    document.cookie = `${COOKIE_CUPOM}=1; max-age=${60 * 60 * 24 * 365}; path=/; SameSite=Lax`;
     popupCupom.value = true;
     window.addEventListener('keydown', fecharComEsc);
     nextTick(() => botaoAplicarPopup.value?.focus());
@@ -1445,7 +1443,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
             </aside>
         </div>
 
-        <!-- Pop-up do cupom de boas-vindas (BEMVINDO): só com cupom cadastrado e válido, uma vez por navegador. -->
+        <!-- Pop-up do cupom de boas-vindas (BEMVINDO): só com cupom cadastrado e válido, toda vez que o checkout abre sem cupom. -->
         <div v-if="popupCupom && cupomPrimeiraCompra" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="fecharPopupCupom">
             <div role="dialog" aria-modal="true" aria-labelledby="popup-cupom-titulo" class="relative w-full max-w-[440px] rounded-2xl bg-white px-6 pb-8 pt-10 text-center shadow-2xl">
                 <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100" aria-label="Fechar" @click="fecharPopupCupom">

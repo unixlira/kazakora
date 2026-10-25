@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
@@ -333,6 +334,8 @@ class CatalogController extends Controller
             'quantityDiscounts',
             // Benefícios + descrição em blocos (pedido 2026-10-09).
             'adContent',
+            'fiscalData',
+            'parent.fiscalData',
         ]);
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
@@ -364,6 +367,8 @@ class CatalogController extends Controller
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
+        // Ficha técnica (pedido 2026-10-24): sem SKU, categoria e variação.
+        $product->setAttribute('ficha_tecnica', FichaTecnica::linhas($product));
         $product->setAttribute('reviews_avg_rating', $reviews->count() ? round((float) $reviews->avg('rating'), 4) : null);
 
         $user = $request->user();
@@ -416,13 +421,15 @@ class CatalogController extends Controller
             ->with([
                 'images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1),
                 'quantityDiscounts',
+                'fiscalData',
+                'parent.fiscalData',
             ])
             ->orderBy('id')
             ->get()
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix'));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix')->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation)));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto

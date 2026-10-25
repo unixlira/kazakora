@@ -500,14 +500,12 @@ const highlights = computed(() => {
     return [];
 });
 
-const specs = computed(() => {
-    const list = [];
-    if (props.product.brand) list.push(['Marca', props.product.brand]);
-    if (selecionada.value.model) list.push(['Modelo', selecionada.value.model]);
-    if (selecionada.value.color) list.push(['Cor', selecionada.value.color]);
-    if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
-    return list;
-});
+// Ficha técnica (pedido 2026-10-24): marca, modelo, cor, voltagem, dimensões e
+// peso vêm prontos do servidor (FichaTecnica) e seguem a variação escolhida. SKU, categoria e variação não aparecem.
+const specs = computed(() => [
+    ...(selecionada.value.ficha_tecnica ?? props.product.ficha_tecnica ?? []),
+    ['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`],
+]);
 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 

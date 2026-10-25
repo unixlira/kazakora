@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Services;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\FichaTecnica;
 use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -91,6 +92,23 @@ abstract class CatalogoOutroSite
         return round($frete + ($valor - $frete) * (1 + $acrescimo), 2);
     }
 
+    /**
+     * Ficha técnica (pedido 2026-10-24) no formato additional_info do site:
+     * marca, modelo, cor, voltagem, dimensões e peso, sem SKU, categoria e
+     * variação. Com variações, cor e voltagem ficam de fora: mudam por opção
+     * e já aparecem no seletor.
+     *
+     * @return array<int, array{title: string, description: string}>
+     */
+    private function fichaTecnica(Product $pai, bool $temOpcao): array
+    {
+        return collect(FichaTecnica::linhas($pai))
+            ->reject(fn (array $linha) => $temOpcao && in_array($linha[0], ['Cor', 'Voltagem'], true))
+            ->map(fn (array $linha) => ['title' => $linha[0], 'description' => $linha[1]])
+            ->values()
+            ->all();
+    }
+
     /** Campos próprios do site acrescentados no fim do produto devolvido. */
     protected function camposExtras(Model $registro, Product $pai): array
     {
@@ -169,7 +187,7 @@ abstract class CatalogoOutroSite
         return $this->modelo()::query()
             ->where('ativo', true)
             ->whereHas('product', fn ($query) => $query->where('is_active', true))
-            ->with(['product.images', 'product.children' => fn ($query) => $query->where('is_active', true)->orderBy('id')->with('images')])
+            ->with(['product.images', 'product.fiscalData', 'product.children' => fn ($query) => $query->where('is_active', true)->orderBy('id')->with('images')])
             ->orderBy('ordem')
             ->orderBy('id');
     }
@@ -263,7 +281,7 @@ abstract class CatalogoOutroSite
             ]] : [],
             'variants' => $variantes->all(),
             'product_collections' => [],
-            'additional_info' => [],
+            'additional_info' => $this->fichaTecnica($pai, $temOpcao),
             'custom_fields' => [],
             'related_products' => [],
             'type' => ['value' => 'physical'],

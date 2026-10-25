@@ -73,4 +73,34 @@ class PrazoCepFlexTest extends TestCase
         $this->getJson("/frete/prazo?cep=01310-100&produto={$product->id}")
             ->assertOk()->assertJsonPath('opcoes.0.tipo', 'full')->assertJsonPath('opcoes.1.tipo', 'turbo');
     }
+
+    public function test_fora_da_grande_sp_manda_o_prazo_do_pac_e_dentro_nao(): void
+    {
+        $product = Product::factory()->create(['is_active' => true]);
+        config(['entrega_expressa.faixas' => [], 'frete_embutido.folga_dias' => 2]);
+
+        // Maranhão: grátis pelo PAC com o prazo real do CEP (pedido do Lira 2026-10-24).
+        $this->correios([8]);
+        $this->getJson("/frete/prazo?cep=65010-000&produto={$product->id}")
+            ->assertOk()->assertJsonPath('pac.ate', 10)->assertJsonPath('pac.mensagem', 'Receba em até 10 dias úteis');
+
+        // Grande SP (Guarulhos) segue no Flex, sem PAC.
+        $this->correios([1]);
+        $this->getJson("/frete/prazo?cep=07010-000&produto={$product->id}")->assertOk()->assertJsonPath('pac', null);
+    }
+
+    public function test_motoboy_so_junto_do_full(): void
+    {
+        $product = Product::factory()->create(['is_active' => true]);
+        config([
+            'entrega_expressa.faixas' => [['inicio' => '01000000', 'fim' => '05999999', 'local' => 'São Paulo']],
+            'entrega_expressa.motoboy.faixas_extra' => [['inicio' => '09300000', 'fim' => '09399999', 'local' => 'Mauá']],
+            'entrega_expressa.motoboy.ignorar_horario' => true,
+        ]);
+        $this->correios([1]);
+
+        $this->getJson("/frete/prazo?cep=01310-100&produto={$product->id}")->assertOk()->assertJsonPath('motoboy.preco', 39);
+        // Mauá: Flex grátis sem o motoboy junto (pedido do Lira 2026-10-24).
+        $this->getJson("/frete/prazo?cep=09310-000&produto={$product->id}")->assertOk()->assertJsonPath('motoboy', null);
+    }
 }

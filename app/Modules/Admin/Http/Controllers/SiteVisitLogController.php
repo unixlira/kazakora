@@ -3,8 +3,12 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\IbgeEstado;
+use App\Models\IbgeMunicipio;
 use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\LocalDoIp;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Modules\Audit\Models\AuditLog;
 use App\Support\Privacidade\Cookies;
@@ -40,6 +44,12 @@ use Inertia\Response;
  * no período (primeira visita que não é navegação interna, regra em
  * OrigemVisita); o olho mostra cada entrada com o site de onde veio, UTM e
  * identificador de clique. Visita antiga sem Referer nem UTM = "Sem dado".
+ *
+ * Cidades do estado (pedido 2026-10-24): no histórico, a coluna Ações de
+ * cada visita abre as cidades do estado daquele IP (cidades(), paginado).
+ * O estado vem da base DB-IP no servidor (LocalDoIp), a lista do IBGE
+ * (ibge_municipios). O histórico mostra CPF sim/não do cliente logado no
+ * lugar de página, aparelho, origem e navegador.
  */
 class SiteVisitLogController extends Controller
 {
@@ -50,6 +60,9 @@ class SiteVisitLogController extends Controller
 
     /** Linhas por página no histórico de um visitante (robô passa de mil páginas num dia). */
     private const POR_PAGINA_HISTORICO = 100;
+
+    /** Cidades por página na lista do estado do IP. */
+    private const POR_PAGINA_CIDADES = 50;
 
     /** Visitas de fora (não internas) lidas para o "De onde veio" do olho. */
     private const MAX_ENTRADAS = 500;
@@ -167,9 +180,10 @@ class SiteVisitLogController extends Controller
      * entra: aqui é o caminho inteiro da pessoa.
      *
      * Paginado (POR_PAGINA_HISTORICO, parâmetro page); "De onde veio",
-     * "sem dado" e cookies olham o período inteiro, não só a página.
+     * "sem dado", cookies e localização olham o período inteiro, não só a
+     * página.
      */
-    public function visitante(Request $request): JsonResponse
+    public function visitante(Request $request, LocalDoIp $local): JsonResponse
     {
         $validated = $this->validarVisitante($request, [
             'todos' => ['nullable', 'boolean'],
@@ -194,7 +208,7 @@ class SiteVisitLogController extends Controller
         $site = rtrim((string) config('app.url'), '/');
 
         $visitas = (clone $query)
-            ->with('user:id,name')
+            ->with('user:id,name,cpf')
             ->orderBy('created_at')
             ->orderBy('id')
             ->forPage($paginaAtual, self::POR_PAGINA_HISTORICO)
@@ -205,6 +219,7 @@ class SiteVisitLogController extends Controller
                 'path' => $v->path,
                 'url' => $site.$v->path,
                 'cliente' => $v->user?->name,
+                'cpf' => filled($v->user?->cpf),
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),
                 'dispositivo' => $v->dispositivo,
                 'origem' => $this->origemDaVisita($v),
@@ -243,6 +258,7 @@ class SiteVisitLogController extends Controller
             // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
             'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),
             'cookies' => $cookies,
+            'localizacao' => LocalizacaoDaVisita::resumo($query, $validated['ip'] ?? null, $local),
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],
             'de' => $de->format('d/m/Y'),
@@ -252,6 +268,74 @@ class SiteVisitLogController extends Controller
             'paginas' => $paginas,
             'por_pagina' => self::POR_PAGINA_HISTORICO,
             'visitas' => $visitas,
+        ]);
+    }
+
+    /**
+     * Cidades do estado do IP (olho da coluna Ações do histórico), em
+     * ordem alfabética e paginadas; a cidade que a base aponta para o IP
+     * vem marcada. IP de fora do Brasil, sem registro ou sem a base: lista
+     * vazia com o motivo.
+     */
+    public function cidades(Request $request, LocalDoIp $local): JsonResponse
+    {
+        $validated = $request->validate([
+            'ip' => ['required', 'ip'],
+            'busca' => ['nullable', 'string', 'max:80'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $lugar = $local->buscar($validated['ip']);
+        $uf = $lugar['uf'] ?? null;
+        $base = [
+            'ip' => $validated['ip'],
+            'uf' => $uf,
+            'estado' => null,
+            'cidade_ip' => $lugar['cidade'] ?? null,
+            'motivo' => null,
+            'total' => 0,
+            'pagina' => 1,
+            'paginas' => 1,
+            'por_pagina' => self::POR_PAGINA_CIDADES,
+            'cidades' => [],
+        ];
+
+        if ($uf === null) {
+            $base['motivo'] = match (true) {
+                ! $local->disponivel() => 'A base de localização de IP ainda não foi baixada no servidor.',
+                $lugar === null => 'Este IP não aparece na base de localização.',
+                $lugar['pais'] !== 'BR' => 'IP de fora do Brasil ('.implode(', ', array_filter([$lugar['cidade'], $lugar['pais']])).').',
+                default => 'A base não informa o estado deste IP.',
+            };
+
+            return response()->json($base);
+        }
+
+        $busca = trim((string) ($validated['busca'] ?? ''));
+        $query = IbgeMunicipio::query()->where('uf', $uf)
+            ->when($busca !== '', fn ($q) => $q->where('nome_normalizado', 'like', '%'.$this->like(IbgeMunicipio::normalizar($busca)).'%'));
+
+        $total = (clone $query)->count();
+        $paginas = max(1, (int) ceil($total / self::POR_PAGINA_CIDADES));
+        $paginaAtual = min((int) ($validated['page'] ?? 1), $paginas);
+        $cidadeIp = $lugar['cidade'] !== null ? IbgeMunicipio::normalizar($lugar['cidade']) : null;
+
+        return response()->json([
+            ...$base,
+            'estado' => IbgeEstado::query()->where('sigla', $uf)->value('nome') ?? $lugar['estado'],
+            'busca' => $busca,
+            'total' => $total,
+            'pagina' => $paginaAtual,
+            'paginas' => $paginas,
+            'cidades' => $query->orderBy('nome_normalizado')
+                ->forPage($paginaAtual, self::POR_PAGINA_CIDADES)
+                ->get(['id', 'nome', 'nome_normalizado'])
+                ->map(fn (IbgeMunicipio $m) => [
+                    'ibge' => (int) $m->id,
+                    'nome' => $m->nome,
+                    'do_ip' => $m->nome_normalizado === $cidadeIp,
+                ])
+                ->values(),
         ]);
     }
 

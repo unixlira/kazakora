@@ -38,7 +38,7 @@ class VitrineHome
             'ofertasTerminamEm' => $this->ofertasTerminamEm($ids['ofertas']),
             'maisBuscados' => $montar($ids['maisBuscados']),
             'utilidades' => $montar($ids['utilidades']),
-            'utilidadesLink' => Cache::remember('home:utilidades-link', now()->addHour(), fn () => $this->categoriasCasa()->first()?->slug),
+            'utilidadesLink' => $this->utilidadesLink(),
             'novidades' => $montar($ids['novidades']),
             'gostar' => $montar($ids['gostar']),
         ];
@@ -98,6 +98,12 @@ class VitrineHome
         $categorias = $this->categoriasCasa()->pluck('id');
 
         return $categorias->isEmpty() ? [] : $this->ativos()->whereIn('category_id', $categorias)->latest()->limit(8)->pluck('id')->all();
+    }
+
+    /** Slug da categoria de casa com mais produtos: destino de "Utilidades para casa" na home e no menu do celular. */
+    public function utilidadesLink(): ?string
+    {
+        return Cache::remember('home:utilidades-link', now()->addHour(), fn () => $this->categoriasCasa()->first()?->slug);
     }
 
     private function categoriasCasa()

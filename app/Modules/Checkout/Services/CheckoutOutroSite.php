@@ -10,6 +10,7 @@ use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
@@ -275,25 +276,18 @@ abstract class CheckoutOutroSite
     /**
      * Cupom pedido pelo site, conferido com as regras da KazaKora (ativo,
      * validade, mínimo, limite de usos, um por cliente pelo e-mail). Sem
-     * código, entra o cupom automático (BEMVINDO, 2026-10-24) quando vale,
-     * como no checkout da KazaKora; o site manda sem_cupom_automatico quando
-     * o cliente tira o cupom.
+     * código, sem cupom: desde 2026-10-24 (2º pedido do dia) o BEMVINDO não
+     * entra mais sozinho, o site oferece no pop-up (resumo.cupom_boas_vindas).
      *
      * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
      */
-    public function cupom(?string $codigo, Collection $itens, ?string $email = null, bool $automatico = true): array
+    public function cupom(?string $codigo, Collection $itens, ?string $email = null): array
     {
-        $email = filled($email) ? trim($email) : null;
-
         if (blank($codigo)) {
-            if (! $automatico || ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0)) {
-                return [null, null];
-            }
-            $conta = $email ? User::query()->where('email', $email)->first() : null;
-
-            return [CupomAutomatico::para(round($itens->sum('subtotal'), 2), $conta, $email), null];
+            return [null, null];
         }
 
+        $email = filled($email) ? trim($email) : null;
         $cupom = Coupon::buscar($codigo);
         if (! $cupom) {
             return [null, 'Cupom não encontrado. Confira o código.'];
@@ -310,6 +304,24 @@ abstract class CheckoutOutroSite
         return [$cupom, null];
     }
 
+    /**
+     * Cupom que o pop-up de boas-vindas oferece (BEMVINDO, config
+     * loja.cupom_automatico) quando ele vale para os itens e o e-mail.
+     *
+     * @return array{codigo: string, descricao: string}|null
+     */
+    private function cupomBoasVindas(Collection $itens, ?string $email): ?array
+    {
+        if ($itens->isEmpty() || self::subtotalParaCupom($itens) <= 0) {
+            return null;
+        }
+        $email = filled($email) ? trim($email) : null;
+        $conta = $email ? User::query()->where('email', $email)->first() : null;
+        $cupom = CupomAutomatico::para(round($itens->sum('subtotal'), 2), $conta, $email);
+
+        return $cupom ? ['codigo' => $cupom->code, 'descricao' => $cupom->descricaoDesconto()] : null;
+    }
+
     /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia nem da Relâmpago (2026-10-14). */
     private static function subtotalParaCupom(Collection $itens): float
     {
@@ -317,10 +329,10 @@ abstract class CheckoutOutroSite
     }
 
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */
-    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null, bool $cupomAutomatico = true): array
+    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null): array
     {
         $itens = $this->itens($pedidos, $cep);
-        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email, $cupomAutomatico);
+        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email);
         $valores = $this->valores($itens, $cep, $frete, $cupom);
 
         return [
@@ -342,6 +354,8 @@ abstract class CheckoutOutroSite
                 'desconto' => self::centavos($valores['desconto_cupom']),
             ] : null,
             'cupom_erro' => $cupomErro,
+            // Pop-up de boas-vindas do site (2026-10-24): o BEMVINDO quando vale para este carrinho.
+            'cupom_boas_vindas' => $cupom ? null : $this->cupomBoasVindas($itens, $email),
             'desconto_cupom' => self::centavos($valores['desconto_cupom']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
             'desconto_pix_percentual' => $valores['desconto_pix_percentual'],
@@ -365,6 +379,15 @@ abstract class CheckoutOutroSite
             'total' => self::centavos($valores['total']),
             'total_pix' => self::centavos($valores['total_pix']),
             'mercadopago_public_key' => CredenciaisCheckout::publicKey(),
+            // Carrossel de avaliações (2026-10-24), igual ao checkout da loja;
+            // nome oculto vira só "Cliente" (o site não é a KazaKora).
+            'avaliacoes' => array_map(
+                fn (array $avaliacao) => ['nome' => $avaliacao['nome'] === 'Cliente KazaKora' ? 'Cliente' : $avaliacao['nome']] + $avaliacao,
+                app(AvaliacoesDoCheckout::class)->paraProdutos(
+                    $itens->map(fn (array $item) => $item['product']->id),
+                    $this->modeloPublicado()::query()->where('ativo', true)->select('product_id'),
+                ),
+            ),
         ];
     }
 
@@ -385,7 +408,7 @@ abstract class CheckoutOutroSite
             // Trava a linha do cupom antes de conferir o limite de usos.
             Coupon::travar($dados['cupom'] ?? null);
             // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
-            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email'], empty($dados['sem_cupom_automatico']));
+            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
             if ($cupomErro) {
                 throw ValidationException::withMessages(['cupom' => $cupomErro.' O desconto foi removido: confira o total e finalize de novo.']);
             }
@@ -495,10 +518,11 @@ abstract class CheckoutOutroSite
                 'processing_mode' => 'automatic',
                 'capture_mode' => 'automatic',
                 'external_reference' => "order-{$order->id}-payment-1",
-                'total_amount' => (string) $total,
+                // Duas casas ("200.10"), como no exemplo da API de Orders.
+                'total_amount' => number_format($total, 2, '.', ''),
                 'payer' => $this->pagador($pagador),
                 'transactions' => ['payments' => [[
-                    'amount' => (string) $total,
+                    'amount' => number_format($total, 2, '.', ''),
                     'payment_method' => [
                         'id' => $cartao['mp_payment_method_id'],
                         'type' => 'credit_card',
@@ -596,6 +620,15 @@ abstract class CheckoutOutroSite
     private function cliente(array $cliente): User
     {
         $cpf = preg_replace('/\D/', '', $cliente['cpf']);
+        // CPF já cadastrado (2026-10-24): a compra vai para a conta dona do CPF.
+        if ($doCpf = User::contaDoCpf($cpf)) {
+            if (blank($doCpf->phone)) {
+                $doCpf->forceFill(['phone' => $cliente['phone']])->save();
+            }
+
+            return $doCpf;
+        }
+
         $conta = User::withTrashed()->where('email', trim($cliente['email']))->first();
 
         if ($conta) {

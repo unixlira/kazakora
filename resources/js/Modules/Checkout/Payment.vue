@@ -115,6 +115,8 @@ const mountMpCardBrick = async () => {
 
         mpBrickController = await mp.bricks().create('cardPayment', 'mpCardBrick-container', {
             initialization: { amount: primaryAmount },
+            // Só crédito, como no checkout novo: o servidor manda type credit_card.
+            customization: { paymentMethods: { minInstallments: 1, maxInstallments: 12, types: { excluded: ['debit_card', 'prepaid_card'] } } },
             callbacks: {
                 onReady: () => { mpCardReady.value = true; },
                 onError: (error) => {
@@ -447,7 +449,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                     <div>
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
-                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
+                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Aprovação imediata · em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
                                             <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixPercentualTexto }}% de desconto</span>
                                         </p>
                                     </div>
@@ -480,8 +482,10 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                         <label class="mt-6 flex items-start gap-3 text-sm">
                             <input v-model="chooseForm.terms_accepted" type="checkbox" class="mt-0.5 h-4 w-4 accent-store-accent">
                             <span>
-                                Li e estou ciente das condições desta compra e dos
-                                <Link href="/termos-de-uso" target="_blank" class="text-store-accent hover:underline">termos de uso</Link>.
+                                Li e aceito as condições desta compra, os
+                                <Link href="/termos-de-uso" target="_blank" class="text-store-accent hover:underline">termos de uso</Link>, a
+                                <Link href="/politica-de-privacidade" target="_blank" class="text-store-accent hover:underline">política de privacidade</Link> e o uso de
+                                <Link href="/politica-de-cookies" target="_blank" class="text-store-accent hover:underline">cookies</Link>, conforme a LGPD (Lei 13.709/2018).
                             </span>
                         </label>
                         <InputError v-if="chooseForm.errors.terms_accepted" :message="chooseForm.errors.terms_accepted" />

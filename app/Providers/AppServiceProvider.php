@@ -49,9 +49,9 @@ class AppServiceProvider extends ServiceProvider
         // App\Http\Middleware\ExpireStaleSession) — marca o instante do
         // login. O evento Login nativo do Laravel dispara em login
         // normal, "lembrar-me" (recaller cookie) e Auth::login() manual
-        // (auto-login do checkout convidado), então um único listener
-        // aqui cobre os 3 pontos de entrada sem precisar tocar em cada
-        // controller.
+        // (cadastro, passagem do checkout seguro), então um único listener
+        // aqui cobre os pontos de entrada sem precisar tocar em cada
+        // controller. O checkout de convidado não loga mais (2026-10-24).
         Event::listen(function (Login $event): void {
             session(['login_at' => now()->timestamp]);
         });

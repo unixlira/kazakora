@@ -13,7 +13,9 @@ class ConsentimentoCookie extends Model
 
     public const ORIGEM_BEAUTYKORA = 'beautykora';
 
-    public const ORIGENS = [self::ORIGEM_KAZAKORA, self::ORIGEM_BEAUTYKORA];
+    public const ORIGEM_FERRAKORA = 'ferrakora';
+
+    public const ORIGENS = [self::ORIGEM_KAZAKORA, self::ORIGEM_BEAUTYKORA, self::ORIGEM_FERRAKORA];
 
     protected $table = 'consentimentos_cookies';
 

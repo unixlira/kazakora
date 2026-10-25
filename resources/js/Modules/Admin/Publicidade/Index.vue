@@ -32,6 +32,7 @@ const roasGeral = computed(() => {
 const semVenda = (periodo) => periodo.canais.filter((c) => c.gasto > 0 && c.roas === null).map((c) => CANAIS[c.canal]?.label ?? c.canal);
 
 const atalhos = [
+    { label: 'Campanhas Meta e Google', href: '/admin/publicidade/campanhas', icon: 'fas fa-layer-group', texto: 'Status e números de cada campanha, ao vivo.' },
     { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', texto: 'Saldo da Shopee Ads e histórico de recargas.' },
     { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', texto: 'Anúncios de concorrentes para inspirar criativos.' },
     { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', texto: 'Páginas de venda que estão convertendo.' },
@@ -111,7 +112,7 @@ const atalhos = [
         </section>
 
         <h2 class="mb-3 text-base font-semibold">Ferramentas de publicidade</h2>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <Link
                 v-for="a in atalhos"
                 :key="a.href"

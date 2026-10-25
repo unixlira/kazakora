@@ -124,6 +124,24 @@ class User extends Authenticatable
             ->exists();
     }
 
+    /**
+     * Conta ativa dona do CPF (checkout sem trava, pedido 2026-10-24: CPF já
+     * cadastrado vincula a compra à conta existente em vez de recusar).
+     * Conta apagada não entra: ela segue segurando o CPF no índice único.
+     */
+    public static function contaDoCpf(?string $cpf): ?static
+    {
+        $numeros = preg_replace('/\D/', '', (string) $cpf);
+
+        if (strlen($numeros) !== 11) {
+            return null;
+        }
+
+        $mascarado = substr($numeros, 0, 3).'.'.substr($numeros, 3, 3).'.'.substr($numeros, 6, 3).'-'.substr($numeros, 9, 2);
+
+        return static::whereIn('cpf', [$numeros, $mascarado])->orderBy('id')->first();
+    }
+
     /** E-mail já usado por outra conta, inclusive apagada (índice único do banco). */
     public static function emailEmUso(?string $email, ?int $ignorarId = null): bool
     {

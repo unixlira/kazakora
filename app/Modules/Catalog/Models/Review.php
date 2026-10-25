@@ -25,6 +25,7 @@ class Review extends Model
         'seller_reply_error',
         'seller_reply_payload',
         'reviewer_name',
+        'uf',
         'channel',
         'external_id',
     ];

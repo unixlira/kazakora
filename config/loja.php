@@ -13,11 +13,11 @@ return [
     */
 
     /*
-    | Cupom que entra sozinho no campo de cupom do checkout (pedido do Lira
-    | 2026-10-24): código de um cupom JÁ cadastrado em Admin > Cupons (a
-    | migração 2026_10_24_150000 cria o BEMVINDO de 3%). Só entra quando não
-    | há outro cupom, ele vale para o carrinho e o cliente não tirou ele
-    | nesta compra. Outro cupom digitado troca o automático (não somam).
+    | Cupom de boas-vindas (pedido do Lira 2026-10-24): código de um cupom JÁ
+    | cadastrado em Admin > Cupons (a migração 2026_10_24_150000 cria o
+    | BEMVINDO de 3%). Não entra sozinho: o pop-up do checkout (KazaKora,
+    | FerraKora e Beauty Kora) oferece no 1º acesso e o cliente escolhe
+    | "Aplicar cupom" ou fecha. Outro cupom digitado troca ele (não somam).
     | Vazio desliga.
     */
     'cupom_automatico' => env('LOJA_CUPOM_AUTOMATICO', 'BEMVINDO'),
@@ -50,6 +50,8 @@ return [
         'whatsapp_exibicao' => '(11) 96572-3990',
         'whatsapp_link' => 'https://wa.me/5511965723990',
         'endereco' => 'Rua Mogi Mirim, 20, Mooca, São Paulo/SP',
+        // Completo, como no rodapé do checkout (cabeçalho do boleto, 2026-10-24).
+        'endereco_completo' => 'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
     ],
 
     /*
@@ -76,6 +78,14 @@ return [
     | esse tanto de dias DEPOIS do vencimento (compensação leva até 3 dias
     | úteis), a loja cancela o boleto e o pedido e devolve o estoque.
     */
+    /*
+    | Pop-up de cupom no checkout (pedido 2026-10-23, modelo Yampi). Código de
+    | um cupom JÁ cadastrado em Admin > Cupons; vazio usa o cupom_automatico
+    | (BEMVINDO, 2026-10-24). Inexistente, inativo ou que não vale para o
+    | carrinho: o pop-up não aparece. Aparece uma vez só por navegador (cookie).
+    */
+    'cupom_primeira_compra' => env('LOJA_CUPOM_PRIMEIRA_COMPRA'),
+
     'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
     'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
 
@@ -121,4 +131,11 @@ return [
     'ads_alerta_percentual' => (float) env('LOJA_ADS_ALERTA_PERCENTUAL', 6),
     'ads_meta_percentual' => (float) env('LOJA_ADS_META_PERCENTUAL', 4),
     'queda_vendas_percentual' => (float) env('LOJA_QUEDA_VENDAS_PERCENTUAL', 30),
+
+    /*
+    | Carrinho abandonado (lead_checkout, 2026-10-24): prazo de guarda decidido
+    | pelo Lira, 3 meses desde a última interação (updated_at). Depois disso o
+    | lead sai do banco, aberto ou convertido (leads:limpar, todo dia).
+    */
+    'lead_checkout_dias_guarda' => (int) env('LOJA_LEAD_CHECKOUT_DIAS_GUARDA', 90),
 ];

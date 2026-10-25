@@ -17,8 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
  * de "abre com JSON cru").
  *
  * `login_at` é gravado no listener do evento Login (AppServiceProvider) —
- * cobre login normal, "lembrar-me" e o auto-login do checkout como
- * convidado, todos disparam esse mesmo evento nativo do Laravel. Esse
+ * cobre login normal, "lembrar-me" e o login feito no código (cadastro),
+ * todos disparam esse mesmo evento nativo do Laravel. Esse
  * middleware também inicializa `login_at` sozinho na primeira vez que vê
  * uma sessão autenticada sem essa marca (sessão de antes do recurso
  * existir) — evita derrubar todo mundo de uma vez no deploy.

@@ -44,8 +44,6 @@ const props = defineProps({
     quadrosPromocao: { type: Object, default: () => ({}) },
     // Unidades vendidas de verdade, todos os canais (pedido 2026-10-23).
     salesCount: { type: Number, default: 0 },
-    // % do cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24).
-    cupomAutomaticoPercentual: { type: Number, default: 0 },
 });
 
 const page = usePage();
@@ -53,11 +51,10 @@ const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const PARCELAS = 12;
 // Desconto no Pix: "Desconto Checkout" do produto, em % ou R$ (2026-10-18).
-// Desde 2026-10-24 o % soma o cupom automático (2% do Pix + 3% do BEMVINDO).
-const itemEmOferta = (item) => !!(item?.oferta_do_dia || item?.oferta_relampago);
-const cupomNaVitrine = (item) => (itemEmOferta(item) ? 0 : Number(props.cupomAutomaticoPercentual) || 0);
+// Só o desconto da forma de pagamento (2% OFF), sem o cupom automático
+// (pedido 2026-10-24, revendo o 2% + 3% do mesmo dia).
 const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
-    ? `${Number((Number(props.product.checkout_discount_percentage) + cupomNaVitrine(props.product)).toFixed(2)).toLocaleString('pt-BR')}%`
+    ? `${Number(Number(props.product.checkout_discount_percentage).toFixed(2)).toLocaleString('pt-BR')}%`
     : (Number(props.product.checkout_discount_amount ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
@@ -65,6 +62,8 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
 // Fileira do "PAGAMENTO SEGURO E RÁPIDO" na ordem da Mavo (tarefa 2656); Diners
 // entra porque o checkout aceita (CheckoutV2, detecção da bandeira).
 const PAYMENT_BRANDS = ['visa', 'mastercard', 'elo', 'amex', 'diners', 'hipercard', 'pix', 'boleto'];
+// Versão no endereço: o CDN guarda os SVG por dias; troque ao redesenhar uma bandeira (AMEX maior, 2026-10-24).
+const VERSAO_BANDEIRAS = '20261024';
 // Bandeiras do bloco de formas de pagamento (mesmas imagens do rodapé, pedido 2026-10-14).
 const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'American Express', diners: 'Diners Club', hipercard: 'Hipercard', pix: 'Pix', boleto: 'Boleto' };
@@ -73,7 +72,7 @@ const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
-    ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
+    ['O frete é grátis?', 'Sim. Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
@@ -302,9 +301,9 @@ const installmentValue = computed(() => Number(precoBase.value.final_price) / PA
 // e desconto arredondado no centavo, sobre o subtotal.
 const percentualPix = (item, unitario) => {
     const pct = Number(item?.checkout_discount_percentage ?? 0);
-    if (pct > 0) return Math.min(100, pct + cupomNaVitrine(item));
+    if (pct > 0) return Math.min(100, pct);
     const valor = Number(item?.checkout_discount_amount ?? 0);
-    if (valor > 0 && unitario > 0) return Math.min(100, Math.round(((valor * 100) / unitario) * 10000) / 10000 + cupomNaVitrine(item));
+    if (valor > 0 && unitario > 0) return Math.min(100, Math.round(((valor * 100) / unitario) * 10000) / 10000);
     return 0;
 };
 const precoPixPara = (item, unitario, qtd = 1) => {
@@ -321,34 +320,112 @@ const precoPix = computed(() => {
 // Selo ao lado do valor no Pix: o % real do produto ou "R$ N OFF" quando é valor fixo.
 const seloPix = computed(() => {
     const pct = Number(precoBase.value.checkout_discount_percentage ?? 0);
-    if (pct > 0) return `${Number((pct + cupomNaVitrine(precoBase.value)).toFixed(2)).toLocaleString('pt-BR')}% OFF`;
+    if (pct > 0) return `${Number(pct.toFixed(2)).toLocaleString('pt-BR')}% OFF`;
     const valor = Number(precoBase.value.checkout_discount_amount ?? 0);
     return valor > 0 ? `${formatPrice(valor).replace(/,00$/, '')} OFF` : '';
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
-// Escassez e confiança com números reais (pedido 2026-10-23, aprovado pelo Lira
-// no lugar de números fixos): vendidos com o número exato desde a 1ª venda
-// ("+1538 vendidos", formato da referência, tarefa 2648); "EXCLUSIVO" e
-// "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão do Lira em
-// 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar); "Só restam" com o estoque da
-// variação escolhida, só quando for menor que 50 (barra de 50, pedido 2026-10-23).
+// Vendidos: texto fixo "+1.538 vendidos" em todo produto (tarefa 2704 do
+// Lira em 2026-10-23, corrigindo o "mais de 1.538" da 2697; ele foi avisado
+// do risco de publicidade enganosa e manteve). props.salesCount, o total
+// real, segue vindo do servidor. "EXCLUSIVO" e "POR TEMPO LIMITADO!" em todo produto, como na Mavo (decisão
+// do Lira em 2026-10-23 22h; antes só com Oferta do Dia ou Relâmpago no ar).
 const ESTOQUE_BAIXO = 50;
-const vendidosLegenda = computed(() => {
-    const total = Number(props.salesCount) || 0;
-    if (total < 1) return null;
-    return total === 1 ? '1 vendido' : `+${total} vendidos`;
+const vendidosLegenda = computed(() => '+1.538 vendidos');
+// "Só N unidades!" no fluxo que o Lira corrigiu (2026-10-23, decisão dele,
+// no lugar do estoque real do #1020):
+//   0 s    barra 100% cheia e um número sorteado entre 7 e 36, em preto, que
+//          fica FIXO enquanto a barra desce (não conta para baixo);
+//   0,06 s a barra recolhe até o tamanho proporcional ao número (de 50);
+//   +3 s   parada; o número cai uma unidade e a barra perde o pedaço dessa
+//          unidade. No momento da queda o fundo do número fica vermelho com a
+//          fonte branca e some em 1 s (fade out); a fonte fica vermelha e
+//          continua vermelha (correção do Lira em 2026-10-23).
+// O sorteio é novo a cada carregamento da página e fica OBRIGATORIAMENTE
+// entre 7 e 36 (tarefa #2809, Lira em 2026-10-24; antes 19 a 37). O estoque
+// real não limita mais o número (Lira em 2026-10-24, teste no homolog; antes
+// o sorteio não passava do estoque e um produto com 10 mostrava sempre 10):
+// ele só esconde a barra quando a variação está esgotada. Antes de escolher a
+// variação vale o maior estoque entre elas (antes era 0 e a barra sumia em
+// todo produto com variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
+const ESTOQUE_SORTEIO_MIN = 7;
+const ESTOQUE_SORTEIO_MAX = 36;
+const estoqueReal = computed(() => (faltaVariacao.value
+    ? Math.max(0, ...opcoesVariacao.value.map((variant) => Number(variant.stock) || 0))
+    : Number(selecionada.value.stock) || 0));
+const estoqueBaixo = ref(null);
+const estoqueBarra = ref(ESTOQUE_BAIXO);
+const estoqueFundo = ref(false);
+const estoqueVermelho = ref(false);
+let estoqueTimers = [];
+const pararEstoque = () => {
+    estoqueTimers.forEach((id) => clearTimeout(id));
+    estoqueTimers = [];
+};
+const depois = (ms, fn) => estoqueTimers.push(setTimeout(fn, ms));
+const ESTOQUE_DESCIDA_MS = 1200;
+// No celular a barra fica abaixo da dobra e a animação acabava antes de a
+// pessoa chegar nela (Lira, 2026-10-23: "não aparece"). Lá ela espera cheia,
+// com o número sorteado, e só roda quando a barra chega na faixa do meio da
+// tela (30% centrais). Uma vez por página; trocar a variação depois roda na hora.
+const estoqueEl = ref(null);
+const ESTOQUE_ESPERA_MEIO = '(max-width: 900px)';
+let estoqueVisto = false;
+let observadorEstoque = null;
+const esperaMeio = () => !estoqueVisto && 'IntersectionObserver' in window && window.matchMedia?.(ESTOQUE_ESPERA_MEIO).matches;
+const rodarEstoque = (numero) => {
+    pararEstoque();
+    depois(60, () => { estoqueBarra.value = numero; });
+    if (numero < 2) return;
+    const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
+    depois(parada, () => {
+        estoqueFundo.value = true;
+        estoqueVermelho.value = true;
+        estoqueBaixo.value = numero - 1;
+        estoqueBarra.value = numero - 1;
+    });
+};
+const pararObservadorEstoque = () => {
+    observadorEstoque?.disconnect();
+    observadorEstoque = null;
+};
+watch(estoqueEl, (el) => {
+    pararObservadorEstoque();
+    if (!el || !esperaMeio()) return;
+    observadorEstoque = new IntersectionObserver(([entrada]) => {
+        // Também dispara se a barra já passou do meio (rolagem rápida ou link com âncora).
+        const passou = entrada.rootBounds && entrada.boundingClientRect.top < entrada.rootBounds.top;
+        if (estoqueVisto || !(entrada.isIntersecting || passou)) return;
+        estoqueVisto = true;
+        pararObservadorEstoque();
+        if (estoqueBaixo.value) rodarEstoque(estoqueBaixo.value);
+    }, { rootMargin: '-35% 0px -35% 0px', threshold: 0 });
+    observadorEstoque.observe(el);
 });
-const estoqueBaixo = computed(() => {
-    if (faltaVariacao.value) return null;
-    const estoque = Number(selecionada.value.stock) || 0;
-    return estoque > 0 && estoque < ESTOQUE_BAIXO ? estoque : null;
-});
-// Barra do "Só N unidades!" (formato da Mavo, pedido 2026-10-23): enche pelo
-// estoque real numa barra de tamanho fixo 50, com um mínimo para não sumir.
-const barraEstoque = computed(() => (estoqueBaixo.value
-    ? Math.max(6, Math.round((estoqueBaixo.value / ESTOQUE_BAIXO) * 100))
-    : 0));
+const animarEstoque = () => {
+    pararEstoque();
+    estoqueFundo.value = false;
+    estoqueVermelho.value = false;
+    if (estoqueReal.value < 1) {
+        estoqueBaixo.value = null;
+        return;
+    }
+    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
+    estoqueBaixo.value = numero;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        estoqueBarra.value = numero;
+        return;
+    }
+    // Pinta a barra cheia primeiro; o recolhimento sai no tick seguinte para a transição rodar.
+    estoqueBarra.value = ESTOQUE_BAIXO;
+    if (esperaMeio()) return;
+    rodarEstoque(numero);
+};
+onMounted(animarEstoque);
+onUnmounted(() => { pararEstoque(); pararObservadorEstoque(); });
+watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
+const barraEstoque = computed(() => Math.max(4, Math.round((estoqueBarra.value / ESTOQUE_BAIXO) * 100)));
 // Só cita o que vale para o produto: frete grátis e desconto do Pix.
 const complementoEstoque = computed(() => {
     if (isFreeShipping.value && DESCONTO_PIX) return 'Frete grátis + desconto no checkout.';
@@ -423,67 +500,53 @@ const highlights = computed(() => {
     return [];
 });
 
-const specs = computed(() => {
-    const list = [];
-    if (props.product.brand) list.push(['Marca', props.product.brand]);
-    if (selecionada.value.model) list.push(['Modelo', selecionada.value.model]);
-    if (selecionada.value.color) list.push(['Cor', selecionada.value.color]);
-    if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
-    if (props.product.category) list.push(['Categoria', props.product.category.name]);
-    if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
-    return list;
-});
+// Ficha técnica (pedido 2026-10-24): marca, modelo, cor, voltagem, dimensões e
+// peso vêm prontos do servidor (FichaTecnica) e seguem a variação escolhida. SKU, categoria e variação não aparecem.
+const specs = computed(() => [
+    ...(selecionada.value.ficha_tecnica ?? props.product.ficha_tecnica ?? []),
+    ['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`],
+]);
 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
 // Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
-// dela, o prazo normal de envio.
+// dela, o prazo normal de envio. Sábado à noite, domingo e feriado (pedido do
+// Lira 2026-10-24): o servidor manda o dia certo, "Receba SEGUNDA" no Full e
+// "Receba a partir de SEGUNDA" no Flex (flex_mensagem) e no Turbo (turbo.mensagem).
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { endereco, opcoes } depois da consulta
-const consultandoPrazo = ref(false);
-const erroPrazo = ref('');
-const resultadoPrazoEl = ref(null);
-
-// Rua do CEP e opções de entrega (pedido 2026-10-23), com as regras reais:
-// Full grátis só na área da Grande SP (até 21h pagando até o corte, senão
-// amanhã); fora dela, a entrega grátis com o prazo e o TURBO (SEDEX) pelo
-// mesmo valor da diferença cobrado no checkout.
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo, endereco } depois da consulta
+// "Rua - Cidade - UF" do CEP, abaixo do campo e do botão (pedido do Lira 2026-10-24).
 const enderecoPrazo = computed(() => {
     const endereco = prazo.value?.endereco;
     if (!endereco) return '';
-    // "Rua Mogi Mirim - São Paulo - SP", como no print.
     return [endereco.rua, endereco.cidade, endereco.uf].filter(Boolean).join(' - ');
 });
-// Tabela de entrega igual ao print do Lira (2026-10-23 21:24): duas linhas,
-// "Frete | 8 a 11 dias | Grátis" e "Envio Prioritário | Postagem em 24h |
-// R$ 19,90". O prazo e o valor vêm do servidor: Frete = entrega grátis
-// (Full, Flex ou Padrão, "geralmente a até" dias); Prioritário = Turbo (SEDEX),
-// com o mesmo valor cobrado no checkout.
-// Regras do Lira (2026-10-23 21:31): no raio do Full a primeira coluna diz
-// "Full" em azul; depois do corte das 13h (Full = "Amanhã") entra embaixo
-// "Turbo | Chegará em até 3 horas" no lugar do Prioritário, pelo valor que
-// ele deu para o Turbo de 3h. O checkout ainda não tem esse serviço.
-// Fora do raio do Full (print do Lira 2026-10-23 21:34): a primeira linha
-// vira "Flex | 1 a 7 dias | Grátis", prazo fixo pedido por ele.
-const PRECO_TURBO_3H = 39.9;
-const linhasEntrega = computed(() => {
-    const opcoes = prazo.value?.opcoes ?? [];
-    const gratis = opcoes.find((opcao) => opcao.tipo !== 'turbo');
-    const turbo = opcoes.find((opcao) => opcao.tipo === 'turbo');
-    const full = gratis?.tipo === 'full';
-    const linhas = [];
-    if (gratis) {
-        const quando = full ? (gratis.quando === 'hoje' ? `Hoje até ${gratis.horario}` : 'Amanhã') : '1 a 7 dias';
-        linhas.push({ tipo: full ? 'full' : 'flex', nome: full ? 'Full' : 'Flex', quando, valor: 'Grátis' });
-    }
-    if (full && gratis.quando !== 'hoje') {
-        linhas.push({ tipo: 'turbo', nome: 'Turbo', quando: 'Chegará em até 3 horas', valor: formatPrice(PRECO_TURBO_3H) });
-    } else if (turbo) {
-        linhas.push({ tipo: 'prioritario', nome: 'Envio Prioritário', quando: 'Postagem em 24h', valor: formatPrice(turbo.preco) });
-    }
-    return linhas;
+const consultandoPrazo = ref(false);
+const erroPrazo = ref('');
+const resultadoPrazoEl = ref(null);
+// Opções de frete da página do produto (pedido do Lira 2026-10-24), em caixas de rádio:
+// - Grande SP em horário comercial (servidor manda `motoboy`: seg a sex 8h-18h, sáb
+//   8h-13h): Full e Turbo do motoboy "Receba em até 3 horas" pelo preço fixo, SEM o Flex.
+// - Fora da área ou do horário do motoboy: Flex "Receba de 1 a 7 dias" (texto fixo) e
+//   Turbo dos Correios "Receba em X dias por + R$ Y", com o prazo do SEDEX e só a
+//   diferença SEDEX − PAC (turbo.preco já é só o que passa do grátis; pedido do Lira
+//   2026-10-24, CEP do Maranhão).
+// - CEP com motoboy fora do Full (Mauá): Flex no lugar do Full, para sempre haver o grátis.
+// Nasce no grátis; a finalização continua nascendo no grátis (pedido 2026-10-12).
+const mostrarFull = computed(() => Boolean(prazo.value?.expressa && prazo.value.motoboy));
+// Fora da Grande SP o grátis é o PAC com o prazo real do CEP (servidor manda `pac`,
+// pedido do Lira 2026-10-24): "Receba em até 10 dias úteis" no Maranhão, não o Flex.
+const mostrarPac = computed(() => Boolean(prazo.value?.pac) && !mostrarFull.value);
+const mostrarFlex = computed(() => Boolean(prazo.value) && !mostrarFull.value && !mostrarPac.value);
+const prazoTurbo = (dias) => (dias ? `Receba em ${dias} ${dias === 1 ? 'dia' : 'dias'}` : 'Receba mais rápido');
+const opcaoTurbo = computed(() => {
+    if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco, excedente: false };
+    if (isFreeShipping.value && prazo.value?.turbo) return { texto: prazo.value.turbo.mensagem || prazoTurbo(prazo.value.turbo.prazo), preco: prazo.value.turbo.preco, excedente: true };
+    return null;
 });
+const escolhaFrete = ref('flex');
+const freteGratisPadrao = () => (mostrarFull.value ? 'full' : (mostrarPac.value ? 'pac' : 'flex'));
 
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
@@ -491,20 +554,56 @@ const onCepPrazo = (event) => {
     erroPrazo.value = '';
 };
 
-// Rolagem até a tabela (pedido 2026-10-23): no celular o resultado ficava
-// abaixo da dobra e o cliente não via que o frete foi calculado. Só rola
-// quando a tabela não está inteira na tela.
+// Rolagem até o resultado (pedido 2026-10-23): no celular o resultado ficava
+// abaixo da dobra e o cliente não via que o frete foi calculado. Desce só o
+// que falta para o resultado inteiro aparecer, com ele no pé da tela.
+const rolarSuave = () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MARGEM_PE = 16;
+// O que fica preso no pé da tela e cobre o fim dela: a barra do rodapé (celular)
+// ou o COMPRAR AGORA preso na caixa (computador). Conta o maior dos dois.
+const barraEl = ref(null);
+const alturaBarraRodape = () => Math.max(barraEl.value?.offsetHeight ?? 0, botaoCompraEl.value?.offsetHeight ?? 0);
 const mostrarResultadoPrazo = async () => {
     await nextTick();
     const el = resultadoPrazoEl.value;
     if (!el) return;
     const caixa = el.getBoundingClientRect();
-    if (caixa.top >= 0 && caixa.bottom <= window.innerHeight) return;
-    const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'center' });
+    const pe = window.innerHeight - alturaBarraRodape() - MARGEM_PE;
+    if (caixa.top >= 0 && caixa.bottom <= pe) return;
+    const falta = caixa.bottom - pe;
+    // Resultado maior que a tela: o topo dele fica visível.
+    window.scrollBy({ top: Math.min(falta, caixa.top - MARGEM_PE), behavior: rolarSuave() ? 'smooth' : 'auto' });
 };
 
-const consultarPrazo = async ({ rolar = true } = {}) => {
+// Primeira rolagem da página (pedido 2026-10-23): quando o cliente para de rolar
+// pela primeira vez, a tela completa a descida até o "Calcular o prazo" ficar
+// no pé da área visível. Só uma vez, só para baixo e só se o campo ainda não
+// apareceu inteiro; se o cliente já passou do campo, não mexe.
+const prazoCepEl = ref(null);
+let ajusteFeito = false;
+let esperaFimRolagem = null;
+const ajustarAoCep = () => {
+    if (ajusteFeito || !prazoCepEl.value) return;
+    ajusteFeito = true;
+    pararAjusteCep();
+    if (window.scrollY < 40) { ajusteFeito = false; ligarAjusteCep(); return; }
+    const caixa = prazoCepEl.value.getBoundingClientRect();
+    const pe = window.innerHeight - alturaBarraRodape() - MARGEM_PE;
+    if (caixa.bottom <= pe || caixa.top < 0) return;
+    window.scrollBy({ top: caixa.bottom - pe, behavior: rolarSuave() ? 'smooth' : 'auto' });
+};
+const aoRolar = () => {
+    clearTimeout(esperaFimRolagem);
+    esperaFimRolagem = setTimeout(ajustarAoCep, 180);
+};
+const ligarAjusteCep = () => window.addEventListener('scroll', aoRolar, { passive: true });
+const pararAjusteCep = () => { window.removeEventListener('scroll', aoRolar); clearTimeout(esperaFimRolagem); };
+onMounted(() => { if (!window.location.hash) ligarAjusteCep(); });
+onUnmounted(pararAjusteCep);
+
+const consultarPrazo = async () => {
+    ajusteFeito = true;
+    pararAjusteCep();
     if (cep.value.replace(/\D/g, '').length !== 8) {
         erroPrazo.value = 'Digite um CEP com 8 números.';
         return;
@@ -512,16 +611,15 @@ const consultarPrazo = async ({ rolar = true } = {}) => {
     consultandoPrazo.value = true;
     erroPrazo.value = '';
     try {
-        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}&quantidade=${quantity.value}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = {
-            endereco: data.endereco ?? null,
-            opcoes: data.opcoes ?? [],
-        };
-        if (rolar) mostrarResultadoPrazo();
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, pac: data.pac ?? null, motoboy: data.motoboy ?? null, flexMensagem: data.flex_mensagem ?? null, endereco: data.endereco ?? null };
+        escolhaFrete.value = freteGratisPadrao();
+        mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
-        // recarrega os preços da página para o CEP digitado.
+        // recarrega os preços da página para o CEP digitado. Sem aviso de
+        // "preço atualizado de X para Y" (removido a pedido do Lira 2026-10-25).
         if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
             router.reload({ preserveScroll: true, preserveState: true });
         }
@@ -531,11 +629,6 @@ const consultarPrazo = async ({ rolar = true } = {}) => {
         consultandoPrazo.value = false;
     }
 };
-
-// Outra variação ou quantidade muda a caixa: refaz a conta do CEP já consultado.
-watch(() => [selecionada.value.id, quantity.value], () => {
-    if (prazo.value && !consultandoPrazo.value) consultarPrazo({ rolar: false });
-});
 
 const buyingNow = ref(false);
 
@@ -581,6 +674,9 @@ const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.v
 const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
 const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
 
+// No celular o vídeo da avaliação não baixa nada até o toque (pedido 2026-10-23):
+// a miniatura é só o quadrado com o play; o 1º quadro custava ~2 MB por página.
+
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const ehVideo = (midia) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(midia?.image_url ?? '');
 const fotoAberta = ref(null);
@@ -606,6 +702,38 @@ const teclaFoto = (evento) => {
 };
 onMounted(() => window.addEventListener('keydown', teclaFoto));
 onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
+
+// COMPRAR AGORA da caixa (ou o aviso de esgotado). A barra do rodapé é só do
+// celular (pedido 2026-10-24); no computador quem fica preso é este botão.
+const botaoCompraEl = ref(null);
+
+// Caixa de compra como na Mavo (pedido 2026-10-23): no computador ela rola com a
+// página até o fim dela aparecer e trava com o pé no rodapé da tela, enquanto a
+// coluna da esquerda segue rolando. Caixa menor que a tela fica presa embaixo do
+// cabeçalho. O topo do sticky é recalculado quando a caixa muda de altura (CEP,
+// variação) ou a janela muda de tamanho.
+const MARGEM_CAIXA = 16;
+const compraEl = ref(null);
+const topoCompra = ref(null);
+let observadorCaixa = null;
+const ajustarTopoCompra = () => {
+    const caixa = compraEl.value;
+    if (!caixa) return;
+    const cabecalho = document.querySelector('.loja-topo')?.offsetHeight ?? 0;
+    topoCompra.value = Math.min(cabecalho + MARGEM_CAIXA, window.innerHeight - caixa.offsetHeight - MARGEM_CAIXA);
+};
+onMounted(() => {
+    ajustarTopoCompra();
+    window.addEventListener('resize', ajustarTopoCompra, { passive: true });
+    if ('ResizeObserver' in window && compraEl.value) {
+        observadorCaixa = new ResizeObserver(ajustarTopoCompra);
+        observadorCaixa.observe(compraEl.value);
+    }
+});
+onUnmounted(() => {
+    window.removeEventListener('resize', ajustarTopoCompra);
+    observadorCaixa?.disconnect();
+});
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 const submitReview = () => {
@@ -628,7 +756,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <div class="pd2">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
-                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></span>
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></span>
                 <span class="sep">|</span>
                 <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
             </div>
@@ -648,11 +776,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                                    <!-- Favorito no canto da foto (a caixa de compra segue a Mavo, sem o coração). -->
+                                    <!-- Favorito no canto da foto desligado (pedido do Lira 2026-10-23); para voltar, descomente.
                                     <button type="button" class="fav fav-foto" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
                                         :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click.stop="toggleFavorite(product.id)">
                                         <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                     </button>
+                                    -->
+                                    <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`">-{{ percentualTotal }}%</span>
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
@@ -686,7 +816,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </section>
 
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
-                        <aside id="comprar" class="card compra">
+                        <aside id="comprar" ref="compraEl" class="card compra" :style="topoCompra !== null ? { top: `${topoCompra}px` } : null">
                             <!-- Caixa de compra no formato da Mavo (tarefa 2656, print de 23/10 21h), com
                                  os números reais: vendidos, oferta no ar, nota, estoque e desconto do Pix. -->
                             <div class="condicao">
@@ -697,7 +827,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <h1>{{ selecionada.name }}</h1>
 
-                            <!-- Linha de estrelas sempre abaixo do título, como na Mavo (tarefa 2656, print
+                            <!-- Três checks logo abaixo do título, antes das estrelas e do preço (pedido 2026-10-23). -->
+                            <ul v-if="highlights.length" class="checks">
+                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
+                            </ul>
+
+                            <!-- Linha de estrelas abaixo do título e dos checks, como na Mavo (tarefa 2656, print
                                  das 21h22). Sem avaliação: estrelas vazias e "(0 Avaliações)", nunca nota inventada. -->
                             <component :is="showReviews ? 'a' : 'span'" :href="showReviews ? '#avaliacoes' : undefined" class="nota" :class="{ 'sem-aval': reviewsCount === 0 }">
                                 <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
@@ -708,10 +843,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <hr class="divisor">
 
                             <div class="preco">
+                                <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
+                                <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
                                 <div class="linha-por">
                                     <span class="por">{{ formatPrice(precoPor) }}</span>
-                                    <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 </div>
                                 <div class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong></div>
                                 <div v-if="precoPix !== null && seloPix" class="linha-pix">
@@ -757,24 +893,20 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <div v-if="estoqueBaixo" class="estoque-baixo">
-                                    <p><b>Só <span class="num">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
-                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
+                                <div v-if="estoqueBaixo" ref="estoqueEl" class="estoque-baixo">
+                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b> {{ complementoEstoque }}</p>
+                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO":aria-label="`Estoque: ${estoqueBaixo} unidades`">
                                         <span :style="{ width: `${barraEstoque}%` }"></span>
                                     </div>
                                 </div>
-                                <!-- Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
-                                <div class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                    <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
-                                </div>
                                 <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
-                            <p v-else class="esgotado">Produto esgotado</p>
+                            <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
 
                             <div class="pagamento-seguro">
                                 <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
                                 <div class="bandeiras">
-                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
+                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg?v=${VERSAO_BANDEIRAS}`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
                                 </div>
                             </div>
 
@@ -783,7 +915,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <ul class="selos-compra">
                                 <li>
                                     <img src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> para a sua casa!</span>
+                                    <!-- Texto do frete com FULL e FLEX e o aviso do estoque por estado (pedido 2026-10-24). -->
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FLEX</span> para a sua casa!<small class="aviso-frete">(Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado)</small></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
@@ -802,33 +935,43 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <!-- Calcular o prazo logo abaixo das bandeiras de pagamento (pedido do Lira 2026-10-23;
                                  antes ficava depois dos cards, na posição da Mavo); os selos ficam entre os dois. -->
-                            <form class="prazo-cep" @submit.prevent="consultarPrazo()">
+                            <form ref="prazoCepEl" class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
                                     <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
+                                <p v-if="enderecoPrazo && !erroPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
+                                <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
-                                    <p v-if="enderecoPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
-                                    <table v-if="linhasEntrega.length" class="tabela-entrega">
-                                        <thead>
-                                            <tr><th scope="col">Entrega</th><th scope="col">Prazo</th><th scope="col">Preço</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr v-for="linha in linhasEntrega" :key="linha.tipo" :class="`linha-${linha.tipo}`">
-                                                <td class="nome">{{ linha.nome }}</td>
-                                                <td class="quando">{{ linha.quando }}</td>
-                                                <td class="valor">{{ linha.valor }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                    <!-- Opções em caixas de rádio, uma por linha, centralizadas (pedido do Lira 2026-10-24):
+                                         Full e Flex em verde, Turbo em laranja da logo; marcar uma desmarca as outras. -->
+                                    <label v-if="mostrarFull" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
+                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
+                                    </label>
+                                    <label v-if="mostrarPac" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'pac' }">
+                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="pac">
+                                        <i class="fas fa-truck" aria-hidden="true"></i><b class="nome">PAC</b><span>{{ prazo.pac.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
+                                    </label>
+                                    <label v-if="mostrarFlex" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'flex' }">
+                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="flex">
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>{{ prazo.flexMensagem || 'Receba de 1 a 7 dias' }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
+                                    </label>
+                                    <label v-if="opcaoTurbo" class="opcao-frete turbo" :class="{ marcado: escolhaFrete === 'turbo' }">
+                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="turbo">
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Turbo</b><span>{{ opcaoTurbo.texto }}</span><span v-if="opcaoTurbo.excedente" class="valor">por <b>+ {{ formatPrice(opcaoTurbo.preco) }}</b></span><span v-else class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcaoTurbo.preco) }}</b></span>
+                                    </label>
                                 </div>
                             </form>
 
-                            <ul v-if="highlights.length" class="checks">
-                                <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                            </ul>
+                            <!-- COMPRAR AGORA no fim da caixa, depois do frete/prazo (pedido do Lira 2026-10-23):
+                                 no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
+                                 Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
+                            <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
+                                <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
+                            </div>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1036,7 +1179,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <video v-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
+                                    <span v-if="ehVideo(image) && ehCelular" class="video-sem-capa"></span>
+                                    <video v-else-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
                                     <img v-else :src="miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
@@ -1074,7 +1218,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- FAIXA DE CONFIANÇA -->
                 <div class="confianca">
-                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></strong>Entrega em todo Brasil</span></div>
+                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></strong>Entrega em todo Brasil</span></div>
                     <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
                     <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>
                     <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>
@@ -1087,9 +1231,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 </section>
             </div>
 
-            <!-- Botão fixo no celular -->
-            <!-- Barra fixa do celular (pedido 2026-10-23): valor no Pix à esquerda, botão com ~60%. -->
-            <div class="barra">
+            <!-- Barra fixa no rodapé (pedido 2026-10-23): valor no Pix à esquerda, botão à direita.
+                 Só no celular (pedido 2026-10-24); no computador fica escondida. -->
+            <div ref="barraEl" class="barra">
                 <div class="barra-preco">
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
@@ -1164,6 +1308,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo-full i { margin: 0 1px 0 0; font-size: 0.9em; width: auto; color: inherit; }
 /* Faixa laranja (cor da logo): ⚡FULL em preto só aqui (pedido 2026-10-10). */
 .pd2 .faixa .selo-full { color: #111; }
+/* Faixa laranja com a mesma fonte do "⚡FULL" (itálico 800), pedido do Lira 2026-10-23. */
+.pd2 .faixa > span:not(.sep) { font-style: italic; font-weight: 800; }
 .pd2 .faixa .sep { opacity: .4; }
 
 .pd2 .migalhas { font-size: 14.5px; color: var(--muted); padding: 18px 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1173,17 +1319,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
 .pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
 .pd2 .col-principal > .card { grid-column: 1; }
-.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
+/* Caixa presa como na Mavo (pedido 2026-10-23): rola até o fim e trava no rodapé da tela;
+   o top vem do script (ajustarTopoCompra). Abaixo de 900px vira static. */
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; box-shadow: var(--shadow-strong); }
 .pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
 .pd2 .galeria { display: flex; flex-direction: row-reverse; gap: 20px; }
-.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 2px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
+.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
 .pd2 .galeria.sem-miniaturas .foto { flex-basis: 100%; }
 .pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
 .pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
 .pd2 .miniaturas { flex: 1; display: flex; flex-direction: column; gap: 20px; max-height: 640px; overflow-y: auto; scrollbar-width: thin; }
-.pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
+.pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
 .pd2 .miniaturas button:hover { border-color: var(--line); }
 .pd2 .miniaturas button[aria-current=true] { border-color: var(--yellow); }
 /* Foto da variação escolhida: borda azul, sem sair do lugar na galeria. */
@@ -1227,10 +1375,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .estoque-baixo p { color: var(--text); }
 .pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
 .dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
-/* Animação da barra: enche do zero ao abrir a página e as listras correm por cima. */
-.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; animation: estoque-enche 1.2s ease-out both; }
+/* Barra abre cheia, recolhe até o número (1,2 s) e depois perde uma unidade; as listras correm por cima. */
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width 1.2s ease-in-out; }
 .pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
-@keyframes estoque-enche { from { width: 0; } }
 @keyframes estoque-listras { to { background-position: 22.6px 0; } }
 .dark .pd2 .estoque-barra span { background: var(--blue); }
 .pd2 .nota .media { font-size: 15px; }
@@ -1327,40 +1474,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep button { height: 46px; padding: 0 26px; border: 0; border-radius: 16px; background: #13bce6; color: #fff; font: 600 19px Poppins, sans-serif; cursor: pointer; }
 .pd2 .prazo-cep button:disabled { opacity: .6; }
 .pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }
-.pd2 .prazo-cep .expressa { display: inline-flex; align-items: center; gap: 6px; background: #e7f8ec; color: #00801a; font-weight: 700; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
-.dark .pd2 .prazo-cep .expressa { background: rgba(0, 171, 33, .15); color: #4ade80; }
-/* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
-.pd2 .prazo-cep .expressa .full { font-weight: 800; }
-.pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
-/* Rua e tabela de entrega iguais ao print do Lira (2026-10-23 21:24): rua em
-   azul-claro com o pino; tabela com fundo cinza claro, bordas arredondadas,
-   cabeçalhos pretos, tudo centralizado e o preço em azul-claro. */
-.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
-.pd2 .prazo-cep .rua i { margin-right: 4px; }
-.pd2 .tabela-entrega { width: 100%; margin: 10px 0 0; border-collapse: separate; border-spacing: 0; border: 1px solid #d4d7dd; border-radius: 12px; overflow: hidden; background: #fff; font-size: 15px; table-layout: fixed; }
-.pd2 .tabela-entrega th { background: #f3f4f6; color: #111; font-weight: 500; padding: 11px 8px; text-align: center; }
-.pd2 .tabela-entrega td { padding: 12px 8px; text-align: center; vertical-align: middle; border-top: 1px solid #d4d7dd; background: #fafafa; }
-.pd2 .tabela-entrega td + td, .pd2 .tabela-entrega th + th { border-left: 1px solid #d4d7dd; }
-.pd2 .tabela-entrega .nome { color: #444; font-weight: 500; }
-.pd2 .tabela-entrega .quando { color: #111; font-weight: 700; }
-.pd2 .tabela-entrega .valor { color: #13bce6; font-weight: 700; white-space: nowrap; }
-/* "Full" em azul (pedido 2026-10-23 21:31). */
-.pd2 .tabela-entrega .linha-full .nome { color: #2563eb; font-weight: 700; }
-@media (max-width: 480px) { .pd2 .tabela-entrega th, .pd2 .tabela-entrega td { padding: 10px 6px; font-size: 14px; } }
 .dark .pd2 .prazo-cep { background: #141a24; }
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
-.dark .pd2 .tabela-entrega { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega th { background: #18181b; color: #f4f4f5; }
-.dark .pd2 .tabela-entrega td { background: #27272a; border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega td + td, .dark .pd2 .tabela-entrega th + th { border-color: #3f3f46; }
-.dark .pd2 .tabela-entrega .nome { color: #d4d4d8; }
-.dark .pd2 .tabela-entrega .linha-full .nome { color: #60a5fa; }
-.dark .pd2 .tabela-entrega .quando { color: #f4f4f5; }
-.dark .pd2 .prazo-cep .normal { color: #4ade80; }
-.pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
-
+/* Endereço do CEP no mesmo azul do botão "calcular", também no tema escuro. */
+.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
+.pd2 .prazo-cep .rua i { margin-right: 4px; }
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
@@ -1465,7 +1585,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
+.pd2 .video-sem-capa { display: block; }
+.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video, .pd2 .video-sem-capa { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
 .pd2 .foto-btn { position: relative; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
 .pd2 .play-video { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .pd2 .play-video i { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; padding-left: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
@@ -1500,7 +1621,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
 .pd2 .relacionados h2 { margin-top: 10px; }
 
-/* botão fixo no celular */
+/* Barra presa no rodapé: só no celular (pedido 2026-10-24). No computador o
+   COMPRAR AGORA preso na caixa já faz esse papel. O estilo dela está no
+   bloco de até 767px. */
 .pd2 .barra { display: none; }
 
 @media (max-width: 1024px) {
@@ -1550,13 +1673,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 6px; font-size: 14px; padding: 18px 12px; }
     .pd2 .confianca i { font-size: 40px; }
     .pd2 .confianca strong { font-size: 16px; }
-    .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }
+    .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); transform: none; visibility: visible; transition: none; }
     .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
     .pd2 .barra-preco strong { font-size: 17px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pd2 .barra-preco span { font-size: 11px; color: #575757; }
     .dark .pd2 .barra-preco strong { color: var(--green); }
     .dark .pd2 .barra-preco span { color: var(--text); }
-    .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; }
+    /* Pílula como no computador (pedido do Lira 2026-10-23). */
+    .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; border-radius: 999px; }
     .pd2 { padding-bottom: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1584,7 +1708,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .a-partir { font-size: 13px; color: #777; }
 .pd2 .compra .linha-por { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
 .pd2 .compra .por { color: #000; font-size: 28px; font-weight: 600; line-height: 1.15; letter-spacing: 0; }
-.pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; text-decoration: line-through; }
+.pd2 .compra .de { color: #9a9a9a; font-size: 15px; font-weight: 400; line-height: 1.2; text-decoration: line-through; }
 .pd2 .compra .parc { display: flex; align-items: center; gap: 4px; color: #1c1c1c; font-size: 15px; line-height: 1.35; }
 .pd2 .compra .parc i { color: #1c1c1c; font-size: 14px; margin: 0; }
 .pd2 .compra .parc strong { color: #0aac48; font-weight: 700; }
@@ -1603,11 +1727,24 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
 .pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
 .pd2 .compra .estoque-baixo p { font-weight: 700; }
-.pd2 .compra .estoque-baixo .num { color: #e11d2a; }
+/* Número em preto; ao cair uma unidade, fundo vermelho com fonte branca que some em 1 s e deixa a fonte vermelha. */
+.pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; }
+.pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in; }
+@keyframes estoque-fundo { from { background-color: #e11d2a; color: #fff; } to { background-color: transparent; color: #e11d2a; } }
+.pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
 .pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
 .pd2 .compra .estoque-barra span { background: #000; }
 .pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
 .pd2 .compra .acao { margin: 0; }
+/* Preso no rodapé da tela enquanto a caixa rola; encaixa no fim do card, depois do frete/prazo.
+   No celular a barra fixa já faz esse papel. */
+@media (max-width: 767px) {
+    /* No celular o COMPRAR AGORA da caixa sai: o da barra fixa já está sempre na tela (pedido do Lira 2026-10-23). */
+    .pd2 .compra .acao { display: none; }
+}
+@media (min-width: 768px) {
+    .pd2 .compra .acao { position: sticky; bottom: 0; z-index: 2; margin: 0 0 -12px; padding: 12px 0; background: var(--card); }
+}
 .pd2 .compra .comprar-agora { width: 100%; min-height: 64px; padding: 0 14px; border: 0; border-radius: 50px; background: #0aac48; color: #fff; font: 600 17px/1.2 Manrope, 'DM Sans', system-ui, sans-serif; letter-spacing: 0; text-transform: uppercase; }
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
@@ -1617,7 +1754,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
 .pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
 .pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
-.pd2 .compra .checks { margin: 0 0 10px; font-size: 14px; }
+.pd2 .compra .checks { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
 /* Selos em caixinhas separadas, como "Frete Grátis" e "Devoluções Gratuitas" da Mavo:
    borda #f5f5f5, cantos de 6px, título 13px em negrito preto e texto 12px. */
 .pd2 .compra .fretefundo { display: flex; flex-direction: column; gap: 10px; margin: 0 0 10px; padding: 0; border: 0; border-radius: 0; background: none; }
@@ -1637,6 +1774,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .selos-compra b { color: #1846c7; font-weight: 700; }
 .pd2 .compra .selos-compra .selo-full { color: #0aac48; font-style: italic; font-weight: 800; }
 .pd2 .compra .selos-compra .selo-full i { margin: 0 2px 0 0; font-size: .95em; color: inherit; }
+.pd2 .compra .selos-compra .aviso-frete { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: #777; }
 .dark .pd2 .compra .selos-compra { background: var(--card); border-color: var(--line); }
 .dark .pd2 .compra .selos-compra li { color: var(--text); }
 .dark .pd2 .compra .selos-compra li + li { border-color: var(--line); }
@@ -1645,6 +1783,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
+/* Endereço do CEP no azul do botão "calcular" desta caixa (#00c3ee, pedido do Lira 2026-10-24). */
+.pd2 .compra .prazo-cep .rua { color: #00c3ee; }
+/* Selo de desconto no canto da foto (pedido 2026-10-23): "-9%" quando o preço caiu. */
+.pd2 .selo-desconto { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); pointer-events: none; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
 .dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }
@@ -1666,4 +1808,26 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     /* "Só N unidades! Frete grátis + desconto no checkout." numa linha, como no print. */
     .pd2 .compra .estoque-baixo p { font-size: clamp(11px, 3.1vw, 13.5px); }
 }
+/* Opções de frete (pedido do Lira 2026-10-24): uma caixa por linha, largura toda, conteúdo
+   numa linha só e centralizado (fonte acompanha a tela do celular; só abaixo de 360px o valor desce); Full/Flex em verde, Turbo em laranja. Marcada = borda mais grossa.
+   No fim do estilo para valer sobre o label/input do .compra .prazo-cep. */
+.pd2 .prazo-cep label.opcao-frete { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; column-gap: 4px; row-gap: 2px; width: 100%; box-sizing: border-box; margin: 8px 0 0; padding: 10px 8px; border: 1px solid; border-radius: 8px; font-size: clamp(11px, 3.2vw, 15px); font-weight: 500; line-height: 1.3; text-align: center; cursor: pointer; }
+.pd2 .prazo-cep .opcao-frete input[type="radio"] { flex: 0 0 auto; width: 16px; height: 16px; margin: 0 2px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.pd2 .prazo-cep .opcao-frete .nome { font-weight: 800; font-style: italic; }
+.pd2 .prazo-cep .opcao-frete > * { white-space: nowrap; }
+.pd2 .prazo-cep .opcao-frete .valor b { font-weight: 800; }
+.pd2 .prazo-cep .opcao-frete.verde { background: #e7f8ec; border-color: #00a650; color: #00801a; }
+.pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #00801a; }
+/* Turbo (Lira, 2026-10-24): fundo e borda no laranja oficial da logo (#FF7F00), como o verde do
+   Full/Flex; o texto vai num laranja mais escuro para ler bem sobre o fundo claro. */
+.pd2 .prazo-cep .opcao-frete.turbo { background: #fff2e5; border-color: #FF7F00; color: #a34f00; }
+.pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #FF7F00; }
+.pd2 .prazo-cep .opcao-frete.marcado { box-shadow: 0 0 0 1px currentColor; }
+.pd2 .prazo-cep .opcao-frete:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
+.dark .pd2 .prazo-cep .opcao-frete.verde { background: rgba(0, 171, 33, .15); border-color: #22c55e; color: #4ade80; }
+.dark .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #4ade80; }
+.dark .pd2 .prazo-cep .opcao-frete.turbo { background: rgba(255, 127, 0, .15); border-color: #FF7F00; color: #ffa04d; }
+.dark .pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #ffa04d; }
+/* Celular: menos sobra nas laterais para o Turbo do motoboy caber numa linha a partir de 360px. */
+@media (max-width: 480px) { .pd2 .compra .prazo-cep { padding-left: 6px; padding-right: 6px; } .pd2 .prazo-cep label.opcao-frete { padding: 10px 4px; } }
 </style>

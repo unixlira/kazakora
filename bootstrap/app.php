@@ -56,6 +56,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\AtivarFreteEmbutido::class,
             HandleInertiaRequests::class,
             TrackSiteVisit::class,
+            // Lugar aproximado do IP por sessão, base do frete pela localização (2026-10-24).
+            \App\Http\Middleware\RegistrarGeoDoVisitante::class,
             PreventBrowserCaching::class,
             ExpireStaleSession::class,
             GuardarCupomDaUrl::class,
@@ -111,6 +113,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/webhooks/whatsapp',
             'api/whatsapp/webhook',
             'api/bling/webhook',
+            // sendBeacon não manda o X-XSRF-TOKEN; a rota só grava contagem
+            // anônima, confere Origin/Sec-Fetch-Site e tem limite por minuto
+            // (CheckoutEventosController, 2026-10-23).
+            'finalizacao/eventos',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

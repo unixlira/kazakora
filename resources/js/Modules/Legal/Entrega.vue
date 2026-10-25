@@ -35,8 +35,12 @@ const regioes = computed(() => {
             <div class="mt-8 flex flex-col gap-6">
                 <LegalCard title="Frete grátis para todo o Brasil">
                     <p>
-                        Todas as compras na KazaKora têm <strong class="text-store-fg">frete grátis</strong>. O valor do frete
-                        nunca é cobrado no checkout, qualquer que seja o CEP.
+                        Entrega <strong class="text-store-fg">GRÁTIS</strong>
+                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e
+                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span> para a sua casa!
+                        Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado:
+                        quando o produto não está no estoque que atende o seu estado, o valor da entrega pode mudar, e ele
+                        sempre aparece no checkout antes de você pagar.
                     </p>
                     <p>
                         A entrega é feita pelos <strong class="text-store-fg">Correios ou por transportadora</strong> em até
@@ -60,14 +64,14 @@ const regioes = computed(() => {
                         <li class="flex items-start gap-2.5">
                             <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Pagamento aprovado <strong class="text-store-fg">depois das {{ full.horario_corte }}</strong>:
-                                você <strong class="text-store-fg">recebe no dia seguinte</strong>.</span>
+                                você <strong class="text-store-fg">recebe no próximo dia de entrega</strong>: de segunda a sábado, sem domingo e feriado (sábado depois das {{ full.horario_corte }}, chega na segunda).</span>
                         </li>
                         <li class="flex items-start gap-2.5">
                             <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Continua com <strong class="text-store-fg">frete grátis</strong>: o Full não tem custo extra.</span>
                         </li>
                     </ul>
-                    <p>Quando o seu CEP é atendido, o "⚡FULL Receba hoje" ou "Receba amanhã" aparece na página do produto e no resumo do pedido.</p>
+                    <p>Quando o seu CEP é atendido, o "⚡FULL Receba hoje", "Receba amanhã" ou o dia da entrega ("Receba SEGUNDA") aparece na página do produto e no resumo do pedido.</p>
                 </LegalCard>
 
                 <LegalCard title="Onde o Full atende">

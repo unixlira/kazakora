@@ -37,6 +37,18 @@ return [
 
     'mailers' => [
 
+        // Resposta às mensagens de comprador da Amazon (2026-10-25): sai do
+        // e-mail autorizado na Seller Central (services.amazon_mensagens).
+        'amazon_mensagens' => [
+            'transport' => 'smtp',
+            'scheme' => env('AMAZON_MENSAGENS_SMTP_SCHEME', 'smtps'),
+            'host' => env('AMAZON_MENSAGENS_SMTP_HOST'),
+            'port' => env('AMAZON_MENSAGENS_SMTP_PORTA', 465),
+            'username' => env('AMAZON_MENSAGENS_IMAP_USUARIO', env('AMAZON_MENSAGENS_EMAIL')),
+            'password' => env('AMAZON_MENSAGENS_SENHA'),
+            'timeout' => 20,
+        ],
+
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),

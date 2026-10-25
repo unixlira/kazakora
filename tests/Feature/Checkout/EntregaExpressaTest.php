@@ -94,6 +94,80 @@ class EntregaExpressaTest extends TestCase
         Carbon::setTestNow();
     }
 
+    /** Turbo de motoboy (pedido 2026-10-24): área do Full, seg a sex em horário comercial e sábado até 13h. */
+    public function test_motoboy_so_na_area_e_em_horario_comercial(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        // 2026-10-09 é sexta; 10 sábado; 11 domingo.
+        $this->assertSame(['preco' => 39.0, 'mensagem' => 'Receba em até 3 horas'], $servico->motoboy('01001-000', $dia('2026-10-09 10:00')));
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-10 12:59')));
+        $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-10 13:00')));
+        $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-11 10:00')));
+        $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-09 18:00')));
+        $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-09 07:59')));
+        $this->assertNull($servico->motoboy('20040-020', $dia('2026-10-09 10:00')));
+    }
+
+    /** Teste do fim de semana (Lira, 2026-10-24): com ignorar_horario o Turbo aparece domingo e de madrugada, só na área. */
+    public function test_motoboy_sem_regra_de_horario_quando_ignorar_horario(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => true]);
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-11 10:00')));
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-10 21:30')));
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-09 03:00')));
+        $this->assertNull($servico->motoboy('20040-020', $dia('2026-10-11 10:00')));
+    }
+
+    /** Mauá (pedido 2026-10-24): motoboy em horário comercial, mas fora do Full e da etiqueta da J3. */
+    public function test_maua_tem_motoboy_sem_entrar_no_full(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        $this->assertNotNull($servico->motoboy('09310-000', $dia('2026-10-08 10:00')));
+        $this->assertNull($servico->motoboy('09310-000', $dia('2026-10-10 21:30')));
+        $this->assertNull($servico->consultar('09310-000', $dia('2026-10-08 10:00')));
+        $this->assertFalse($servico->atende('09310-000'));
+    }
+
+    public function test_horario_comercial_vale_sem_configurar(): void
+    {
+        $this->assertNull(app(EntregaExpressa::class)->motoboy('01001-000', Carbon::parse('2026-10-10 21:30', 'America/Sao_Paulo')));
+    }
+
+    public function test_fim_de_semana_e_sabado_depois_das_13h_ou_domingo(): void
+    {
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        $this->assertFalse($servico->fimDeSemana($dia('2026-10-09 22:00')));
+        $this->assertFalse($servico->fimDeSemana($dia('2026-10-10 12:59')));
+        $this->assertTrue($servico->fimDeSemana($dia('2026-10-10 13:00')));
+        $this->assertTrue($servico->fimDeSemana($dia('2026-10-11 09:00')));
+        // 15:30 UTC de sábado = 12:30 em Brasília: ainda não.
+        $this->assertFalse($servico->fimDeSemana(Carbon::parse('2026-10-10 15:30', 'UTC')));
+    }
+
+    public function test_endpoint_de_prazo_manda_motoboy_e_fim_de_semana(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
+        Carbon::setTestNow($this->em('09:00'));
+        $this->getJson('/frete/prazo?cep=01001-000')->assertJsonPath('motoboy.preco', 39)->assertJsonPath('fim_de_semana', false);
+        $this->getJson('/frete/prazo?cep=20040-020')->assertJsonPath('motoboy', null);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-11 10:00', 'America/Sao_Paulo'));
+        $this->getJson('/frete/prazo?cep=01001-000')->assertJsonPath('motoboy', null)->assertJsonPath('fim_de_semana', true);
+
+        Carbon::setTestNow();
+    }
+
     public function test_cotacao_do_checkout_devolve_a_entrega_expressa(): void
     {
         Carbon::setTestNow($this->em('14:00'));

@@ -621,9 +621,24 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
     }
 }
 
-/* Selo "Envio Express" do card com as duas laterais inclinadas (/ texto /). */
-.envio-express {
-    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+/* Card deitado (Utilidades para casa no celular, 2026-10-24): a foto tem
+   120 px, então o selo encolhe para caber "Oferta Relâmpago" inteiro. */
+.promo-badge.promo-badge-compacto,
+.promo-badge-compacto .promo-badge-icon,
+.promo-badge-compacto .promo-badge-text {
+    height: 20px;
+}
+
+.promo-badge-compacto .promo-badge-icon {
+    min-width: 20px;
+    font-size: 12px;
+}
+
+.promo-badge-compacto .promo-badge-text {
+    margin-left: -10px;
+    padding: 0 12px 0 14px;
+    font-size: 8.5px;
+    letter-spacing: 0;
 }
 
 /* Nome no card: 2 linhas no celular, 3 no computador (altura fixa). */
@@ -639,6 +654,13 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
         line-height: 20px;
         height: 60px;
     }
+}
+
+/* Card deitado: 2 linhas, um pouco maior que no card em pé (coluna mais larga). */
+.card-horizontal .titulo-card {
+    font-size: 13px;
+    line-height: 17px;
+    height: 34px;
 }
 
 .titulo-ver-mais {

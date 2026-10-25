@@ -76,6 +76,21 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('frete', 0);
     }
 
+    public function test_resumo_avisa_quando_o_cep_da_entrega_e_de_outro_estado_da_regiao_do_cliente(): void
+    {
+        $url = '/api/ferrakora/checkout/resumo?simular_uf=SP';
+        $freteEmbutido = \App\Modules\Checkout\Support\FreteEmbutido::class;
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson($url, ['itens' => $this->itens(), 'cep' => '60060-000'])->assertOk()->assertJsonPath('outra_regiao', true);
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson($url, ['itens' => $this->itens(), 'cep' => '01310-100'])->assertOk()->assertJsonPath('outra_regiao', false);
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $this->itens(), 'cep' => '60060-000'])->assertOk()->assertJsonPath('outra_regiao', false);
+    }
+
     public function test_produto_fora_do_ferrakora_e_sem_estoque_sao_recusados(): void
     {
         $outro = Product::factory()->create(['is_active' => true, 'stock' => 3]);
@@ -118,6 +133,10 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(0, \App\Modules\Checkout\Models\Address::count());
         Mail::assertNotSent(\App\Modules\Auth\Mail\WelcomeEmail::class);
         $this->assertSame($resposta->json('token'), CheckoutFerraKora::token($order));
+        // Aceite dos cookies no "Finalizar" do site (2026-10-24): só a prova, com a origem.
+        $prova = \App\Modules\Analytics\Models\ConsentimentoCookie::sole();
+        $this->assertSame('ferrakora', $prova->origem);
+        $this->assertSame(\App\Support\Privacidade\Cookies::VERSAO, $prova->versao);
 
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=errado")->assertNotFound();
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))
@@ -242,7 +261,6 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('pix', null)
             ->assertJsonPath('boleto.linha_digitavel', '23790.12345 60000.000000 00000.000000 1 00000000020000')
-            ->assertJsonPath('boleto.url', 'https://www.mercadopago.com.br/payments/777/ticket')
             ->assertJsonPath('boleto.vencimento', '2026-10-17T23:59:59.000-03:00')
             ->assertJsonPath('pedido.total', 20000)
             ->assertJsonPath('pedido.pago', false);
@@ -251,6 +269,8 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(Order::SITE_FERRAKORA, $order->site_origem);
         $this->assertSame('0.00', $order->pix_discount_amount);
         $this->assertTrue($order->payments()->firstOrFail()->boletoPendente());
+        // O PDF é o boleto com o topo da loja (BoletoComMarca), não o link cru do Mercado Pago.
+        $this->assertStringContainsString("/boleto/{$order->payments()->firstOrFail()->id}?signature=", $resposta->json('boleto.url'));
         Mail::assertSent(\App\Modules\Checkout\Mail\BoletoAguardandoPagamento::class, fn ($mail) => $mail->hasTo('maria@exemplo.com'));
 
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))

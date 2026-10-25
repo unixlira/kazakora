@@ -62,7 +62,7 @@ class SituacaoDoPagamento
 
             return $vence?->isPast()
                 ? self::montar('pix_vencido', 'warning', 'Pix vencido', 'Pix gerado e não pago; o prazo venceu às '.self::hora($vence).'.',
-                    'O pedido é cancelado sozinho em até 30 min depois do vencimento, depois de conferir no Mercado Pago.')
+                    'O pedido é cancelado sozinho em até 15 min depois do vencimento, depois de conferir no Mercado Pago.')
                 : self::montar('pix_aguardando', 'info', 'Aguardando Pix', 'Pix gerado, aguardando o cliente pagar.',
                     $vence ? 'Gerado em '.self::data($pix->created_at).', vence às '.self::hora($vence).'.' : null);
         }

@@ -77,8 +77,8 @@ class DescontoPix
      * (sem preço: final_price da loja), com a mesma conta do checkout:
      * % do carrinho com 4 casas e desconto arredondado no centavo. Null =
      * produto sem desconto no Pix. Página de produto (pedido 2026-10-23).
-     * Desde 2026-10-24 soma o % do cupom automático (BEMVINDO), que o
-     * checkout já aplica sozinho: 2% do Pix + 3% do cupom = 5%.
+     * Só o desconto da forma de pagamento (2% OFF), sem o cupom automático
+     * (pedido 2026-10-24, revendo o 2% + 3% do mesmo dia).
      */
     public static function precoPix(?Product $produto, ?float $preco = null, int $quantidade = 1): ?float
     {
@@ -93,22 +93,18 @@ class DescontoPix
             return null;
         }
 
-        $percentual = min(100.0, $percentual + CupomAutomatico::percentualNaVitrine($produto));
-
         $subtotal = round($preco * max(1, $quantidade), 2);
 
         return round($subtotal - self::desconto($subtotal, $percentual), 2);
     }
 
     /**
-     * % que a vitrine mostra no Pix (catálogo dos outros sites): o "Desconto
-     * Checkout" do produto mais o cupom automático (2% + 3% = 5%, 2026-10-24).
+     * % que a vitrine mostra no Pix (catálogo dos outros sites): só o
+     * "Desconto Checkout" do produto, sem o cupom automático (2026-10-24).
      */
     public static function percentualNaVitrine(?Product $produto): float
     {
-        $percentual = self::percentualDo($produto);
-
-        return $percentual > 0 ? min(100.0, round($percentual + CupomAutomatico::percentualNaVitrine($produto), 4)) : 0.0;
+        return round(self::percentualDo($produto), 4);
     }
 
     /** Maior "Desconto Checkout" entre os produtos ativos (chamada "até X% no Pix"). */

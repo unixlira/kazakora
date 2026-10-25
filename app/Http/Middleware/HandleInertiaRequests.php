@@ -35,6 +35,7 @@ class HandleInertiaRequests extends Middleware
         OversellDetectedNotification::class,
         LowStockNotification::class,
         \App\Notifications\AlertaAdminNotification::class,
+        \App\Notifications\ManuelaAlertaAtendimentoNotification::class,
         // TikTokRelatorioNotification fica de fora de propósito (pedido do
         // Lira 2026-10-11): o alerta vermelho/verde aparece no sino do admin
         // E da loja. Só admins recebem essa notificação, cliente nunca vê.
@@ -86,6 +87,7 @@ class HandleInertiaRequests extends Middleware
             'menuLoja' => fn () => $request->is('admin*') ? null : rescue(fn () => [
                 'departamentos' => \App\Modules\Catalog\Support\MenuDaLoja::departamentos(),
                 'maiorDesconto' => \App\Modules\Catalog\Support\MenuDaLoja::maiorDesconto(),
+                'utilidadesLink' => app(\App\Modules\Catalog\Support\VitrineHome::class)->utilidadesLink(),
             ], null, false),
             // Checkout com o Mercado Pago em modo teste: faixa amarela avisando.
             'pagamentoTeste' => fn () => $request->is('finalizacao*') && \App\Services\MercadoPago\CredenciaisCheckout::emTeste(),
@@ -95,6 +97,10 @@ class HandleInertiaRequests extends Middleware
                 // Pixel da Meta (2026-10-16): o front só carrega depois do OK; ID do admin.
                 'pixelMeta' => \App\Support\PixelMeta::id(),
             ],
+            // Modal "Avalie sua compra" depois do login (2026-10-23): só na loja, só cliente.
+            'avaliacaoModal' => fn () => ! $request->is('admin*') && $request->user() && ! $request->user()->isStaff() && \App\Modules\Catalog\Support\ModalAvaliacao::ativo($request->session())
+                ? rescue(fn () => app(\App\Modules\Catalog\Support\ModalAvaliacao::class)->proximo($request->user(), $request->session()), null, false)
+                : null,
             'cart' => fn () => [
                 // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.
                 'count' => app(CartManager::class)->quantidadeNoCarrinho(),
@@ -122,9 +128,14 @@ class HandleInertiaRequests extends Middleware
                     // Suporte: chamados abertos esperando a equipe (pedido 2026-10-11).
                     'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
                     // Perguntas dos marketplaces esperando uma pessoa (Perguntas MK Place).
-                    'perguntasMkplace' => rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->aguardandoHumano()->count(), 0, false),
+                    'perguntasMkplace' => $perguntasMkplace = rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->aguardandoHumano()->count(), 0, false),
                     // Criativos de anúncio esperando o Lira (Marketing › Validação de criativos).
                     'criativosAguardando' => rescue(fn () => \App\Modules\Admin\Models\CriativoValidacao::query()->where('status', \App\Modules\Admin\Models\CriativoValidacao::AGUARDANDO)->count(), 0, false),
+                    // Chat da Shopee (aba de Perguntas MK Place): conversas com mensagem não lida.
+                    'shopeeChatNaoLidas' => $shopeeChatNaoLidas = rescue(fn () => \App\Modules\Marketplace\Models\ShopeeChatConversa::query()->comNaoLidas()->count(), 0, false),
+                    // Item Perguntas MK Place do menu: perguntas pra você + chats não lidos
+                    // (Shopee, Amazon e TikTok Shop).
+                    'atendimentoMkplace' => $perguntasMkplace + $shopeeChatNaoLidas + array_sum(\App\Modules\Admin\Http\Controllers\MarketplaceChatController::naoLidasPorAba()),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

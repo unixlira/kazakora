@@ -25,11 +25,17 @@ class AlertasAdmin
 {
     public const COLETA_FINANCEIRA = 'coleta_financeira';
 
+    public const FRETE_TABELA = 'frete_tabela';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
             'nome' => 'Falha na coleta financeira (TikTok e Amazon)',
             'descricao' => 'A rotina da Cora Box que tira o financeiro do TikTok e da Amazon falhou, parou ou não está consolidando. Some sozinho quando o próximo relatório entra.',
+        ],
+        self::FRETE_TABELA => [
+            'nome' => 'Falha na atualização da tabela de frete (Correios)',
+            'descricao' => 'A atualização mensal do frete por localidade não conseguiu falar com os Correios (credencial, API fora do ar ou cotações recusadas). Some sozinho quando a tabela termina de atualizar.',
         ],
     ];
 

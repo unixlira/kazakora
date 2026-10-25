@@ -4,6 +4,9 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        {{-- Verificação de propriedade do domínio no Norton Safe Web (pedido do Lira, 2026-10-23). --}}
+        <meta name="norton-safeweb-site-verification" content="77EVMTMGAB7-91DHNRR4XGA1S26545597MEHYHHH7AT1758N5UGGNBO9359JJ35T2CZ0X93SDBOGZTQ333Y-72UD-SD1TZQJOXV6ZQUSV1-XP5X3D9TQOHC4GSTIA1ZF" />
+
         {{-- Página de produto: título, descrição, foto e dados estruturados já no HTML inicial
              (Search Console, pedido 2026-10-12). O <Head> do Vue troca o título depois pelo mesmo texto. --}}
         @php

@@ -43,7 +43,11 @@ class OrderPaymentFinalizer
             return true;
         }
 
-        if ($order->payments->isEmpty()) {
+        // Pix antigo trocado por um novo (`pedidos:novo-pix`, 2026-10-23):
+        // fica no histórico, mas não conta para "todas as parcelas prontas".
+        $pagamentos = $order->payments->filter(fn (Payment $payment) => $payment->substituido_em === null);
+
+        if ($pagamentos->isEmpty()) {
             return false;
         }
 
@@ -56,7 +60,7 @@ class OrderPaymentFinalizer
             return false;
         }
 
-        $allReady = $order->payments->every(
+        $allReady = $pagamentos->every(
             fn (Payment $payment) => in_array($payment->status, [Payment::STATUS_AUTHORIZED, Payment::STATUS_CAPTURED], true)
         );
 
@@ -64,7 +68,7 @@ class OrderPaymentFinalizer
             return false;
         }
 
-        foreach ($order->payments as $payment) {
+        foreach ($pagamentos as $payment) {
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
                 $payment->provider === Payment::PROVIDER_MERCADOPAGO
                     ? $this->mercadoPago->captureOrder($payment->mercadopago_order_id)
@@ -74,6 +78,12 @@ class OrderPaymentFinalizer
         }
 
         $order->update(['status' => Order::STATUS_PAID]);
+
+        // Carrinho abandonado (2026-10-24): pago com lead ainda aberto (outro
+        // aparelho, mesmo e-mail/CPF) também conta como convertido. Nunca lança.
+        if ($order->origin === Order::ORIGIN_STORE) {
+            app(LeadsDoCheckout::class)->converter($order);
+        }
 
         // Emissão da nota + envio do e-mail de recibo acontecem de forma
         // assíncrona, numa fila — o webhook do Stripe (chamador mais comum

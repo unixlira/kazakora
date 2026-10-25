@@ -2,7 +2,10 @@
 
 namespace App\Support\Privacidade;
 
+use App\Modules\Analytics\Models\ConsentimentoCookie;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Str;
 
 /**
  * Cookies da loja e o OK do cliente (pedido 2026-10-10). Documentação:
@@ -12,12 +15,19 @@ use Illuminate\Http\Request;
  *   OK — sem eles a loja não abre carrinho, login nem checkout.
  * - Estatística (kazakora_visitor): só depois do OK.
  *
- * Mudou o que a loja coleta? Troque VERSAO: o aviso volta para todo mundo.
+ * Desde 2026-10-24 não há mais aviso flutuante: o aceite vem junto com o
+ * "Finalizar pedido" (frase abaixo do botão) e é gravado por registrarAceite().
+ *
+ * Mudou o que a loja coleta? Troque VERSAO e atualize as políticas.
  */
 class Cookies
 {
     // 2026-10-18: API de Conversões da Meta (o servidor também manda os eventos).
-    public const VERSAO = '2026-10-18';
+    // 2026-10-24: aceite na frase do checkout, no lugar do aviso flutuante.
+    public const VERSAO = '2026-10-24';
+
+    /** OKs anteriores para os mesmos cookies (aviso de 2026-10-18): continuam valendo. */
+    public const VERSOES_ANTERIORES = ['2026-10-18'];
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';
@@ -50,7 +60,41 @@ class Cookies
 
     public static function aceitou(Request $request): bool
     {
-        return $request->cookie(self::COOKIE_OK) === self::VERSAO;
+        return in_array($request->cookie(self::COOKIE_OK), [self::VERSAO, ...self::VERSOES_ANTERIORES], true);
+    }
+
+    /**
+     * Grava o aceite (LGPD art. 8º, § 2º) e devolve o código do visitante.
+     * Na KazaKora também cria os cookies do OK e do visitante e marca a
+     * requisição atual como aceita, para o resto dela (rastreio da Meta do
+     * pedido) já enxergar o aceite. Os outros sites (Beauty Kora, FerraKora)
+     * chegam pela API, de outro domínio: só a prova é gravada.
+     */
+    public static function registrarAceite(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?int $userId = null): string
+    {
+        $naLoja = $origem === ConsentimentoCookie::ORIGEM_KAZAKORA;
+        $visitante = ($naLoja ? $request->cookie(self::COOKIE_VISITANTE) : null) ?: (string) Str::uuid();
+
+        if (! $naLoja || ! self::aceitou($request)) {
+            ConsentimentoCookie::create([
+                'visitante_id' => $visitante,
+                'user_id' => $userId ?? $request->user()?->id,
+                'origem' => $origem,
+                'versao' => self::VERSAO,
+                'ip' => $request->ip(),
+                'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
+                'aceito_em' => now(),
+            ]);
+        }
+
+        if ($naLoja) {
+            Cookie::queue(self::COOKIE_OK, self::VERSAO, self::DURACAO_MINUTOS);
+            Cookie::queue(self::COOKIE_VISITANTE, $visitante, self::DURACAO_MINUTOS);
+            $request->cookies->set(self::COOKIE_OK, self::VERSAO);
+            $request->cookies->set(self::COOKIE_VISITANTE, $visitante);
+        }
+
+        return $visitante;
     }
 
     public static function registravel(string $nome): bool

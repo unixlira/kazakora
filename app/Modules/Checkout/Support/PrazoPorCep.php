@@ -73,6 +73,8 @@ class PrazoPorCep
             $opcoes = [[
                 'tipo' => 'full',
                 'quando' => $prazo['entrega_expressa']['tipo'],
+                // "Receba SEGUNDA" no fim de semana (pedido do Lira 2026-10-24).
+                'mensagem' => $prazo['entrega_expressa']['mensagem'] ?? null,
                 'horario' => (string) config('entrega_expressa.horario_entrega', '21h'),
                 'preco' => 0.0,
             ]];

@@ -26,6 +26,16 @@ class ManuelaAgentClient
 {
     public const HANDOFF_TAG = '[HUMANO]';
 
+    /**
+     * Resposta negativa ("não sei", "não tem"): a Manuela começa com esta
+     * marcação e a resposta NÃO vai ao cliente; o time de Atendimento é
+     * alertado para assumir (pedido do Lira 2026-10-25).
+     */
+    public const ALERT_TAG = '[ALERTA_ATENDIMENTO]';
+
+    /** Rede de segurança: negativas óbvias sem a marcação (comparado sem acento, minúsculas). */
+    private const NEGATIVAS = '/\bnao sei\b|\bnao tenho (essa |a )?(informacao|certeza)|\bnao tenho como (confirmar|informar|afirmar)|\bnao consigo (confirmar|informar|afirmar)|\bnao (encontrei|localizei|achei)\b|\bnao temos\b|\bnao tem (esse|essa|este|esta|disponivel|a informacao)|\bnao trabalhamos com\b|\bnao possuimos\b|\bnao consta\b/';
+
     /** Mensagem enquanto procura na Shopee/ML (pedido 2026-10-08, texto do Lira). */
     public const SEARCHING_ELSEWHERE_REPLY = 'Só mais um minutinho que estou verificando em outro catálogo 😊';
 
@@ -56,7 +66,7 @@ class ManuelaAgentClient
 
     /**
      * @param  (callable(string): void)|null  $sendNow  manda uma mensagem pro cliente na hora (o "só um minutinho")
-     * @return array{reply: string, needs_human: bool, provider: string}
+     * @return array{reply: string, needs_human: bool, provider: string, alerta_atendimento: bool, rascunho: string}
      */
     public function reply(WhatsAppConversation $conversation, string $systemPrompt, ?callable $sendNow = null): array
     {
@@ -66,14 +76,25 @@ class ManuelaAgentClient
             ? $this->replyFromHermes($conversation, $systemPrompt)
             : $this->replyFromGemini($conversation, $systemPrompt, $sendNow);
 
+        $alerta = Str::contains($text, self::ALERT_TAG);
         $needsHuman = Str::contains($text, self::HANDOFF_TAG);
-        $text = trim(str_replace(self::HANDOFF_TAG, '', $text));
+        $text = trim(str_replace([self::HANDOFF_TAG, self::ALERT_TAG], '', $text));
+        $alerta = $alerta || self::respostaNegativa($text);
+
+        if ($alerta) {
+            return ['reply' => '', 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => true, 'rascunho' => $text];
+        }
 
         if ($text === '') {
             throw new RuntimeException("Manuela ({$provider}) devolveu só a marcação, sem texto pro cliente.");
         }
 
-        return ['reply' => $text, 'needs_human' => $needsHuman, 'provider' => $provider];
+        return ['reply' => $text, 'needs_human' => $needsHuman, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => ''];
+    }
+
+    public static function respostaNegativa(string $text): bool
+    {
+        return (bool) preg_match(self::NEGATIVAS, Str::lower(Str::ascii($text)));
     }
 
     private function replyFromGemini(WhatsAppConversation $conversation, string $systemPrompt, ?callable $sendNow): string

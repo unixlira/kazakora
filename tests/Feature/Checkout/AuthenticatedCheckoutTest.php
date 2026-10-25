@@ -3,12 +3,14 @@
 namespace Tests\Feature\Checkout;
 
 use App\Models\User;
+use App\Modules\Analytics\Models\ConsentimentoCookie;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Stripe\PaymentIntent;
@@ -75,6 +77,41 @@ class AuthenticatedCheckoutTest extends TestCase
         $this->assertEquals(170, $order->total);
 
         $this->assertDatabaseCount('addresses', 1);
+    }
+
+    /**
+     * Aceite dos cookies no "Finalizar pedido" (pedido 2026-10-24, no lugar do
+     * aviso flutuante): grava a prova, cria os cookies e o rastreio da Meta
+     * do pedido já sai com o aceite.
+     */
+    public function test_finalizar_pedido_registra_o_aceite_dos_cookies(): void
+    {
+        Mail::fake();
+        $this->mockStripe();
+
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $address = Address::create([
+            'user_id' => $user->id, 'label' => 'Casa', 'recipient_name' => $user->name, 'phone' => '11999999999',
+            'zip' => '01000-000', 'street' => 'Rua Salva', 'number' => '10', 'neighborhood' => 'Centro',
+            'city' => 'São Paulo', 'state' => 'SP', 'is_default' => true,
+        ]);
+        $product = Product::factory()->create(['price' => 150, 'stock' => 10, 'is_active' => true]);
+        $shippingMethod = ShippingMethod::factory()->create(['price' => 20, 'is_active' => true]);
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->post('/finalizacao/entrega', ['shipping_method_id' => $shippingMethod->id, 'address_id' => $address->id]);
+
+        $this->assertDatabaseCount('consentimentos_cookies', 0);
+
+        $this->actingAs($user)->post('/finalizacao/pagamento', ['payment_method' => 'card', 'terms_accepted' => true])
+            ->assertCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+            ->assertCookie(Cookies::COOKIE_VISITANTE);
+
+        $prova = ConsentimentoCookie::sole();
+        $this->assertSame(Cookies::VERSAO, $prova->versao);
+        $this->assertSame($user->id, $prova->user_id);
+        $this->assertSame('kazakora', $prova->origem);
+        $this->assertSame(Cookies::VERSAO, Order::where('user_id', $user->id)->sole()->meta_rastreio['consentiu']);
     }
 
     /**

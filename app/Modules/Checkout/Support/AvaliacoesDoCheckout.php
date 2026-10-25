@@ -1,0 +1,134 @@
+<?php
+
+namespace App\Modules\Checkout\Support;
+
+use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
+use App\Support\NomeBrasileiro;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+
+/**
+ * Avaliações do carrossel do checkout (modelo Mavo): o da loja e o dos outros
+ * sites (FerraKora e Beauty Kora) pela API de resumo. Só as que existem no
+ * banco, nota 4 ou 5 e com texto, só dos produtos do carrinho (anúncio pai e
+ * variações); com foto antes. Produto sem avaliação não mostra o carrossel: as
+ * "melhores da loja" de outro produto saíram (pedido 2026-10-24, depois do
+ * PR #1080). O nome segue a mesma regra da página do produto
+ * (reviewer_display_name) e a UF só aparece quando é a real (reviews.uf).
+ *
+ * Foto redonda (pedido 2026-10-24): avatar do pacote da vitrine em
+ * public/images/avaliacoes/avatares, do mesmo gênero do nome, escolhido
+ * pelo id da avaliação (a mesma avaliação mostra sempre o mesmo rosto) e sem
+ * repetir rosto no mesmo carrossel. Máximo de 5 avaliações (pedido 2026-10-24):
+ * se o gênero do nome já usou todos os rostos dele, a avaliação é pulada e
+ * entra a próxima, então nunca há duas pessoas com a mesma foto.
+ */
+class AvaliacoesDoCheckout
+{
+    public const LIMITE = 5;
+
+    // Candidatas lidas do banco: avaliação cujo rosto já saiu é pulada, então precisa sobrar.
+    private const CANDIDATAS = 40;
+
+    public const AVATARES_FEMININOS = 16;
+
+    public const AVATARES_MASCULINOS = 3;
+
+    /**
+     * $catalogo (ids de produto pai publicados no site): os outros sites só
+     * mostram avaliações do próprio catálogo (2026-10-24: a Beauty Kora
+     * mostrava "Torque forte" de parafusadeira).
+     *
+     * @param  Collection<int, int>|array<int, int>  $productIds  produtos do carrinho
+     * @return list<array{id: int, nota: int, nome: string, uf: ?string, texto: string, avatar: string}>
+     */
+    public function paraProdutos(Collection|array $productIds, ?Builder $catalogo = null): array
+    {
+        $ids = collect($productIds)->filter()->unique();
+        $grupos = $ids->isEmpty() ? collect() : Product::query()->whereIn('id', $ids)->get(['id', 'parent_product_id'])
+            ->map(fn (Product $product) => $product->parent_product_id ?: $product->id)->unique()->values();
+
+        if ($grupos->isEmpty()) {
+            return [];
+        }
+
+        $avaliacoes = Review::query()
+            ->where('rating', '>=', 4)
+            ->whereNotNull('comment')
+            ->whereRaw('LENGTH(TRIM(comment)) >= 15')
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->orderByDesc('rating')
+            ->latest()
+            ->orderByDesc('id')
+            ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')))
+            ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
+            ->limit(self::CANDIDATAS)
+            ->get();
+
+        $usados = [];
+        $resultado = [];
+
+        foreach ($avaliacoes as $review) {
+            if (count($resultado) >= self::LIMITE) {
+                break;
+            }
+            if ($review->ocultar_nome) {
+                $review->setRelation('user', null);
+            }
+            $nome = $review->reviewer_display_name;
+            $arquivo = self::avatar($review->id, $nome, $usados, repetir: false);
+            if ($arquivo === null) {
+                continue;
+            }
+
+            $resultado[] = [
+                'id' => $review->id,
+                'nota' => (int) $review->rating,
+                'nome' => $nome,
+                'uf' => $review->uf ? strtoupper($review->uf) : null,
+                'texto' => Str::limit(trim((string) $review->comment), 220),
+                'avatar' => asset('images/avaliacoes/avatares/'.$arquivo),
+            ];
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Arquivo do avatar ("f03.webp"). $usados guarda os já mostrados no
+     * carrossel; quando todos do gênero já saíram, volta a repetir (ou devolve
+     * null com $repetir = false).
+     *
+     * @param  array<string, true>  $usados
+     */
+    public static function avatar(int $semente, string $nome, array &$usados = [], bool $repetir = true): ?string
+    {
+        [$prefixo, $total] = NomeBrasileiro::feminino($nome)
+            ? ['f', self::AVATARES_FEMININOS]
+            : ['m', self::AVATARES_MASCULINOS];
+
+        $inicio = hexdec(substr(sha1('avatar-avaliacao:'.$semente), 0, 8)) % $total;
+        // Todos do gênero já saíram: começa outra rodada (revezando, sem cair sempre no mesmo).
+        if (count(array_filter(array_keys($usados), fn (string $usado) => $usado[0] === $prefixo)) >= $total) {
+            if (! $repetir) {
+                return null;
+            }
+            $usados = array_filter($usados, fn (string $usado) => $usado[0] !== $prefixo, ARRAY_FILTER_USE_KEY);
+        }
+        $arquivo = null;
+        for ($passo = 0; $passo < $total; $passo++) {
+            $candidato = sprintf('%s%02d.webp', $prefixo, (($inicio + $passo) % $total) + 1);
+            if (! isset($usados[$candidato])) {
+                $arquivo = $candidato;
+                break;
+            }
+        }
+        $usados[$arquivo] = true;
+
+        return $arquivo;
+    }
+}

@@ -135,6 +135,17 @@ class FreteEmbutido
     }
 
     /**
+     * Estado da região em que o cliente navega (CEP digitado antes do checkout
+     * ou IP). Chamar ANTES de usarCep(): o CEP da entrega vale acima dos dois.
+     */
+    public function ufDaNavegacao(): ?string
+    {
+        $destino = $this->destino();
+
+        return $destino['uf'] ?? CepUf::porCep($destino['cep'] ?? null);
+    }
+
+    /**
      * Estado pelo IP: cabeçalhos "visitor location" da Cloudflare (precisa da
      * regra "Add visitor location headers" ligada no painel). Fora do
      * kazakora.com, ?simular_uf=CE na URL testa sem Cloudflare (o homolog

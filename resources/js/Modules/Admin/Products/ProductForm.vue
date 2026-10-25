@@ -286,6 +286,32 @@ const resumo = computed(() => {
             </div>
         </div>
 
+        <!-- SEO só do site (kazakora.com). Marketplaces seguem usando o nome do anúncio. -->
+        <div v-if="form.seo_title !== undefined" class="rounded-lg border border-gray-200 p-4">
+            <p class="text-sm font-semibold">SEO do site</p>
+            <p class="text-xs text-gray-500">Vale só para a página do produto em kazakora.com. Vazio = usa o nome e a descrição do anúncio. Não muda Shopee, Mercado Livre, Amazon nem TikTok.</p>
+            <div class="mt-2 space-y-4">
+                <div>
+                    <label for="seo_title" class="block text-sm font-medium">Título SEO</label>
+                    <input id="seo_title" v-model="form.seo_title" type="text" maxlength="255" aria-describedby="seo_title-hint" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                    <p id="seo_title-hint" class="mt-1 text-xs text-gray-400">{{ (form.seo_title || '').length }} caracteres. Ideal até 120.</p>
+                    <InputError :message="form.errors.seo_title" />
+                </div>
+                <div>
+                    <label for="seo_description" class="block text-sm font-medium">Meta description</label>
+                    <textarea id="seo_description" v-model="form.seo_description" rows="2" maxlength="320" aria-describedby="seo_description-hint" class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                    <p id="seo_description-hint" class="mt-1 text-xs text-gray-400">{{ (form.seo_description || '').length }} de 320 caracteres. Ideal até 160.</p>
+                    <InputError :message="form.errors.seo_description" />
+                </div>
+                <div>
+                    <label for="seo_tags" class="block text-sm font-medium">Tags</label>
+                    <textarea id="seo_tags" v-model="form.tags" rows="2" aria-describedby="seo_tags-hint" class="mt-1 w-full rounded border border-gray-300 px-3 py-2" />
+                    <p id="seo_tags-hint" class="mt-1 text-xs text-gray-400">Separadas por vírgula. Entram nas palavras-chave da página e na busca do site.</p>
+                    <InputError :message="form.errors.tags" />
+                </div>
+            </div>
+        </div>
+
         <div v-if="form.sku !== undefined">
             <label for="sku" class="block text-sm font-medium">SKU</label>
 

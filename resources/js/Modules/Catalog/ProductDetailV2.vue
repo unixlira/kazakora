@@ -745,7 +745,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 </script>
 
 <template>
-    <Head :title="product.name" />
+    <Head :title="product.seo_title || product.name" />
 
     <AppLayout>
         <div class="pd2">

@@ -14,7 +14,7 @@
             $seoProduto = $seoProduto !== null ? json_decode(json_encode($seoProduto), true) : null;
             $seoProduto = is_array($seoProduto) && filled($seoProduto['name'] ?? null) ? $seoProduto : null;
         @endphp
-        <title inertia>{{ config('app.name', 'KazaKora').($seoProduto ? ' - '.$seoProduto['name'] : '') }}</title>
+        <title inertia>{{ config('app.name', 'KazaKora').($seoProduto ? ' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : '') }}</title>
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
@@ -26,19 +26,26 @@
                     $slugPai = \App\Modules\Catalog\Models\Product::query()->whereKey($seoProduto['parent_product_id'])->value('slug');
                     $canonical = $slugPai ? rtrim(config('app.url'), '/').'/produtos/'.$slugPai : $canonical;
                 }
-                $descricao = $seoProduto && filled($seoProduto['description'] ?? null)
+                $descricao = $seoProduto && filled($seoProduto['seo_description'] ?? null)
+                    ? trim($seoProduto['seo_description'])
+                    : ($seoProduto && filled($seoProduto['description'] ?? null)
                     ? \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($seoProduto['description'])))), 155)
-                    : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.';
+                    : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.');
+                // Tags do produto (só do site): meta keywords e keywords do JSON-LD.
+                $tagsSeo = collect($seoProduto['tags'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
             @endphp
             <link rel="canonical" href="{{ $canonical }}">
             <meta name="description" content="{{ $descricao }}">
+            @if ($seoProduto && $tagsSeo)
+                <meta name="keywords" content="{{ implode(', ', $tagsSeo) }}">
+            @endif
             <meta property="og:site_name" content="KazaKora">
             <meta property="og:type" content="{{ $seoProduto ? 'product' : 'website' }}">
             <meta property="og:url" content="{{ $canonical }}">
             <meta property="og:locale" content="pt_BR">
             @if ($seoProduto)
-                <meta property="og:title" content="{{ $seoProduto['name'] }}">
+                <meta property="og:title" content="{{ filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name'] }}">
                 <meta property="og:description" content="{{ $descricao }}">
                 @if ($imagens)
                     <meta property="og:image" content="{{ url($imagens[0]) }}">
@@ -52,6 +59,7 @@
                     'sku' => $seoProduto['sku'] ?? null,
                     'brand' => filled($seoProduto['brand'] ?? null) ? ['@type' => 'Brand', 'name' => $seoProduto['brand']] : null,
                     'image' => $imagens ?: null,
+                    'keywords' => $tagsSeo ? implode(', ', $tagsSeo) : null,
                     'offers' => [
                         '@type' => 'Offer',
                         'url' => $canonical,

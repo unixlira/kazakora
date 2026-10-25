@@ -659,8 +659,9 @@ const enderecoResumo = computed(() => {
     const a = usarNovoEndereco.value ? endereco : enderecoSelecionado.value;
     if (!a) return null;
     return {
-        rua: `${a.street}, ${a.number}${a.complement ? ` - ${a.complement}` : ''}`,
-        cidade: `${a.neighborhood} · ${a.city}/${a.state} · CEP ${a.zip}`,
+        // Bairro junto da rua e CEP com a cidade: a linha cortada no computador nunca esconde o CEP.
+        rua: `${a.street}, ${a.number}${a.complement ? ` - ${a.complement}` : ''}${a.neighborhood ? ` · ${a.neighborhood}` : ''}`,
+        cidade: `${a.city}/${a.state} · CEP ${a.zip}`,
     };
 });
 
@@ -884,7 +885,9 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
 // Celular (modelo Mavo, pedido 2026-10-24): só a etapa atual aparece; a feita
 // fecha (volta pelo "Voltar") e a próxima não fica apagada na tela. No
 // computador as três seguem à mostra, a próxima esmaecida.
-const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden lg:block', etapa.value < numero && 'lg:opacity-60'];
+// No computador o card é coluna flex: o resumo da etapa feita cresce até o fim
+// do card, e Identificação e Entrega fecham com a mesma altura (2026-10-24).
+const classeEtapa = (numero) => [caixaClass, 'lg:flex lg:flex-col', etapa.value !== numero && 'hidden', etapa.value < numero && 'lg:opacity-60'];
 // Grade da coluna da esquerda no computador: Identificação e Entrega 50/50, Pagamento embaixo.
 const areasSemErro = "lg:[grid-template-areas:'ident_entrega'_'pag_pag']";
 const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_pag']";
@@ -911,8 +914,9 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
         <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6 lg:py-9 xl:grid-cols-[minmax(0,1fr)_400px]">
             <!-- ETAPAS -->
             <!-- A linha do aviso de erro só entra na grade com erro, senão sobra o espaço dela no topo. -->
-            <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6"
-                :class="erroGeral || serverErrors.payment || serverErrors.cart ? areasComErro : areasSemErro">
+            <!-- Com as duas etapas fechadas (no Pagamento), Identificação e Entrega esticam até a mesma altura. -->
+            <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:gap-6"
+                :class="[erroGeral || serverErrors.payment || serverErrors.cart ? areasComErro : areasSemErro, etapa === 3 ? 'lg:items-stretch' : 'lg:items-start']">
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 lg:mb-0 lg:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
@@ -986,7 +990,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             </p>
                         </template>
 
-                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600">
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600 lg:flex-1">
                             <div class="min-w-0 break-words">
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
                                 <p v-if="ehPj">{{ empresa.razaoSocial }} · CNPJ {{ empresa.cnpj }}</p>
@@ -1134,13 +1138,14 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             </p>
                         </template>
 
-                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600">
+                        <!-- Três linhas como a Identificação (2026-10-24): no computador a cidade fica numa linha só, com o endereço inteiro no title. -->
+                        <div v-else class="mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[#F6F7F8] p-4 text-sm text-slate-600 lg:flex-1">
                             <div class="flex min-w-0 items-start gap-1.5 break-words">
                                 <i class="fa-solid fa-circle-check mt-1 text-[#00843f]"></i>
                                 <div class="min-w-0">
-                                    <p v-if="enderecoResumo" class="font-semibold text-slate-900">{{ enderecoResumo.rua }}</p>
-                                    <p v-if="enderecoResumo">{{ enderecoResumo.cidade }}</p>
-                                    <p class="mt-1 font-semibold text-slate-700">
+                                    <p v-if="enderecoResumo" class="font-semibold text-slate-900 lg:truncate" :title="enderecoResumo.rua">{{ enderecoResumo.rua }}</p>
+                                    <p v-if="enderecoResumo" class="lg:truncate" :title="enderecoResumo.cidade">{{ enderecoResumo.cidade }}</p>
+                                    <p class="mt-1 font-semibold text-slate-700 lg:mt-0">
                                         <template v-if="turboEscolhido && turbo">Envio Prioritário: + {{ formatPrice(turbo.preco) }}</template>
                                         <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
                                     </p>

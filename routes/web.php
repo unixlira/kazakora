@@ -960,6 +960,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('suporte/{chamado}/humano', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'humano'])->whereNumber('chamado')->name('suporte.humano');
         Route::patch('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'atualizar'])->whereNumber('chamado')->name('suporte.atualizar');
         Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
+        // Chat da Shopee (2026-10-25): conversas do sellerchat. Enviar só por ação do atendente.
+        Route::get('chat-shopee', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'index'])->name('chat-shopee.index');
+        Route::get('chat-shopee/pendentes', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'pendentes'])->name('chat-shopee.pendentes');
+        Route::post('chat-shopee/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'enviar'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-shopee.enviar');
+        Route::post('chat-shopee/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'lida'])->whereNumber('conversa')->name('chat-shopee.lida');
         // Perguntas MK Place (pedido 2026-10-20): Manuela atende, humano assume quando precisa.
         Route::get('perguntas-marketplace', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'index'])->name('perguntas-marketplace.index');
         Route::get('perguntas-marketplace/chegando', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'chegando'])->name('perguntas-marketplace.chegando');

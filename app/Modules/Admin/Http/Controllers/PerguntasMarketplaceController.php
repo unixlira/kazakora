@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Modules\Marketplace\Models\MercadoLivrePergunta;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Models\ShopeeChatConversa;
 use App\Services\MercadoLivre\Services\RespostaPerguntaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,8 @@ use Throwable;
  * API (a Shopee e a Amazon não têm perguntas públicas na API). A Manuela atende primeiro; o que ela não sabe fica
  * marcado para uma pessoa, com aviso no topo do admin. O atendente pode
  * assumir qualquer pergunta, editar o rascunho e enviar, ou devolver para ela.
+ * Aba "Chat da Shopee" (2026-10-25): conversas do sellerchat na mesma tela
+ * (dados em ShopeeChatController::dados).
  */
 class PerguntasMarketplaceController extends Controller
 {
@@ -38,6 +41,20 @@ class PerguntasMarketplaceController extends Controller
 
     public function index(Request $request): Response
     {
+        $abas = [
+            'perguntas' => MercadoLivrePergunta::query()->aguardandoHumano()->count(),
+            'chat-shopee' => rescue(fn () => ShopeeChatConversa::query()->comNaoLidas()->count(), 0, false),
+        ];
+
+        if ($request->query('aba') === 'chat-shopee') {
+            return Inertia::render('Admin/PerguntasMarketplace/Index', [
+                'aba' => 'chat-shopee',
+                'abas' => $abas,
+                'chat' => ShopeeChatController::dados($request),
+                'perguntas' => [],
+            ]);
+        }
+
         $filtro = in_array($request->query('filtro'), self::FILTROS, true) ? $request->query('filtro') : 'humano';
         $busca = trim((string) $request->query('busca', ''));
         $canal = in_array($request->query('canal'), self::CANAIS, true) ? $request->query('canal') : null;
@@ -61,6 +78,8 @@ class PerguntasMarketplaceController extends Controller
         $atendentes = User::query()->whereIn('id', $perguntas->pluck('humano_assumiu_por')->merge($perguntas->pluck('respondida_por_user_id'))->filter()->unique())->pluck('name', 'id');
 
         return Inertia::render('Admin/PerguntasMarketplace/Index', [
+            'aba' => 'perguntas',
+            'abas' => $abas,
             'perguntas' => $perguntas->map(fn (MercadoLivrePergunta $p) => $this->linha($p, $produtos, $atendentes))->values(),
             'filtro' => $filtro,
             'busca' => $busca,

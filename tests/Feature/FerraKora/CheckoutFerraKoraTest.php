@@ -76,6 +76,21 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('frete', 0);
     }
 
+    public function test_resumo_avisa_quando_o_cep_da_entrega_e_de_outro_estado_da_regiao_do_cliente(): void
+    {
+        $url = '/api/ferrakora/checkout/resumo?simular_uf=SP';
+        $freteEmbutido = \App\Modules\Checkout\Support\FreteEmbutido::class;
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson($url, ['itens' => $this->itens(), 'cep' => '60060-000'])->assertOk()->assertJsonPath('outra_regiao', true);
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson($url, ['itens' => $this->itens(), 'cep' => '01310-100'])->assertOk()->assertJsonPath('outra_regiao', false);
+
+        $this->app->forgetInstance($freteEmbutido);
+        $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $this->itens(), 'cep' => '60060-000'])->assertOk()->assertJsonPath('outra_regiao', false);
+    }
+
     public function test_produto_fora_do_ferrakora_e_sem_estoque_sao_recusados(): void
     {
         $outro = Product::factory()->create(['is_active' => true, 'stock' => 3]);

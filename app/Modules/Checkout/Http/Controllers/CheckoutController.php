@@ -227,6 +227,18 @@ class CheckoutController extends Controller
             $turbo['mensagem'] = app(DiaDeEntrega::class)->fraseCorreios((int) $turbo['prazo']);
         }
 
+        $opcoes = PrazoPorCep::opcoes($prazo, $entrega);
+
+        // Fora da Grande SP o grátis sai pelo PAC (pedido do Lira 2026-10-24): a tela
+        // mostra o prazo real do CEP ("Receba em até 10 dias úteis" no Maranhão), não
+        // a frase do Flex. Grande SP = CEP 01000-000 a 09999-999 (capital e as 38
+        // cidades da região metropolitana).
+        $grandeSp = (int) $cep >= 1000000 && (int) $cep <= 9999999;
+        $gratis = collect($opcoes)->first(fn (array $opcao) => in_array($opcao['tipo'], ['flex', 'padrao'], true));
+        $pac = ! $grandeSp && ! $prazo['entrega_expressa'] && $gratis
+            ? ['ate' => $gratis['ate'], 'mensagem' => "Receba em até {$gratis['ate']} dias úteis"]
+            : null;
+
         return response()->json([
             'final_price' => $produto?->final_price,
             'preco_de' => $produto?->preco_de,
@@ -243,11 +255,14 @@ class CheckoutController extends Controller
             // domingo e feriado não prometem "1 dia", dizem "a partir de TERÇA". Na
             // área do Full o grátis sai pelo Full: mesmo dia dele ("Receba SEGUNDA").
             'flex_mensagem' => $prazo['entrega_expressa']['mensagem'] ?? app(DiaDeEntrega::class)->fraseFlex(),
+            'pac' => $pac,
             'turbo' => $turbo,
-            'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
+            'opcoes' => $opcoes,
             // Página do produto (pedido 2026-10-24): Turbo de motoboy na Grande SP em
             // horário comercial (Full + motoboy, sem Flex); fora dele, Flex + Turbo SEDEX.
-            'motoboy' => app(EntregaExpressa::class)->motoboy($cep),
+            // Motoboy só junto do Full: em Mauá (fora do Full) fica o Flex grátis e o
+            // motoboy não aparece com ele (pedido do Lira 2026-10-24).
+            'motoboy' => $prazo['entrega_expressa'] ? app(EntregaExpressa::class)->motoboy($cep) : null,
             'fim_de_semana' => app(EntregaExpressa::class)->fimDeSemana(),
         ]);
     }

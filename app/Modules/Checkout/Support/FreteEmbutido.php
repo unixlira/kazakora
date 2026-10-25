@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Fiscal\Models\Company;
 use App\Services\Correios\CorreiosTokenService;
+use App\Support\SiteAtual;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
@@ -28,6 +29,11 @@ use Throwable;
  *
  * Preço por destino e faixa de peso, cotado na API dos Correios uma vez por
  * CEP e guardado por 24 h (11 faixas x PAC/SEDEX, em lotes de 5).
+ *
+ * Regras por lugar (pedido 2026-10-24, RegrasDeFrete): onde houver regra
+ * para a cidade, UF ou faixa de CEP do cliente, o frete embutido segue a
+ * regra (valor fixo, acréscimo, desconto ou teto sobre os Correios). O custo
+ * real da caixa (custo) continua o dos Correios: a loja paga a diferença.
  */
 class FreteEmbutido
 {
@@ -49,6 +55,9 @@ class FreteEmbutido
     private ?array $pesos = null;
 
     private ?array $destino = null;
+
+    /** @var list<array>|null regras de frete que valem para o destino atual */
+    private ?array $regras = null;
 
     public function __construct(private readonly Request $request)
     {
@@ -75,6 +84,7 @@ class FreteEmbutido
         $cep = self::digitos($cep);
         $this->cepForcado = strlen($cep) === 8 ? $cep : null;
         $this->destino = null;
+        $this->regras = null;
     }
 
     /**
@@ -144,7 +154,7 @@ class FreteEmbutido
     /**
      * Frete de 1 unidade para o destino atual.
      *
-     * @return array{embutido: float, servico: string, prazo: ?int, pac: float, sedex: float, prazo_pac: ?int, prazo_sedex: ?int, estimado: bool}
+     * @return array{embutido: float, servico: string, prazo: ?int, pac: float, sedex: float, prazo_pac: ?int, prazo_sedex: ?int, estimado: bool, correios?: float, regra?: string}
      */
     public function paraProduto(Product $product): array
     {
@@ -157,13 +167,13 @@ class FreteEmbutido
             $pac = (float) config('frete_embutido.fallback_pac', 30);
             $sedex = (float) config('frete_embutido.fallback_sedex', 60);
 
-            return ['embutido' => $pac, 'servico' => 'pac', 'prazo' => null, 'pac' => $pac, 'sedex' => $sedex, 'prazo_pac' => null, 'prazo_sedex' => null, 'estimado' => true];
+            return $this->comRegra(['embutido' => $pac, 'servico' => 'pac', 'prazo' => null, 'pac' => $pac, 'sedex' => $sedex, 'prazo_pac' => null, 'prazo_sedex' => null, 'estimado' => true], $peso);
         }
 
         // O mais barato dos dois vai embutido (em SP o SEDEX do contrato sai mais em conta que o PAC).
         $sedexMaisBarato = $faixa['sedex'] <= $faixa['pac'];
 
-        return [
+        return $this->comRegra([
             'embutido' => $sedexMaisBarato ? $faixa['sedex'] : $faixa['pac'],
             'servico' => $sedexMaisBarato ? 'sedex' : 'pac',
             'prazo' => $sedexMaisBarato ? $faixa['prazo_sedex'] : $faixa['prazo_pac'],
@@ -172,7 +182,48 @@ class FreteEmbutido
             'prazo_pac' => $faixa['prazo_pac'],
             'prazo_sedex' => $faixa['prazo_sedex'],
             'estimado' => false,
+        ], $peso);
+    }
+
+    /**
+     * Aplica a regra de frete do destino (se houver) ao frete de 1 unidade:
+     * embutido passa a ser o da regra e correios guarda a cotação original.
+     */
+    private function comRegra(array $frete, int $peso): array
+    {
+        $regra = RegrasDeFrete::paraPeso($this->regras(), $peso);
+        if (! $regra) {
+            return $frete;
+        }
+
+        return [
+            ...$frete,
+            'correios' => $frete['embutido'],
+            'embutido' => RegrasDeFrete::aplicar($regra, $frete['embutido']),
+            'prazo' => $regra['prazo_dias'] ?? $frete['prazo'],
+            'regra' => $regra['nome'],
         ];
+    }
+
+    /** Regras de frete do site atual que valem para o destino (memória da requisição). */
+    public function regras(): array
+    {
+        if ($this->regras !== null) {
+            return $this->regras;
+        }
+
+        $destino = $this->destino();
+        // Destino pelo IP é o CEP da capital: só a regra da UF vale, não a da cidade.
+        $cep = $destino['origem'] === 'cep' ? $destino['cep'] : null;
+        if (! $cep && ! $destino['uf']) {
+            return $this->regras = [];
+        }
+
+        return $this->regras = app(RegrasDeFrete::class)->paraDestino(
+            app(SiteAtual::class)->atual() ?? SiteAtual::KAZAKORA,
+            $cep,
+            $destino['uf'],
+        );
     }
 
     /**
@@ -202,7 +253,7 @@ class FreteEmbutido
             $f = $this->paraProduto($item['product']);
             $estimado = $estimado || $f['estimado'];
             $embutido += $f['embutido'] * $qtd;
-            $extraItemAItem += max(0, $f['sedex'] - $f['embutido']) * $qtd;
+            $extraItemAItem += max(0, $f['sedex'] - ($f['correios'] ?? $f['embutido'])) * $qtd;
             $peso += $this->pesoTarifavel($item['product']) * $qtd;
             $unidades += $qtd;
         }
@@ -232,6 +283,11 @@ class FreteEmbutido
         $real = $sedexMaisBarato ? $caixa['sedex'] : $caixa['pac'];
         $prazo = $sedexMaisBarato ? $caixa['prazo_sedex'] : $caixa['prazo_pac'];
 
+        // Regra da cidade/UF: o cliente paga o frete da regra pela caixa inteira.
+        $regra = RegrasDeFrete::paraPeso($this->regras(), $peso);
+        $doCliente = $regra ? RegrasDeFrete::aplicar($regra, $real) : $real;
+        $prazo = $regra['prazo_dias'] ?? $prazo;
+
         $turbo = null;
         if (! $sedexMaisBarato && $caixa['prazo_pac'] && $caixa['prazo_sedex'] && $caixa['prazo_sedex'] < $caixa['prazo_pac']) {
             $turbo = [
@@ -245,11 +301,12 @@ class FreteEmbutido
             'prazo' => $prazo,
             'turbo' => self::turboAteOTeto($turbo),
             'estimado' => false,
-            'desconto_plataforma' => $unidades > 1 ? round(max(0, $embutido - $real), 2) : 0.0,
+            'desconto_plataforma' => $unidades > 1 ? round(max(0, $embutido - $doCliente), 2) : 0.0,
             // Frete da caixa que o preço já paga (o desconto acima devolve o excesso).
             'servico' => $sedexMaisBarato ? 'sedex' : 'pac',
             'custo' => round($real, 2),
             'peso_g' => $peso,
+            'regra' => $regra['nome'] ?? null,
         ];
     }
 

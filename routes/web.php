@@ -826,6 +826,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Frete por cidade (2026-10-24): cidades do estado e a regra de cada uma.
+        Route::get('logistica/fretes-por-estado/{uf}/cidades', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cidades'])->where('uf', '[A-Za-z]{2}')->name('logistica.fretes-por-estado.cidades');
+        Route::put('logistica/fretes-por-estado/cidades/{municipio}', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'salvarCidade'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidades.salvar')->middleware('permission:operacional.edit');
+        Route::delete('logistica/fretes-por-estado/cidades/{municipio}', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'removerCidade'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidades.remover')->middleware('permission:operacional.edit');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

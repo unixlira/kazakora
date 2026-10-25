@@ -31,6 +31,11 @@ use Throwable;
  * Preço por destino e faixa de peso, cotado na API dos Correios uma vez por
  * CEP e guardado por 24 h (11 faixas x PAC/SEDEX, em lotes de 5).
  *
+ * Tabela por localidade (pedido 2026-10-25, TabelaFreteLocalidades): produto
+ * com categoria de tamanho (Pequeno, Médio, Grande, Extra Grande) usa o
+ * PAC/SEDEX salvo no banco para a localidade do CEP, sem chamar os Correios.
+ * As regras por lugar valem por cima dele do mesmo jeito.
+ *
  * Regras por lugar (pedido 2026-10-24, RegrasDeFrete): onde houver regra
  * para a cidade, UF ou faixa de CEP do cliente, o frete embutido segue a
  * regra (valor fixo, acréscimo, desconto ou teto sobre os Correios). O custo
@@ -62,6 +67,11 @@ class FreteEmbutido
     private ?array $pacotes = null;
 
     private ?array $destino = null;
+
+    /** @var array<int, string>|null categoria de frete por produto (pais das variações) */
+    private ?array $categorias = null;
+
+    private const CACHE_CATEGORIAS = 'frete-embutido:categorias';
 
     /** @var list<array>|null regras de frete que valem para o destino atual */
     private ?array $regras = null;
@@ -165,9 +175,14 @@ class FreteEmbutido
      */
     public function paraProduto(Product $product): array
     {
-        $tabela = $this->tabela($this->destino()['cep']);
         $peso = $this->pesoTarifavel($product);
-        $categoria = FreteCategoriaPacote::classificar($peso, $this->maiorLado($product));
+        $categoria = $this->categoria($product);
+
+        if ($salvo = $this->daTabelaDeLocalidades($product)) {
+            return $this->comTrava($product, $this->comRegra($salvo, $peso, $categoria));
+        }
+
+        $tabela = $this->tabela($this->destino()['cep']);
 
         $faixa = $this->faixa($tabela, $peso);
 
@@ -191,6 +206,63 @@ class FreteEmbutido
             'prazo_sedex' => $faixa['prazo_sedex'],
             'estimado' => false,
         ], $peso, $categoria));
+    }
+
+    /**
+     * Frete salvo na tabela por localidade (pedido 2026-10-25,
+     * TabelaFreteLocalidades): produto que o Lira classificou numa categoria
+     * de tamanho e destino já cotado usam o PAC/SEDEX gravado, sem chamar os
+     * Correios. Sem classificação ou sem cotação para o CEP, null: segue a
+     * cotação por peso.
+     */
+    private function daTabelaDeLocalidades(Product $product): ?array
+    {
+        $categoria = $this->categoriaFrete($product);
+        $linha = $categoria ? app(TabelaFreteLocalidades::class)->linha($this->destino()['cep'], $categoria) : null;
+        if (! $linha) {
+            return null;
+        }
+
+        // Localidade sem um dos serviços: vale o que tem.
+        $pac = $linha['pac'] ?? $linha['sedex'];
+        $sedex = $linha['sedex'] ?? $linha['pac'];
+        $prazoPac = $linha['pac'] !== null ? $linha['prazo_pac'] : $linha['prazo_sedex'];
+        $prazoSedex = $linha['sedex'] !== null ? $linha['prazo_sedex'] : $linha['prazo_pac'];
+        $sedexMaisBarato = $sedex <= $pac;
+
+        return [
+            'embutido' => $sedexMaisBarato ? $sedex : $pac,
+            'servico' => $sedexMaisBarato ? 'sedex' : 'pac',
+            'prazo' => $sedexMaisBarato ? $prazoSedex : $prazoPac,
+            'pac' => $pac,
+            'sedex' => $sedex,
+            'prazo_pac' => $prazoPac,
+            'prazo_sedex' => $prazoSedex,
+            'estimado' => false,
+            'tabela' => $categoria,
+        ];
+    }
+
+    /** Categoria escolhida no produto (a do pai, na variação sem a própria); null = não classificado. */
+    public function categoriaFrete(Product $product): ?string
+    {
+        if ($product->categoria_frete) {
+            return $product->categoria_frete;
+        }
+        if (! $product->parent_product_id) {
+            return null;
+        }
+
+        $this->categorias ??= Cache::remember(self::CACHE_CATEGORIAS, now()->addMinutes(10), fn () => DB::table('products')
+            ->whereNotNull('categoria_frete')->pluck('categoria_frete', 'id')->all());
+
+        return $this->categorias[$product->parent_product_id] ?? null;
+    }
+
+    /** Limpa o mapa de categorias depois de classificar produtos. */
+    public static function esquecerCategorias(): void
+    {
+        Cache::forget(self::CACHE_CATEGORIAS);
     }
 
     /**
@@ -296,10 +368,12 @@ class FreteEmbutido
         $estimado = false;
         $prazosTravados = [];
         $cepDigitado = $this->cepDigitado();
+        $fretes = [];
 
         foreach ($itens as $item) {
             $qtd = (int) $item['quantity'];
             $f = $this->paraProduto($item['product']);
+            $fretes[] = [$f, $qtd];
             $estimado = $estimado || $f['estimado'];
             $embutido += $f['embutido'] * $qtd;
             $extraItemAItem += max(0, $f['sedex'] - ($f['correios'] ?? $f['embutido'])) * $qtd;
@@ -317,6 +391,10 @@ class FreteEmbutido
 
         if ($itens->isEmpty()) {
             return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0];
+        }
+
+        if (collect($fretes)->every(fn ($par) => isset($par[0]['tabela']))) {
+            return $this->entregaPelaTabela($fretes, $peso);
         }
 
         // A caixa inteira (peso somado) na tabela do destino.
@@ -369,6 +447,50 @@ class FreteEmbutido
             'custo' => round($real, 2),
             'peso_g' => $peso,
             'regra' => $regra['nome'] ?? null,
+        ];
+    }
+
+    /**
+     * Carrinho todo com frete da tabela por localidade (pedido 2026-10-25):
+     * cada item vai na caixa da categoria dele, então o frete é o somado item
+     * a item, sem desconto de caixa única e sem chamar os Correios. Prazo = o
+     * do item mais demorado; TURBO = SEDEX de todos pela diferença, quando
+     * chega antes.
+     *
+     * @param  list<array{0: array, 1: int}>  $fretes  frete de 1 unidade e quantidade
+     */
+    private function entregaPelaTabela(array $fretes, int $peso): array
+    {
+        $custo = 0.0;
+        $extra = 0.0;
+        $prazo = null;
+        $prazoBase = null;
+        $prazoSedex = null;
+        $todosSedex = true;
+
+        foreach ($fretes as [$f, $qtd]) {
+            $base = $f['correios'] ?? $f['embutido'];
+            $custo += $base * $qtd;
+            $extra += max(0, $f['sedex'] - $base) * $qtd;
+            $prazo = max($prazo, $f['prazo']);
+            $prazoBase = max($prazoBase, $f['servico'] === 'sedex' ? $f['prazo_sedex'] : $f['prazo_pac']);
+            $prazoSedex = max($prazoSedex, $f['prazo_sedex']);
+            $todosSedex = $todosSedex && $f['servico'] === 'sedex';
+        }
+
+        $turbo = $extra > 0 && $prazoSedex && $prazoBase && $prazoSedex < $prazoBase
+            ? ['preco' => round($extra, 2), 'prazo' => $prazoSedex, 'dias_a_menos' => $prazoBase - $prazoSedex]
+            : null;
+
+        return [
+            'prazo' => $prazo,
+            'turbo' => self::turboAteOTeto($turbo),
+            'estimado' => false,
+            'desconto_plataforma' => 0.0,
+            'servico' => $todosSedex ? 'sedex' : 'pac',
+            'custo' => round($custo, 2),
+            'peso_g' => $peso,
+            'regra' => collect($fretes)->map(fn ($par) => $par[0]['regra'] ?? null)->filter()->first(),
         ];
     }
 
@@ -533,10 +655,15 @@ class FreteEmbutido
         return $this->pacoteDoProduto($product)[1] ?? 0.0;
     }
 
-    /** Categoria de tamanho do pacote de 1 unidade (FreteCategoriaPacote). */
+    /**
+     * Categoria de tamanho do pacote de 1 unidade (FreteCategoriaPacote): a
+     * que o Lira escolheu no produto (2026-10-25) ou, sem ela, pelo peso
+     * tarifável e pelo maior lado.
+     */
     public function categoria(Product $product): ?string
     {
-        return FreteCategoriaPacote::classificar($this->pesoTarifavel($product), $this->maiorLado($product));
+        return $this->categoriaFrete($product)
+            ?? FreteCategoriaPacote::classificar($this->pesoTarifavel($product), $this->maiorLado($product));
     }
 
     /**

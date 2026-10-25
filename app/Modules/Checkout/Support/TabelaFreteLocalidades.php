@@ -27,8 +27,8 @@ use Throwable;
  *    Água Doce do Norte (ES) 29820-000, com os distritos Vila Nelita
  *    29822-000, Santa Luzia do Azul 29823-000, Santo Agostinho 29824-000 e
  *    Governador Lacerda de Aguiar 29826-000. Cidade com CEP por rua não tem
- *    CEP geral: a cotação usa o início da faixa (a API aceita, conferido em
- *    25/10). Distrito sem CEP próprio usa o do município.
+ *    CEP geral: a cotação usa o primeiro CEP da faixa de logradouros (C), não
+ *    o início da faixa total (ver cepDoMunicipio). Distrito sem CEP próprio usa o do município.
  * 2. Cotação: para cada CEP de cotação, PAC e SEDEX (preço do contrato e
  *    prazo) das 4 categorias de tamanho (caixa de referência em
  *    frete_categorias_pacote). Categoria que
@@ -184,15 +184,23 @@ class TabelaFreteLocalidades
         return null;
     }
 
-    /** CEP geral do município ou, na cidade com CEP por rua, o início da faixa total. */
+    /**
+     * CEP geral do município ou, na cidade com CEP por rua, o primeiro CEP da
+     * faixa de logradouros (tipoFaixa C). O início da faixa total (T, final
+     * 000) não é endereço e às vezes cai em outra tarifa: em 25/10 Cachoeiro
+     * de Itapemirim (ES) cotava 29300-000 a R$ 25,94 (interior) e qualquer
+     * rua da cidade, 29300-001 em diante, a R$ 22,30. Sem faixa C, fica a T.
+     */
     private function cepDoMunicipio(array $municipio): ?string
     {
         if ($cep = self::cep($municipio['cep'] ?? null)) {
             return $cep;
         }
 
-        $faixas = collect((array) ($municipio['faixas'] ?? []));
-        $faixa = $faixas->firstWhere('tipoFaixa', 'T') ?? $faixas->first();
+        $faixas = collect((array) ($municipio['faixas'] ?? []))->filter(fn ($f) => self::cep($f['cepInicial'] ?? null));
+        $faixa = $faixas->where('tipoFaixa', 'C')->sortBy('cepInicial')->first()
+            ?? $faixas->firstWhere('tipoFaixa', 'T')
+            ?? $faixas->first();
 
         return self::cep($faixa['cepInicial'] ?? null);
     }

@@ -8,13 +8,18 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Regras de frete por lugar (pedido 2026-10-24, tabelas frete_regioes e
- * frete_regiao_locais). Ordem de busca: faixa de CEP → município → UF; no
- * mesmo nível, a de maior prioridade. Sem regra, fica a cotação normal dos
- * Correios.
+ * frete_regiao_locais). Ordem de busca: distrito ou faixa de CEP → município
+ * → UF; no mesmo nível, a de maior prioridade. Sem regra, fica a cotação
+ * normal dos Correios.
+ *
+ * Distrito (2026-10-25): vale pelo CEP (ou faixa) cadastrado ou, sem CEP que
+ * case, quando o ViaCEP devolve o nome do distrito em "bairro" para um CEP do
+ * mesmo município (cidades pequenas: CEP geral para a sede e um CEP por
+ * distrito).
  *
  * O município sai do CEP pelo ViaCEP (código IBGE, cache de 30 dias em
  * CompletarEnderecoPeloCep). Só consulta o ViaCEP se existir alguma regra
- * por município. Qualquer falha (tabela ausente, ViaCEP fora) = sem regra:
+ * por município ou distrito. Qualquer falha (tabela ausente, ViaCEP fora) = sem regra:
  * o checkout nunca para por causa disso.
  */
 class RegrasDeFrete
@@ -40,8 +45,9 @@ class RegrasDeFrete
         }
 
         $municipio = null;
-        if ($cep && strlen($cep) === 8 && collect($regras)->contains(fn ($r) => $r['municipios'] !== [] || ($r['ufs'] !== [] && ! $uf))) {
-            [$municipio, $ufDoCep] = $this->municipioDoCep($cep);
+        $bairro = null;
+        if ($cep && strlen($cep) === 8 && collect($regras)->contains(fn ($r) => $r['municipios'] !== [] || $r['distritos'] !== [] || ($r['ufs'] !== [] && ! $uf))) {
+            [$municipio, $ufDoCep, $bairro] = $this->municipioDoCep($cep);
             $uf = $uf ?: $ufDoCep;
         }
 
@@ -49,6 +55,7 @@ class RegrasDeFrete
         foreach ($regras as $r) {
             $nivel = match (true) {
                 $cep !== null && collect($r['ceps'])->contains(fn ($f) => $cep >= $f[0] && $cep <= $f[1]) => 3,
+                self::noDistrito($r['distritos'], $cep, $municipio, $bairro) => 3,
                 $municipio !== null && in_array($municipio, $r['municipios'], true) => 2,
                 $uf !== null && in_array($uf, $r['ufs'], true) => 1,
                 default => 0,
@@ -61,6 +68,26 @@ class RegrasDeFrete
         usort($candidatas, fn ($a, $b) => [$b[0], $b[1]['prioridade']] <=> [$a[0], $a[1]['prioridade']]);
 
         return array_map(fn ($c) => array_intersect_key($c[1], array_flip(['id', 'nome', 'tipo', 'valor', 'prazo_dias', 'peso_min_g', 'peso_max_g'])), $candidatas);
+    }
+
+    /**
+     * O destino está num dos distritos: CEP dentro da faixa do distrito ou,
+     * no mesmo município, o bairro do ViaCEP com o nome do distrito.
+     *
+     * @param  list<array{municipio: int, nome: string, cep_inicio: ?string, cep_fim: ?string}>  $distritos
+     */
+    private static function noDistrito(array $distritos, ?string $cep, ?int $municipio, ?string $bairro): bool
+    {
+        foreach ($distritos as $d) {
+            if ($cep !== null && $d['cep_inicio'] && $cep >= $d['cep_inicio'] && $cep <= ($d['cep_fim'] ?: $d['cep_inicio'])) {
+                return true;
+            }
+            if ($municipio === $d['municipio'] && $bairro !== null && $bairro === $d['nome']) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Primeira regra da lista que aceita o peso (g). */
@@ -107,24 +134,31 @@ class RegrasDeFrete
                 'peso_min_g' => $r->peso_min_g,
                 'peso_max_g' => $r->peso_max_g,
                 'ufs' => $r->locais->pluck('uf')->filter()->values()->all(),
-                'municipios' => $r->locais->pluck('municipio_id')->filter()->map(fn ($id) => (int) $id)->values()->all(),
-                'ceps' => $r->locais->filter(fn ($l) => $l->cep_inicio && $l->cep_fim)->map(fn ($l) => [$l->cep_inicio, $l->cep_fim])->values()->all(),
+                'municipios' => $r->locais->whereNull('distrito')->pluck('municipio_id')->filter()->map(fn ($id) => (int) $id)->values()->all(),
+                'distritos' => $r->locais->whereNotNull('distrito')->filter(fn ($l) => $l->municipio_id)->map(fn ($l) => [
+                    'municipio' => (int) $l->municipio_id,
+                    'nome' => IbgeMunicipio::normalizar($l->distrito),
+                    'cep_inicio' => $l->cep_inicio,
+                    'cep_fim' => $l->cep_fim,
+                ])->values()->all(),
+                'ceps' => $r->locais->whereNull('distrito')->filter(fn ($l) => $l->cep_inicio && $l->cep_fim)->map(fn ($l) => [$l->cep_inicio, $l->cep_fim])->values()->all(),
             ])
             ->all()), [], false);
     }
 
-    /** @return array{0: ?int, 1: ?string} código IBGE do município e UF do CEP */
+    /** @return array{0: ?int, 1: ?string, 2: ?string} código IBGE do município, UF e bairro (normalizado) do CEP */
     private function municipioDoCep(string $cep): array
     {
         $dados = rescue(fn () => app(CompletarEnderecoPeloCep::class)->buscar($cep), null, false);
         if (! $dados) {
-            return [null, null];
+            return [null, null, null];
         }
 
         $uf = strtoupper(trim((string) ($dados['uf'] ?? ''))) ?: null;
+        $bairro = IbgeMunicipio::normalizar((string) ($dados['bairro'] ?? '')) ?: null;
         $ibge = preg_replace('/\D/', '', (string) ($dados['ibge'] ?? ''));
         if (strlen($ibge) === 7) {
-            return [(int) $ibge, $uf];
+            return [(int) $ibge, $uf, $bairro];
         }
 
         // ViaCEP sem o código: casa o nome da cidade na tabela do IBGE.
@@ -133,6 +167,6 @@ class RegrasDeFrete
             ? IbgeMunicipio::query()->where('uf', $uf)->where('nome_normalizado', IbgeMunicipio::normalizar($cidade))->value('id')
             : null;
 
-        return [$id ? (int) $id : null, $uf];
+        return [$id ? (int) $id : null, $uf, $bairro];
     }
 }

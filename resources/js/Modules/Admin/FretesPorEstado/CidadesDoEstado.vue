@@ -2,7 +2,10 @@
 // Frete por cidade (pedido 2026-10-24): todas as cidades do estado (tabela do
 // IBGE) e a regra de frete de cada uma. A regra vale no preço da loja
 // KazaKora (frete embutido) para quem tem CEP daquela cidade.
+// Distritos (2026-10-25): cada cidade abre os distritos dela com regra própria.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import DistritosDaCidade from './DistritosDaCidade.vue';
+import { TIPOS, camposDaRegra, corpoDaRegra, descrever, normalizar, pedir } from './regraDeFrete';
 
 const props = defineProps({
     uf: { type: String, required: true },
@@ -10,47 +13,17 @@ const props = defineProps({
 });
 const emit = defineEmits(['fechar', 'contagem']);
 
-const TIPOS = [
-    { chave: 'gratis', rotulo: 'Frete grátis' },
-    { chave: 'fixo', rotulo: 'Valor fixo' },
-    { chave: 'acrescimo', rotulo: 'Correios + valor' },
-    { chave: 'desconto', rotulo: 'Correios − valor' },
-    { chave: 'teto', rotulo: 'Correios até no máximo' },
-];
-
 const carregando = ref(true);
 const erro = ref('');
 const cidades = ref([]);
 const busca = ref('');
 const soComRegra = ref(false);
 const editando = ref(null);
+const distritosAbertos = ref(null);
 const salvando = ref(false);
 const erroForm = ref('');
 const form = reactive({ tipo: 'gratis', valor: 0, prazo_dias: '' });
 const campoBusca = ref(null);
-
-const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-const normalizar = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-function getCookie(name) {
-    const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-
-    return match ? decodeURIComponent(match[1]) : null;
-}
-
-async function pedir(url, metodo = 'GET', corpo = null) {
-    const r = await fetch(url, {
-        method: metodo,
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': getCookie('XSRF-TOKEN') },
-        body: corpo ? JSON.stringify(corpo) : null,
-    });
-    const dados = await r.json().catch(() => ({}));
-    if (r.status === 422) throw new Error(Object.values(dados.errors ?? {}).flat().join(' ') || 'Regra inválida.');
-    if (!r.ok) throw new Error('Não deu certo agora. Tente de novo em instantes.');
-
-    return dados;
-}
 
 async function carregar() {
     carregando.value = true;
@@ -66,46 +39,36 @@ async function carregar() {
     campoBusca.value?.focus();
 }
 
-const comRegra = computed(() => cidades.value.filter((c) => c.regra).length);
+const temRegra = (c) => c.regra || c.distritos_com_regra > 0;
+const comRegra = computed(() => cidades.value.filter(temRegra).length);
 const filtradas = computed(() => {
     const termo = normalizar(busca.value.trim());
 
-    return cidades.value.filter((c) => (!soComRegra.value || c.regra) && (!termo || normalizar(c.nome).includes(termo)));
+    return cidades.value.filter((c) => (!soComRegra.value || temRegra(c)) && (!termo || normalizar(c.nome).includes(termo)));
 });
 
-function descrever(regra) {
-    if (!regra) return 'Correios normal';
-    const v = dinheiro(regra.valor);
-    const texto = {
-        fixo: regra.valor === 0 ? 'Frete grátis' : `Frete fixo de ${v}`,
-        acrescimo: `Correios + ${v}`,
-        desconto: `Correios − ${v}`,
-        teto: `Correios até ${v}`,
-    }[regra.tipo_preco] ?? regra.tipo_preco;
-
-    return regra.prazo_dias ? `${texto} · ${regra.prazo_dias} ${regra.prazo_dias === 1 ? 'dia útil' : 'dias úteis'}` : texto;
+function editar(cidade) {
+    Object.assign(form, camposDaRegra(cidade.regra));
+    erroForm.value = '';
+    distritosAbertos.value = null;
+    editando.value = cidade.id;
 }
 
-function editar(cidade) {
-    const r = cidade.regra;
-    form.tipo = !r ? 'gratis' : r.tipo_preco === 'fixo' && r.valor === 0 ? 'gratis' : r.tipo_preco;
-    form.valor = r?.valor ?? 0;
-    form.prazo_dias = r?.prazo_dias ?? '';
-    erroForm.value = '';
-    editando.value = cidade.id;
+function abrirDistritos(cidade) {
+    editando.value = null;
+    distritosAbertos.value = distritosAbertos.value === cidade.id ? null : cidade.id;
+}
+
+function contarDistritos(cidade, n) {
+    cidade.distritos_com_regra = n;
+    emit('contagem', props.uf, comRegra.value);
 }
 
 async function salvar(cidade) {
     salvando.value = true;
     erroForm.value = '';
     try {
-        const gratis = form.tipo === 'gratis';
-        const dados = await pedir(`/admin/logistica/fretes-por-estado/cidades/${cidade.id}`, 'PUT', {
-            tipo_preco: gratis ? 'fixo' : form.tipo,
-            valor: gratis ? 0 : Number(form.valor || 0),
-            prazo_dias: form.prazo_dias === '' || form.prazo_dias === null ? null : Number(form.prazo_dias),
-            ativo: true,
-        });
+        const dados = await pedir(`/admin/logistica/fretes-por-estado/cidades/${cidade.id}`, 'PUT', corpoDaRegra(form));
         cidade.regra = dados.regra;
         editando.value = null;
         emit('contagem', props.uf, comRegra.value);
@@ -152,7 +115,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
                             <span class="mr-2 inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ uf }}</span>Cidades de {{ estado || uf }}
                         </h2>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {{ cidades.length }} cidades · {{ comRegra }} com regra própria. A regra muda o frete embutido no preço da loja KazaKora para quem tem CEP da cidade.
+                            {{ cidades.length }} cidades · {{ comRegra }} com regra própria. A regra muda o frete embutido no preço da loja KazaKora para quem tem CEP da cidade; em "distritos", cada distrito pode ter a sua.
                         </p>
                     </div>
                     <button type="button" class="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar" @click="emit('fechar')">
@@ -197,8 +160,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
                                         class="whitespace-nowrap text-xs font-semibold text-primary hover:underline"
                                         @click="editar(c)"
                                     >{{ c.regra ? 'editar' : 'criar regra' }}</button>
+                                    <button
+                                        type="button"
+                                        class="whitespace-nowrap text-xs font-semibold hover:underline"
+                                        :class="c.distritos_com_regra ? 'text-green-700 dark:text-green-300' : 'text-slate-500 dark:text-slate-400'"
+                                        :aria-expanded="distritosAbertos === c.id"
+                                        @click="abrirDistritos(c)"
+                                    >
+                                        distritos<template v-if="c.distritos_com_regra"> ({{ c.distritos_com_regra }})</template>
+                                        <i class="fas ml-0.5 text-[10px]" :class="distritosAbertos === c.id ? 'fa-chevron-up' : 'fa-chevron-down'" aria-hidden="true"></i>
+                                    </button>
                                 </span>
                             </div>
+
+                            <DistritosDaCidade v-if="distritosAbertos === c.id" :cidade="c" @contagem="(n) => contarDistritos(c, n)" />
 
                             <form v-if="editando === c.id" class="mx-5 mb-3 rounded-xl border border-[var(--surface-border)] bg-slate-50 p-3 dark:bg-slate-900/40" @submit.prevent="salvar(c)">
                                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-end">

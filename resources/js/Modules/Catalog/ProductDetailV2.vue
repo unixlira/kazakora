@@ -506,8 +506,6 @@ const specs = computed(() => {
     if (selecionada.value.model) list.push(['Modelo', selecionada.value.model]);
     if (selecionada.value.color) list.push(['Cor', selecionada.value.color]);
     if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
-    if (props.product.category) list.push(['Categoria', props.product.category.name]);
-    if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
     return list;
 });
 

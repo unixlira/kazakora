@@ -203,14 +203,11 @@ const keySpecs = computed(() => {
     if (props.product.model) specs.push({ label: 'Modelo', value: props.product.model });
     if (props.product.color) specs.push({ label: 'Cor', value: props.product.color });
     if (props.product.variation) specs.push({ label: 'Variação', value: props.product.variation });
-    if (props.product.category) specs.push({ label: 'Categoria', value: props.product.category.name });
     return specs;
 });
 
 const fullSpecs = computed(() => {
-    const specs = [...keySpecs.value];
-    if (props.product.sku) specs.push({ label: 'SKU', value: props.product.sku });
-    return specs;
+    return [...keySpecs.value];
 });
 
 const scrollToSpecs = () => {
@@ -316,9 +313,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div class="max-w-3xl">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Produto KazaKora</span>
-                            <span v-if="product.category" class="rounded-full bg-store-accent-soft px-3 py-1 text-xs font-semibold text-store-accent-strong">
-                                {{ product.category.name }}
-                            </span>
                         </div>
                         <h1 class="mt-3 font-display text-3xl font-semibold leading-tight text-store-fg md:text-5xl">{{ product.name }}</h1>
                         <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-store-fg-muted">

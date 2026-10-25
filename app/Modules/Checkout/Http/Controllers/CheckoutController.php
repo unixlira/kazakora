@@ -23,6 +23,7 @@ use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
+use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -221,6 +222,10 @@ class CheckoutController extends Controller
         $entrega = $produto
             ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => $quantidade]])), null, false)
             : null;
+        $turbo = $entrega['turbo'] ?? null;
+        if (! empty($turbo['prazo'])) {
+            $turbo['mensagem'] = app(DiaDeEntrega::class)->fraseCorreios((int) $turbo['prazo']);
+        }
 
         return response()->json([
             'final_price' => $produto?->final_price,
@@ -234,7 +239,10 @@ class CheckoutController extends Controller
                 'uf' => strtoupper(trim((string) ($viaCep['uf'] ?? ''))),
             ] : null,
             'prazo_gratis' => $entrega['prazo'] ?? null,
-            'turbo' => $entrega['turbo'] ?? null,
+            // Prazo em dia de verdade (pedido do Lira 2026-10-24): sábado à noite,
+            // domingo e feriado não prometem "1 dia", dizem "a partir de SEGUNDA".
+            'flex_mensagem' => app(DiaDeEntrega::class)->fraseFlex(),
+            'turbo' => $turbo,
             'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
             // Página do produto (pedido 2026-10-24): Turbo de motoboy na Grande SP em
             // horário comercial (Full + motoboy, sem Flex); fora dele, Flex + Turbo SEDEX.

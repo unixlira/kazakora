@@ -36,14 +36,14 @@ class PrazoCepFlexTest extends TestCase
         config(['frete_embutido.folga_dias' => 2, 'frete_embutido.prazo_padrao_dias' => 7, 'entrega_expressa.horario_entrega' => '21h']);
 
         $this->assertSame(
-            [['tipo' => 'full', 'quando' => 'amanha', 'horario' => '21h', 'preco' => 0.0]],
-            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => ['tipo' => 'amanha'], 'prazo_dias' => null], null),
+            [['tipo' => 'full', 'quando' => 'amanha', 'mensagem' => 'Receba amanhã', 'horario' => '21h', 'preco' => 0.0]],
+            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => ['tipo' => 'amanha', 'mensagem' => 'Receba amanhã'], 'prazo_dias' => null], null),
         );
 
         // No raio do Full o Turbo aparece também, sem o "dias antes" (pedido 2026-10-23).
         $this->assertSame(
-            [['tipo' => 'full', 'quando' => 'amanha', 'horario' => '21h', 'preco' => 0.0], ['tipo' => 'turbo', 'ate' => 1, 'dias_a_menos' => null, 'preco' => 9.9]],
-            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => ['tipo' => 'amanha'], 'prazo_dias' => null], ['prazo' => 3, 'turbo' => ['preco' => 9.9, 'prazo' => 1, 'dias_a_menos' => 2]]),
+            [['tipo' => 'full', 'quando' => 'amanha', 'mensagem' => 'Receba amanhã', 'horario' => '21h', 'preco' => 0.0], ['tipo' => 'turbo', 'ate' => 1, 'dias_a_menos' => null, 'preco' => 9.9]],
+            \App\Modules\Checkout\Support\PrazoPorCep::opcoes(['entrega_expressa' => ['tipo' => 'amanha', 'mensagem' => 'Receba amanhã'], 'prazo_dias' => null], ['prazo' => 3, 'turbo' => ['preco' => 9.9, 'prazo' => 1, 'dias_a_menos' => 2]]),
         );
 
         // Flex: até Y + 2, geralmente Y (prazo do grátis, o mesmo do checkout), e o Turbo depois.

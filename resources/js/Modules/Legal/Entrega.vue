@@ -60,14 +60,14 @@ const regioes = computed(() => {
                         <li class="flex items-start gap-2.5">
                             <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Pagamento aprovado <strong class="text-store-fg">depois das {{ full.horario_corte }}</strong>:
-                                você <strong class="text-store-fg">recebe no dia seguinte</strong>.</span>
+                                você <strong class="text-store-fg">recebe no próximo dia de entrega</strong>: de segunda a sábado, sem domingo e feriado (sábado depois das {{ full.horario_corte }}, chega na segunda).</span>
                         </li>
                         <li class="flex items-start gap-2.5">
                             <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
                             <span>Continua com <strong class="text-store-fg">frete grátis</strong>: o Full não tem custo extra.</span>
                         </li>
                     </ul>
-                    <p>Quando o seu CEP é atendido, o "⚡FULL Receba hoje" ou "Receba amanhã" aparece na página do produto e no resumo do pedido.</p>
+                    <p>Quando o seu CEP é atendido, o "⚡FULL Receba hoje", "Receba amanhã" ou o dia da entrega ("Receba SEGUNDA") aparece na página do produto e no resumo do pedido.</p>
                 </LegalCard>
 
                 <LegalCard title="Onde o Full atende">

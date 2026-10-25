@@ -9,8 +9,9 @@ use Illuminate\Support\Str;
 /**
  * Entrega expressa na Grande São Paulo (pedido 2026-10-09): diz se o CEP
  * está na área atendida e qual mensagem mostrar ("Receba hoje até as 21h"
- * até o horário de corte, "Receba amanhã" depois dele). Faixas e horários
- * ficam em config/entrega_expressa.php.
+ * até o horário de corte, "Receba amanhã" depois dele, "Receba SEGUNDA" quando
+ * o dia seguinte não tem entrega). Faixas e horários ficam em
+ * config/entrega_expressa.php; os dias de entrega, em DiaDeEntrega.
  */
 class EntregaExpressa
 {
@@ -18,8 +19,11 @@ class EntregaExpressa
 
     public const AMANHA = 'amanha';
 
+    /** Entrega depois de amanhã (fim de semana ou feriado no meio). */
+    public const PROXIMO = 'proximo';
+
     /**
-     * @return array{tipo: string, mensagem: string, local: string}|null null quando o CEP está fora da área
+     * @return array{tipo: string, mensagem: string, dia: string, local: string}|null null quando o CEP está fora da área
      */
     public function consultar(?string $cep, ?CarbonInterface $agora = null): ?array
     {
@@ -29,15 +33,22 @@ class EntregaExpressa
             return null;
         }
 
-        $agora = Carbon::instance($agora ?? now())->setTimezone('America/Sao_Paulo');
-        [$hora, $minuto] = array_map('intval', explode(':', (string) config('entrega_expressa.horario_corte', '13:00')));
-        $antesDoCorte = $agora->lt($agora->copy()->setTime($hora, $minuto));
+        // Sábado depois do corte, domingo e feriado não têm entrega (pedido do
+        // Lira 2026-10-24): aí a mensagem diz o dia, "Receba SEGUNDA".
+        $diaDeEntrega = app(DiaDeEntrega::class);
+        $dia = $diaDeEntrega->full($agora);
+        $rotulo = $diaDeEntrega->rotulo($dia, $agora);
 
         return [
-            'tipo' => $antesDoCorte ? self::HOJE : self::AMANHA,
-            'mensagem' => $antesDoCorte
+            'tipo' => match ($rotulo) {
+                'hoje' => self::HOJE,
+                'amanhã' => self::AMANHA,
+                default => self::PROXIMO,
+            },
+            'mensagem' => $rotulo === 'hoje'
                 ? 'Receba hoje até as '.config('entrega_expressa.horario_entrega', '21h')
-                : 'Receba amanhã',
+                : $diaDeEntrega->frase($dia, $agora),
+            'dia' => $dia->toDateString(),
             'local' => $faixa['local'],
         ];
     }

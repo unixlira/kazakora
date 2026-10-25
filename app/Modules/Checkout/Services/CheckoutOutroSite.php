@@ -518,10 +518,11 @@ abstract class CheckoutOutroSite
                 'processing_mode' => 'automatic',
                 'capture_mode' => 'automatic',
                 'external_reference' => "order-{$order->id}-payment-1",
-                'total_amount' => (string) $total,
+                // Duas casas ("200.10"), como no exemplo da API de Orders.
+                'total_amount' => number_format($total, 2, '.', ''),
                 'payer' => $this->pagador($pagador),
                 'transactions' => ['payments' => [[
-                    'amount' => (string) $total,
+                    'amount' => number_format($total, 2, '.', ''),
                     'payment_method' => [
                         'id' => $cartao['mp_payment_method_id'],
                         'type' => 'credit_card',

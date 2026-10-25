@@ -688,9 +688,16 @@ class CheckoutController extends Controller
         if ($useMercadoPago && $includesCard) {
             $cardValidator = Validator::make($request->all(), [
                 'mp_card_token' => ['required', 'string'],
-                'mp_card_installments' => ['required', 'integer', 'min:1'],
+                // Parcelas: o Brick só oferece de 1 a 12 (maxInstallments).
+                'mp_card_installments' => ['required', 'integer', 'min:1', 'max:12'],
                 'mp_payment_method_id' => ['required', 'string'],
-                'mp_issuer_id' => ['nullable', 'string'],
+                // O Brick manda o emissor como texto, mas número não pode
+                // derrubar o pagamento: o servidor nem usa esse campo.
+                'mp_issuer_id' => ['nullable'],
+            ], [
+                'mp_card_installments.*' => 'Escolha em quantas parcelas pagar no cartão.',
+                'mp_card_token.required' => 'Confira os dados do cartão.',
+                'mp_payment_method_id.required' => 'Confira os dados do cartão.',
             ]);
 
             if ($cardValidator->fails()) {
@@ -1589,16 +1596,20 @@ class CheckoutController extends Controller
      */
     private function mercadoPagoOrderPayload(float $amount, User $user, array $data, bool $capture, string $externalReference): array
     {
+        // Valor em texto com duas casas ("607.20"), como no exemplo da API de
+        // Orders; (string) 607.2 virava "607.2".
+        $valor = number_format($amount, 2, '.', '');
+
         return [
             'type' => 'online',
             'processing_mode' => 'automatic',
             'capture_mode' => $capture ? 'automatic' : 'manual',
             'external_reference' => $externalReference,
-            'total_amount' => (string) $amount,
+            'total_amount' => $valor,
             'payer' => $this->mercadoPagoPayer($user),
             'transactions' => [
                 'payments' => [[
-                    'amount' => (string) $amount,
+                    'amount' => $valor,
                     'payment_method' => [
                         'id' => $data['mp_payment_method_id'],
                         'type' => 'credit_card',

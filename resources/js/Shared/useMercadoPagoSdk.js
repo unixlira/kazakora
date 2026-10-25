@@ -42,5 +42,15 @@ export function mensagemErroCartao(error, padrao = 'Não foi possível carregar 
         return 'O valor mínimo para pagar no cartão de crédito é R$ 0,50. Escolha o Pix ou adicione mais itens ao carrinho.';
     }
 
+    // Cartão que o Mercado Pago não aceita como crédito (débito, pré-pago ou
+    // número de teste): sem isso aparecia o código cru na tela.
+    if (/no_payment_method_for_provided_bin/i.test(mensagem)) {
+        return 'Este cartão não foi aceito como cartão de crédito. Confira o número ou use outro cartão de crédito.';
+    }
+
+    if (/installments/i.test(mensagem)) {
+        return 'Não foi possível carregar as parcelas deste cartão. Confira o número ou tente outro cartão.';
+    }
+
     return mensagem || padrao;
 }

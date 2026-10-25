@@ -59,7 +59,7 @@ class BoletoMercadoPago
         );
         $boleto = MercadoPagoPaymentService::dadosDoBoleto($mp);
 
-        Payment::create([
+        $payment = Payment::create([
             'order_id' => $order->id,
             'provider' => Payment::PROVIDER_MERCADOPAGO,
             'mercadopago_payment_id' => (string) $mp['id'],
@@ -70,6 +70,9 @@ class BoletoMercadoPago
             'boleto_url' => $boleto['pdfUrl'],
             'expira_em' => $boleto['vencimento'] ? Carbon::parse($boleto['vencimento']) : null,
         ]);
+
+        // No kazakora.com o link vai para o boleto com o logo da loja (BoletoComMarca).
+        $boleto['pdfUrl'] = BoletoComMarca::url($payment) ?? $boleto['pdfUrl'];
 
         DB::afterCommit(fn () => self::enviarEmail($user, $order, $boleto, $valor));
 

@@ -272,6 +272,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
 });
+// Boleto com o logo da KazaKora (2026-10-24): link assinado, abre sem login.
+Route::get('/boleto/{payment}', [\App\Modules\Checkout\Http\Controllers\BoletoController::class, 'pdf'])
+    ->whereNumber('payment')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('boleto.pdf');
 // Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link com token
 // único do e-mail e da página do pedido, abre sem login (2026-10-22). O GET
 // mostra os termos de uso e conta a tentativa; o PDF sai no POST do

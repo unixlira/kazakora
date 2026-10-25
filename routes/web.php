@@ -1002,6 +1002,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // visitas daquele IP no período), pedido 2026-10-12.
         Route::get('visitas-site/visitante', [SiteVisitLogController::class, 'visitante'])->name('visitas-site.visitante');
         Route::delete('visitas-site/visitante', [SiteVisitLogController::class, 'apagar'])->name('visitas-site.apagar');
+        // Cidades do estado do IP, paginadas (olho da coluna Ações do histórico, 2026-10-24).
+        Route::get('visitas-site/cidades', [SiteVisitLogController::class, 'cidades'])->name('visitas-site.cidades');
 
         // Visitas FerraKora e Visitas Beauty Kora (2026-10-12): o mesmo log
         // para os outros sites, lido de site_visits pela coluna site

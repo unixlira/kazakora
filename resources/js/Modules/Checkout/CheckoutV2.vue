@@ -901,14 +901,16 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
             </span>
         </button>
 
-        <!-- Computador largo (pedido 2026-10-24): Pagamento com os valores (cupom e Pix) ao lado
-             em cima; Identificação e Entrega lado a lado embaixo; itens, avaliações e selos na
-             coluna da direita. main, aside e o cartão do resumo viram "contents" para os filhos
-             entrarem direto nas áreas da grade; no celular e até 1279px fica tudo como antes. -->
-        <div class="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-8 lg:py-9 xl:max-w-[1320px] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_380px] xl:grid-rows-[auto_auto_auto_auto_auto_1fr] xl:gap-6 xl:[grid-template-areas:'erro_erro_erro'_'pag_pag_fin'_'ident_entrega_itens'_'ident_entrega_aval'_'ident_entrega_selos'_'ident_entrega_fim']">
+        <!-- Computador (pedido 2026-10-24): grade de 12 colunas. Identificação num card
+             de 3, Entrega e Pagamento em 5 e o resumo em 4.
+             Computador largo, a partir de 1280px (pedido 2026-10-24): Pagamento com os valores
+             (cupom e Pix) ao lado em cima; Identificação e Entrega lado a lado embaixo; itens,
+             avaliações e selos na coluna da direita. main, aside e os blocos de dentro viram
+             "contents" para os filhos entrarem direto nas áreas da grade. -->
+        <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-12 lg:items-start lg:gap-6 lg:py-9 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_380px] xl:grid-rows-[auto_auto_auto_auto_auto_1fr] xl:[grid-template-areas:'erro_erro_erro'_'pag_pag_fin'_'ident_entrega_itens'_'ident_entrega_aval'_'ident_entrega_selos'_'ident_entrega_fim']">
             <!-- ETAPAS -->
-            <main class="order-2 min-w-0 lg:order-1 xl:contents">
-                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 xl:mb-0 xl:[grid-area:erro] flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <main class="order-2 min-w-0 lg:order-1 lg:col-span-8 xl:contents">
+                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 xl:mb-0 xl:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
@@ -916,9 +918,9 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                     </div>
                 </div>
 
-                <div class="space-y-4 xl:contents">
-                    <!-- 1 de 3: Identificação -->
-                    <section id="etapa-1" ref="secaoDados" class="xl:[grid-area:ident]" :class="classeEtapa(1)">
+                <div class="space-y-4 lg:grid lg:grid-cols-8 lg:items-start lg:gap-6 lg:space-y-0 xl:contents">
+                    <!-- 1 de 3: Identificação (no computador, card de 3 das 12 colunas, fixo ao rolar; no largo, metade da linha de baixo) -->
+                    <section id="etapa-1" ref="secaoDados" :class="[classeEtapa(1), 'lg:sticky lg:top-6 lg:col-span-3 lg:p-5 xl:static xl:p-7 xl:[grid-area:ident]']">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold text-slate-900">Identificação</h2>
                             <span class="text-xs text-slate-500">1 de 3</span>
@@ -927,12 +929,13 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         <template v-if="etapa === 1">
                             <!-- Pessoa física / jurídica (pedido 2026-10-24, modelo Mavo). -->
                             <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
-                                <button v-for="[valor, rotulo, icone] in [['pf', 'Pessoa física', 'fa-user'], ['pj', 'Pessoa jurídica', 'fa-building']]" :key="valor"
-                                    type="button" role="radio" :aria-checked="tipoPessoa === valor"
-                                    class="flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition"
+                                <!-- No card estreito do computador: só "Física"/"Jurídica", sem ícone, numa linha. -->
+                                <button v-for="[valor, rotulo, curto, icone] in [['pf', 'Pessoa física', 'Física', 'fa-user'], ['pj', 'Pessoa jurídica', 'Jurídica', 'fa-building']]" :key="valor"
+                                    type="button" role="radio" :aria-checked="tipoPessoa === valor" :aria-label="rotulo"
+                                    class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i>{{ rotulo }}
+                                    <i class="fa-solid text-xs lg:hidden xl:inline" :class="icone" aria-hidden="true"></i><span class="lg:hidden xl:inline">{{ rotulo }}</span><span class="hidden lg:inline xl:hidden">{{ curto }}</span>
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">
@@ -959,7 +962,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="E-mail">
                                     <small v-if="erro('guest.email')" class="ml-4 text-xs text-red-600">{{ erro('guest.email') }}</small>
                                 </label>
-                                <div class="grid gap-3 sm:grid-cols-2">
+                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                                     <label v-if="pedirCpf" class="block" :data-erro="erro(campoCpf) ? 1 : 0">
                                         <span class="sr-only">{{ ehPj ? 'CPF do responsável' : 'CPF' }}</span>
                                         <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" :placeholder="ehPj ? 'CPF do responsável' : 'CPF'" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
@@ -985,12 +988,17 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
                                 <p v-if="ehPj">{{ empresa.razaoSocial }} · CNPJ {{ empresa.cnpj }}</p>
                                 <p v-if="!isLoggedIn" class="break-all">{{ pessoa.email }}</p>
-                                <p>{{ [pedirCpf ? pessoa.cpf : null, pessoa.phone].filter(Boolean).join(' · ') }}</p>
+                                <!-- Um por linha no card estreito, sem quebrar o número no meio. -->
+                                <p class="flex flex-wrap gap-x-2">
+                                    <span v-if="pedirCpf && pessoa.cpf" class="whitespace-nowrap">{{ pessoa.cpf }}</span>
+                                    <span v-if="pessoa.phone" class="whitespace-nowrap">{{ pessoa.phone }}</span>
+                                </p>
                             </div>
                             <button v-if="!order" type="button" class="shrink-0 text-sm font-semibold text-sky-700 hover:underline" @click="irPara(1)">Editar</button>
                         </div>
                     </section>
 
+                    <div class="space-y-4 lg:col-span-5 xl:contents">
                     <!-- 2 de 3: Entrega -->
                     <section id="etapa-2" class="xl:[grid-area:entrega]" :class="classeEtapa(2)">
                         <header class="flex items-baseline justify-between gap-3">
@@ -1250,11 +1258,12 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                             </div>
                         </li>
                     </ul>
+                    </div>
                 </div>
             </main>
 
             <!-- RESUMO DA COMPRA (fixo ao rolar no computador) -->
-            <aside id="resumo-compra" class="order-1 lg:sticky lg:top-6 lg:order-2 xl:contents" :class="{ 'hidden lg:block': !resumoAberto }">
+            <aside id="resumo-compra" class="order-1 lg:sticky lg:top-6 lg:order-2 lg:col-span-4 xl:contents" :class="{ 'hidden lg:block': !resumoAberto }">
                 <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6 xl:contents">
                     <!-- Computador largo: cupom, Pix e totais num cartão ao lado do Pagamento. -->
                     <div class="xl:self-start xl:rounded-[24px] xl:bg-white xl:p-6 xl:shadow-[0_4px_24px_rgba(15,23,42,0.07)] xl:[grid-area:fin]">

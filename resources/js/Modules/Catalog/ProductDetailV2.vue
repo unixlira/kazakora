@@ -1785,12 +1785,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .compra .estoque-baixo p { font-size: clamp(11px, 3.1vw, 13.5px); }
 }
 /* Opções de frete (pedido do Lira 2026-10-24): uma caixa por linha, largura toda, conteúdo
-   numa linha só e centralizado; Full/Flex em verde, Turbo em vermelho. Marcada = borda mais grossa.
+   numa linha só e centralizado (fonte acompanha a tela do celular; só abaixo de 360px o valor desce); Full/Flex em verde, Turbo em vermelho. Marcada = borda mais grossa.
    No fim do estilo para valer sobre o label/input do .compra .prazo-cep. */
-.pd2 .prazo-cep label.opcao-frete { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; column-gap: 6px; row-gap: 2px; width: 100%; box-sizing: border-box; margin: 8px 0 0; padding: 10px 12px; border: 1px solid; border-radius: 8px; font-size: 15px; font-weight: 500; line-height: 1.3; text-align: center; cursor: pointer; }
+.pd2 .prazo-cep label.opcao-frete { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; column-gap: 4px; row-gap: 2px; width: 100%; box-sizing: border-box; margin: 8px 0 0; padding: 10px 8px; border: 1px solid; border-radius: 8px; font-size: clamp(11px, 3.2vw, 15px); font-weight: 500; line-height: 1.3; text-align: center; cursor: pointer; }
 .pd2 .prazo-cep .opcao-frete input[type="radio"] { flex: 0 0 auto; width: 16px; height: 16px; margin: 0 2px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
 .pd2 .prazo-cep .opcao-frete .nome { font-weight: 800; font-style: italic; }
-.pd2 .prazo-cep .opcao-frete .valor { white-space: nowrap; }
+.pd2 .prazo-cep .opcao-frete > * { white-space: nowrap; }
 .pd2 .prazo-cep .opcao-frete .valor b { font-weight: 800; }
 .pd2 .prazo-cep .opcao-frete.verde { background: #e7f8ec; border-color: #00a650; color: #00801a; }
 .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #00801a; }
@@ -1802,5 +1802,4 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #4ade80; }
 .dark .pd2 .prazo-cep .opcao-frete.vermelho { background: rgba(220, 38, 38, .15); border-color: #ef4444; color: #f87171; }
 .dark .pd2 .prazo-cep .opcao-frete.vermelho input[type="radio"] { accent-color: #f87171; }
-@media (max-width: 400px) { .pd2 .prazo-cep label.opcao-frete { font-size: 13.5px; column-gap: 5px; padding: 10px 8px; } }
 </style>

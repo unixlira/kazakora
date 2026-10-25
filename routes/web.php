@@ -869,6 +869,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado/importar/modelo', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'modelo'])->name('logistica.fretes-por-estado.importar.modelo');
         Route::post('logistica/fretes-por-estado/importar/previa', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'previa'])->name('logistica.fretes-por-estado.importar.previa')->middleware('permission:operacional.edit');
         Route::post('logistica/fretes-por-estado/importar', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'aplicar'])->name('logistica.fretes-por-estado.importar')->middleware('permission:operacional.edit');
+        // Tabela de frete por localidade (2026-10-25): PAC/SEDEX salvos por cidade/distrito e categoria de tamanho.
+        Route::get('logistica/frete-por-localidade', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'index'])->name('logistica.frete-por-localidade');
+        Route::get('logistica/frete-por-localidade/status', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'status'])->name('logistica.frete-por-localidade.status');
+        Route::get('logistica/frete-por-localidade/buscar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'buscar'])->name('logistica.frete-por-localidade.buscar');
+        Route::post('logistica/frete-por-localidade/atualizar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'atualizar'])->name('logistica.frete-por-localidade.atualizar')->middleware('permission:operacional.edit');
+        Route::put('logistica/frete-por-localidade/categorias/{chave}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'salvarCategoria'])->where('chave', '[a-z_]+')->name('logistica.frete-por-localidade.categorias.salvar')->middleware('permission:operacional.edit');
+        Route::put('logistica/frete-por-localidade/produtos/{product}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'classificar'])->whereNumber('product')->name('logistica.frete-por-localidade.produtos.classificar')->middleware('permission:operacional.edit');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

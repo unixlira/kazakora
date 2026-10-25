@@ -346,3 +346,7 @@ Schedule::command('ibge:sincronizar')->monthlyOn(1, '04:10')->withoutOverlapping
 // Base IP → estado da tela Visitas ao site (2026-10-24): a DB-IP publica
 // a do mês nos primeiros dias.
 Schedule::command('geoip:atualizar')->monthlyOn(5, '04:30')->withoutOverlapping(30);
+
+// Tabela de frete por localidade (2026-10-25): localidades dos Correios e
+// PAC/SEDEX das 4 categorias de tamanho, de novo todo mês (só agenda o job).
+Schedule::command('frete:tabela-localidades')->monthlyOn(1, '03:30');

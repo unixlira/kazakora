@@ -1473,7 +1473,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
-/* Endereço do CEP no mesmo azul do botão "calcular" (#13bce6), também no tema escuro. */
+/* Endereço do CEP no mesmo azul do botão "calcular", também no tema escuro. */
 .pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
 .pd2 .prazo-cep .rua i { margin-right: 4px; }
 /* descrição no visual da v1 */
@@ -1777,6 +1777,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
+/* Endereço do CEP no azul do botão "calcular" desta caixa (#00c3ee, pedido do Lira 2026-10-24). */
+.pd2 .compra .prazo-cep .rua { color: #00c3ee; }
 /* Selo de desconto no canto da foto (pedido 2026-10-23): "-9%" quando o preço caiu. */
 .pd2 .selo-desconto { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); pointer-events: none; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }

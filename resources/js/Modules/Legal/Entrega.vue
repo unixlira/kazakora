@@ -35,8 +35,12 @@ const regioes = computed(() => {
             <div class="mt-8 flex flex-col gap-6">
                 <LegalCard title="Frete grátis para todo o Brasil">
                     <p>
-                        Todas as compras na KazaKora têm <strong class="text-store-fg">frete grátis</strong>. O valor do frete
-                        nunca é cobrado no checkout, qualquer que seja o CEP.
+                        Entrega <strong class="text-store-fg">GRÁTIS</strong>
+                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e
+                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span> para a sua casa!
+                        Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado:
+                        quando o produto não está no estoque que atende o seu estado, o valor da entrega pode mudar, e ele
+                        sempre aparece no checkout antes de você pagar.
                     </p>
                     <p>
                         A entrega é feita pelos <strong class="text-store-fg">Correios ou por transportadora</strong> em até

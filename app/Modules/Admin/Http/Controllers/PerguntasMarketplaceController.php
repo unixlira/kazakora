@@ -26,7 +26,8 @@ use Throwable;
  * marcado para uma pessoa, com aviso no topo do admin. O atendente pode
  * assumir qualquer pergunta, editar o rascunho e enviar, ou devolver para ela.
  * Aba "Chat da Shopee" (2026-10-25): conversas do sellerchat na mesma tela
- * (dados em ShopeeChatController::dados).
+ * (dados em ShopeeChatController::dados). Abas Amazon e TikTok Shop
+ * (2026-10-25): MarketplaceChatController::dados.
  */
 class PerguntasMarketplaceController extends Controller
 {
@@ -44,7 +45,17 @@ class PerguntasMarketplaceController extends Controller
         $abas = [
             'perguntas' => MercadoLivrePergunta::query()->aguardandoHumano()->count(),
             'chat-shopee' => rescue(fn () => ShopeeChatConversa::query()->comNaoLidas()->count(), 0, false),
-        ];
+        ] + MarketplaceChatController::naoLidasPorAba();
+
+        // Abas Amazon e TikTok Shop (2026-10-25): mesmo formato do chat da Shopee.
+        if ($canalChat = MarketplaceChatController::ABAS[$request->query('aba')] ?? null) {
+            return Inertia::render('Admin/PerguntasMarketplace/Index', [
+                'aba' => $request->query('aba'),
+                'abas' => $abas,
+                'chatMarketplace' => MarketplaceChatController::dados($request, $canalChat),
+                'perguntas' => [],
+            ]);
+        }
 
         if ($request->query('aba') === 'chat-shopee') {
             return Inertia::render('Admin/PerguntasMarketplace/Index', [

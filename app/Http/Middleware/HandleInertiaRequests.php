@@ -133,8 +133,9 @@ class HandleInertiaRequests extends Middleware
                     'criativosAguardando' => rescue(fn () => \App\Modules\Admin\Models\CriativoValidacao::query()->where('status', \App\Modules\Admin\Models\CriativoValidacao::AGUARDANDO)->count(), 0, false),
                     // Chat da Shopee (aba de Perguntas MK Place): conversas com mensagem não lida.
                     'shopeeChatNaoLidas' => $shopeeChatNaoLidas = rescue(fn () => \App\Modules\Marketplace\Models\ShopeeChatConversa::query()->comNaoLidas()->count(), 0, false),
-                    // Item Perguntas MK Place do menu: perguntas pra você + chat da Shopee não lido.
-                    'atendimentoMkplace' => $perguntasMkplace + $shopeeChatNaoLidas,
+                    // Item Perguntas MK Place do menu: perguntas pra você + chats não lidos
+                    // (Shopee, Amazon e TikTok Shop).
+                    'atendimentoMkplace' => $perguntasMkplace + $shopeeChatNaoLidas + array_sum(\App\Modules\Admin\Http\Controllers\MarketplaceChatController::naoLidasPorAba()),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

@@ -74,11 +74,28 @@ const copiarCodigoDoPedido = async () => {
     setTimeout(() => { codigoCopiado.value = false; }, 2000);
 };
 
+// "Ver meu pedido" travado até o cliente copiar a linha ou abrir o boleto
+// (pedido 2026-10-24): força pegar os dados de pagamento antes de sair.
+// Fica no sessionStorage para atualizar a página não travar de novo.
+// Sem linha e sem PDF não há o que pegar: o botão já nasce liberado.
+const chaveBoletoPego = computed(() => `boleto-pego:${props.orderCode ?? props.boleto?.linhaDigitavel ?? ''}`);
+const boletoPego = ref(false);
+watch(chaveBoletoPego, (chave) => {
+    try { boletoPego.value = sessionStorage.getItem(chave) === '1'; } catch { boletoPego.value = false; }
+}, { immediate: true });
+const marcarBoletoPego = () => {
+    boletoPego.value = true;
+    try { sessionStorage.setItem(chaveBoletoPego.value, '1'); } catch {}
+};
+const verPedidoLiberado = computed(() =>
+    boletoPego.value || (! props.boleto?.linhaDigitavel && ! props.boleto?.pdfUrl));
+
 const linhaCopiada = ref(false);
 const copiarLinha = async () => {
     if (! props.boleto?.linhaDigitavel) return;
     await navigator.clipboard.writeText(props.boleto.linhaDigitavel);
     linhaCopiada.value = true;
+    marcarBoletoPego();
     setTimeout(() => { linhaCopiada.value = false; }, 2000);
 };
 const vencimentoBoleto = computed(() => {
@@ -217,7 +234,7 @@ const copyPixCode = async () => {
                         <i class="fas" :class="linhaCopiada ? 'fa-check' : 'fa-copy'"></i>
                         {{ linhaCopiada ? 'Linha copiada! Cole no app do banco' : 'Copiar linha digitável' }}
                     </button>
-                    <a v-if="boleto?.pdfUrl" :href="boleto.pdfUrl" target="_blank" rel="noopener"
+                    <a v-if="boleto?.pdfUrl" :href="boleto.pdfUrl" target="_blank" rel="noopener" @click="marcarBoletoPego"
                         class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">
                         <i class="fas fa-file-pdf text-[#F27A2A]"></i> Abrir o boleto (PDF)
                     </a>
@@ -228,10 +245,18 @@ const copyPixCode = async () => {
                         <li><i class="fas fa-box mr-2 w-4 text-center text-[#F27A2A]"></i>O pedido segue para separação assim que o pagamento for confirmado. Se o boleto vencer sem pagamento, o pedido é cancelado.</li>
                     </ul>
 
-                    <Link v-if="successUrl" :href="successUrl"
+                    <Link v-if="successUrl && verPedidoLiberado" :href="successUrl" data-testid="ver-meu-pedido"
                         class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0FB930] px-4 py-3 text-sm font-bold text-white no-underline shadow-md hover:bg-store-laranja-hover">
                         <i class="fas fa-receipt"></i> Ver meu pedido
                     </Link>
+                    <template v-else-if="successUrl">
+                        <button type="button" disabled data-testid="ver-meu-pedido"
+                            class="mt-5 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-zinc-300 px-4 py-3 text-sm font-bold text-zinc-500 shadow-none dark:bg-zinc-700 dark:text-zinc-400"
+                            aria-describedby="ver-pedido-dica">
+                            <i class="fas fa-lock"></i> Ver meu pedido
+                        </button>
+                        <p id="ver-pedido-dica" class="mt-1.5 text-xs text-store-fg-muted">Copie a linha digitável ou abra o boleto para liberar.</p>
+                    </template>
                 </template>
 
                 <template v-else-if="state === 'success'">

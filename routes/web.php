@@ -240,9 +240,6 @@ Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGr
 // sem o que ela digitou. Fora do CSRF (sendBeacon); ver CheckoutEventosController.
 Route::post('/finalizacao/eventos', [\App\Modules\Analytics\Http\Controllers\CheckoutEventosController::class, 'store'])->middleware('throttle:60,1')->name('finalizacao.eventos');
 
-// Clique nos selos de segurança do rodapé (2026-10-25), soma na visita; ver SeloCliqueController.
-Route::post('/selos/clique', [\App\Modules\Analytics\Http\Controllers\SeloCliqueController::class, 'store'])->middleware('throttle:30,1')->name('selos.clique');
-
 // Checkout no subdomínio seguro (pedido 2026-10-23): https://seguro.<loja>/pagamento
 // é a mesma tela de /finalizacao (RedirecionarCheckoutSeguro, App\Support\CheckoutSeguro).
 Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamento.seguro');
@@ -328,10 +325,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
-    // Contador de cliques do painel (Lira 2026-10-25): o AdminLayout manda o lote aqui.
-    Route::post('cliques', [\App\Modules\Admin\Http\Controllers\CliquesAdminController::class, 'store'])
-        ->middleware('throttle:60,1')
-        ->name('cliques.registrar');
     // Botões de ação do diagnóstico do Cauê (pedido 2026-10-14): mexem na Shopee, só admin.
     Route::post('diagnostico/shopee/acao', [DiagnosticoAcaoController::class, 'shopee'])->middleware('admin')->name('diagnostico.shopee.acao');
     Route::get('diagnostico/shopee/{itemId}/modelos', [DiagnosticoAcaoController::class, 'modelos'])->middleware('admin')->name('diagnostico.shopee.modelos');
@@ -1028,8 +1021,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
-        // Cliques do painel (2026-10-25): ranking do que a equipe usa. Só admin como a Auditoria.
-        Route::get('relatorios/cliques', [\App\Modules\Admin\Http\Controllers\CliquesAdminController::class, 'index'])->name('relatorios.cliques');
 
         // Menu "Log": os arquivos de storage/logs na tela, com filtro de
         // data/hora, nível e busca por texto. Admin-only igual à auditoria —

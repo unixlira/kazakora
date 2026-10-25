@@ -544,7 +544,6 @@ const cancelInvoice = () => {
                                 <button
                                     v-if="canCheckLabel()"
                                     type="button"
-                                    data-clique="Pedido: consultar etiqueta"
                                     :disabled="checkLabelForm.processing"
                                     title="Consulta o canal (Shopee/ML) agora mesmo e grava a etiqueta se já estiver liberada — o mesmo que o sistema já tenta sozinho automaticamente, só que na hora"
                                     class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
@@ -675,7 +674,6 @@ const cancelInvoice = () => {
                             <button
                                 v-if="canIssue()"
                                 type="button"
-                                data-clique="Pedido: emitir nota"
                                 :disabled="issueForm.processing"
                                 class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
                                 @click="issueInvoice"
@@ -685,7 +683,6 @@ const cancelInvoice = () => {
                             <button
                                 v-if="canCancel() && !showCancelForm"
                                 type="button"
-                                data-clique="Pedido: cancelar nota"
                                 class="rounded-lg border border-error px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10"
                                 @click="showCancelForm = true"
                             >
@@ -694,7 +691,6 @@ const cancelInvoice = () => {
                             <button
                                 v-if="canResubmitToChannel()"
                                 type="button"
-                                data-clique="Pedido: reenviar nota ao canal"
                                 :disabled="resubmitForm.processing"
                                 title="A nota já é enviada automaticamente assim que sai — use isso só se o canal (Shopee/ML) travou esperando ela, ex.: envio automático falhou ou a nota foi reemitida depois"
                                 class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
@@ -909,7 +905,6 @@ const cancelInvoice = () => {
                         <button
                             type="submit"
                             :disabled="form.processing"
-                            data-clique="Pedido: atualizar status"
                             class="w-full rounded-lg bg-primary py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Atualizar status
@@ -943,7 +938,6 @@ const cancelInvoice = () => {
                     <button
                         type="button"
                         class="mt-2 w-full rounded-lg border border-error py-2 text-sm font-medium text-error hover:bg-error hover:text-white"
-                        data-clique="Pedido: cancelar pedido"
                         @click="abrirCancelamento"
                     >
                         <i class="fas fa-ban mr-1" aria-hidden="true"></i> Cancelar pedido

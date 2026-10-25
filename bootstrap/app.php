@@ -117,8 +117,6 @@ return Application::configure(basePath: dirname(__DIR__))
             // anônima, confere Origin/Sec-Fetch-Site e tem limite por minuto
             // (CheckoutEventosController, 2026-10-23).
             'finalizacao/eventos',
-            // Cliques nos selos do rodapé, mesmo motivo (SeloCliqueController, 2026-10-25).
-            'selos/clique',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

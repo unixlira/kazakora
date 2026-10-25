@@ -297,7 +297,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                         <span class="text-xs text-slate-400">até</span>
                         <input v-model="filterState.ate" type="date" name="ate" aria-label="Data final" @change="applyFilters"
                             class="w-full min-w-0 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
-                        <button v-if="filterState.de || filterState.ate" type="button" aria-label="Limpar período" data-clique="Pedidos: limpar período"
+                        <button v-if="filterState.de || filterState.ate" type="button" aria-label="Limpar período"
                             class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
                             @click="clearPeriod">
                             <i class="fas fa-xmark" aria-hidden="true"></i>
@@ -334,13 +334,13 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                             </div>
                             <!-- No celular (< 640px) o Buscar fica só com a lupa, para o campo
                                  não sumir ao lado do "+ pedido" (Lira 2026-10-16). -->
-                            <button type="submit" aria-label="Buscar" title="Buscar" data-clique="Pedidos: buscar"
+                            <button type="submit" aria-label="Buscar" title="Buscar"
                                 class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-3 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none! sm:px-4">
                                 <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
                                 <span class="hidden sm:inline">Buscar</span>
                             </button>
                         </div>
-                        <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar" data-clique="Pedidos: novo pedido"
+                        <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
                             aria-label="Novo pedido" title="Novo pedido"
                             class="inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
                             <i class="fas fa-circle-plus" aria-hidden="true"></i>

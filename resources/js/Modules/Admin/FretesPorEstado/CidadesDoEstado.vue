@@ -143,8 +143,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', aoTeclar));
 
 <template>
     <Teleport to="body">
-        <div class="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="cidades-titulo" @click.self="emit('fechar')">
-            <div class="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-2xl">
+        <!-- admin-shell: fora do layout (Teleport) a janela perdia --surface e ficava transparente. -->
+        <div class="admin-shell fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 text-[var(--surface-foreground)]" role="dialog" aria-modal="true" aria-labelledby="cidades-titulo" @click.self="emit('fechar')">
+            <div class="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface,#ffffff)] shadow-2xl">
                 <header class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-5 py-4">
                     <div>
                         <h2 id="cidades-titulo" class="text-lg font-bold">

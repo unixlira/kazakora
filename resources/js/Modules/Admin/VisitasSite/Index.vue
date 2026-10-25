@@ -465,13 +465,34 @@ const confirmarApagar = () => {
                             </li>
                         </ul>
                         <p v-else class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Nenhum cookie registrado para este visitante no período. Os cookies só são gravados
-                            a partir de 12/10/2026 e somente de quem deu OK no aviso de cookies; as visitas anteriores
-                            não têm cookies.
+                            Nenhum cookie registrado para este visitante no período. A lista de cookies só é gravada
+                            a partir de 12/10/2026 e somente de quem aceitou os cookies (no checkout). As páginas
+                            abertas aparecem em Rotas visitadas mesmo sem o aceite.
                         </p>
                         <p class="mt-2 text-xs text-slate-400">
                             Só aparecem cookies de identificação e marketing. Sessão, login e token de segurança nunca são gravados.
                         </p>
+                    </section>
+                    <section v-if="detalhe.dados && !detalhe.carregando" class="mx-4 mb-3 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 p-4"
+                        aria-labelledby="visitante-rotas">
+                        <h3 id="visitante-rotas" class="mb-1 text-sm font-semibold">
+                            <i class="fas fa-route mr-1" aria-hidden="true"></i> Rotas visitadas
+                        </h3>
+                        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400" data-testid="rotas-resumo">
+                            {{ numero(detalhe.dados.total) }} {{ detalhe.dados.total === 1 ? 'página vista' : 'páginas vistas' }},
+                            {{ numero(detalhe.dados.rotas?.distintas ?? 0) }} {{ (detalhe.dados.rotas?.distintas ?? 0) === 1 ? 'rota diferente' : 'rotas diferentes' }}
+                            <template v-if="(detalhe.dados.visitantes ?? 0) > 1">, {{ numero(detalhe.dados.visitantes) }} navegadores neste IP</template>
+                        </p>
+                        <ul v-if="(detalhe.dados.rotas?.lista ?? []).length" class="max-h-64 divide-y divide-[var(--surface-border)] overflow-auto text-sm">
+                            <li v-for="r in detalhe.dados.rotas.lista" :key="r.path" class="flex items-baseline gap-3 py-1.5">
+                                <a :href="r.url" target="_blank" rel="noopener noreferrer"
+                                    class="min-w-0 flex-1 truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
+                                    :title="r.path">{{ r.path }}</a>
+                                <span class="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400"
+                                    :title="`Última vez em ${r.ultima}`">{{ numero(r.vezes) }}×</span>
+                            </li>
+                        </ul>
+                        <p v-else class="text-sm text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</p>
                     </section>
                     <table v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">

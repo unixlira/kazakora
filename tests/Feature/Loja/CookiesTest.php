@@ -6,6 +6,7 @@ use App\Modules\Analytics\Models\ConsentimentoCookie;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Support\Privacidade\Cookies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -16,17 +17,20 @@ class CookiesTest extends TestCase
 
     private const NAVEGADOR = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148';
 
-    public function test_sem_ok_mostra_aviso_e_nao_cria_cookie_de_estatistica(): void
+    public function test_sem_ok_cria_so_o_cookie_de_visitante_no_primeiro_acesso(): void
     {
         $resposta = $this->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-entrega?utm_source=instagram&utm_campaign=black');
 
+        // Desde 2026-10-25 o kazakora_visitor nasce no primeiro acesso (histórico de navegação).
         $resposta->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('cookies.aceito', false))
-            ->assertCookieMissing(Cookies::COOKIE_VISITANTE);
+            ->assertCookie(Cookies::COOKIE_VISITANTE)
+            ->assertCookieMissing(Cookies::COOKIE_OK);
 
         $visita = SiteVisit::sole();
         $this->assertFalse($visita->consentiu);
-        $this->assertStringStartsWith('s-', $visita->visitor_id);
+        $this->assertTrue(Str::isUuid($visita->visitor_id));
+        $this->assertNull($visita->cookies);
         $this->assertNull($visita->user_agent);
         $this->assertNotNull($visita->ip);
         $this->assertSame('instagram', $visita->utm_source);
@@ -100,6 +104,37 @@ class CookiesTest extends TestCase
         $visitantes = SiteVisit::visitantesPorDia(SiteVisit::query());
         $this->assertCount(1, $visitantes);
         $this->assertSame(2, $visitantes->first()->paginas);
+    }
+
+    public function test_sem_ok_todas_as_paginas_ficam_no_mesmo_visitante(): void
+    {
+        $this->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-entrega')->assertCookie(Cookies::COOKIE_VISITANTE);
+        $codigo = SiteVisit::sole()->visitor_id;
+
+        // Sem o cookie de volta (navegador que recusa cookie) vale o código da sessão; com ele, o cookie.
+        $this->withHeader('User-Agent', self::NAVEGADOR)->get('/termos-de-uso');
+        $this->withCookie(Cookies::COOKIE_VISITANTE, $codigo)->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-cookies');
+
+        $visitas = SiteVisit::query()->orderBy('id')->get();
+        $this->assertSame(['/politica-de-entrega', '/termos-de-uso', '/politica-de-cookies'], $visitas->pluck('path')->all());
+        $this->assertSame([$codigo], $visitas->pluck('visitor_id')->unique()->values()->all());
+    }
+
+    public function test_cookie_de_visitante_que_ja_existe_nao_e_trocado(): void
+    {
+        $this->withCookie(Cookies::COOKIE_VISITANTE, 'b6a1c1d2-0000-4000-8000-000000000009')
+            ->withHeader('User-Agent', self::NAVEGADOR)
+            ->get('/politica-de-entrega')
+            ->assertCookieMissing(Cookies::COOKIE_VISITANTE);
+
+        $this->assertSame('b6a1c1d2-0000-4000-8000-000000000009', SiteVisit::sole()->visitor_id);
+    }
+
+    public function test_robo_nao_ganha_cookie_de_visitante(): void
+    {
+        $this->withHeader('User-Agent', 'curl/8.0')->get('/politica-de-entrega')->assertCookieMissing(Cookies::COOKIE_VISITANTE);
+
+        $this->assertSame(0, SiteVisit::count());
     }
 
     public function test_com_ok_aviso_some_e_visita_usa_o_cookie(): void

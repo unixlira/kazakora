@@ -929,13 +929,13 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         <template v-if="etapa === 1">
                             <!-- Pessoa física / jurídica (pedido 2026-10-24, modelo Mavo). -->
                             <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
-                                <!-- No card estreito do computador: só "Física"/"Jurídica", sem ícone, numa linha. -->
+                                <!-- No card estreito do computador: só "Física"/"Jurídica", numa linha. -->
                                 <button v-for="[valor, rotulo, curto, icone] in [['pf', 'Pessoa física', 'Física', 'fa-user'], ['pj', 'Pessoa jurídica', 'Jurídica', 'fa-building']]" :key="valor"
                                     type="button" role="radio" :aria-checked="tipoPessoa === valor" :aria-label="rotulo"
                                     class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs lg:hidden xl:inline" :class="icone" aria-hidden="true"></i><span class="lg:hidden xl:inline">{{ rotulo }}</span><span class="hidden lg:inline xl:hidden">{{ curto }}</span>
+                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i><span class="lg:hidden xl:inline">{{ rotulo }}</span><span class="hidden lg:inline xl:hidden">{{ curto }}</span>
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">
@@ -1360,7 +1360,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 </span>
                                 <span class="min-w-0 flex-1 text-sm text-slate-600">{{ livrosBrindeNome }}</span>
                                 <!-- Valor de referência riscado antes do GRÁTIS (pedido do Lira 2026-10-22); GRÁTIS no tamanho do Total, verde mantido (2026-10-24). -->
-                                <span class="flex shrink-0 items-baseline gap-2">
+                                <span class="flex shrink-0 items-baseline gap-2 lg:flex-col lg:items-end lg:gap-0 xl:flex-row xl:items-baseline xl:gap-2">
                                     <s class="whitespace-nowrap text-sm text-slate-500"><span class="sr-only">De </span>R$ 97,50</s>
                                     <span class="text-xl font-extrabold text-[#00843f]">GRÁTIS</span>
                                 </span>

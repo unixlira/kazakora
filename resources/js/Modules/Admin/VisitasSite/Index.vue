@@ -17,6 +17,9 @@ const props = defineProps({
     origens: { type: Array, default: () => [] },
 });
 
+// Selos de segurança do rodapé (cliques no olho).
+const SELOS = [['google', 'Site Browsing Verificado'], ['reclame_aqui', 'Reclame Aqui'], ['norton', 'Norton Safe Web']];
+
 // Cor do selo de origem (classes inteiras para o Tailwind achar).
 const CORES_ORIGEM = {
     instagram: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
@@ -425,6 +428,20 @@ const confirmarApagar = () => {
                         <p v-else class="text-sm text-slate-500 dark:text-slate-400">
                             Só navegação interna nesse período (a entrada no site foi antes do período escolhido).
                         </p>
+                    </section>
+                    <section v-if="detalhe.dados && !detalhe.carregando" class="mx-4 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 p-4" aria-labelledby="visitante-selos">
+                        <h3 id="visitante-selos" class="mb-2 text-sm font-semibold">
+                            <i class="fas fa-shield-halved mr-1" aria-hidden="true"></i> Selos de Segurança
+                        </h3>
+                        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                            IP: <span class="font-mono" data-testid="detalhe-ip">{{ detalhe.dados.ip ?? 'anonimizado' }}</span>
+                        </p>
+                        <dl class="grid gap-2 text-sm sm:grid-cols-3">
+                            <div v-for="[chave, nome] in SELOS" :key="chave" class="rounded-md border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2">
+                                <dt class="text-xs text-slate-500 dark:text-slate-400">{{ nome }}</dt>
+                                <dd class="text-lg font-semibold tabular-nums" :data-testid="`selo-${chave}`">{{ numero(detalhe.dados.selos?.[chave] ?? 0) }} {{ (detalhe.dados.selos?.[chave] ?? 0) === 1 ? 'clique' : 'cliques' }}</dd>
+                            </div>
+                        </dl>
                     </section>
                     <CardLocalizacao v-if="detalhe.dados && !detalhe.carregando" :localizacao="detalhe.dados.localizacao" :total="detalhe.dados.total" />
                     <section v-if="detalhe.dados" class="mx-2 mb-3 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3"

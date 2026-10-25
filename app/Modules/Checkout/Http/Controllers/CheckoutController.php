@@ -19,6 +19,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
+use App\Modules\Checkout\Support\BoletoComMarca;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
@@ -1235,7 +1236,7 @@ class CheckoutController extends Controller
                     'pago_em' => $pagamento->updated_at?->toIso8601String(),
                     'boleto' => $pagamento->boletoPendente() ? [
                         'linha_digitavel' => $pagamento->boleto_linha_digitavel,
-                        'url' => $pagamento->boleto_url,
+                        'url' => BoletoComMarca::url($pagamento),
                         'vencimento' => $pagamento->expira_em?->toIso8601String(),
                     ] : null,
                 ] : null,
@@ -1498,8 +1499,16 @@ class CheckoutController extends Controller
             ...$this->paymentPropsFor($draft),
             'order' => $order->only('id', 'total', 'external_order_id'),
             'methodType' => Payment::METHOD_BOLETO,
-            'mercadoPagoBoleto' => MercadoPagoPaymentService::dadosDoBoleto($mpPayment),
+            'mercadoPagoBoleto' => $this->boletoComLinkDaLoja($order, MercadoPagoPaymentService::dadosDoBoleto($mpPayment)),
         ]);
+    }
+
+    /** Botão do boleto na tela do checkout abre o PDF com o logo da loja (BoletoComMarca). */
+    private function boletoComLinkDaLoja(Order $order, array $boleto): array
+    {
+        $payment = $order->payments()->where('method_type', Payment::METHOD_BOLETO)->latest('id')->first();
+
+        return [...$boleto, 'pdfUrl' => ($payment ? BoletoComMarca::url($payment) : null) ?? $boleto['pdfUrl']];
     }
 
     private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpPayment): Response

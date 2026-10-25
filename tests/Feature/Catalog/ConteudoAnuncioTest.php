@@ -352,4 +352,44 @@ class ConteudoAnuncioTest extends TestCase
         $this->artisan('produtos:gerar-conteudo-anuncio')->assertSuccessful();
         Http::assertSentCount(1);
     }
+
+    public function test_descricao_por_ia_da_kazakora_segue_o_modelo_da_parafusadeira_18v(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'descricao' => "✨ Gancho.\n\n🔥 PRINCIPAIS VANTAGENS\n✅ Item",
+            'blocos' => [['titulo' => 'Título', 'texto' => 'Texto.', 'imagem' => null]],
+        ]))]);
+
+        $dados = app(AnuncioConteudoService::class)->gerarViaGemini('KazaKora', 'Furadeira', 'Furadeira sem fio.', [], 0, comDescricao: true);
+
+        $this->assertStringContainsString('✅ Item', $dados['descricao']);
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return str_contains($prompt, 'MODELO DA DESCRIÇÃO')
+                && str_contains($prompt, '🔥 PRINCIPAIS VANTAGENS')
+                && str_contains($prompt, '📦 CONTEÚDO DA EMBALAGEM')
+                && str_contains($prompt, 'parafusadeira 18V')
+                && ! str_contains($prompt, "seção 'Características:'");
+        });
+    }
+
+    public function test_modelo_da_descricao_so_vale_para_descricao_da_kazakora(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'descricao' => 'Sérum.',
+            'blocos' => [['titulo' => 'Pele macia', 'texto' => 'Hidrata.', 'imagem' => null]],
+        ]))]);
+
+        $service = app(AnuncioConteudoService::class);
+        $service->gerarViaGemini('Beauty Kora (beleza e skincare)', 'Sérum', 'Sérum facial.', [], 0, comDescricao: true);
+        $service->gerarViaGemini('KazaKora', 'Furadeira', 'Furadeira sem fio.', [], 0);
+
+        Http::assertNotSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+
+            return str_contains(end($partes)['text'], 'MODELO DA DESCRIÇÃO');
+        });
+    }
 }

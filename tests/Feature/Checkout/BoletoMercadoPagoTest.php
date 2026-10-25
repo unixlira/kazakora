@@ -322,7 +322,7 @@ class BoletoMercadoPagoTest extends TestCase
         // Página do Mercado Pago importada + o logo (imagem PNG com transparência).
         $this->assertStringContainsString('/XObject', $pdf);
         $this->assertStringContainsString('/SMask', $pdf);
-        Storage::disk('local')->assertExists("boletos/v3/{$payment->id}.pdf");
+        Storage::disk('local')->assertExists("boletos/v4/{$payment->id}.pdf");
 
         // Segunda vez sai do arquivo guardado, sem baixar de novo.
         $this->get($url)->assertOk();

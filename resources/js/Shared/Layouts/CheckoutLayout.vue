@@ -5,7 +5,7 @@
 // social, ajuste de 2026-10-24), e abaixo a barra roxa "Oferta termina em".
 // O relógio é sempre de 30 minutos a partir da primeira visita ao checkout
 // (pedido do Lira 2026-10-24, modelo Mavo), guardados no navegador para não
-// recomeçar ao atualizar. Zerou, a barra some. Desde 2026-10-25 não usa mais o
+// recomeçar ao atualizar. Zerou na tela, a barra some; na próxima visita recomeça. Desde 2026-10-25 não usa mais o
 // fim da Oferta Relâmpago do carrinho: mostrava 568:47:51 (oferta de 23 dias).
 // Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
 // da loja (no celular, desde 2026-10-24: selos e depois sanfonas de pagamento
@@ -55,9 +55,10 @@ onMounted(() => {
     let fim = NaN;
     try {
         fim = Number(localStorage.getItem(RELOGIO_CHAVE));
-        // Passou mais de um dia desde o relógio anterior: é outra compra, começa de novo.
+        // Relógio anterior já zerou: começa outros 30 minutos (2026-10-25: antes
+        // esperava um dia, e quem voltou ao checkout ficava sem a barra até lá).
         // Fim além de 30 minutos à frente (valor estranho guardado) também recomeça.
-        if (!Number.isFinite(fim) || fim <= 0 || Date.now() - fim > 86400000
+        if (!Number.isFinite(fim) || fim <= Date.now()
             || fim - Date.now() > RELOGIO_MINUTOS * 60000) {
             fim = Date.now() + RELOGIO_MINUTOS * 60000;
             localStorage.setItem(RELOGIO_CHAVE, String(fim));

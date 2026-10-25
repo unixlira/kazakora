@@ -16,6 +16,12 @@
 return [
     'ativo' => env('FRETE_EMBUTIDO_ATIVO', true),
 
+    // Preço fixo no KazaKora (pedido 2026-10-25, clientes das campanhas viam
+    // um preço no card e outro no checkout): o frete somado ao preço é sempre
+    // o deste CEP de referência, igual para todo cliente. O CEP/IP do cliente
+    // só decide prazo e TURBO. Vazio = volta ao frete pela região do cliente.
+    'cep_fixo' => env('FRETE_EMBUTIDO_CEP_FIXO', '01310100'),
+
     // Sem região ou com a API dos Correios fora do ar.
     'fallback_pac' => 30.0,
     'fallback_sedex' => 60.0,

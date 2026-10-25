@@ -437,13 +437,8 @@ watch(() => pessoa.email, () => {
 });
 
 // ---------- Selos de confiança ----------
-// Textos com a identidade da KazaKora (a izeshop foi só referência de formato).
-const SELOS = [
-    { imagem: '/images/checkout/pagamento-100-seguro-checkout-v4.webp', titulo: 'Pagamento 100% Seguro', texto: 'Seu pagamento passa direto pelo Mercado Pago, com criptografia. Seus dados de cartão nunca ficam com a gente.' },
-    { imagem: '/images/checkout/avaliacoes-positivas-checkout-v4.webp', titulo: 'Avaliações Positivas', texto: 'Cada produto é escolhido a dedo e avaliado por quem já comprou. Dúvidas? A gente responde no WhatsApp.' },
-    { imagem: '/images/checkout/satisfacao-garantida-checkout-v4.webp', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a). Se não gostar, devolvemos todo o seu dinheiro, sem burocracia.' },
-    { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.webp', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora, ou no boleto.' },
-];
+// Os 4 cartões com imagem (Pagamento Seguro, Avaliações Positivas, Satisfação
+// Garantida, Parcelamento) ficam só na página do produto (pedido 2026-10-25).
 
 // Selos e checks verdes do padrão KazaKora (mesmos da página de produto,
 // 2026-10-19), abaixo do resumo (pedido 2026-10-23). Só fatos de toda compra.
@@ -1303,17 +1298,6 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
                     <!-- Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24). -->
                     <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" />
-
-                    <!-- Celular: selos de confiança debaixo das etapas (pedido 2026-10-21). -->
-                    <ul class="space-y-3 lg:hidden">
-                        <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
-                            <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
-                            <div class="text-sm text-slate-600">
-                                <strong class="block text-slate-900">{{ selo.titulo }}</strong>
-                                {{ selo.texto }}
-                            </div>
-                        </li>
-                    </ul>
                     </div>
                 </div>
             </main>
@@ -1458,17 +1442,6 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
                 <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
                 <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
-
-                <!-- Selos de confiança com imagem (pedido 2026-10-10). No celular ficam debaixo das etapas (2026-10-21). -->
-                <ul class="mt-4 hidden space-y-3 lg:block lg:mt-0">
-                    <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
-                        <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
-                        <div class="text-sm text-slate-600">
-                            <strong class="block text-slate-900">{{ selo.titulo }}</strong>
-                            {{ selo.texto }}
-                        </div>
-                    </li>
-                </ul>
             </aside>
         </div>
 

@@ -333,8 +333,7 @@ class TabelaFreteLocalidades
                     }
                     $k = (string) $item['nuRequisicao'];
                     if (isset($item['pcFinal']) && empty($item['txErro'])) {
-                        // pcFinal vem como string com vírgula decimal (ex.: "23,45").
-                        $dados[$k]['preco'] = (float) str_replace(',', '.', (string) $item['pcFinal']);
+                        $dados[$k]['preco'] = self::valor($item['pcFinal']);
                     }
                     if (isset($item['prazoEntrega'])) {
                         $dados[$k]['prazo'] = (int) $item['prazoEntrega'];
@@ -538,6 +537,17 @@ class TabelaFreteLocalidades
     private function novaVersao(): void
     {
         Cache::forever(self::VERSAO, (int) Cache::get(self::VERSAO, 0) + 1);
+    }
+
+    /** pcFinal vem como string em formato brasileiro ("23,45" ou "1.234,56"), em reais com 2 casas. */
+    public static function valor(mixed $pcFinal): float
+    {
+        $texto = (string) $pcFinal;
+        if (str_contains($texto, ',')) {
+            $texto = str_replace(['.', ','], ['', '.'], $texto);
+        }
+
+        return round((float) $texto, 2);
     }
 
     private static function cep(mixed $valor): ?string

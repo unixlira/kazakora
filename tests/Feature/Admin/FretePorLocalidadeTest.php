@@ -109,6 +109,13 @@ class FretePorLocalidadeTest extends TestCase
         $this->assertSame(7, DB::table('frete_localidades')->count());
     }
 
+    public function test_preco_dos_correios_em_formato_brasileiro(): void
+    {
+        $this->assertSame(23.45, TabelaFreteLocalidades::valor('23,45'));
+        $this->assertSame(1234.56, TabelaFreteLocalidades::valor('1.234,56'));
+        $this->assertSame(18.4, TabelaFreteLocalidades::valor('18.4'));
+    }
+
     public function test_cota_quatro_categorias_por_cep_e_caixa_fora_do_limite_nao_vai_para_a_api(): void
     {
         // Caixa acima de 100 cm por lado: os Correios não levam.

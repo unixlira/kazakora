@@ -14,6 +14,8 @@ class Coupon extends Model
 
     public const TYPE_FIXED = 'fixed';
 
+    public const MSG_JA_USOU = 'Você já usou este cupom em outra compra.';
+
     /** Pedidos que contam como "cupom usado" (pagamento confirmado). */
     public const STATUS_USO = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
@@ -119,7 +121,7 @@ class Coupon extends Model
      * Por que o cupom não vale para esta compra — null quando vale.
      * Mensagens já no tom de quem lê no checkout.
      */
-    public function motivoInvalido(float $subtotal, ?User $user = null, ?string $email = null): ?string
+    public function motivoInvalido(float $subtotal, ?User $user = null, ?string $email = null, ?string $cpf = null, ?string $telefone = null): ?string
     {
         if (! $this->is_active) {
             return 'Este cupom não está mais ativo.';
@@ -140,19 +142,54 @@ class Coupon extends Model
         if ($this->esgotado()) {
             return 'Este cupom já atingiu o limite de usos.';
         }
-        if ($this->one_per_customer && ($user || $email)) {
-            $jaUsou = $this->pedidos()
-                ->whereIn('status', self::STATUS_USO)
-                ->where(fn ($pedidos) => $pedidos
-                    ->when($user, fn ($q) => $q->orWhere('user_id', $user->id))
-                    ->when($email, fn ($q) => $q->orWhere('shipping_email', $email)))
-                ->exists();
-            if ($jaUsou) {
-                return 'Você já usou este cupom em outra compra.';
-            }
+        if ($this->one_per_customer && $this->jaUsadoPor($user, $email, $cpf, $telefone)) {
+            return self::MSG_JA_USOU;
         }
 
         return null;
+    }
+
+    /**
+     * Uso único por pessoa (pedido do Lira 2026-10-25): a mesma pessoa é a
+     * mesma conta, o mesmo e-mail, o mesmo CPF ou o mesmo celular de um
+     * pedido pago com este cupom. Trocar de e-mail não basta, porque o CPF
+     * e o celular continuam. IP fica de fora: no 4G e em condomínio muita
+     * gente sai pelo mesmo IP e o cliente novo seria barrado.
+     */
+    public function jaUsadoPor(?User $user, ?string $email = null, ?string $cpf = null, ?string $telefone = null): bool
+    {
+        $emails = collect([$email, $user?->email])->map(fn ($e) => mb_strtolower(trim((string) $e)))->filter()->unique();
+        $cpfs = collect([$cpf, $user?->cpf])->map(fn ($c) => self::digitos($c))->filter(fn ($c) => strlen($c) === 11)->unique();
+        $telefones = collect([$telefone, $user?->phone])->map(fn ($t) => self::celular($t))->filter()->unique();
+
+        if (! $user && $emails->isEmpty() && $cpfs->isEmpty() && $telefones->isEmpty()) {
+            return false;
+        }
+
+        return $this->pedidos()
+            ->whereIn('status', self::STATUS_USO)
+            ->with('user:id,email,cpf,phone')
+            ->get(['id', 'user_id', 'shipping_email', 'shipping_phone'])
+            ->contains(fn (Order $pedido) => ($user && $pedido->user_id === $user->id)
+                || $emails->intersect([mb_strtolower(trim((string) $pedido->shipping_email)), mb_strtolower(trim((string) $pedido->user?->email))])->isNotEmpty()
+                || $cpfs->contains(self::digitos($pedido->user?->cpf))
+                || $telefones->intersect([self::celular($pedido->shipping_phone), self::celular($pedido->user?->phone)])->isNotEmpty());
+    }
+
+    private static function digitos(?string $valor): string
+    {
+        return preg_replace('/\D/', '', (string) $valor);
+    }
+
+    /** DDD + número, sem o 55 do país: "(11) 98888-7777" e "+55 11988887777" são o mesmo. */
+    private static function celular(?string $valor): string
+    {
+        $numeros = self::digitos($valor);
+        if (strlen($numeros) > 11 && str_starts_with($numeros, '55')) {
+            $numeros = substr($numeros, 2);
+        }
+
+        return strlen($numeros) >= 10 ? $numeros : '';
     }
 
     public function discountFor(float $subtotal): float

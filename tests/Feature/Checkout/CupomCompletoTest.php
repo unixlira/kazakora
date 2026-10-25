@@ -145,6 +145,39 @@ class CupomCompletoTest extends TestCase
         $this->postJson('/finalizacao/cupom', ['code' => 'primeira'])->assertStatus(422)->assertJsonFragment(['message' => 'Você já usou este cupom em outra compra.']);
     }
 
+    public function test_uso_unico_reconhece_a_pessoa_pelo_cpf_email_e_celular(): void
+    {
+        $coupon = Coupon::create(['code' => 'UMAVEZ', 'discount_type' => 'fixed', 'discount_value' => 10, 'is_active' => true, 'one_per_customer' => true]);
+        $usou = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'ana@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 98888-7777']);
+        $this->pedidoPago('UMAVEZ', ['user_id' => $usou->id, 'shipping_email' => 'ana@exemplo.com', 'shipping_phone' => '(11) 98888-7777']);
+
+        // Outra conta, mas mesmo CPF (sem máscara), mesmo e-mail (maiúsculo) ou mesmo celular (+55).
+        $this->assertTrue($coupon->jaUsadoPor(null, 'outra@exemplo.com', '12345678909'));
+        $this->assertTrue($coupon->jaUsadoPor(null, ' ANA@exemplo.com '));
+        $this->assertTrue($coupon->jaUsadoPor(null, 'nova@exemplo.com', '98765432100', '+55 11 98888-7777'));
+        $this->assertSame(Coupon::MSG_JA_USOU, $coupon->motivoInvalido(100, null, 'nova@exemplo.com', '123.456.789-09'));
+
+        // Pessoa nova passa; pedido cancelado com o cupom não conta como uso.
+        $this->assertFalse($coupon->jaUsadoPor(null, 'nova@exemplo.com', '98765432100', '21977776666'));
+        $outro = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '98765432100', 'phone' => '21977776666']);
+        $this->pedidoPago('UMAVEZ', ['user_id' => $outro->id, 'status' => Order::STATUS_CANCELLED, 'shipping_phone' => '21977776666']);
+        $this->assertFalse($coupon->jaUsadoPor($outro));
+        $this->assertNull($coupon->motivoInvalido(100, $outro));
+    }
+
+    public function test_uso_unico_barra_convidado_com_cpf_de_quem_ja_usou(): void
+    {
+        Coupon::create(['code' => 'UMAVEZ', 'discount_type' => 'fixed', 'discount_value' => 10, 'is_active' => true, 'one_per_customer' => true]);
+        $usou = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '12345678909']);
+        $this->pedidoPago('UMAVEZ', ['user_id' => $usou->id]);
+        $this->carrinho(100);
+
+        $this->withSession(['checkout_draft' => ['guest' => ['name' => 'Ana', 'email' => 'outro@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '21977776666']]])
+            ->postJson('/finalizacao/cupom', ['code' => 'umavez'])
+            ->assertStatus(422)
+            ->assertJsonFragment(['message' => Coupon::MSG_JA_USOU]);
+    }
+
     public function test_link_com_cupom_guarda_no_checkout(): void
     {
         Coupon::create(['code' => 'LINK15', 'discount_type' => 'percentage', 'discount_value' => 15, 'is_active' => true]);

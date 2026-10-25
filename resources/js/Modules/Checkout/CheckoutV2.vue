@@ -1053,15 +1053,15 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <span class="sr-only">Complemento (opcional)</span>
                                     <input v-model="endereco.complement" data-medir="complemento" type="text" autocomplete="address-line2" :class="inputClass" placeholder="Complemento (opcional)">
                                 </label>
-                                <label class="col-span-6 sm:col-span-2" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
+                                <label class="col-span-6 sm:col-span-2 xl:col-span-6" :data-erro="erro('new_address.neighborhood') ? 1 : 0">
                                     <span class="sr-only">Bairro</span>
                                     <input v-model="endereco.neighborhood" data-medir="bairro" type="text" :class="[inputClass, erro('new_address.neighborhood') && inputErroClass]" placeholder="Bairro">
                                 </label>
-                                <label class="col-span-4 sm:col-span-3" :data-erro="erro('new_address.city') ? 1 : 0">
+                                <label class="col-span-4 sm:col-span-3 xl:col-span-4" :data-erro="erro('new_address.city') ? 1 : 0">
                                     <span class="sr-only">Cidade</span>
                                     <input v-model="endereco.city" data-medir="cidade" type="text" autocomplete="address-level2" :class="[inputClass, erro('new_address.city') && inputErroClass]" placeholder="Cidade">
                                 </label>
-                                <label class="col-span-2 sm:col-span-1" :data-erro="erro('new_address.state') ? 1 : 0">
+                                <label class="col-span-2 sm:col-span-1 xl:col-span-2" :data-erro="erro('new_address.state') ? 1 : 0">
                                     <span class="sr-only">UF</span>
                                     <input v-model="endereco.state" data-medir="uf" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]" placeholder="UF">
                                 </label>

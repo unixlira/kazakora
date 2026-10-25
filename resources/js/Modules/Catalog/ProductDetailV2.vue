@@ -519,7 +519,13 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // Lira 2026-10-24): o servidor manda o dia certo, "Receba SEGUNDA" no Full e
 // "Receba a partir de SEGUNDA" no Flex (flex_mensagem) e no Turbo (turbo.mensagem).
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo } depois da consulta
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo, endereco } depois da consulta
+// "Rua - Cidade - UF" do CEP, abaixo do campo e do botão (pedido do Lira 2026-10-24).
+const enderecoPrazo = computed(() => {
+    const endereco = prazo.value?.endereco;
+    if (!endereco) return '';
+    return [endereco.rua, endereco.cidade, endereco.uf].filter(Boolean).join(' - ');
+});
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
@@ -609,7 +615,7 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null, flexMensagem: data.flex_mensagem ?? null };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null, flexMensagem: data.flex_mensagem ?? null, endereco: data.endereco ?? null };
         escolhaFrete.value = freteGratisPadrao();
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
@@ -934,6 +940,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
+                                <p v-if="enderecoPrazo && !erroPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
                                 <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
@@ -1466,6 +1473,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep label { color: #f3f4f6; }
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
+/* Endereço do CEP no mesmo azul do botão "calcular" (#13bce6), também no tema escuro. */
+.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
+.pd2 .prazo-cep .rua i { margin-right: 4px; }
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }

@@ -35,6 +35,9 @@ class FretesPorCidadeTest extends TestCase
     {
         parent::setUp();
         config(['frete_embutido.ativo' => true]);
+        // Aqui o mesmo visitante consulta vários CEPs: sem o preço fixo da
+        // navegação (#1206) cada CEP mostra o preço da sua regra.
+        config(['frete_embutido.fixo_na_navegacao' => false]);
 
         $agora = now();
         DB::table('ibge_estados')->insert(['id' => 35, 'sigla' => 'SP', 'nome' => 'São Paulo', 'created_at' => $agora, 'updated_at' => $agora]);

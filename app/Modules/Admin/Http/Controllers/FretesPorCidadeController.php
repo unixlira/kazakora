@@ -37,7 +37,7 @@ use Inertia\Response;
  */
 class FretesPorCidadeController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, TabelaFreteLocalidades $tabela): Response
     {
         $site = self::site($request);
         $uf = strtoupper((string) $request->query('uf', 'SP'));
@@ -63,6 +63,8 @@ class FretesPorCidadeController extends Controller
             ->selectRaw('ibge_municipios.uf as uf, count(distinct frete_regiao_locais.municipio_id) as n')
             ->pluck('n', 'uf');
 
+        $precos = $estado ? self::precosDaTabela($estado->id, $tabela->origem()) : collect();
+
         return Inertia::render('Admin/FretesPorCidade/Index', [
             'site' => $site,
             'sites' => SiteAtual::SITES,
@@ -77,6 +79,7 @@ class FretesPorCidadeController extends Controller
                     'id' => $m->id,
                     'nome' => $m->nome,
                     'regras' => self::regrasPorCategoria($regras[$m->id] ?? collect()),
+                    'precos' => $precos[$m->id] ?? (object) [],
                     'distritos_com_regra' => (int) ($distritos[$m->id] ?? 0),
                 ])
                 ->values() : [],
@@ -234,6 +237,33 @@ class FretesPorCidadeController extends Controller
             ->whereNotExists(fn ($q) => $q->from('frete_regiao_locais as outro')
                 ->whereColumn('outro.frete_regiao_id', 'frete_regiao_locais.frete_regiao_id')
                 ->whereColumn('outro.id', '!=', 'frete_regiao_locais.id'));
+    }
+
+    /**
+     * PAC e SEDEX salvos (tabela de Frete por localidade) de cada categoria,
+     * pela localidade do município (tipo M), por cidade do estado. Sem isso a
+     * lista só mostrava as regras e as cidades com tabela (ex.: o ES inteiro
+     * com o valor de Afonso Cláudio, 25/10) apareciam como "Correios normal".
+     *
+     * @return Collection<int, array<string, array{pac: ?float, sedex: ?float}>>
+     */
+    private static function precosDaTabela(int $estadoId, ?string $origem): Collection
+    {
+        if (! $origem) {
+            return collect();
+        }
+
+        return DB::table('frete_localidades as l')
+            ->join('frete_tabela as t', 't.cep_destino', '=', 'l.cep_cotacao')
+            ->where('l.tipo', 'M')
+            ->where('t.cep_origem', $origem)
+            ->whereIn('l.municipio_id', IbgeMunicipio::query()->where('estado_id', $estadoId)->select('id'))
+            ->get(['l.municipio_id', 't.categoria', 't.pac_preco', 't.sedex_preco'])
+            ->groupBy('municipio_id')
+            ->map(fn (Collection $linhas) => $linhas->mapWithKeys(fn ($t) => [$t->categoria => [
+                'pac' => $t->pac_preco !== null ? (float) $t->pac_preco : null,
+                'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
+            ]])->all());
     }
 
     /** @return array<string, ?array> 'todas' e uma entrada por categoria */

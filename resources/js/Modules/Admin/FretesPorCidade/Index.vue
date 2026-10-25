@@ -39,6 +39,12 @@ function ir(params) {
 
 const linkCidade = (c) => `/admin/logistica/fretes-por-estado/cidades/${c.id}?site=${props.site}`;
 
+// PAC e SEDEX salvos na tabela de Frete por localidade (2026-10-25): antes a
+// lista só mostrava as regras e as cidades com tabela pareciam vazias.
+const reais = (v) => (v === null || v === undefined ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const preco = (c, chave) => (chave === 'todas' ? null : c.precos?.[chave] ?? null);
+const comTabela = computed(() => props.cidades.filter((c) => Object.keys(c.precos ?? {}).length).length);
+
 // Limites das categorias (a última fica sem limite).
 const editandoCategorias = ref(false);
 const formCategorias = reactive({ categorias: [] });
@@ -153,7 +159,7 @@ function salvarCategorias() {
                     <input v-model="soComRegra" type="checkbox" class="rounded">
                     Só cidades com regra
                 </label>
-                <p id="cidades-titulo" class="ml-auto pb-2 text-xs text-slate-500 dark:text-slate-400">{{ cidades.length }} cidades em {{ estado }} · {{ comRegra }} com regra</p>
+                <p id="cidades-titulo" class="ml-auto pb-2 text-xs text-slate-500 dark:text-slate-400">{{ cidades.length }} cidades em {{ estado }} · {{ comRegra }} com regra · {{ comTabela }} com PAC e SEDEX na tabela</p>
             </div>
 
             <div class="overflow-x-auto">
@@ -179,7 +185,12 @@ function salvarCategorias() {
                                     class="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold"
                                     :class="c.regras[col.chave].ativo ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-500 line-through dark:bg-slate-800'"
                                 >{{ descrever(c.regras[col.chave]) }}</span>
-                                <span v-else class="text-xs text-slate-400 dark:text-slate-500">{{ col.chave === 'todas' ? 'Correios normal' : '—' }}</span>
+                                <span v-else-if="!preco(c, col.chave)" class="text-xs text-slate-400 dark:text-slate-500">{{ col.chave === 'todas' ? 'Correios normal' : '—' }}</span>
+                                <span
+                                    v-if="preco(c, col.chave)"
+                                    class="block whitespace-nowrap text-xs tabular-nums text-slate-600 dark:text-slate-300"
+                                    :class="{ 'mt-1': c.regras[col.chave] }"
+                                >PAC {{ reais(preco(c, col.chave).pac) }} · SEDEX {{ reais(preco(c, col.chave).sedex) }}</span>
                             </td>
                             <td class="px-3 py-2 text-right">
                                 <Link v-if="temRegra(c)" :href="linkCidade(c)" class="whitespace-nowrap text-xs font-semibold text-primary hover:underline">editar</Link>
@@ -198,6 +209,7 @@ function salvarCategorias() {
             </div>
             <p class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
                 "Todas" vale para qualquer pacote; a regra de uma categoria passa na frente dela. "—" = segue a regra de Todas (ou os Correios).
+                "PAC · SEDEX" = preço salvo na tabela de Frete por localidade para a cidade (R$).
             </p>
         </section>
     </AdminLayout>

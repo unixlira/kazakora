@@ -197,21 +197,9 @@ const currentUnitPrice = computed(() => unitPriceForQuantity(quantity.value));
 const currentTotal = computed(() => currentUnitPrice.value * quantity.value);
 
 // Características: resumo curto na lateral (estilo Mercado Livre) + tabela completa mais abaixo.
-const keySpecs = computed(() => {
-    const specs = [];
-    if (props.product.brand) specs.push({ label: 'Marca', value: props.product.brand });
-    if (props.product.model) specs.push({ label: 'Modelo', value: props.product.model });
-    if (props.product.color) specs.push({ label: 'Cor', value: props.product.color });
-    if (props.product.variation) specs.push({ label: 'Variação', value: props.product.variation });
-    if (props.product.category) specs.push({ label: 'Categoria', value: props.product.category.name });
-    return specs;
-});
+const keySpecs = computed(() => (props.product.ficha_tecnica ?? []).map(([label, value]) => ({ label, value })));
 
-const fullSpecs = computed(() => {
-    const specs = [...keySpecs.value];
-    if (props.product.sku) specs.push({ label: 'SKU', value: props.product.sku });
-    return specs;
-});
+const fullSpecs = computed(() => keySpecs.value);
 
 const scrollToSpecs = () => {
     document.getElementById('caracteristicas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

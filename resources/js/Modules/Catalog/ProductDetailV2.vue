@@ -500,16 +500,12 @@ const highlights = computed(() => {
     return [];
 });
 
-const specs = computed(() => {
-    const list = [];
-    if (props.product.brand) list.push(['Marca', props.product.brand]);
-    if (selecionada.value.model) list.push(['Modelo', selecionada.value.model]);
-    if (selecionada.value.color) list.push(['Cor', selecionada.value.color]);
-    if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
-    if (props.product.category) list.push(['Categoria', props.product.category.name]);
-    if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
-    return list;
-});
+// Ficha técnica (pedido 2026-10-24): marca, modelo, cor, voltagem, dimensões e
+// peso vêm prontos do servidor (FichaTecnica). SKU, categoria e variação não aparecem.
+const specs = computed(() => [
+    ...(props.product.ficha_tecnica ?? []),
+    ['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`],
+]);
 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 

@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
@@ -333,6 +334,8 @@ class CatalogController extends Controller
             'quantityDiscounts',
             // Benefícios + descrição em blocos (pedido 2026-10-09).
             'adContent',
+            'fiscalData',
+            'parent.fiscalData',
         ]);
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
@@ -364,6 +367,8 @@ class CatalogController extends Controller
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
+        // Ficha técnica (pedido 2026-10-24): sem SKU, categoria e variação.
+        $product->setAttribute('ficha_tecnica', FichaTecnica::linhas($product));
         $product->setAttribute('reviews_avg_rating', $reviews->count() ? round((float) $reviews->avg('rating'), 4) : null);
 
         $user = $request->user();

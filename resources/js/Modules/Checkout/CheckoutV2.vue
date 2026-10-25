@@ -885,6 +885,9 @@ const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_r
 // fecha (volta pelo "Voltar") e a próxima não fica apagada na tela. No
 // computador as três seguem à mostra, a próxima esmaecida.
 const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden lg:block', etapa.value < numero && 'lg:opacity-60'];
+// Grade da coluna da esquerda no computador: Identificação e Entrega 50/50, Pagamento embaixo.
+const areasSemErro = "lg:[grid-template-areas:'ident_entrega'_'pag_pag']";
+const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_pag']";
 </script>
 
 <template>
@@ -907,7 +910,9 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
              empilhados. Os blocos de dentro do main viram "contents" para entrar na grade dele. -->
         <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6 lg:py-9 xl:grid-cols-[minmax(0,1fr)_400px]">
             <!-- ETAPAS -->
-            <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_pag']">
+            <!-- A linha do aviso de erro só entra na grade com erro, senão sobra o espaço dela no topo. -->
+            <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6"
+                :class="erroGeral || serverErrors.payment || serverErrors.cart ? areasComErro : areasSemErro">
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 lg:mb-0 lg:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
@@ -932,7 +937,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2 lg:text-xs xl:px-3 xl:text-sm"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs lg:hidden xl:inline-block" :class="icone" aria-hidden="true"></i>{{ rotulo }}
+                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i>{{ rotulo }}
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">

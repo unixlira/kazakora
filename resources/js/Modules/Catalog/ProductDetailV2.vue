@@ -548,16 +548,10 @@ const opcaoTurbo = computed(() => {
 const escolhaFrete = ref('flex');
 const freteGratisPadrao = () => (mostrarFull.value ? 'full' : (mostrarPac.value ? 'pac' : 'flex'));
 
-// Aviso de preço pelo CEP (pedido do Lira 2026-10-24): o preço da página nasce
-// estimado (CEP salvo, estado pelo IP ou valor de segurança); quando o CEP muda o
-// frete embutido, o cliente vê de quanto para quanto foi, em vez de o preço trocar calado.
-const avisoPreco = ref(null);
-
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
     prazo.value = null;
     erroPrazo.value = '';
-    avisoPreco.value = null;
 };
 
 // Rolagem até o resultado (pedido 2026-10-23): no celular o resultado ficava
@@ -616,8 +610,6 @@ const consultarPrazo = async () => {
     }
     consultandoPrazo.value = true;
     erroPrazo.value = '';
-    avisoPreco.value = null;
-    const precoAntes = precoPor.value;
     try {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
@@ -626,17 +618,10 @@ const consultarPrazo = async () => {
         escolhaFrete.value = freteGratisPadrao();
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
-        // recarrega os preços da página para o CEP digitado.
+        // recarrega os preços da página para o CEP digitado. Sem aviso de
+        // "preço atualizado de X para Y" (removido a pedido do Lira 2026-10-25).
         if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
-            router.reload({
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => {
-                    if (precoPor.value === precoAntes) return;
-                    const lugar = [data.endereco?.cidade, data.endereco?.uf].filter(Boolean).join(' - ') || `o CEP ${cep.value}`;
-                    avisoPreco.value = { lugar, de: precoAntes, para: precoPor.value };
-                },
-            });
+            router.reload({ preserveScroll: true, preserveState: true });
         }
     } catch {
         erroPrazo.value = 'Não foi possível consultar o prazo agora.';
@@ -966,10 +951,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
                                         <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>
-                                    <p v-if="avisoPreco" class="aviso-preco" role="status">
-                                        <i class="fas fa-circle-info" aria-hidden="true"></i>
-                                        Preço atualizado para {{ avisoPreco.lugar }}: de {{ formatPrice(avisoPreco.de) }} para <b>{{ formatPrice(avisoPreco.para) }}</b>
-                                    </p>
                                     <label v-if="mostrarPac" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'pac' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="pac">
                                         <i class="fas fa-truck" aria-hidden="true"></i><b class="nome">PAC</b><span>{{ prazo.pac.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
@@ -1841,9 +1822,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
    Full/Flex; o texto vai num laranja mais escuro para ler bem sobre o fundo claro. */
 .pd2 .prazo-cep .opcao-frete.turbo { background: #fff2e5; border-color: #FF7F00; color: #a34f00; }
 .pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #FF7F00; }
-.pd2 .prazo-cep .aviso-preco { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: #eaf8fd; color: #035f78; font-size: 14px; text-align: center; }
-.pd2 .prazo-cep .aviso-preco i { margin-right: 4px; }
-.dark .pd2 .prazo-cep .aviso-preco { background: rgba(0, 195, 238, .12); color: #7fdcf4; }
 .pd2 .prazo-cep .opcao-frete.marcado { box-shadow: 0 0 0 1px currentColor; }
 .pd2 .prazo-cep .opcao-frete:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
 .dark .pd2 .prazo-cep .opcao-frete.verde { background: rgba(0, 171, 33, .15); border-color: #22c55e; color: #4ade80; }

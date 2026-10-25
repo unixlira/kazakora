@@ -6,12 +6,15 @@ use App\Models\IbgeMunicipio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Onde uma FreteRegiao vale: uma UF, um município do IBGE ou uma faixa de CEP. */
+/**
+ * Onde uma FreteRegiao vale: uma UF, um município do IBGE, um distrito de um
+ * município (2026-10-25: distrito + CEP ou faixa) ou uma faixa de CEP.
+ */
 class FreteRegiaoLocal extends Model
 {
     protected $table = 'frete_regiao_locais';
 
-    protected $fillable = ['frete_regiao_id', 'uf', 'municipio_id', 'cep_inicio', 'cep_fim'];
+    protected $fillable = ['frete_regiao_id', 'uf', 'municipio_id', 'distrito_id', 'distrito', 'cep_inicio', 'cep_fim'];
 
     public function regiao(): BelongsTo
     {

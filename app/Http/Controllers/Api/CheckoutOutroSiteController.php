@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\BoletoComMarca;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
@@ -166,7 +167,7 @@ abstract class CheckoutOutroSiteController extends Controller
                 'qr_code_base64' => $qr['qr_code_base64'] ?? null,
                 'expira_em' => $mp['date_of_expiration'] ?? null,
             ] : null,
-            'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($mp) : null,
+            'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($order, $mp) : null,
         ], 201);
     }
 
@@ -221,10 +222,12 @@ abstract class CheckoutOutroSiteController extends Controller
             : response()->json(collect($endereco)->only(['zip', 'street', 'neighborhood', 'city', 'state']));
     }
 
-    /** Boleto gerado: linha digitável, código de barras, PDF e vencimento. */
-    private function boleto(array $mp): array
+    /** Boleto gerado: linha digitável, código de barras, PDF (com o topo da loja, BoletoComMarca) e vencimento. */
+    private function boleto(Order $order, array $mp): array
     {
         $boleto = MercadoPagoPaymentService::dadosDoBoleto($mp);
+        $payment = $order->payments()->where('method_type', Payment::METHOD_BOLETO)->latest('id')->first();
+        $boleto['pdfUrl'] = ($payment ? BoletoComMarca::url($payment) : null) ?? $boleto['pdfUrl'];
 
         return [
             'linha_digitavel' => $boleto['linhaDigitavel'],

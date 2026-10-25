@@ -246,7 +246,6 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('pix', null)
             ->assertJsonPath('boleto.linha_digitavel', '23790.12345 60000.000000 00000.000000 1 00000000020000')
-            ->assertJsonPath('boleto.url', 'https://www.mercadopago.com.br/payments/777/ticket')
             ->assertJsonPath('boleto.vencimento', '2026-10-17T23:59:59.000-03:00')
             ->assertJsonPath('pedido.total', 20000)
             ->assertJsonPath('pedido.pago', false);
@@ -255,6 +254,8 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(Order::SITE_FERRAKORA, $order->site_origem);
         $this->assertSame('0.00', $order->pix_discount_amount);
         $this->assertTrue($order->payments()->firstOrFail()->boletoPendente());
+        // O PDF é o boleto com o topo da loja (BoletoComMarca), não o link cru do Mercado Pago.
+        $this->assertStringContainsString("/boleto/{$order->payments()->firstOrFail()->id}?signature=", $resposta->json('boleto.url'));
         Mail::assertSent(\App\Modules\Checkout\Mail\BoletoAguardandoPagamento::class, fn ($mail) => $mail->hasTo('maria@exemplo.com'));
 
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))

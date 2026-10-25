@@ -48,8 +48,8 @@ class GeoDoVisitante
             return null;
         }
 
-        // Com o OK dos cookies, o visitante é o cookie (igual a site_visits).
-        $visitorId = Cookies::aceitou($request) ? ($request->cookie(Cookies::COOKIE_VISITANTE) ?: $sessao) : $sessao;
+        // O mesmo visitante de site_visits (cookie desde o primeiro acesso).
+        $visitorId = Cookies::visitante($request);
 
         $geo = $this->registrar($request, SiteVisit::SITE_LOJA, $sessao, $visitorId, $userId);
 

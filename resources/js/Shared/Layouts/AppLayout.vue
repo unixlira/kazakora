@@ -73,7 +73,6 @@ const contaMobileAberta = ref(false);
 // Abrem ao passar o mouse (com uma folguinha pra não fechar no caminho) e
 // também no clique/teclado.
 const departamentos = computed(() => page.props.menuLoja?.departamentos ?? []);
-const utilidadesLink = computed(() => page.props.menuLoja?.utilidadesLink ?? null);
 const menuAberto = ref(null);
 let fecharTimer = null;
 const abrirMenu = (nome) => {
@@ -96,6 +95,13 @@ const pararDeOuvir = router.on('start', () => {
     contaMobileAberta.value = false;
 });
 onUnmounted(pararDeOuvir);
+
+// "Entrar em Contato" do menu do celular (pedido 2026-10-24): fecha o menu e
+// desliza a página até o bloco Atendimento do rodapé, que existe em toda página.
+const irParaContato = () => {
+    mobileMenuOpen.value = false;
+    nextTick(() => document.getElementById('contato')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+};
 
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
 // a lista de resultados abre logo no topo. Ao digitar, a BuscaInstantanea
@@ -451,38 +457,22 @@ const REDES = [
                     <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-3 py-2.5 text-left text-red-600" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                 </nav>
 
-                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15); ícones coloridos e chamativos, uma cor por botão. -->
+                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15); ícones coloridos e chamativos, uma cor por botão.
+                     Pedido 2026-10-24: só Departamentos, Produtos e Entrar em Contato; saíram Ofertas do Dia, Mandar mensagem, Utilidades para Casa e o WhatsApp. -->
                 <nav class="menu-mobile-atalhos mt-4 grid grid-cols-3 gap-2 border-t border-store-border pt-4">
                     <a href="/#categorias" class="menu-mobile-icone">
                         <i class="fas fa-table-cells-large text-xl text-[#8b5cf6]"></i>
                         <span>Departamentos</span>
                     </a>
-                    <!-- Pedido 2026-10-24: Ofertas do Dia na linha de cima, logo depois de Departamentos e antes de Produtos; leva à seção da home. -->
-                    <a href="/#ofertas" class="menu-mobile-icone">
-                        <i class="fa-solid fa-stopwatch text-xl text-[#E02424]"></i>
-                        <span>Ofertas do Dia</span>
-                    </a>
                     <a href="/?todos=1#produtos" class="menu-mobile-icone">
                         <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
                         <span>Produtos</span>
                     </a>
-                    <Link href="/fale-conosco" class="menu-mobile-icone">
-                        <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
-                        <span>Mandar mensagem</span>
-                    </Link>
-                    <a v-if="utilidadesLink" :href="`/?categoria=${utilidadesLink}#produtos`" class="menu-mobile-icone">
-                        <i class="fas fa-house text-xl text-[#10b981]"></i>
-                        <span>Utilidades para Casa</span>
+                    <a href="#contato" class="menu-mobile-icone" @click.prevent="irParaContato">
+                        <i class="fas fa-headset text-xl text-[#3b82f6]"></i>
+                        <span>Entrar em Contato</span>
                     </a>
                 </nav>
-
-                <!-- Fim do menu: só o símbolo do WhatsApp em verde, na coluna do Rastrear pedido (pedido 2026-10-23). -->
-                <div class="mt-3 grid grid-cols-3 gap-2">
-                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="Falar no WhatsApp"
-                        class="col-start-2 flex h-12 items-center justify-center rounded-xl no-underline">
-                        <i class="fa-brands fa-whatsapp text-[2rem] text-[#25D366]"></i>
-                    </a>
-                </div>
             </div>
         </header>
 
@@ -518,7 +508,7 @@ const REDES = [
                                 <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                             </ul>
                         </div>
-                        <div>
+                        <div id="contato" class="scroll-mt-24">
                             <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>

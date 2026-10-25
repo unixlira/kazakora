@@ -78,6 +78,11 @@ class Coupon extends Model
         return $this->hasMany(CouponDisparo::class);
     }
 
+    public function usos(): HasMany
+    {
+        return $this->hasMany(CupomUso::class);
+    }
+
     public function pedidos(): HasMany
     {
         return $this->hasMany(Order::class, 'coupon_code', 'code');
@@ -154,25 +159,32 @@ class Coupon extends Model
      * mesma conta, o mesmo e-mail, o mesmo CPF ou o mesmo celular de um
      * pedido pago com este cupom. Trocar de e-mail não basta, porque o CPF
      * e o celular continuam. IP fica de fora: no 4G e em condomínio muita
-     * gente sai pelo mesmo IP e o cliente novo seria barrado.
+     * gente sai pelo mesmo IP e o cliente novo seria barrado. O CPF/CNPJ
+     * também é conferido no registro de usos (CupomUso), gravado quando o
+     * pagamento é confirmado.
      */
     public function jaUsadoPor(?User $user, ?string $email = null, ?string $cpf = null, ?string $telefone = null): bool
     {
         $emails = collect([$email, $user?->email])->map(fn ($e) => mb_strtolower(trim((string) $e)))->filter()->unique();
-        $cpfs = collect([$cpf, $user?->cpf])->map(fn ($c) => self::digitos($c))->filter(fn ($c) => strlen($c) === 11)->unique();
+        $cpfs = collect([$cpf, $user?->cpf])->map(fn ($c) => CupomUso::documento($c))->filter()->unique();
         $telefones = collect([$telefone, $user?->phone])->map(fn ($t) => self::celular($t))->filter()->unique();
 
         if (! $user && $emails->isEmpty() && $cpfs->isEmpty() && $telefones->isEmpty()) {
             return false;
         }
 
+        // Registro gravado no webhook de pagamento confirmado (2026-10-25).
+        if ($cpfs->isNotEmpty() && $this->usos()->whereIn('documento', $cpfs->values())->exists()) {
+            return true;
+        }
+
         return $this->pedidos()
             ->whereIn('status', self::STATUS_USO)
             ->with('user:id,email,cpf,phone')
-            ->get(['id', 'user_id', 'shipping_email', 'shipping_phone'])
+            ->get(['id', 'user_id', 'buyer_document', 'shipping_email', 'shipping_phone'])
             ->contains(fn (Order $pedido) => ($user && $pedido->user_id === $user->id)
                 || $emails->intersect([mb_strtolower(trim((string) $pedido->shipping_email)), mb_strtolower(trim((string) $pedido->user?->email))])->isNotEmpty()
-                || $cpfs->contains(self::digitos($pedido->user?->cpf))
+                || $cpfs->intersect([CupomUso::documento($pedido->buyer_document), CupomUso::documento($pedido->user?->cpf)])->filter()->isNotEmpty()
                 || $telefones->intersect([self::celular($pedido->shipping_phone), self::celular($pedido->user?->phone)])->isNotEmpty());
     }
 

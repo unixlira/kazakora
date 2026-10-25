@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Support;
 
 use App\Modules\Checkout\Jobs\EnviarPurchaseMetaJob;
 use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
+use App\Modules\Checkout\Models\CupomUso;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
@@ -78,6 +79,13 @@ class OrderPaymentFinalizer
         }
 
         $order->update(['status' => Order::STATUS_PAID]);
+
+        // Cupom usado por este CPF/CNPJ (BEMVINDO, 2026-10-25): só agora,
+        // com o pagamento confirmado, a pessoa perde o direito de usar de
+        // novo. Nunca derruba o webhook.
+        if ($order->coupon_code) {
+            rescue(fn () => CupomUso::registrar($order));
+        }
 
         // Carrinho abandonado (2026-10-24): pago com lead ainda aberto (outro
         // aparelho, mesmo e-mail/CPF) também conta como convertido. Nunca lança.

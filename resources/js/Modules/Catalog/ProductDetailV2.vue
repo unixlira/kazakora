@@ -515,7 +515,9 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
 // Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
-// dela, o prazo normal de envio.
+// dela, o prazo normal de envio. Sábado à noite, domingo e feriado (pedido do
+// Lira 2026-10-24): o servidor manda o dia certo, "Receba SEGUNDA" no Full e
+// "Receba a partir de SEGUNDA" no Flex (flex_mensagem) e no Turbo (turbo.mensagem).
 const cep = ref('');
 const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo } depois da consulta
 const consultandoPrazo = ref(false);
@@ -535,7 +537,7 @@ const mostrarFlex = computed(() => Boolean(prazo.value) && !mostrarFull.value);
 const prazoTurbo = (dias) => (dias ? `Receba em ${dias} ${dias === 1 ? 'dia' : 'dias'}` : 'Receba mais rápido');
 const opcaoTurbo = computed(() => {
     if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco, excedente: false };
-    if (isFreeShipping.value && prazo.value?.turbo) return { texto: prazoTurbo(prazo.value.turbo.prazo), preco: prazo.value.turbo.preco, excedente: true };
+    if (isFreeShipping.value && prazo.value?.turbo) return { texto: prazo.value.turbo.mensagem || prazoTurbo(prazo.value.turbo.prazo), preco: prazo.value.turbo.preco, excedente: true };
     return null;
 });
 const escolhaFrete = ref('flex');
@@ -607,7 +609,7 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, motoboy: data.motoboy ?? null, flexMensagem: data.flex_mensagem ?? null };
         escolhaFrete.value = freteGratisPadrao();
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
@@ -943,7 +945,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </label>
                                     <label v-if="mostrarFlex" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'flex' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="flex">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>Receba de 1 a 7 dias</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
+                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>{{ prazo.flexMensagem || 'Receba de 1 a 7 dias' }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>
                                     <label v-if="opcaoTurbo" class="opcao-frete turbo" :class="{ marcado: escolhaFrete === 'turbo' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="turbo">

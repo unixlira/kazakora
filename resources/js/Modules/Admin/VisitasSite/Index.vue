@@ -476,15 +476,22 @@ const confirmarApagar = () => {
                     <table v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
+                                <th scope="col" class="px-4 py-3 text-right">#</th>
                                 <th scope="col" class="px-4 py-3">Horário</th>
+                                <th scope="col" class="px-4 py-3">Página (rota)</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
                                 <th scope="col" class="px-4 py-3">CPF</th>
                                 <th scope="col" class="px-4 py-3 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--surface-border)]">
-                            <tr v-for="v in detalhe.dados.visitas" :key="v.id" class="align-top">
+                            <tr v-for="(v, i) in detalhe.dados.visitas" :key="v.id" class="align-top">
+                                <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums text-slate-400">{{ (detalhe.dados.pagina - 1) * detalhe.dados.por_pagina + i + 1 }}</td>
                                 <td class="whitespace-nowrap px-4 py-2 tabular-nums text-slate-500 dark:text-slate-400">{{ v.quando }}</td>
+                                <td class="px-4 py-2" data-testid="visita-rota">
+                                    <a :href="v.url" target="_blank" rel="noopener noreferrer" :title="v.url"
+                                        class="break-all font-mono text-xs text-primary hover:underline">{{ v.path }}</a>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <template v-if="v.cliente">
                                         {{ v.cliente }}
@@ -506,7 +513,7 @@ const confirmarApagar = () => {
                                 </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="4" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
+                                <td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>
                         </tbody>
                     </table>

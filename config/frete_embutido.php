@@ -49,6 +49,13 @@ return [
     // Caixa cotada no Melhor Envio (C x L x A, cm); o peso é o tarifável somado.
     'caixa_cm' => [16, 11, 5],
 
+    // Frete padrão por estado na tabela por localidade (pedido do Lira em
+    // 2026-10-25): UF => código IBGE da cidade de referência. Todas as
+    // localidades da UF (cidades, distritos e povoados) ficam com o PAC e o
+    // SEDEX (valor e prazo) da referência, que é a única cotada nos Correios.
+    // ES: Afonso Cláudio (3200102).
+    'padrao_por_uf' => ['ES' => 3200102],
+
     // Produto sem peso no cadastro fiscal.
     'peso_padrao_g' => 1000,
 

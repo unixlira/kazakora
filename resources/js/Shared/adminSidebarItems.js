@@ -99,6 +99,8 @@ export const sidebarSections = [
             { label: 'Fretes por estado', href: '/admin/logistica/fretes-por-estado', icon: 'fas fa-map-location-dot', cor: 'verde', permission: 'operacional.view' },
             // Regra de frete por cidade e tamanho de pacote (2026-10-24).
             { label: 'Fretes por cidade', href: '/admin/logistica/fretes-por-cidade', icon: 'fas fa-city', cor: 'verde', permission: 'operacional.view' },
+            // Tabela própria por cidade/distrito e tamanho, cotada em segundo plano (2026-10-25).
+            { label: 'Frete por localidade', href: '/admin/logistica/frete-por-localidade', icon: 'fas fa-table-cells', cor: 'verde', permission: 'operacional.view' },
         ],
     },
     {

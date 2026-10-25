@@ -340,3 +340,7 @@ Schedule::command('marketplace:diagnostico')->cron('20 */3 * * *')->withoutOverl
 // Tabela de estados e municípios do IBGE usada na NF-e (2026-10-15):
 // atualiza 1x por mês; se a API falhar não apaga nada.
 Schedule::command('ibge:sincronizar')->monthlyOn(1, '04:10')->withoutOverlapping(30);
+
+// Tabela de frete por localidade (2026-10-25): localidades dos Correios e
+// PAC/SEDEX das 4 categorias de tamanho, de novo todo mês (só agenda o job).
+Schedule::command('frete:tabela-localidades')->monthlyOn(1, '03:30');

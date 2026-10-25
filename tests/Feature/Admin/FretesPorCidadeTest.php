@@ -143,6 +143,15 @@ class FretesPorCidadeTest extends TestCase
                 ->where('localidades.0.regras.pequena.sedex', 22.9)
                 ->where('localidades.1.nome', 'Distrito Teste'));
 
+        // A lista do estado mostra o PAC e o SEDEX da tabela da cidade (o
+        // distrito não entra); cidade sem tabela fica sem preço.
+        $this->actingAs($this->admin())
+            ->get('/admin/logistica/fretes-por-estado/cidades?uf=sp')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('cidades.0.precos.pequena.pac', 18.5)
+                ->where('cidades.0.precos.pequena.sedex', 22.9)
+                ->where('cidades.1.precos', []));
+
         // Endereços antigos (o item Fretes por cidade saiu do menu) redirecionam.
         $this->actingAs($this->admin())
             ->get('/admin/logistica/fretes-por-cidade?uf=sp&site=ferrakora')

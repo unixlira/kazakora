@@ -20,6 +20,9 @@ const usoProibido = [
     'Usar bots ou scripts automatizados sem autorização',
     'Reproduzir ou copiar conteúdo sem permissão',
 ];
+
+// Frete grátis por região nos Termos (pedido 2026-10-25): valor mínimo da compra.
+const freteGratisAcimaDe = 'R$ X';
 </script>
 
 <template>
@@ -100,6 +103,12 @@ const usoProibido = [
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>O risco de perda ou dano do produto passa ao cliente no momento da entrega</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Em caso de não recebimento, o cliente deve notificar em até 72 horas</span></li>
                     </ul>
+                    <p>
+                        O frete é grátis para capitais e regiões metropolitanas nas compras acima de {{ freteGratisAcimaDe }}.
+                        Para outras regiões ou áreas distantes, o valor do frete e o preço final do produto podem sofrer
+                        alterações. Antes de finalizar a compra, consulte o valor exato informando seu CEP. Em caso de
+                        dúvidas, entre em contato com nosso atendimento.
+                    </p>
                 </LegalCard>
 
                 <LegalCard title="Propriedade Intelectual">

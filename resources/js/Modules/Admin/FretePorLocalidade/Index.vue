@@ -283,13 +283,28 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
             </form>
             <p v-if="erroBusca" role="alert" class="px-4 pb-3 text-sm text-slate-600 dark:text-slate-300">{{ erroBusca }}</p>
 
+            <!-- Cada categoria com PAC e SEDEX lado a lado (pedido do Lira em 2026-10-25). -->
             <div v-if="resultado?.localidades?.length" class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            <th scope="col" class="px-4 py-2 font-semibold">Localidade</th>
-                            <th scope="col" class="px-2 py-2 font-semibold">CEP</th>
-                            <th v-for="c in categorias" :key="c.chave" scope="col" class="px-2 py-2 font-semibold">{{ c.nome }}</th>
+                            <th scope="col" rowspan="2" class="sticky left-0 z-10 bg-[var(--surface)] px-4 py-2 align-bottom font-semibold">Localidade</th>
+                            <th scope="col" rowspan="2" class="px-2 py-2 align-bottom font-semibold">CEP</th>
+                            <th
+                                v-for="c in categorias"
+                                :key="c.chave"
+                                scope="colgroup"
+                                colspan="2"
+                                class="border-l border-[var(--surface-border)] px-3 pt-2 pb-1 text-center font-semibold text-slate-700 dark:text-slate-200"
+                            >
+                                {{ c.nome }}
+                            </th>
+                        </tr>
+                        <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <template v-for="c in categorias" :key="c.chave">
+                                <th scope="col" class="border-l border-[var(--surface-border)] px-3 pb-2 font-semibold">PAC</th>
+                                <th scope="col" class="px-3 pb-2 font-semibold">SEDEX</th>
+                            </template>
                         </tr>
                     </thead>
                     <tbody>
@@ -299,7 +314,7 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
                             class="border-t border-[var(--surface-border)] align-top"
                             :class="resultado.achadas.includes(l.id) ? 'bg-blue-50/60 dark:bg-blue-950/40' : ''"
                         >
-                            <td class="px-4 py-2">
+                            <td class="sticky left-0 z-10 px-4 py-2" :class="resultado.achadas.includes(l.id) ? 'bg-blue-50 dark:bg-blue-950' : 'bg-[var(--surface)]'">
                                 <span class="font-medium" :class="l.tipo === 'M' ? '' : 'pl-3'">{{ l.nome }}</span>
                                 <span class="text-slate-500 dark:text-slate-400"> · {{ l.uf }}</span>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ TIPOS[l.tipo] }}<template v-if="l.tipo !== 'M' && l.municipio"> de {{ l.municipio }}</template></p>
@@ -308,16 +323,21 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
                                 {{ cep(l.cep_cotacao) || '—' }}
                                 <p v-if="l.cep_herdado" class="text-xs text-slate-500 dark:text-slate-400">do município</p>
                             </td>
-                            <td v-for="c in categorias" :key="c.chave" class="px-2 py-2">
-                                <template v-if="l.regras[c.chave]">
-                                    <template v-if="l.regras[c.chave].pac !== null || l.regras[c.chave].sedex !== null">
-                                        <p class="tabular-nums"><span class="text-xs text-slate-500">PAC</span> {{ dinheiro(l.regras[c.chave].pac) }} <span class="text-xs text-slate-500">{{ dias(l.regras[c.chave].pac_prazo) }}</span></p>
-                                        <p class="tabular-nums"><span class="text-xs text-slate-500">SEDEX</span> {{ dinheiro(l.regras[c.chave].sedex) }} <span class="text-xs text-slate-500">{{ dias(l.regras[c.chave].sedex_prazo) }}</span></p>
-                                    </template>
-                                    <p v-else class="max-w-48 text-xs text-amber-700 dark:text-amber-400">{{ l.regras[c.chave].erro || 'Sem serviço' }}</p>
+                            <template v-for="c in categorias" :key="c.chave">
+                                <template v-if="l.regras[c.chave] && (l.regras[c.chave].pac !== null || l.regras[c.chave].sedex !== null)">
+                                    <td v-for="s in ['pac', 'sedex']" :key="s" class="whitespace-nowrap px-3 py-2" :class="s === 'pac' ? 'border-l border-[var(--surface-border)]' : ''">
+                                        <template v-if="l.regras[c.chave][s] !== null">
+                                            <p class="font-medium tabular-nums">{{ dinheiro(l.regras[c.chave][s]) }}</p>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ dias(l.regras[c.chave][`${s}_prazo`]) }}</p>
+                                        </template>
+                                        <span v-else class="text-xs text-slate-400">sem serviço</span>
+                                    </td>
                                 </template>
-                                <span v-else class="text-xs text-slate-400">ainda não cotado</span>
-                            </td>
+                                <td v-else colspan="2" class="border-l border-[var(--surface-border)] px-3 py-2">
+                                    <p v-if="l.regras[c.chave]" class="max-w-48 text-xs text-amber-700 dark:text-amber-400">{{ l.regras[c.chave].erro || 'Sem serviço' }}</p>
+                                    <span v-else class="text-xs text-slate-400">ainda não cotado</span>
+                                </td>
+                            </template>
                         </tr>
                     </tbody>
                 </table>

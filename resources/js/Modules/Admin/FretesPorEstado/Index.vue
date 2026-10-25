@@ -2,7 +2,8 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import CidadesDoEstado from './CidadesDoEstado.vue';
-import { Head } from '@inertiajs/vue3';
+import ImportarPlanilha from './ImportarPlanilha.vue';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 const props = defineProps({
@@ -15,6 +16,12 @@ const props = defineProps({
 // Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades do estado.
 const cidadesAbertas = ref(null);
 const regrasPorUf = reactive({ ...props.cidadesComRegra });
+
+// Regras em massa por planilha (2026-10-25); depois de gravar, recarrega a contagem por estado.
+const importando = ref(false);
+function aposImportar() {
+    router.reload({ only: ['cidadesComRegra'], onSuccess: () => Object.assign(regrasPorUf, props.cidadesComRegra) });
+}
 
 // Duas abas (2026-10-12): Correios (contrato próprio) e Melhor Envio. A aba
 // fica na URL (?aba=melhor-envio) para dar F5 sem voltar para a primeira.
@@ -185,6 +192,13 @@ const campos = [
     <AdminLayout>
         <div class="mb-2 flex items-center justify-between">
             <h1 class="text-2xl font-bold">Fretes por estado</h1>
+            <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                @click="importando = true"
+            >
+                <i class="fas fa-file-import text-primary" aria-hidden="true"></i>Importar planilha de fretes
+            </button>
         </div>
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Quanto custa mandar o pacote da empresa{{ resultado?.origem ? ` (CEP ${cep(resultado.origem)})` : '' }} para a capital de cada estado.
@@ -501,5 +515,6 @@ const campos = [
             @fechar="cidadesAbertas = null"
             @contagem="(uf, n) => (regrasPorUf[uf] = n)"
         />
+        <ImportarPlanilha v-if="importando" @fechar="importando = false" @importado="aposImportar" />
     </AdminLayout>
 </template>

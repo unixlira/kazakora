@@ -834,6 +834,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado/cidades/{municipio}/distritos', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'distritos'])->whereNumber('municipio')->name('logistica.fretes-por-estado.distritos');
         Route::put('logistica/fretes-por-estado/cidades/{municipio}/distritos', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'salvarDistrito'])->whereNumber('municipio')->name('logistica.fretes-por-estado.distritos.salvar')->middleware('permission:operacional.edit');
         Route::delete('logistica/fretes-por-estado/cidades/{municipio}/distritos/{regra}', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'removerDistrito'])->whereNumber(['municipio', 'regra'])->name('logistica.fretes-por-estado.distritos.remover')->middleware('permission:operacional.edit');
+        // Regras de frete por planilha (2026-10-25): prévia, gravar e o modelo para baixar.
+        Route::get('logistica/fretes-por-estado/importar/modelo', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'modelo'])->name('logistica.fretes-por-estado.importar.modelo');
+        Route::post('logistica/fretes-por-estado/importar/previa', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'previa'])->name('logistica.fretes-por-estado.importar.previa')->middleware('permission:operacional.edit');
+        Route::post('logistica/fretes-por-estado/importar', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'aplicar'])->name('logistica.fretes-por-estado.importar')->middleware('permission:operacional.edit');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

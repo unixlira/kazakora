@@ -502,13 +502,6 @@ const highlights = computed(() => {
     return [];
 });
 
-// Ficha técnica (pedido 2026-10-24): marca, modelo, cor, voltagem, dimensões e
-// peso vêm prontos do servidor (FichaTecnica) e seguem a variação escolhida. SKU, categoria e variação não aparecem.
-const specs = computed(() => [
-    ...(selecionada.value.ficha_tecnica ?? props.product.ficha_tecnica ?? []),
-    ['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`],
-]);
-
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
 // Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
@@ -1138,12 +1131,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
                         </section>
 
-                        <section class="card">
-                            <h2>Informação adicional</h2>
-                            <table class="ficha">
-                                <tr v-for="[label, value] in specs" :key="label"><th>{{ label }}</th><td>{{ value }}</td></tr>
-                            </table>
-                        </section>
                     </main>
                 </div>
 
@@ -1560,12 +1547,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
-.pd2 .ficha { width: 100%; border-collapse: collapse; font-size: 15px; }
-.pd2 .ficha th, .pd2 .ficha td { padding: 8px; border-bottom: 1px dotted rgba(0, 0, 0, .15); text-align: left; vertical-align: top; }
-.dark .pd2 .ficha th, .dark .pd2 .ficha td { border-color: var(--line); }
-.pd2 .ficha th { width: 150px; font-weight: 700; color: var(--ink); }
-.pd2 .ficha td { font-style: italic; }
-.pd2 .ficha tr:nth-child(even) th, .pd2 .ficha tr:nth-child(even) td { background: rgba(0, 0, 0, .025); }
 
 /* avaliações e FAQ em largura total */
 .pd2 .largura-total { margin-top: 20px; }

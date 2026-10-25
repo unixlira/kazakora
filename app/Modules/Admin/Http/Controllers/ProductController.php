@@ -407,6 +407,10 @@ class ProductController extends Controller
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
+            // SEO só do site (kazakora.com); marketplaces seguem usando name.
+            'seo_title' => ['nullable', 'string', 'max:255'],
+            'seo_description' => ['nullable', 'string', 'max:320'],
+            'tags' => ['nullable', 'string', 'max:1000'],
         ];
 
         if ($includeStock) {
@@ -414,6 +418,17 @@ class ProductController extends Controller
         }
 
         $dados = $request->validate($rules);
+
+        // Tags chegam como texto separado por vírgula e ficam como lista.
+        if (array_key_exists('tags', $dados)) {
+            $lista = collect(explode(',', (string) $dados['tags']))->map(fn ($t) => trim($t))->filter()->unique()->values()->all();
+            $dados['tags'] = $lista ?: null;
+        }
+        foreach (['seo_title', 'seo_description'] as $campo) {
+            if (array_key_exists($campo, $dados)) {
+                $dados[$campo] = filled($dados[$campo]) ? trim($dados[$campo]) : null;
+            }
+        }
 
         // Grupo de modelos normalizado ("Caixa Sanfonada" = "caixa-sanfonada"),
         // para um espaço ou maiúscula a mais não separar os anúncios.

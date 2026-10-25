@@ -392,7 +392,7 @@ const REDES = [
             <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
-                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e Mandar mensagem. -->
+                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e WhatsApp. -->
                 <div class="grid grid-cols-3 gap-2">
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
@@ -468,9 +468,9 @@ const REDES = [
                         <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
                         <span>Produtos</span>
                     </a>
-                    <a href="#contato" class="menu-mobile-icone" @click.prevent="irParaContato">
-                        <i class="fas fa-headset text-xl text-[#3b82f6]"></i>
-                        <span>Entrar em Contato</span>
+                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" class="menu-mobile-icone">
+                        <i class="fa-brands fa-whatsapp text-xl text-[#25D366]"></i>
+                        <span>WhatsApp</span>
                     </a>
                 </nav>
             </div>

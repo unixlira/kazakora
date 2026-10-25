@@ -101,7 +101,7 @@ class FretesPorCidadeTest extends TestCase
         $this->regraNaCidade(self::MAUA, FreteRegiao::TETO, 20)->update(['categoria' => FreteCategoriaPacote::EXTRA_GRANDE]);
 
         $this->actingAs($this->admin())
-            ->get('/admin/logistica/fretes-por-cidade?uf=sp')
+            ->get('/admin/logistica/fretes-por-estado/cidades?uf=sp')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/FretesPorCidade/Index', false)
@@ -116,19 +116,46 @@ class FretesPorCidadeTest extends TestCase
                 ->where('cidades.1.regras.todas', null)
                 ->where('estados.0.com_regra', 1));
 
+        // Página da cidade: PAC e SEDEX de cada categoria (tabela de Frete por
+        // localidade) da cidade e dos distritos, e as regras.
+        $this->comCorreiosEViaCep();
+        $agora = now();
+        DB::table('frete_localidades')->insert([
+            ['numero_correios' => 1, 'uf' => 'SP', 'nome' => 'Mauá', 'nome_normalizado' => 'maua', 'tipo' => 'M', 'municipio_id' => self::MAUA, 'municipio_nome' => 'Mauá', 'cep' => null, 'cep_cotacao' => '09310000', 'cep_herdado' => false, 'created_at' => $agora, 'updated_at' => $agora],
+            ['numero_correios' => 2, 'uf' => 'SP', 'nome' => 'Distrito Teste', 'nome_normalizado' => 'distrito teste', 'tipo' => 'D', 'municipio_id' => self::MAUA, 'municipio_nome' => 'Mauá', 'cep' => null, 'cep_cotacao' => '09310000', 'cep_herdado' => true, 'created_at' => $agora, 'updated_at' => $agora],
+        ]);
+        DB::table('frete_tabela')->insert([
+            'cep_destino' => '09310000', 'categoria' => FreteCategoriaPacote::PEQUENA, 'cep_origem' => '03187040',
+            'pac_preco' => 18.5, 'pac_prazo' => 4, 'sedex_preco' => 22.9, 'sedex_prazo' => 1, 'cotado_em' => $agora, 'created_at' => $agora, 'updated_at' => $agora,
+        ]);
+
         $this->actingAs($this->admin())
-            ->get('/admin/logistica/fretes-por-cidade/'.self::MAUA)
+            ->get('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA)
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/FretesPorCidade/Cidade', false)
                 ->where('cidade.nome', 'Mauá')
-                ->where('regras.extra_grande.tipo_preco', 'teto'));
+                ->where('cidade.estado', 'São Paulo')
+                ->where('regras.extra_grande.tipo_preco', 'teto')
+                ->has('localidades', 2)
+                ->where('localidades.0.tipo', 'M')
+                ->where('localidades.0.regras.pequena.pac', 18.5)
+                ->where('localidades.0.regras.pequena.sedex', 22.9)
+                ->where('localidades.1.nome', 'Distrito Teste'));
+
+        // Endereços antigos (o item Fretes por cidade saiu do menu) redirecionam.
+        $this->actingAs($this->admin())
+            ->get('/admin/logistica/fretes-por-cidade?uf=sp&site=ferrakora')
+            ->assertRedirect('/admin/logistica/fretes-por-estado/cidades?uf=sp&site=ferrakora');
+        $this->actingAs($this->admin())
+            ->get('/admin/logistica/fretes-por-cidade/'.self::MAUA)
+            ->assertRedirect('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA);
     }
 
     public function test_cria_troca_e_tira_a_regra_da_cidade_por_categoria(): void
     {
         $admin = $this->admin();
-        $url = '/admin/logistica/fretes-por-cidade/'.self::MAUA.'/regra';
+        $url = '/admin/logistica/fretes-por-estado/cidades/'.self::MAUA.'/regra';
 
         $this->actingAs($admin)
             ->put($url, ['site' => 'kazakora', 'categoria' => null, 'tipo_preco' => 'teto', 'valor' => 12.5, 'prazo_dias' => 2])
@@ -164,7 +191,7 @@ class FretesPorCidadeTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)
-            ->put('/admin/logistica/fretes-por-cidade/categorias', ['categorias' => [
+            ->put('/admin/logistica/fretes-por-estado/categorias', ['categorias' => [
                 ['chave' => 'pequena', 'peso_max_g' => 800, 'lado_max_cm' => 25],
                 ['chave' => 'media', 'peso_max_g' => 4000, 'lado_max_cm' => 50],
                 ['chave' => 'grande', 'peso_max_g' => 10000, 'lado_max_cm' => 70],
@@ -174,7 +201,7 @@ class FretesPorCidadeTest extends TestCase
         $this->assertDatabaseHas('frete_categorias_pacote', ['chave' => 'extra_grande', 'peso_max_g' => null]);
 
         $this->actingAs($admin)
-            ->put('/admin/logistica/fretes-por-cidade/categorias', ['categorias' => [
+            ->put('/admin/logistica/fretes-por-estado/categorias', ['categorias' => [
                 ['chave' => 'media', 'peso_max_g' => 500, 'lado_max_cm' => 50],
             ]])
             ->assertSessionHasErrors('categorias');

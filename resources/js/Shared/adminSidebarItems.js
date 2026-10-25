@@ -96,9 +96,8 @@ export const sidebarSections = [
             // entregador que não iniciou a rota).
             { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', marca: 'mercado-livre', permission: 'operacional.view', badgeKey: 'flexAlertas' },
             // PAC e SEDEX para as 27 capitais, preço do contrato (2026-10-12).
+            // As cidades e a regra de cada uma ficam dentro dela (2026-10-25).
             { label: 'Fretes por estado', href: '/admin/logistica/fretes-por-estado', icon: 'fas fa-map-location-dot', cor: 'verde', permission: 'operacional.view' },
-            // Regra de frete por cidade e tamanho de pacote (2026-10-24).
-            { label: 'Fretes por cidade', href: '/admin/logistica/fretes-por-cidade', icon: 'fas fa-city', cor: 'verde', permission: 'operacional.view' },
             // Tabela própria por cidade/distrito e tamanho, cotada em segundo plano (2026-10-25).
             { label: 'Frete por localidade', href: '/admin/logistica/frete-por-localidade', icon: 'fas fa-table-cells', cor: 'verde', permission: 'operacional.view' },
         ],

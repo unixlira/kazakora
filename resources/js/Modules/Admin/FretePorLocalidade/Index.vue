@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import TabelaPorCategoria from './TabelaPorCategoria.vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
@@ -17,12 +18,9 @@ const resumo = ref(props.resumo);
 const categorias = ref(props.categorias.map((c) => ({ ...c })));
 const produtos = reactive(props.produtos.map((p) => ({ ...p })));
 
-const dinheiro = (v) => (v === null || v === undefined ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v));
-const dias = (v) => (v === null || v === undefined ? '' : `${v} ${v === 1 ? 'dia útil' : 'dias úteis'}`);
 const cep = (v) => (v ? `${v.slice(0, 5)}-${v.slice(5)}` : '');
 const numero = (v) => new Intl.NumberFormat('pt-BR').format(v ?? 0);
 const dataHora = (v) => (v ? new Date(v.replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
-const TIPOS = { M: 'Município', D: 'Distrito', P: 'Povoado' };
 
 function getCookie(name) {
     const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -216,7 +214,7 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
             <h2 class="border-b border-[var(--surface-border)] px-4 py-3 text-lg font-semibold">Categorias de tamanho</h2>
             <p class="px-4 pt-3 text-xs text-slate-500 dark:text-slate-400">
                 A caixa de referência de cada categoria é a que vai para a cotação. Limite dos Correios: 30 kg, 100 cm por lado e 200 cm somando os lados.
-                Mudou a caixa, a categoria é cotada de novo em segundo plano. Os limites de cada categoria (peso e maior lado) ficam em Fretes por cidade.
+                Mudou a caixa, a categoria é cotada de novo em segundo plano. Os limites de cada categoria (peso e maior lado) ficam em Fretes por estado, na lista de cidades de cada estado.
             </p>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -284,64 +282,7 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
             <p v-if="erroBusca" role="alert" class="px-4 pb-3 text-sm text-slate-600 dark:text-slate-300">{{ erroBusca }}</p>
 
             <!-- Cada categoria com PAC e SEDEX lado a lado (pedido do Lira em 2026-10-25). -->
-            <div v-if="resultado?.localidades?.length" class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            <th scope="col" rowspan="2" class="sticky left-0 z-10 bg-[var(--surface)] px-4 py-2 align-bottom font-semibold">Localidade</th>
-                            <th scope="col" rowspan="2" class="px-2 py-2 align-bottom font-semibold">CEP</th>
-                            <th
-                                v-for="c in categorias"
-                                :key="c.chave"
-                                scope="colgroup"
-                                colspan="2"
-                                class="border-l border-[var(--surface-border)] px-3 pt-2 pb-1 text-center font-semibold text-slate-700 dark:text-slate-200"
-                            >
-                                {{ c.nome }}
-                            </th>
-                        </tr>
-                        <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            <template v-for="c in categorias" :key="c.chave">
-                                <th scope="col" class="border-l border-[var(--surface-border)] px-3 pb-2 font-semibold">PAC</th>
-                                <th scope="col" class="px-3 pb-2 font-semibold">SEDEX</th>
-                            </template>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="l in resultado.localidades"
-                            :key="l.id"
-                            class="border-t border-[var(--surface-border)] align-top"
-                            :class="resultado.achadas.includes(l.id) ? 'bg-blue-50/60 dark:bg-blue-950/40' : ''"
-                        >
-                            <td class="sticky left-0 z-10 px-4 py-2" :class="resultado.achadas.includes(l.id) ? 'bg-blue-50 dark:bg-blue-950' : 'bg-[var(--surface)]'">
-                                <span class="font-medium" :class="l.tipo === 'M' ? '' : 'pl-3'">{{ l.nome }}</span>
-                                <span class="text-slate-500 dark:text-slate-400"> · {{ l.uf }}</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ TIPOS[l.tipo] }}<template v-if="l.tipo !== 'M' && l.municipio"> de {{ l.municipio }}</template></p>
-                            </td>
-                            <td class="px-2 py-2 tabular-nums">
-                                {{ cep(l.cep_cotacao) || '—' }}
-                                <p v-if="l.cep_herdado" class="text-xs text-slate-500 dark:text-slate-400">do município</p>
-                            </td>
-                            <template v-for="c in categorias" :key="c.chave">
-                                <template v-if="l.regras[c.chave] && (l.regras[c.chave].pac !== null || l.regras[c.chave].sedex !== null)">
-                                    <td v-for="s in ['pac', 'sedex']" :key="s" class="whitespace-nowrap px-3 py-2" :class="s === 'pac' ? 'border-l border-[var(--surface-border)]' : ''">
-                                        <template v-if="l.regras[c.chave][s] !== null">
-                                            <p class="font-medium tabular-nums">{{ dinheiro(l.regras[c.chave][s]) }}</p>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ dias(l.regras[c.chave][`${s}_prazo`]) }}</p>
-                                        </template>
-                                        <span v-else class="text-xs text-slate-400">sem serviço</span>
-                                    </td>
-                                </template>
-                                <td v-else colspan="2" class="border-l border-[var(--surface-border)] px-3 py-2">
-                                    <p v-if="l.regras[c.chave]" class="max-w-48 text-xs text-amber-700 dark:text-amber-400">{{ l.regras[c.chave].erro || 'Sem serviço' }}</p>
-                                    <span v-else class="text-xs text-slate-400">ainda não cotado</span>
-                                </td>
-                            </template>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <TabelaPorCategoria v-if="resultado?.localidades?.length" :categorias="categorias" :localidades="resultado.localidades" :achadas="resultado.achadas" />
         </section>
 
         <!-- Produtos -->
@@ -358,7 +299,7 @@ const medidas = (m) => (m ? `${(m.peso_g / 1000).toLocaleString('pt-BR')} kg · 
             </div>
             <p class="px-4 pt-3 text-xs text-slate-500 dark:text-slate-400">
                 A variação usa a categoria do produto principal. Produto sem categoria continua com o frete pelo peso, consultado nos Correios.
-                A sugestão é a categoria pelo peso e pelo maior lado (a mesma das regras em Fretes por cidade); a escolhida aqui vale também para essas regras.
+                A sugestão é a categoria pelo peso e pelo maior lado (a mesma das regras por cidade em Fretes por estado); a escolhida aqui vale também para essas regras.
             </p>
             <p v-if="erroProduto" role="alert" class="px-4 pt-2 text-sm text-red-700 dark:text-red-400">{{ erroProduto }}</p>
             <div class="overflow-x-auto">

@@ -12,7 +12,7 @@ const props = defineProps({
     cidadesComRegra: { type: Object, default: () => ({}) },
 });
 
-// Frete por cidade (2026-10-24): o olho da coluna Cidades abre a tela Fretes por cidade no estado.
+// Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades do estado; cada cidade abre a página dela (PAC e SEDEX por categoria e regras).
 const regrasPorUf = reactive({ ...props.cidadesComRegra });
 
 // Regras em massa por planilha (2026-10-25); depois de gravar, recarrega a contagem por estado.
@@ -317,7 +317,7 @@ const campos = [
                                     <span class="inline-flex items-center gap-2">
                                         <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                         <span>
-                                            <span class="font-semibold">{{ l.estado }}</span>
+                                            <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                             <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                         </span>
                                     </span>
@@ -341,7 +341,7 @@ const campos = [
                                 <td class="px-4 py-2 text-right tabular-nums">{{ dias(l.sedex.prazo) }}</td>
                                 <td class="px-4 py-2 text-center">
                                     <Link
-                                        :href="`/admin/logistica/fretes-por-cidade?uf=${l.uf}`"
+                                        :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`"
                                         class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
                                         :title="`Ver as cidades de ${l.estado}`"
                                         :aria-label="`Ver as cidades de ${l.estado}`"
@@ -365,7 +365,7 @@ const campos = [
                     <i class="fas fa-star text-amber-500" aria-hidden="true"></i> = serviço mais barato para o estado.
                     Cor do preço: verde é dos mais baratos do país, vermelho dos mais caros. Média: PAC {{ dinheiro(faixaPac?.media) }}, SEDEX {{ dinheiro(faixaSedex?.media) }}.
                     Prazo em dias úteis depois da postagem. Valores guardados por 6 horas.
-                    <i class="fas fa-eye ml-1 text-primary" aria-hidden="true"></i> = cidades do estado e o frete próprio de cada uma (número verde: cidades com regra).
+                    <i class="fas fa-eye ml-1 text-primary" aria-hidden="true"></i> ou o nome do estado = cidades do estado (número verde: cidades com regra); a cidade abre o PAC e o SEDEX de cada categoria e a regra dela.
                 </p>
             </section>
         </template>
@@ -442,7 +442,7 @@ const campos = [
                                             <span class="inline-flex items-center gap-2">
                                                 <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                                 <span>
-                                                    <span class="font-semibold">{{ l.estado }}</span>
+                                                    <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                                     <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                                 </span>
                                             </span>

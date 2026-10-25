@@ -180,7 +180,7 @@ class CatalogController extends Controller
 
         $total = (clone $query)->count();
         $produtos = $query
-            ->select(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount', 'stock'])
+            ->select(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount', 'stock', 'categoria_frete'])
             ->comPrecoDaVariacao()
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(1)])

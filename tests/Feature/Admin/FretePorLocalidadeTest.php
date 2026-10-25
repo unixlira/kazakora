@@ -208,6 +208,23 @@ class FretePorLocalidadeTest extends TestCase
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/preco/') || str_contains($r->url(), '/prazo/'));
     }
 
+    public function test_card_da_vitrine_usa_a_mesma_categoria_da_pagina(): void
+    {
+        $tabela = app(TabelaFreteLocalidades::class);
+        $tabela->importarUf('ES');
+        $tabela->cotar($tabela->cepsPendentes(100));
+
+        $produto = Product::factory()->create(['categoria_frete' => 'media']);
+        $frete = app(FreteEmbutido::class);
+        $frete->ligar();
+        $frete->usarCep('29823000');
+
+        $card = Product::query()->forCard()->findOrFail($produto->id);
+
+        $this->assertSame('media', $card->categoria_frete);
+        $this->assertEquals($frete->paraProduto($produto->fresh()), $frete->paraProduto($card));
+    }
+
     public function test_produto_sem_categoria_continua_na_cotacao_por_peso(): void
     {
         $tabela = app(TabelaFreteLocalidades::class);

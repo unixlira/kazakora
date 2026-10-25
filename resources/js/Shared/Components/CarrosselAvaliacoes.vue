@@ -43,9 +43,11 @@ const irPara = (indice) => {
 const aoRolar = () => {
     if (!trilho.value) return;
     const total = props.avaliacoes.length;
-    // Chegou na cópia (pelo automático ou pelo dedo): mesma posição na 1ª, sem animação.
-    if (total > 1 && !pressionado && trilho.value.scrollLeft >= total * largura() - 2) {
-        trilho.value.scrollTo({ left: trilho.value.scrollLeft - total * largura(), behavior: 'instant' });
+    // Chegou na cópia, que é o fim do trilho (pelo automático ou pelo dedo): vai à 1ª
+    // sem animação. Pelo fim real e não por largura × total, que erra com zoom.
+    const fim = trilho.value.scrollWidth - trilho.value.clientWidth;
+    if (total > 1 && !pressionado && trilho.value.scrollLeft >= fim - 2) {
+        trilho.value.scrollTo({ left: 0, behavior: 'instant' });
     }
     atual.value = Math.round(trilho.value.scrollLeft / largura()) % Math.max(1, total);
 };

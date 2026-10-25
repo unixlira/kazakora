@@ -372,12 +372,16 @@ class ImportarRegrasDeFrete
         ]);
     }
 
-    /** Regras de um local só, de município (cidade ou distrito): as da tela. */
+    /**
+     * Regras de um local só, de município (cidade ou distrito): as da tela.
+     * A planilha mexe só na regra de todos os pacotes, não nas por categoria.
+     */
     private static function regrasDeUmLocal(string $site): Builder
     {
         return DB::table('frete_regiao_locais')
             ->join('frete_regioes', 'frete_regioes.id', '=', 'frete_regiao_locais.frete_regiao_id')
             ->where('frete_regioes.site', $site)
+            ->whereNull('frete_regioes.categoria')
             ->whereNotNull('frete_regiao_locais.municipio_id')
             ->whereNotExists(fn ($q) => $q->from('frete_regiao_locais as outro')
                 ->whereColumn('outro.frete_regiao_id', 'frete_regiao_locais.frete_regiao_id')

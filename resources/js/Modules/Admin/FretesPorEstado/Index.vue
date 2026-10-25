@@ -1,9 +1,8 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
-import CidadesDoEstado from './CidadesDoEstado.vue';
 import ImportarPlanilha from './ImportarPlanilha.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 const props = defineProps({
@@ -13,8 +12,7 @@ const props = defineProps({
     cidadesComRegra: { type: Object, default: () => ({}) },
 });
 
-// Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades do estado.
-const cidadesAbertas = ref(null);
+// Frete por cidade (2026-10-24): o olho da coluna Cidades abre a tela Fretes por cidade no estado.
 const regrasPorUf = reactive({ ...props.cidadesComRegra });
 
 // Regras em massa por planilha (2026-10-25); depois de gravar, recarrega a contagem por estado.
@@ -342,12 +340,11 @@ const campos = [
                                 </td>
                                 <td class="px-4 py-2 text-right tabular-nums">{{ dias(l.sedex.prazo) }}</td>
                                 <td class="px-4 py-2 text-center">
-                                    <button
-                                        type="button"
+                                    <Link
+                                        :href="`/admin/logistica/fretes-por-cidade?uf=${l.uf}`"
                                         class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
                                         :title="`Ver as cidades de ${l.estado}`"
                                         :aria-label="`Ver as cidades de ${l.estado}`"
-                                        @click="cidadesAbertas = l"
                                     >
                                         <i class="fas fa-eye" aria-hidden="true"></i>
                                         <span
@@ -355,7 +352,7 @@ const campos = [
                                             class="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-green-600 px-1 text-[10px] font-bold leading-4 text-white"
                                             :title="`${regrasPorUf[l.uf]} com regra própria`"
                                         >{{ regrasPorUf[l.uf] }}</span>
-                                    </button>
+                                    </Link>
                                 </td>
                             </tr>
                             <tr v-if="!filtradas.length">
@@ -508,13 +505,6 @@ const campos = [
             </div>
         </div>
 
-        <CidadesDoEstado
-            v-if="cidadesAbertas"
-            :uf="cidadesAbertas.uf"
-            :estado="cidadesAbertas.estado"
-            @fechar="cidadesAbertas = null"
-            @contagem="(uf, n) => (regrasPorUf[uf] = n)"
-        />
         <ImportarPlanilha v-if="importando" @fechar="importando = false" @importado="aposImportar" />
     </AdminLayout>
 </template>

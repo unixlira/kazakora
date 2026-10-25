@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Regras de frete por lugar (pedido 2026-10-24, tabelas frete_regioes e
  * frete_regiao_locais). Ordem de busca: distrito ou faixa de CEP → município
- * → UF; no mesmo nível, a de maior prioridade. Sem regra, fica a cotação
- * normal dos Correios.
+ * → UF; no mesmo nível, a da categoria do pacote (Pequena, Média, Grande,
+ * Extra Grande) antes da que vale para todas, depois a de maior prioridade.
+ * Sem regra, fica a cotação normal dos Correios.
  *
  * Distrito (2026-10-25): vale pelo CEP (ou faixa) cadastrado ou, sem CEP que
  * case, quando o ViaCEP devolve o nome do distrito em "bairro" para um CEP do
@@ -35,7 +36,7 @@ class RegrasDeFrete
     /**
      * Regras ativas que valem para o destino, da mais específica para a menos.
      *
-     * @return list<array{id: int, nome: string, tipo: string, valor: float, prazo_dias: ?int, peso_min_g: ?int, peso_max_g: ?int}>
+     * @return list<array{id: int, nome: string, tipo: string, categoria: ?string, valor: float, prazo_dias: ?int, peso_min_g: ?int, peso_max_g: ?int}>
      */
     public function paraDestino(string $site, ?string $cep, ?string $uf): array
     {
@@ -65,9 +66,9 @@ class RegrasDeFrete
             }
         }
 
-        usort($candidatas, fn ($a, $b) => [$b[0], $b[1]['prioridade']] <=> [$a[0], $a[1]['prioridade']]);
+        usort($candidatas, fn ($a, $b) => [$b[0], $b[1]['categoria'] !== null, $b[1]['prioridade']] <=> [$a[0], $a[1]['categoria'] !== null, $a[1]['prioridade']]);
 
-        return array_map(fn ($c) => array_intersect_key($c[1], array_flip(['id', 'nome', 'tipo', 'valor', 'prazo_dias', 'peso_min_g', 'peso_max_g'])), $candidatas);
+        return array_map(fn ($c) => array_intersect_key($c[1], array_flip(['id', 'nome', 'tipo', 'categoria', 'valor', 'prazo_dias', 'peso_min_g', 'peso_max_g'])), $candidatas);
     }
 
     /**
@@ -90,10 +91,16 @@ class RegrasDeFrete
         return false;
     }
 
-    /** Primeira regra da lista que aceita o peso (g). */
-    public static function paraPeso(array $regras, int $peso): ?array
+    /**
+     * Primeira regra da lista que aceita o pacote: peso (g) dentro dos limites
+     * e categoria igual à do pacote ou regra para todas (categoria null).
+     */
+    public static function paraPacote(array $regras, int $peso, ?string $categoria = null): ?array
     {
         foreach ($regras as $r) {
+            if (($r['categoria'] ?? null) !== null && $r['categoria'] !== $categoria) {
+                continue;
+            }
             if (($r['peso_min_g'] === null || $peso >= $r['peso_min_g']) && ($r['peso_max_g'] === null || $peso <= $r['peso_max_g'])) {
                 return $r;
             }
@@ -129,6 +136,7 @@ class RegrasDeFrete
                 'nome' => $r->nome,
                 'prioridade' => $r->prioridade,
                 'tipo' => $r->tipo_preco,
+                'categoria' => $r->categoria,
                 'valor' => $r->valor,
                 'prazo_dias' => $r->prazo_dias,
                 'peso_min_g' => $r->peso_min_g,

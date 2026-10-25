@@ -4,6 +4,8 @@ namespace Tests\Feature\Admin;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Fiscal\Models\ProductFiscalData;
+use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Models\FreteRegiao;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\RegrasDeFrete;
@@ -13,11 +15,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * Frete por cidade (pedido 2026-10-24): regra por município na tela Fretes
- * por estado, aplicada no frete embutido da loja. Mauá com frete grátis.
+ * Frete por cidade (pedido 2026-10-24): regra por município e categoria de
+ * pacote na tela Fretes por cidade, aplicada no frete embutido da loja, e a
+ * trava do frete por IP e aparelho. Mauá com frete grátis.
  */
 class FretesPorCidadeTest extends TestCase
 {
@@ -91,49 +95,178 @@ class FretesPorCidadeTest extends TestCase
         return $regra;
     }
 
-    public function test_lista_as_cidades_do_estado_com_a_regra_de_cada_uma(): void
+    public function test_tela_lista_as_cidades_do_estado_com_a_regra_de_cada_categoria(): void
     {
         $this->regraNaCidade(self::MAUA, FreteRegiao::FIXO, 0);
+        $this->regraNaCidade(self::MAUA, FreteRegiao::TETO, 20)->update(['categoria' => FreteCategoriaPacote::EXTRA_GRANDE]);
 
         $this->actingAs($this->admin())
-            ->getJson('/admin/logistica/fretes-por-estado/sp/cidades')
+            ->get('/admin/logistica/fretes-por-cidade?uf=sp')
             ->assertOk()
-            ->assertJsonPath('uf', 'SP')
-            ->assertJsonPath('cidades.0.nome', 'Mauá')
-            ->assertJsonPath('cidades.0.regra.tipo_preco', 'fixo')
-            ->assertJsonPath('cidades.0.regra.valor', 0)
-            ->assertJsonPath('cidades.1.nome', 'São Paulo')
-            ->assertJsonPath('cidades.1.regra', null);
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/FretesPorCidade/Index', false)
+                ->where('uf', 'SP')
+                ->where('site', 'kazakora')
+                ->has('categorias', 4)
+                ->where('cidades.0.nome', 'Mauá')
+                ->where('cidades.0.regras.todas.tipo_preco', 'fixo')
+                ->where('cidades.0.regras.extra_grande.valor', 20)
+                ->where('cidades.0.regras.pequena', null)
+                ->where('cidades.1.nome', 'São Paulo')
+                ->where('cidades.1.regras.todas', null)
+                ->where('estados.0.com_regra', 1));
+
+        $this->actingAs($this->admin())
+            ->get('/admin/logistica/fretes-por-cidade/'.self::MAUA)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/FretesPorCidade/Cidade', false)
+                ->where('cidade.nome', 'Mauá')
+                ->where('regras.extra_grande.tipo_preco', 'teto'));
     }
 
-    public function test_cria_troca_e_tira_a_regra_da_cidade(): void
+    public function test_cria_troca_e_tira_a_regra_da_cidade_por_categoria(): void
+    {
+        $admin = $this->admin();
+        $url = '/admin/logistica/fretes-por-cidade/'.self::MAUA.'/regra';
+
+        $this->actingAs($admin)
+            ->put($url, ['site' => 'kazakora', 'categoria' => null, 'tipo_preco' => 'teto', 'valor' => 12.5, 'prazo_dias' => 2])
+            ->assertSessionHasNoErrors();
+        $this->actingAs($admin)
+            ->put($url, ['site' => 'kazakora', 'categoria' => null, 'tipo_preco' => 'fixo', 'valor' => 0])
+            ->assertSessionHasNoErrors();
+        $this->actingAs($admin)
+            ->put($url, ['site' => 'kazakora', 'categoria' => 'grande', 'tipo_preco' => 'fixo', 'valor' => 15])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, FreteRegiao::count());
+        $this->assertDatabaseHas('frete_regioes', ['nome' => 'Mauá - SP', 'categoria' => null, 'tipo_preco' => 'fixo', 'valor' => 0, 'prazo_dias' => null, 'site' => 'kazakora']);
+        $this->assertDatabaseHas('frete_regioes', ['nome' => 'Mauá - SP (Grande)', 'categoria' => 'grande', 'valor' => 15]);
+
+        $this->actingAs($admin)
+            ->put($url, ['site' => 'kazakora', 'tipo_preco' => 'qualquer', 'valor' => -1])
+            ->assertSessionHasErrors(['tipo_preco', 'valor']);
+        $this->actingAs($admin)
+            ->put($url, ['site' => 'kazakora', 'categoria' => 'gigante', 'tipo_preco' => 'fixo', 'valor' => 1])
+            ->assertSessionHasErrors('categoria');
+
+        $this->actingAs($admin)
+            ->delete($url, ['site' => 'kazakora', 'categoria' => 'grande'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, FreteRegiao::count());
+        $this->assertDatabaseCount('frete_regiao_locais', 1);
+    }
+
+    public function test_limites_das_categorias_precisam_crescer(): void
     {
         $admin = $this->admin();
 
         $this->actingAs($admin)
-            ->putJson('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA, ['tipo_preco' => 'teto', 'valor' => 12.5, 'prazo_dias' => 2])
+            ->put('/admin/logistica/fretes-por-cidade/categorias', ['categorias' => [
+                ['chave' => 'pequena', 'peso_max_g' => 800, 'lado_max_cm' => 25],
+                ['chave' => 'media', 'peso_max_g' => 4000, 'lado_max_cm' => 50],
+                ['chave' => 'grande', 'peso_max_g' => 10000, 'lado_max_cm' => 70],
+            ]])
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('frete_categorias_pacote', ['chave' => 'pequena', 'peso_max_g' => 800, 'lado_max_cm' => 25]);
+        $this->assertDatabaseHas('frete_categorias_pacote', ['chave' => 'extra_grande', 'peso_max_g' => null]);
+
+        $this->actingAs($admin)
+            ->put('/admin/logistica/fretes-por-cidade/categorias', ['categorias' => [
+                ['chave' => 'media', 'peso_max_g' => 500, 'lado_max_cm' => 50],
+            ]])
+            ->assertSessionHasErrors('categorias');
+        $this->assertDatabaseHas('frete_categorias_pacote', ['chave' => 'media', 'peso_max_g' => 4000]);
+    }
+
+    public function test_categorias_padrao_pela_escada_de_7_metros(): void
+    {
+        $this->assertSame('pequena', FreteCategoriaPacote::classificar(500, 20));
+        $this->assertSame('media', FreteCategoriaPacote::classificar(500, 45));
+        $this->assertSame('grande', FreteCategoriaPacote::classificar(9000, 70));
+        // Escada telescópica de 7 m: cerca de 95 x 48 x 10 cm e 17 kg.
+        $this->assertSame('extra_grande', FreteCategoriaPacote::classificar(17000, 95));
+    }
+
+    public function test_regra_da_categoria_passa_na_frente_da_regra_de_todas(): void
+    {
+        $this->comCorreiosEViaCep();
+        $pequeno = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
+        $escada = Product::factory()->create(['price' => 600, 'stock' => 5, 'is_active' => true]);
+        ProductFiscalData::create(['product_id' => $pequeno->id, 'peso_bruto' => 0.3, 'altura_cm' => 10, 'largura_cm' => 12, 'profundidade_cm' => 9]);
+        ProductFiscalData::create(['product_id' => $escada->id, 'peso_bruto' => 17, 'altura_cm' => 10, 'largura_cm' => 48, 'profundidade_cm' => 95]);
+        $this->regraNaCidade(self::MAUA, FreteRegiao::FIXO, 0);
+        $this->regraNaCidade(self::MAUA, FreteRegiao::FIXO, 20)->update(['categoria' => FreteCategoriaPacote::EXTRA_GRANDE]);
+        RegrasDeFrete::esquecer();
+
+        $frete = app(FreteEmbutido::class);
+        $frete->ligar();
+        $frete->usarCep('09310-000');
+
+        $this->assertSame('pequena', $frete->categoria($pequeno));
+        $this->assertSame('extra_grande', $frete->categoria($escada));
+        $this->assertSame(0.0, $frete->paraProduto($pequeno)['embutido']);
+        $this->assertSame(20.0, $frete->paraProduto($escada)['embutido']);
+
+        // Caixa com os dois: o maior lado é o da escada, vale a Extra Grande.
+        $entrega = $frete->entregaDoCarrinho(collect([['product' => $pequeno, 'quantity' => 1], ['product' => $escada, 'quantity' => 1]]));
+        $this->assertSame('Teste', $entrega['regra']);
+    }
+
+    public function test_frete_calculado_fica_travado_para_o_mesmo_ip_e_aparelho(): void
+    {
+        $this->comCorreiosEViaCep();
+        $produto = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
+        $aparelho = ['User-Agent' => 'Mozilla/5.0 (Celular do cliente)', 'Accept-Language' => 'pt-BR'];
+
+        $this->withHeaders($aparelho)->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)
             ->assertOk()
-            ->assertJsonPath('regra.tipo_preco', 'teto')
-            ->assertJsonPath('regra.prazo_dias', 2);
+            ->assertJsonPath('final_price', 109.94);
+        $this->assertDatabaseHas('frete_travas', ['cep' => '01001000', 'product_id' => $produto->id, 'embutido' => 9.94, 'site' => 'kazakora']);
 
-        $this->actingAs($admin)
-            ->putJson('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA, ['tipo_preco' => 'fixo', 'valor' => 0])
-            ->assertOk();
+        // O frete da cidade sobe depois: o mesmo visitante continua com o frete que viu.
+        $this->regraNaCidade(self::SAO_PAULO, FreteRegiao::ACRESCIMO, 10);
+        $this->flushSession();
+        $this->withHeaders($aparelho)->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)
+            ->assertOk()
+            ->assertJsonPath('final_price', 109.94);
 
-        $this->assertSame(1, FreteRegiao::count());
-        $this->assertDatabaseHas('frete_regioes', ['nome' => 'Mauá - SP', 'tipo_preco' => 'fixo', 'valor' => 0, 'prazo_dias' => null, 'site' => 'kazakora']);
-        $this->assertDatabaseHas('frete_regiao_locais', ['municipio_id' => self::MAUA]);
+        // Outro aparelho na mesma rede paga o frete de agora.
+        $this->flushSession();
+        $this->withHeaders(['User-Agent' => 'Outro navegador', 'Accept-Language' => 'en-US'])->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)
+            ->assertOk()
+            ->assertJsonPath('final_price', 119.94);
 
-        $this->actingAs($admin)
-            ->putJson('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA, ['tipo_preco' => 'qualquer', 'valor' => -1])
-            ->assertStatus(422);
+        // Se o frete cair, o visitante travado paga o menor.
+        FreteRegiao::query()->update(['tipo_preco' => FreteRegiao::FIXO, 'valor' => 0]);
+        RegrasDeFrete::esquecer();
+        $this->flushSession();
+        $this->withHeaders($aparelho)->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)
+            ->assertOk()
+            ->assertJsonPath('final_price', 100);
+    }
 
-        $this->actingAs($admin)
-            ->deleteJson('/admin/logistica/fretes-por-estado/cidades/'.self::MAUA)
-            ->assertOk();
+    public function test_trava_vencida_ou_desligada_nao_segura_o_frete(): void
+    {
+        $this->comCorreiosEViaCep();
+        $produto = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
 
-        $this->assertSame(0, FreteRegiao::count());
-        $this->assertDatabaseCount('frete_regiao_locais', 0);
+        $this->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)->assertJsonPath('final_price', 109.94);
+        $this->regraNaCidade(self::SAO_PAULO, FreteRegiao::ACRESCIMO, 10);
+
+        $this->travel(31)->days();
+        $this->flushSession();
+        $this->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)->assertJsonPath('final_price', 119.94);
+        // A trava renovada guarda o frete novo.
+        $this->assertDatabaseHas('frete_travas', ['product_id' => $produto->id, 'embutido' => 19.94]);
+
+        config(['frete_embutido.trava_dias' => 0]);
+        FreteRegiao::query()->update(['valor' => 20]);
+        RegrasDeFrete::esquecer();
+        $this->flushSession();
+        $this->getJson('/frete/prazo?cep=01001000&produto='.$produto->id)->assertJsonPath('final_price', 129.94);
     }
 
     public function test_maua_com_frete_gratis_tira_o_frete_do_preco_e_sao_paulo_continua_pagando(): void

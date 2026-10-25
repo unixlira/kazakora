@@ -3,7 +3,6 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\IbgeEstado;
 use App\Models\IbgeMunicipio;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\FreteRegiao;
@@ -33,10 +32,9 @@ use Inertia\Response;
  * as transportadoras da conta conectada), para comparar e decidir o frete
  * grátis. O pacote é o mesmo nas duas.
  *
- * Frete por cidade (2026-10-24): coluna Cidades abre as cidades do estado
- * (tabela ibge_municipios) e cada uma pode ter uma regra (frete_regioes com
- * um local de município) que o FreteEmbutido aplica na loja. Por enquanto só
- * KazaKora; FerraKora e Beauty Kora vêm depois (campo site).
+ * Frete por cidade (2026-10-24): o olho da coluna Cidades leva para a tela
+ * própria Fretes por cidade (FretesPorCidadeController), que usa os
+ * distritos daqui na página de cada cidade.
  *
  * Frete por distrito (2026-10-25): cada cidade abre os distritos dela (IBGE +
  * CEP descoberto no ViaCEP) e cada distrito pode ter regra própria, com CEP
@@ -78,37 +76,6 @@ class FretesPorEstadoController extends Controller
                 ->selectRaw('ibge_municipios.uf as uf, count(distinct frete_regiao_locais.municipio_id) as n')
                 ->pluck('n', 'uf')
                 ->map(fn ($n) => (int) $n),
-        ]);
-    }
-
-    /** Cidades do estado, em ordem alfabética, com a regra de frete de cada uma. */
-    public function cidades(string $uf): JsonResponse
-    {
-        $estado = IbgeEstado::query()->where('sigla', strtoupper($uf))->first();
-        abort_unless($estado, 404);
-
-        $regras = self::regrasDeCidade(SiteAtual::KAZAKORA)
-            ->whereIn('frete_regiao_locais.municipio_id', IbgeMunicipio::query()->where('estado_id', $estado->id)->select('id'))
-            ->get(['frete_regiao_locais.municipio_id', 'frete_regioes.*'])
-            ->keyBy('municipio_id');
-
-        $distritos = self::regrasDeDistrito(SiteAtual::KAZAKORA)
-            ->whereIn('frete_regiao_locais.municipio_id', IbgeMunicipio::query()->where('estado_id', $estado->id)->select('id'))
-            ->groupBy('frete_regiao_locais.municipio_id')
-            ->selectRaw('frete_regiao_locais.municipio_id, count(*) as n')
-            ->pluck('n', 'municipio_id');
-
-        return response()->json([
-            'uf' => $estado->sigla,
-            'estado' => $estado->nome,
-            'cidades' => IbgeMunicipio::query()->where('estado_id', $estado->id)->orderBy('nome_normalizado')->get(['id', 'nome'])
-                ->map(fn (IbgeMunicipio $m) => [
-                    'id' => $m->id,
-                    'nome' => $m->nome,
-                    'regra' => self::regraParaTela($regras[$m->id] ?? null),
-                    'distritos_com_regra' => (int) ($distritos[$m->id] ?? 0),
-                ])
-                ->values(),
         ]);
     }
 
@@ -248,69 +215,14 @@ class FretesPorEstadoController extends Controller
         return response()->json(['regra' => null]);
     }
 
-    /** Cria ou troca a regra de frete de uma cidade. */
-    public function salvarCidade(Request $request, int $municipio): JsonResponse
-    {
-        $cidade = IbgeMunicipio::query()->findOrFail($municipio);
-
-        $validador = Validator::make($request->all(), [
-            'tipo_preco' => ['required', Rule::in(FreteRegiao::TIPOS)],
-            'valor' => ['required', 'numeric', 'min:0', 'max:1000'],
-            'prazo_dias' => ['nullable', 'integer', 'min:1', 'max:60'],
-            'ativo' => ['boolean'],
-        ], [
-            'tipo_preco.in' => 'Escolha o tipo da regra.',
-            'valor.max' => 'O valor pode ir até R$ 1.000.',
-        ]);
-        if ($validador->fails()) {
-            return response()->json(['message' => 'Regra inválida.', 'errors' => $validador->errors()], 422);
-        }
-        $dados = $validador->validated();
-
-        $regra = DB::transaction(function () use ($cidade, $dados) {
-            $regra = self::regrasDeCidade(SiteAtual::KAZAKORA)
-                ->where('frete_regiao_locais.municipio_id', $cidade->id)
-                ->first(['frete_regioes.*']);
-            $regra = $regra ? FreteRegiao::query()->find($regra->id) : new FreteRegiao(['site' => SiteAtual::KAZAKORA]);
-
-            $regra->fill([
-                'nome' => "{$cidade->nome} - {$cidade->uf}",
-                'tipo_preco' => $dados['tipo_preco'],
-                'valor' => round((float) $dados['valor'], 2),
-                'prazo_dias' => $dados['prazo_dias'] ?? null,
-                'ativo' => (bool) ($dados['ativo'] ?? true),
-            ])->save();
-
-            if (! $regra->locais()->exists()) {
-                $regra->locais()->create(['municipio_id' => $cidade->id]);
-            }
-
-            return $regra;
-        });
-        RegrasDeFrete::esquecer();
-
-        return response()->json(['regra' => self::regraParaTela($regra)]);
-    }
-
-    /** Tira a regra da cidade: ela volta para o frete normal dos Correios. */
-    public function removerCidade(int $municipio): JsonResponse
-    {
-        $ids = self::regrasDeCidade(SiteAtual::KAZAKORA)
-            ->where('frete_regiao_locais.municipio_id', $municipio)
-            ->pluck('frete_regioes.id');
-        FreteRegiao::query()->whereIn('id', $ids)->delete();
-        RegrasDeFrete::esquecer();
-
-        return response()->json(['regra' => null]);
-    }
-
     /**
      * Regras de uma cidade só (um local, de município) do site: as que esta
      * tela cria. Regras com vários locais ou por UF/CEP ficam de fora.
      */
     private static function regrasDeCidade(string $site): Builder
     {
-        return self::regrasDoSite($site)->whereNull('frete_regiao_locais.distrito');
+        // Só a regra de todos os pacotes; as por categoria ficam em Fretes por cidade.
+        return self::regrasDoSite($site)->whereNull('frete_regiao_locais.distrito')->whereNull('frete_regioes.categoria');
     }
 
     /** Regras de um distrito só (um local, município + distrito) do site. */

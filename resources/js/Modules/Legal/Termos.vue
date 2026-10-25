@@ -92,6 +92,9 @@ const usoProibido = [
 
                 <LegalCard title="Entrega">
                     <ul class="flex flex-col gap-2.5">
+                        <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>FULL é a entrega expressa a partir do nosso estoque em São Paulo, para os CEPs atendidos; FLEX aparece quando a entrega para o seu CEP é confirmada em até 3 dias úteis</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>A gratuidade do frete depende da disponibilidade do produto no estoque que atende o estado de entrega. Quando o produto precisa sair de outro estoque, o valor da entrega pode ser diferente e é sempre informado no checkout, antes do pagamento, para o cliente decidir se conclui a compra</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Os prazos de entrega informados são estimativas</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>A KazaKora não se responsabiliza por atrasos causados por transportadoras ou eventos de força maior</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>O risco de perda ou dano do produto passa ao cliente no momento da entrega</span></li>

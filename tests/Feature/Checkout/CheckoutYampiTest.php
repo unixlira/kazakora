@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Coupon;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -120,24 +121,51 @@ class CheckoutYampiTest extends TestCase
         $variacao = Product::factory()->create(['parent_product_id' => $product->id, 'is_active' => true]);
         $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
         $daVariacao = Review::create(['reviewer_name' => 'Ana Lima', 'uf' => 'mg', 'product_id' => $variacao->id, 'rating' => 5, 'comment' => 'A cor é igual à da foto, adorei.']);
-        $semUf = Review::create(['reviewer_name' => 'Bruno Dias', 'product_id' => $product->id, 'rating' => 4, 'comment' => 'Bom custo-benefício, chegou antes.']);
+        $semUf = Review::create(['reviewer_name' => 'Bruno Dias', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Ótimo custo-benefício, chegou antes.']);
         // Avaliação ótima de outro produto não completa mais o carrossel (2026-10-24).
         Review::create(['reviewer_name' => 'Caio Reis', 'uf' => 'SP', 'product_id' => $this->produto()->id, 'rating' => 5, 'comment' => 'Outro produto, muito bom mesmo.']);
 
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
             ->has('avaliacoesCarrossel', 2)
-            ->where('avaliacoesCarrossel.0.id', $daVariacao->id)
-            ->where('avaliacoesCarrossel.0.uf', 'MG')
-            ->where('avaliacoesCarrossel.1.id', $semUf->id)
-            ->where('avaliacoesCarrossel.1.uf', null));
+            ->where('avaliacoesCarrossel.0.id', $semUf->id) // mais recente primeiro
+            ->where('avaliacoesCarrossel.0.uf', null)
+            ->where('avaliacoesCarrossel.1.id', $daVariacao->id)
+            ->where('avaliacoesCarrossel.1.uf', 'MG'));
+    }
+
+    public function test_carrossel_so_mostra_nota_5_com_elogio_claro(): void
+    {
+        $product = $this->produto();
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $elogio = Review::create(['reviewer_name' => 'Ana Lima', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Excelente, chegou rápido e funciona perfeitamente.']);
+        Review::create(['reviewer_name' => 'Bruno Dias', 'product_id' => $product->id, 'rating' => 4, 'comment' => 'Produto excelente, recomendo muito.']);
+        Review::create(['reviewer_name' => 'Caio Reis', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Gostei, mas faltaram os parafusos.']);
+        Review::create(['reviewer_name' => 'Davi Melo', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Parece ser bom, ainda não testei.']);
+        Review::create(['reviewer_name' => 'Edu Rocha', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Chegou conforme o anúncio.']);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('avaliacoesCarrossel', 1)
+            ->where('avaliacoesCarrossel.0.id', $elogio->id));
+    }
+
+    public function test_produto_so_com_avaliacao_duvidosa_mostra_os_elogios_da_loja(): void
+    {
+        $product = $this->produto();
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        Review::create(['reviewer_name' => 'Caio Reis', 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Comprei um detector e me mandaram uma lâmpada.']);
+        $daLoja = Review::create(['reviewer_name' => 'Kelly Taylor', 'product_id' => $this->produto()->id, 'rating' => 5, 'comment' => 'Amei meu pedido. Chegou certinho.']);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('avaliacoesCarrossel', 1)
+            ->where('avaliacoesCarrossel.0.id', $daLoja->id));
     }
 
     public function test_avaliacao_do_site_grava_a_uf_do_pedido(): void
     {
         $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
         $product = $this->produto();
-        $pedido = \App\Modules\Checkout\Models\Order::create([
-            'user_id' => $cliente->id, 'status' => \App\Modules\Checkout\Models\Order::STATUS_COMPLETED,
+        $pedido = Order::create([
+            'user_id' => $cliente->id, 'status' => Order::STATUS_COMPLETED,
             'shipping_name' => 'C', 'shipping_phone' => '1', 'shipping_zip' => '1', 'shipping_street' => 'R',
             'shipping_number' => '1', 'shipping_neighborhood' => 'B', 'shipping_city' => 'Recife', 'shipping_state' => 'PE',
             'subtotal' => 100, 'total' => 100,

@@ -1248,6 +1248,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                         <span>Validade</span>
                                     </div>
                                 </div>
+                                <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->
+                                <p v-if="brickPronto && cartaoBin.length < 6" class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-600"><i class="fa-solid fa-credit-card mr-1"></i>Digite o número do cartão para escolher em quantas parcelas pagar (até 12x).</p>
                                 <div id="cartao-brick-v2"></div>
                                 <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
                                 <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>

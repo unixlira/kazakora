@@ -115,6 +115,8 @@ const mountMpCardBrick = async () => {
 
         mpBrickController = await mp.bricks().create('cardPayment', 'mpCardBrick-container', {
             initialization: { amount: primaryAmount },
+            // Só crédito, como no checkout novo: o servidor manda type credit_card.
+            customization: { paymentMethods: { minInstallments: 1, maxInstallments: 12, types: { excluded: ['debit_card', 'prepaid_card'] } } },
             callbacks: {
                 onReady: () => { mpCardReady.value = true; },
                 onError: (error) => {

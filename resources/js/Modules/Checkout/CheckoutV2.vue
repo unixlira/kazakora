@@ -333,7 +333,6 @@ const descontoPixCalculado = computed(() => {
 const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0 ? descontoPixCalculado.value : 0));
 const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value - descontoPlataforma.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
-const parcela12 = computed(() => totalCartao.value / 12);
 
 // Card Payment Brick do Mercado Pago embutido (sem o botão próprio dele):
 // o "Finalizar pedido" único chama getFormData(), que tokeniza o cartão no
@@ -394,13 +393,19 @@ const montarBrick = async () => {
             initialization: { amount: totalCartao.value, payer: { email: emailDoBrick() } },
             customization: {
                 visual: { hidePaymentButton: true, hideFormTitle: true, style: { theme: 'default' } },
-                paymentMethods: { maxInstallments: 12 },
+                // Só crédito: o servidor manda type credit_card na API de Orders,
+                // e débito/pré-pago no Brick não têm parcelas (o seletor some).
+                paymentMethods: { minInstallments: 1, maxInstallments: 12, types: { excluded: ['debit_card', 'prepaid_card'] } },
             },
             callbacks: {
                 onReady: () => { brickPronto.value = true; },
                 // Prévia do cartão (modelo Yampi): o Brick só entrega os 6 primeiros
                 // dígitos (BIN); o resto do número nunca sai do campo seguro dele.
-                onBinChange: (bin) => { cartaoBin.value = String(bin ?? '').replace(/\D/g, '').slice(0, 8); },
+                // Cartão novo apaga o erro do anterior (ex.: cartão não aceito).
+                onBinChange: (bin) => {
+                    cartaoBin.value = String(bin ?? '').replace(/\D/g, '').slice(0, 8);
+                    brickErro.value = null;
+                },
                 onError: (error) => { brickErro.value = mensagemErroCartao(error); },
                 onSubmit: () => Promise.resolve(),
             },
@@ -728,6 +733,12 @@ const finalizar = async () => {
         try {
             const dados = await brick?.getFormData();
             if (!dados?.token) throw new Error();
+            if (!Number(dados.installments)) {
+                erroGeral.value = 'Escolha em quantas parcelas pagar.';
+                processando.value = false;
+                document.getElementById('cartao-brick-v2')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
             Object.assign(pagamento, {
                 mp_card_token: dados.token,
                 mp_card_installments: dados.installments,
@@ -746,7 +757,7 @@ const finalizar = async () => {
     router.post('/finalizacao/pagamento', pagamento, {
         preserveScroll: true,
         preserveState: true,
-        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ?? e.cpf ?? 'Não foi possível concluir. Confira os dados.'; },
+        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ?? e.cpf ?? e.mp_card_installments ?? e.mp_card_token ?? e.mp_payment_method_id ?? 'Não foi possível concluir. Confira os dados.'; },
         onFinish: () => { processando.value = false; },
     });
 };
@@ -1228,7 +1239,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <i class="fa-solid fa-credit-card text-xl text-slate-700"></i>
                                     <span class="flex-1">
                                         <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Cartão de Crédito <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
-                                        <span class="block text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
+                                        <!-- Sem valor da parcela: o Mercado Pago cobra juros a partir de 2x e o valor real só sai com o cartão digitado. -->
+                                        <span class="block text-xs text-slate-500">Em até 12x</span>
                                     </span>
                                 </button>
                                 <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"

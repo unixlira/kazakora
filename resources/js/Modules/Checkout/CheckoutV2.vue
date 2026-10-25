@@ -880,7 +880,7 @@ const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
 const inputClass = 'mt-1 w-full rounded-full border border-transparent bg-[#F1F2F4] px-5 py-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-100';
 const inputErroClass = 'border-red-500 bg-red-50 ring-1 ring-red-200';
 const botaoVerde = 'flex w-full items-center justify-center gap-2 rounded-full bg-[#00843f] px-6 py-4 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.28)] transition hover:brightness-105 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60';
-const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-7';
+const caixaClass = 'scroll-mt-4 rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-7 lg:p-5 xl:p-7';
 // Celular (modelo Mavo, pedido 2026-10-24): só a etapa atual aparece; a feita
 // fecha (volta pelo "Voltar") e a próxima não fica apagada na tela. No
 // computador as três seguem à mostra, a próxima esmaecida.
@@ -901,14 +901,13 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
             </span>
         </button>
 
-        <!-- Computador, a partir de 1024px (pedido 2026-10-24, mesmo padrão nas 3 lojas):
-             Pagamento com os valores (cupom e Pix) ao lado em cima; Identificação e Entrega lado
-             a lado embaixo. Até 1279px itens, avaliações e selos vêm depois, em duas colunas; a
-             partir de 1280px ficam na coluna da direita. main, aside e os blocos de dentro viram
-             "contents" para os filhos entrarem direto nas áreas da grade. -->
-        <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-2 lg:grid-rows-[auto_auto_auto_auto_auto_1fr] lg:items-start lg:gap-6 lg:py-9 lg:[grid-template-areas:'erro_erro'_'pag_fin'_'ident_entrega'_'itens_aval'_'itens_selos'_'itens_fim'] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_380px] xl:[grid-template-areas:'erro_erro_erro'_'pag_pag_fin'_'ident_entrega_itens'_'ident_entrega_aval'_'ident_entrega_selos'_'ident_entrega_fim']">
+        <!-- Computador, a partir de 1024px (pedido 2026-10-24, mesmo padrão nas 3 lojas): duas
+             colunas. Esquerda: Identificação e Entrega lado a lado (50/50) e o Pagamento embaixo,
+             na largura toda. Direita: Resumo da compra, Itens do pedido, avaliações e selos
+             empilhados. Os blocos de dentro do main viram "contents" para entrar na grade dele. -->
+        <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-5 px-3 py-5 md:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6 lg:py-9 xl:grid-cols-[minmax(0,1fr)_400px]">
             <!-- ETAPAS -->
-            <main class="order-2 min-w-0 lg:contents">
+            <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_pag']">
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 lg:mb-0 lg:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
@@ -918,7 +917,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                 </div>
 
                 <div class="space-y-4 lg:contents">
-                    <!-- 1 de 3: Identificação (no computador, metade da linha de baixo) -->
+                    <!-- 1 de 3: Identificação (no computador, metade da linha de cima) -->
                     <section id="etapa-1" ref="secaoDados" class="lg:[grid-area:ident]" :class="classeEtapa(1)">
                         <header class="flex items-baseline justify-between gap-3">
                             <h2 class="text-xl font-extrabold text-slate-900">Identificação</h2>
@@ -930,10 +929,10 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                             <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
                                 <button v-for="[valor, rotulo, icone] in [['pf', 'Pessoa física', 'fa-user'], ['pj', 'Pessoa jurídica', 'fa-building']]" :key="valor"
                                     type="button" role="radio" :aria-checked="tipoPessoa === valor"
-                                    class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition"
+                                    class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2 lg:text-xs xl:px-3 xl:text-sm"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i>{{ rotulo }}
+                                    <i class="fa-solid text-xs lg:hidden xl:inline-block" :class="icone" aria-hidden="true"></i>{{ rotulo }}
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">
@@ -960,7 +959,8 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                     <input v-model="pessoa.email" data-medir="email" type="email" autocomplete="email" :class="[inputClass, erro('guest.email') && inputErroClass]" placeholder="E-mail">
                                     <small v-if="erro('guest.email')" class="ml-4 text-xs text-red-600">{{ erro('guest.email') }}</small>
                                 </label>
-                                <div class="grid gap-3 sm:grid-cols-2">
+                                <!-- No computador o card é meia coluna: CPF e celular um por linha até 1536px. -->
+                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
                                     <label v-if="pedirCpf" class="block" :data-erro="erro(campoCpf) ? 1 : 0">
                                         <span class="sr-only">{{ ehPj ? 'CPF do responsável' : 'CPF' }}</span>
                                         <input :value="pessoa.cpf" data-medir="cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" :placeholder="ehPj ? 'CPF do responsável' : 'CPF'" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
@@ -1260,11 +1260,11 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                 </div>
             </main>
 
-            <!-- RESUMO DA COMPRA (no computador vira dois cartões: valores ao lado do Pagamento e itens) -->
-            <aside id="resumo-compra" class="order-1 lg:contents" :class="{ 'hidden lg:contents': !resumoAberto }">
+            <!-- RESUMO DA COMPRA (no computador, coluna da direita: valores e itens em dois cartões) -->
+            <aside id="resumo-compra" class="order-1 lg:order-2 lg:flex lg:flex-col lg:gap-6" :class="{ 'hidden lg:flex': !resumoAberto }">
                 <div class="rounded-[24px] bg-white p-5 shadow-[0_4px_24px_rgba(15,23,42,0.07)] md:p-6 lg:contents">
-                    <!-- Computador: cupom, Pix e totais num cartão ao lado do Pagamento. -->
-                    <div class="lg:rounded-[24px] lg:bg-white lg:p-6 lg:shadow-[0_4px_24px_rgba(15,23,42,0.07)] lg:[grid-area:fin]">
+                    <!-- Computador: cupom, Pix e totais num cartão no topo da coluna da direita. -->
+                    <div class="lg:rounded-[24px] lg:bg-white lg:p-6 lg:shadow-[0_4px_24px_rgba(15,23,42,0.07)]">
                         <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
                         <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
@@ -1319,7 +1319,7 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         </button>
                     </div>
 
-                    <div class="lg:rounded-[24px] lg:bg-white lg:p-6 lg:shadow-[0_4px_24px_rgba(15,23,42,0.07)] lg:[grid-area:itens]">
+                    <div class="lg:rounded-[24px] lg:bg-white lg:p-6 lg:shadow-[0_4px_24px_rgba(15,23,42,0.07)]">
                         <h2 class="hidden text-base font-extrabold text-slate-900 lg:block">Itens do pedido</h2>
                         <ul class="mt-3 divide-y divide-slate-100 border-t border-slate-100">
                             <li v-for="item in itens" :key="item.product.id" class="flex gap-3 py-4">
@@ -1399,10 +1399,10 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                 </div>
 
                 <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
-                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0 lg:[grid-area:aval]" />
+                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10). No celular ficam debaixo das etapas (2026-10-21). -->
-                <ul class="mt-4 hidden space-y-3 lg:block lg:mt-0 lg:[grid-area:selos]">
+                <ul class="mt-4 hidden space-y-3 lg:block lg:mt-0">
                     <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_24px_rgba(15,23,42,0.05)]">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">

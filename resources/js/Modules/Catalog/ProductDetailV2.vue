@@ -1802,4 +1802,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #4ade80; }
 .dark .pd2 .prazo-cep .opcao-frete.vermelho { background: rgba(220, 38, 38, .15); border-color: #ef4444; color: #f87171; }
 .dark .pd2 .prazo-cep .opcao-frete.vermelho input[type="radio"] { accent-color: #f87171; }
+/* Celular: menos sobra nas laterais para o Turbo do motoboy caber numa linha a partir de 360px. */
+@media (max-width: 480px) { .pd2 .compra .prazo-cep { padding-left: 6px; padding-right: 6px; } .pd2 .prazo-cep label.opcao-frete { padding: 10px 4px; } }
 </style>

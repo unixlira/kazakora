@@ -920,12 +920,13 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                         <template v-if="etapa === 1">
                             <!-- Pessoa física / jurídica (pedido 2026-10-24, modelo Mavo). -->
                             <div class="mt-4 grid grid-cols-2 gap-1 rounded-full bg-[#F1F2F4] p-1" role="radiogroup" aria-label="Tipo de comprador">
-                                <button v-for="[valor, rotulo, icone] in [['pf', 'Pessoa física', 'fa-user'], ['pj', 'Pessoa jurídica', 'fa-building']]" :key="valor"
-                                    type="button" role="radio" :aria-checked="tipoPessoa === valor"
-                                    class="flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition lg:gap-1.5 lg:px-2 lg:text-[13px]"
+                                <!-- No card estreito do computador: só "Física"/"Jurídica", sem ícone, numa linha. -->
+                                <button v-for="[valor, rotulo, curto, icone] in [['pf', 'Pessoa física', 'Física', 'fa-user'], ['pj', 'Pessoa jurídica', 'Jurídica', 'fa-building']]" :key="valor"
+                                    type="button" role="radio" :aria-checked="tipoPessoa === valor" :aria-label="rotulo"
+                                    class="flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-2.5 text-sm font-semibold transition lg:px-2"
                                     :class="tipoPessoa === valor ? 'bg-white text-slate-900 shadow-[0_1px_6px_rgba(15,23,42,0.12)]' : 'text-slate-500 hover:text-slate-800'"
                                     @click="tipoPessoa = valor">
-                                    <i class="fa-solid text-xs" :class="icone" aria-hidden="true"></i>{{ rotulo }}
+                                    <i class="fa-solid text-xs lg:hidden" :class="icone" aria-hidden="true"></i><span class="lg:hidden">{{ rotulo }}</span><span class="hidden lg:inline">{{ curto }}</span>
                                 </button>
                             </div>
                             <div class="mt-3 space-y-3">
@@ -978,7 +979,11 @@ const classeEtapa = (numero) => [caixaClass, etapa.value !== numero && 'hidden l
                                 <p class="font-semibold text-slate-900"><i class="fa-solid fa-circle-check mr-1 text-[#00843f]"></i>{{ pessoa.name }}</p>
                                 <p v-if="ehPj">{{ empresa.razaoSocial }} · CNPJ {{ empresa.cnpj }}</p>
                                 <p v-if="!isLoggedIn" class="truncate">{{ pessoa.email }}</p>
-                                <p>{{ [pedirCpf ? pessoa.cpf : null, pessoa.phone].filter(Boolean).join(' · ') }}</p>
+                                <!-- Um por linha no card estreito, sem quebrar o número no meio. -->
+                                <p class="flex flex-wrap gap-x-2">
+                                    <span v-if="pedirCpf && pessoa.cpf" class="whitespace-nowrap">{{ pessoa.cpf }}</span>
+                                    <span v-if="pessoa.phone" class="whitespace-nowrap">{{ pessoa.phone }}</span>
+                                </p>
                             </div>
                             <button v-if="!order" type="button" class="shrink-0 text-sm font-semibold text-sky-700 hover:underline" @click="irPara(1)">Editar</button>
                         </div>

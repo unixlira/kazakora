@@ -446,7 +446,7 @@ const SELOS_VERIFICADOS = [
     ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
     ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
 ];
-const CHECKS_LOJA = ['Frete grátis para a sua casa', 'Nota fiscal em todo pedido', 'Estorno de 100% do seu dinheiro 30 dias após o recebimento do produto'];
+const CHECKS_LOJA = ['Frete grátis para a sua casa', 'Nota fiscal em todo pedido', '7 dias para desistir da compra após receber'];
 
 // ---------- Finalizar ----------
 const erros = ref({});

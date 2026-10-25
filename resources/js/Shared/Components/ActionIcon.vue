@@ -41,13 +41,12 @@ const COLOR_CLASSES = {
 </script>
 
 <template>
-    <!-- data-clique: contador de cliques do painel (2026-10-25); quem usa pode trocar o nome. -->
-    <Link v-if="href" :href="href" :title="label" :aria-label="label" :data-clique="`Ação: ${label}`"
+    <Link v-if="href" :href="href" :title="label" :aria-label="label"
         class="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors"
         :class="COLOR_CLASSES[color] ?? COLOR_CLASSES.slate">
         <i class="fas text-sm" :class="icon"></i>
     </Link>
-    <button v-else type="button" :title="label" :aria-label="label" :data-clique="`Ação: ${label}`"
+    <button v-else type="button" :title="label" :aria-label="label"
         class="inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors"
         :class="COLOR_CLASSES[color] ?? COLOR_CLASSES.slate"
         @click="$emit('click')">

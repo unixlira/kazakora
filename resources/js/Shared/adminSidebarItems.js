@@ -199,8 +199,6 @@ export const sidebarSections = [
             { label: 'Alertas', href: '/admin/alertas', icon: 'fas fa-triangle-exclamation', cor: 'vermelho', permission: 'configuracoes.auditoria' },
             { label: 'Logs', href: '/admin/logs', icon: 'fas fa-terminal', cor: 'cinza-azul', permission: 'configuracoes.auditoria' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', cor: 'indigo', permission: 'configuracoes.auditoria' },
-            // Cliques do painel (2026-10-25): o que a equipe usa e o que ninguém usa.
-            { label: 'Cliques do painel', href: '/admin/relatorios/cliques', icon: 'fas fa-arrow-pointer', cor: 'ciano', permission: 'configuracoes.auditoria' },
             // Visitas por site (2026-10-12), só admin igual a Logs. Nomes e ordem
             // definidos pelo Lira em 12/10: BeautyKora, Ferrakora, Kazakora.
             // Pedidos do site FerraKora (2026-10-15): a lista de pedidos filtrada pelo site.

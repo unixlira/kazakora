@@ -49,9 +49,6 @@ class SiteVisit extends Model
         'dispositivo',
         'consentiu',
         'cookies',
-        'cliques_selo_google',
-        'cliques_selo_reclame_aqui',
-        'cliques_selo_norton',
     ];
 
     protected function casts(): array

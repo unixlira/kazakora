@@ -75,7 +75,7 @@ const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
     ['O frete é grátis?', 'Sim. Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
-    ['Posso trocar ou devolver?', 'Sim. Estorno de 100% do seu dinheiro 30 dias após o recebimento do produto.'],
+    ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
         : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`],
@@ -923,7 +923,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </li>
                                 <li>
                                     <img src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Estorno de 100% do seu dinheiro</b> 30 dias após o recebimento do produto.</span>
+                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
                                 </li>
                                 <li>
                                     <img src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">

@@ -7,6 +7,7 @@ use App\Modules\Fiscal\Models\Company;
 use App\Services\Correios\CorreiosTokenService;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -455,6 +456,39 @@ class TabelaFreteLocalidades
         $linha = $this->paraCep($cep)['categorias'][$categoria] ?? null;
 
         return $linha && ($linha['pac'] !== null || $linha['sedex'] !== null) ? $linha : null;
+    }
+
+    /**
+     * Localidades (linhas de frete_localidades) com o PAC e o SEDEX salvos de
+     * cada categoria, no formato das tabelas do admin (Frete por localidade e
+     * página da cidade em Fretes por estado).
+     */
+    public function paraTela(Collection $localidades): array
+    {
+        $cotacoes = DB::table('frete_tabela')
+            ->whereIn('cep_destino', $localidades->pluck('cep_cotacao')->filter()->unique())
+            ->where('cep_origem', $this->origem())
+            ->get()
+            ->groupBy('cep_destino');
+
+        return $localidades->map(fn ($l) => [
+            'id' => $l->id,
+            'uf' => $l->uf,
+            'nome' => $l->nome,
+            'tipo' => $l->tipo,
+            'municipio' => $l->municipio_nome,
+            'cep' => $l->cep,
+            'cep_cotacao' => $l->cep_cotacao,
+            'cep_herdado' => (bool) $l->cep_herdado,
+            'regras' => collect($cotacoes[$l->cep_cotacao] ?? [])->mapWithKeys(fn ($t) => [$t->categoria => [
+                'pac' => $t->pac_preco !== null ? (float) $t->pac_preco : null,
+                'pac_prazo' => $t->pac_prazo,
+                'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
+                'sedex_prazo' => $t->sedex_prazo,
+                'erro' => $t->erro,
+                'cotado_em' => $t->cotado_em,
+            ]]),
+        ])->values()->all();
     }
 
     /** CEP exato (distrito ou CEP geral) e, sem ele, a menor faixa de município que contém o CEP. */

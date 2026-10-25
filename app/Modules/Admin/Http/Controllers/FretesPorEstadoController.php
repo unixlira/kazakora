@@ -32,9 +32,10 @@ use Inertia\Response;
  * as transportadoras da conta conectada), para comparar e decidir o frete
  * grátis. O pacote é o mesmo nas duas.
  *
- * Frete por cidade (2026-10-24): o olho da coluna Cidades leva para a tela
- * própria Fretes por cidade (FretesPorCidadeController), que usa os
- * distritos daqui na página de cada cidade.
+ * Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades
+ * do estado e cada cidade abre a página dela (FretesPorCidadeController,
+ * dentro desta tela desde 2026-10-25, sem item próprio no menu), que usa os
+ * distritos daqui.
  *
  * Frete por distrito (2026-10-25): cada cidade abre os distritos dela (IBGE +
  * CEP descoberto no ViaCEP) e cada distrito pode ter regra própria, com CEP
@@ -221,7 +222,7 @@ class FretesPorEstadoController extends Controller
      */
     private static function regrasDeCidade(string $site): Builder
     {
-        // Só a regra de todos os pacotes; as por categoria ficam em Fretes por cidade.
+        // Só a regra de todos os pacotes; as por categoria ficam na página da cidade.
         return self::regrasDoSite($site)->whereNull('frete_regiao_locais.distrito')->whereNull('frete_regioes.categoria');
     }
 

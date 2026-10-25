@@ -1,9 +1,12 @@
 <script setup>
-// Página da cidade em Fretes por cidade (pedido 2026-10-24): uma regra para
-// todos os pacotes e, se precisar, uma por categoria (Pequena, Média, Grande,
-// Extra Grande), e os distritos da cidade com regra própria.
+// Página da cidade (pedido 2026-10-24): uma regra para todos os pacotes e,
+// se precisar, uma por categoria (Pequena, Média, Grande, Extra Grande), e os
+// distritos da cidade com regra própria. Desde 2026-10-25 abre a partir de
+// Fretes por estado e mostra em cima o PAC e o SEDEX de cada categoria (tabela
+// de Frete por localidade) da cidade e dos distritos.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import DistritosDaCidade from '../FretesPorEstado/DistritosDaCidade.vue';
+import TabelaPorCategoria from '../FretePorLocalidade/TabelaPorCategoria.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import { TIPOS, descrever, limites } from './regras.js';
@@ -14,6 +17,7 @@ const props = defineProps({
     cidade: { type: Object, required: true },
     categorias: { type: Array, default: () => [] },
     regras: { type: Object, default: () => ({}) },
+    localidades: { type: Array, default: () => [] },
 });
 
 const blocos = computed(() => [
@@ -25,7 +29,7 @@ const editando = ref(null);
 const salvando = ref(false);
 const erro = ref('');
 const form = reactive({ tipo: 'gratis', valor: 0, prazo_dias: '', ativo: true });
-const url = `/admin/logistica/fretes-por-cidade/${props.cidade.id}/regra`;
+const url = `/admin/logistica/fretes-por-estado/cidades/${props.cidade.id}/regra`;
 
 function editar(chave) {
     const r = props.regras[chave];
@@ -63,7 +67,7 @@ function remover(chave, nome) {
 }
 
 function trocarSite(chave) {
-    router.get(`/admin/logistica/fretes-por-cidade/${props.cidade.id}`, { site: chave });
+    router.get(`/admin/logistica/fretes-por-estado/cidades/${props.cidade.id}`, { site: chave });
 }
 </script>
 
@@ -72,9 +76,9 @@ function trocarSite(chave) {
 
     <AdminLayout>
         <nav class="mb-2 text-sm" aria-label="Caminho">
-            <Link :href="`/admin/logistica/fretes-por-cidade?uf=${cidade.uf}&site=${site}`" class="font-semibold text-primary hover:underline">
-                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Fretes por cidade
-            </Link>
+            <Link href="/admin/logistica/fretes-por-estado" class="font-semibold text-primary hover:underline">Fretes por estado</Link>
+            <span class="mx-1 text-slate-400" aria-hidden="true">›</span>
+            <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${cidade.uf}&site=${site}`" class="font-semibold text-primary hover:underline">{{ cidade.estado }}</Link>
         </nav>
         <h1 class="mb-1 text-2xl font-bold">
             <span class="mr-2 inline-flex w-10 justify-center rounded bg-lightprimary py-0.5 align-middle text-sm font-bold text-primary">{{ cidade.uf }}</span>{{ cidade.nome }}
@@ -82,6 +86,16 @@ function trocarSite(chave) {
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Código IBGE {{ cidade.id }}. A regra muda o frete embutido no preço para quem tem CEP desta cidade; sem regra, vale o frete normal dos Correios.
         </p>
+
+        <section class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" aria-labelledby="correios-titulo">
+            <h2 id="correios-titulo" class="border-b border-[var(--surface-border)] px-4 py-3 text-base font-bold">PAC e SEDEX por categoria</h2>
+            <p class="px-4 pt-3 text-xs text-slate-500 dark:text-slate-400">
+                Preço e prazo do contrato dos Correios para a caixa de referência de cada categoria, na cidade e nos distritos dela.
+                Vem da tabela de Frete por localidade (atualizada todo dia 1º); a regra abaixo muda o que a loja embute no preço.
+            </p>
+            <TabelaPorCategoria v-if="localidades.length" :categorias="categorias" :localidades="localidades" />
+            <p v-else class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">Cidade ainda fora da tabela de Frete por localidade.</p>
+        </section>
 
         <div role="tablist" aria-label="Site" class="mb-4 flex gap-1 border-b border-[var(--surface-border)]">
             <button

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\NovoPixDoPedido;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Checkout\Support\SituacaoDoPagamento;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
@@ -15,15 +16,22 @@ class ExpireAbandonedOrders extends Command
 {
     protected $signature = 'orders:expire-abandoned';
 
-    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos (Pix: 30 min depois do vencimento de 24 h) e devolve o estoque';
+    protected $description = 'Cancela pedidos parados em aguardando pagamento/pendente há mais de 30 minutos (Pix: 15 min depois do vencimento de 24 h) e devolve o estoque';
 
     /**
      * 30 min: folga para o checkout de cartão, que é síncrono e nunca fica
      * "preso" por muito tempo. Pix pendente vale 24 h desde 2026-10-23
-     * (MercadoPagoPaymentService::PIX_VALIDADE_HORAS): o pedido só cai 30 min
-     * depois do vencimento do QR; antes disso só se confere se foi pago.
+     * (MercadoPagoPaymentService::PIX_VALIDADE_HORAS): o pedido só cai
+     * FOLGA_PIX_LONGO_MINUTOS depois do vencimento do QR; antes disso só se confere se foi pago.
      */
     private const ABANDONED_AFTER_MINUTES = 30;
+
+    /**
+     * Pix de vencimento longo (`pedidos:novo-pix`, 2026-10-23): o pedido só
+     * entra na varredura depois do vencimento + esta folga (o Mercado Pago
+     * leva alguns minutos para dar o Pix vencido como cancelado).
+     */
+    private const FOLGA_PIX_LONGO_MINUTOS = 15;
 
     private const LIVRE_PARA_CANCELAR = 'livre';
 
@@ -31,8 +39,12 @@ class ExpireAbandonedOrders extends Command
 
     private const NAO_CONFERIDO = 'nao_conferido';
 
-    public function handle(OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago): int
+    public function handle(OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago, NovoPixDoPedido $novoPix): int
     {
+        // Pix de 24 h pago longe do checkout: ninguém consulta o status pela
+        // tela, então a varredura confere aqui (a cada 5 min).
+        $this->conferirPixDeVencimentoLongo($novoPix);
+
         // BUG REAL 2026-08-18 (pedido #476, Shopee 260819PQEFC0TQ, cancelado
         // por engano com estoque restaurado enquanto o pagamento já estava
         // confirmado no canal): esta varredura foi desenhada só pro checkout
@@ -61,6 +73,14 @@ class ExpireAbandonedOrders extends Command
             ->whereDoesntHave('payments', fn ($q) => $q
                 ->where('method_type', Payment::METHOD_BOLETO)
                 ->where('status', Payment::STATUS_REQUIRES_CONFIRMATION))
+            // Pix novo de vencimento longo (pedidos:novo-pix): o pedido foi
+            // criado há horas, mas só pode cair depois do vencimento do Pix.
+            ->whereDoesntHave('payments', fn ($q) => $q
+                ->where('method_type', Payment::METHOD_PIX)
+                ->where('status', Payment::STATUS_REQUIRES_CONFIRMATION)
+                ->whereNull('substituido_em')
+                ->whereNotNull('expira_em')
+                ->where('expira_em', '>', now()->subMinutes(self::FOLGA_PIX_LONGO_MINUTOS)))
             ->get();
 
         if ($candidates->isEmpty()) {
@@ -118,6 +138,35 @@ class ExpireAbandonedOrders extends Command
         return self::SUCCESS;
     }
 
+    private function conferirPixDeVencimentoLongo(NovoPixDoPedido $novoPix): void
+    {
+        $pendentes = Payment::query()
+            ->where('provider', Payment::PROVIDER_MERCADOPAGO)
+            ->where('method_type', Payment::METHOD_PIX)
+            ->where('status', Payment::STATUS_REQUIRES_CONFIRMATION)
+            ->whereNull('substituido_em')
+            ->whereNotNull('pix_copia_e_cola')
+            ->whereNotNull('mercadopago_payment_id')
+            ->where('expira_em', '>', now()->subMinutes(self::FOLGA_PIX_LONGO_MINUTOS))
+            ->whereHas('order', fn ($q) => $q
+                ->where('origin', Order::ORIGIN_STORE)
+                ->whereIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING]))
+            ->get();
+
+        foreach ($pendentes as $payment) {
+            try {
+                if ($novoPix->conferir($payment) === NovoPixDoPedido::PAGO) {
+                    $this->info("Pedido #{$payment->order_id}: Pix novo pago, pedido confirmado.");
+                }
+            } catch (Throwable $exception) {
+                Log::warning('orders.expire_abandoned.pix_longo_nao_conferido', [
+                    'order_id' => $payment->order_id,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
     /**
      * Pix do Mercado Pago ainda aguardando e dentro do vencimento (+ folga):
      * o cliente pode pagar o QR até lá, então o pedido não pode cair antes.
@@ -125,13 +174,14 @@ class ExpireAbandonedOrders extends Command
     private function temPixNoPrazo(Order $order): bool
     {
         return $order->payments->contains(function (Payment $payment) {
-            if ($payment->method_type !== Payment::METHOD_PIX || $payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+            if ($payment->method_type !== Payment::METHOD_PIX || $payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION
+                || $payment->substituido_em !== null) {
                 return false;
             }
 
             $vence = SituacaoDoPagamento::vencimentoDoPix($payment);
 
-            return $vence !== null && $vence->copy()->addMinutes(self::ABANDONED_AFTER_MINUTES)->isFuture();
+            return $vence !== null && $vence->copy()->addMinutes(self::FOLGA_PIX_LONGO_MINUTOS)->isFuture();
         });
     }
 

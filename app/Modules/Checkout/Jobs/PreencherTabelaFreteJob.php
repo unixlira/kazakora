@@ -2,6 +2,7 @@
 
 namespace App\Modules\Checkout\Jobs;
 
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +24,10 @@ use Throwable;
  * próximo pedaço. Falha da API (token, Correios fora) espera 10 minutos e
  * tenta de novo, até 6 vezes seguidas. O andamento fica em status() para a
  * tela do admin.
+ *
+ * Toda falha também abre (ou soma) o alerta do painel (AlertasAdmin, tipo
+ * frete_tabela: sino e Sistema › Alertas), inclusive o job morto pelo tempo
+ * do worker (failed()). O alerta fecha sozinho quando a tabela termina.
  */
 class PreencherTabelaFreteJob implements ShouldQueue
 {
@@ -36,6 +41,8 @@ class PreencherTabelaFreteJob implements ShouldQueue
 
     private const MAX_FALHAS = 6;
 
+    private const LINK = '/admin/logistica/frete-por-localidade';
+
     public int $tries = 1;
 
     public int $timeout = 100;
@@ -47,8 +54,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
         public readonly string $cadeia,
         public readonly array $ufs = [],
         public readonly int $falhas = 0,
-    ) {
-    }
+    ) {}
 
     /**
      * Começa uma cadeia nova (a que estiver rodando para).
@@ -96,6 +102,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
             $ceps = $tabela->cepsPendentes(self::CEPS_POR_VEZ);
             if ($ceps === []) {
                 self::anotar(['fase' => 'parado', 'uf' => null, 'erro' => null, 'concluido_em' => now()->toIso8601String()]);
+                rescue(fn () => app(AlertasAdmin::class)->resolver(AlertasAdmin::FRETE_TABELA, 'correios'), report: false);
 
                 return;
             }
@@ -108,14 +115,44 @@ class PreencherTabelaFreteJob implements ShouldQueue
             Log::channel('correios')->warning('frete_tabela.job_falhou', ['message' => $e->getMessage(), 'falhas' => $this->falhas + 1]);
 
             if ($this->falhas + 1 >= self::MAX_FALHAS) {
-                self::anotar(['fase' => 'parado', 'erro' => 'Parou depois de '.self::MAX_FALHAS.' falhas seguidas: '.Str::limit($e->getMessage(), 150)]);
+                $erro = 'Parou depois de '.self::MAX_FALHAS.' falhas seguidas: '.Str::limit($e->getMessage(), 150);
+                self::anotar(['fase' => 'parado', 'erro' => $erro]);
+                self::alertar($erro.'. Os CEPs que faltam continuam com a cotação anterior; rode de novo em Logística › Frete por localidade.');
 
                 return;
             }
 
-            self::anotar(['erro' => 'Tentando de novo em 10 minutos: '.Str::limit($e->getMessage(), 150)]);
+            $erro = 'Tentando de novo em 10 minutos: '.Str::limit($e->getMessage(), 150);
+            self::anotar(['erro' => $erro]);
+            self::alertar($erro.' (tentativa '.($this->falhas + 1).' de '.self::MAX_FALHAS.').');
             self::dispatch($this->cadeia, $this->ufs, $this->falhas + 1)->delay(now()->addMinutes(10));
         }
+    }
+
+    /** Job morto fora do handle() (tempo do worker estourado, worker derrubado): a cadeia para. */
+    public function failed(?Throwable $e): void
+    {
+        if (Cache::get(self::CADEIA) !== $this->cadeia) {
+            return;
+        }
+
+        $erro = 'Parou: o job não terminou ('.Str::limit($e?->getMessage() ?? 'sem mensagem', 150).')';
+        self::anotar(['fase' => 'parado', 'erro' => $erro]);
+        self::alertar($erro.'. Rode de novo em Logística › Frete por localidade.');
+    }
+
+    /** Abre ou soma o alerta do painel; falha ao alertar não derruba a cadeia. */
+    public static function alertar(string $mensagem): void
+    {
+        Log::channel('correios')->error('frete_tabela.alerta', ['message' => $mensagem]);
+
+        rescue(fn () => app(AlertasAdmin::class)->disparar(
+            AlertasAdmin::FRETE_TABELA,
+            'correios',
+            'Falha na atualização da tabela de frete (Correios)',
+            $mensagem,
+            self::LINK,
+        ), report: false);
     }
 
     private static function anotar(array $dados, bool $zerar = false): void

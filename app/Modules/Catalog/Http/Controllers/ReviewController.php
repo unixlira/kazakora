@@ -5,11 +5,16 @@ namespace App\Modules\Catalog\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Models\ReviewImage;
 use App\Modules\Catalog\Support\ClubeDeAvaliacoes;
+use App\Modules\Catalog\Support\ModalAvaliacao;
+use App\Modules\Catalog\Support\ProductImageOptimizer;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -61,12 +66,13 @@ class ReviewController extends Controller
 
     public function store(Request $request, Product $product, ClubeDeAvaliacoes $clube): RedirectResponse
     {
-        $purchased = $request->user()->orders()
+        $pedido = $request->user()->orders()
             ->where('status', Order::STATUS_COMPLETED)
             ->whereHas('items', fn ($query) => $query->where('product_id', $product->id))
-            ->exists();
+            ->latest()
+            ->first(['id', 'shipping_state']);
 
-        if (! $purchased) {
+        if (! $pedido) {
             return back()->withErrors(['review' => 'Você só pode avaliar produtos que já recebeu.']);
         }
 
@@ -74,12 +80,35 @@ class ReviewController extends Controller
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:1000'],
             'ocultar_nome' => ['sometimes', 'boolean'],
+            // Fotos (modal pós-login, 2026-10-23): galeria ou câmera do celular.
+            'fotos' => ['sometimes', 'array', 'max:'.ModalAvaliacao::MAX_FOTOS],
+            'fotos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:'.ModalAvaliacao::MAX_FOTO_KB],
+        ], [
+            'fotos.max' => 'Envie no máximo '.ModalAvaliacao::MAX_FOTOS.' fotos.',
+            'fotos.*.mimes' => 'As fotos precisam ser JPG, PNG ou WebP.',
+            'fotos.*.mimetypes' => 'As fotos precisam ser JPG, PNG ou WebP.',
+            'fotos.*.max' => 'Cada foto pode ter no máximo '.intdiv(ModalAvaliacao::MAX_FOTO_KB, 1024).' MB.',
+            'fotos.*.file' => 'Não deu para ler uma das fotos. Tente de novo.',
+            'fotos.*.uploaded' => 'Não deu para enviar uma das fotos. Tente de novo.',
         ]);
 
-        Review::updateOrCreate(
+        $fotos = $request->file('fotos', []);
+        unset($validated['fotos']);
+        // UF do carrossel do checkout: estado de entrega do pedido avaliado.
+        $validated['uf'] = $pedido->shipping_state ?: null;
+
+        // Edição pela tela "Avalie suas compras" soma às fotos que já existem: teto total.
+        $existente = Review::query()->where('user_id', $request->user()->id)->where('product_id', $product->id)->withCount('images')->first();
+        if ($fotos && (($existente?->images_count ?? 0) + count($fotos)) > ModalAvaliacao::MAX_FOTOS) {
+            return back()->withErrors(['fotos' => 'Envie no máximo '.ModalAvaliacao::MAX_FOTOS.' fotos por avaliação.']);
+        }
+
+        $review = Review::updateOrCreate(
             ['user_id' => $request->user()->id, 'product_id' => $product->id],
             $validated,
         );
+
+        $this->guardarFotos($review, $fotos);
 
         // Clube de Avaliações: nível novo gera o cupom pessoal na hora.
         $novos = $clube->conceder($request->user());
@@ -90,5 +119,44 @@ class ReviewController extends Controller
         }
 
         return back()->with('success', 'Avaliação enviada, obrigado!');
+    }
+
+    /**
+     * Dono do modal fechou sem avaliar (X, Esc ou clique fora): não abre mais
+     * neste login. A aparição já foi contada quando o modal abriu.
+     */
+    public function dispensar(Request $request): RedirectResponse
+    {
+        ModalAvaliacao::encerrar($request->session());
+
+        return back();
+    }
+
+    /** @param  array<int, \Illuminate\Http\UploadedFile>  $fotos */
+    private function guardarFotos(Review $review, array $fotos): void
+    {
+        $posicao = (int) $review->images()->max('position');
+
+        foreach ($fotos as $foto) {
+            // Nome sorteado, extensão pelo conteúdo (nunca pelo nome que veio do aparelho).
+            $extensao = match ($foto->getMimeType()) {
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                default => 'jpg',
+            };
+            $caminho = $foto->storeAs("avaliacoes/{$review->id}", Str::random(32).'.'.$extensao, 'public');
+
+            if (! $caminho) {
+                continue;
+            }
+
+            $caminho = ProductImageOptimizer::optimize($caminho) ?? $caminho;
+
+            ReviewImage::create([
+                'review_id' => $review->id,
+                'image_url' => asset('storage/'.$caminho),
+                'position' => ++$posicao,
+            ]);
+        }
     }
 }

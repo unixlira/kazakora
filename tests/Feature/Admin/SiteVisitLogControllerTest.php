@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Modules\Analytics\Support\LocalDoIp;
 use App\Modules\Audit\Models\AuditLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -382,5 +383,122 @@ class SiteVisitLogControllerTest extends TestCase
         // Página além da última volta a última.
         $this->actingAs($admin)->getJson($url.'&page=9')->assertJsonPath('pagina', 3);
         $this->actingAs($admin)->get($url.'&page=0')->assertSessionHasErrors('page');
+    }
+
+    public function test_olho_do_historico_mostra_cpf_sim_ou_nao_do_cliente_logado(): void
+    {
+        $this->travelTo('2026-10-24 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $comCpf = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '123.456.789-09']);
+        $semCpf = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => null]);
+
+        $this->visita('ana', '2026-10-24 10:00:00', '1.1.1.1', '/', $comCpf->id);
+        $this->visita('ana', '2026-10-24 11:00:00', '1.1.1.1', '/', $semCpf->id);
+        $this->visita('ana', '2026-10-24 12:00:00', '1.1.1.1', '/');
+
+        $this->actingAs($admin)->getJson('/admin/visitas-site/visitante?de=2026-10-24&ate=2026-10-24&ip=1.1.1.1&todos=1')
+            ->assertOk()
+            ->assertJsonPath('visitas.0.cpf', true)
+            ->assertJsonPath('visitas.1.cpf', false)
+            ->assertJsonPath('visitas.2.cpf', false);
+    }
+
+    /** Base de IP de mentira: o teste não depende do arquivo de 120 MB. */
+    private function localDoIp(?array $lugar, bool $disponivel = true): void
+    {
+        $this->app->instance(LocalDoIp::class, new class($lugar, $disponivel) extends LocalDoIp
+        {
+            public function __construct(private readonly ?array $lugar, private readonly bool $temBase) {}
+
+            public function disponivel(): bool
+            {
+                return $this->temBase;
+            }
+
+            public function buscar(string $ip): ?array
+            {
+                return $this->temBase ? $this->lugar : null;
+            }
+        });
+    }
+
+    public function test_cidades_do_estado_do_ip_paginadas_com_a_cidade_do_ip_marcada(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        DB::table('ibge_estados')->insert([
+            ['id' => 35, 'sigla' => 'SP', 'nome' => 'São Paulo'],
+            ['id' => 33, 'sigla' => 'RJ', 'nome' => 'Rio de Janeiro'],
+        ]);
+        $municipios = [['id' => 3304557, 'nome' => 'Rio de Janeiro', 'nome_normalizado' => 'rio de janeiro', 'estado_id' => 33, 'uf' => 'RJ']];
+        for ($i = 1; $i <= 59; $i++) {
+            $municipios[] = ['id' => 3500000 + $i, 'nome' => sprintf('Cidade %02d', $i), 'nome_normalizado' => sprintf('cidade %02d', $i), 'estado_id' => 35, 'uf' => 'SP'];
+        }
+        $municipios[] = ['id' => 3509502, 'nome' => 'Campinas', 'nome_normalizado' => 'campinas', 'estado_id' => 35, 'uf' => 'SP'];
+        DB::table('ibge_municipios')->insert($municipios);
+
+        $this->localDoIp(['pais' => 'BR', 'uf' => 'SP', 'estado' => 'São Paulo', 'cidade' => 'Campinas']);
+
+        $this->actingAs($admin)->getJson('/admin/visitas-site/cidades?ip=187.127.60.51')
+            ->assertOk()
+            ->assertJsonPath('uf', 'SP')
+            ->assertJsonPath('estado', 'São Paulo')
+            ->assertJsonPath('cidade_ip', 'Campinas')
+            ->assertJsonPath('total', 60)
+            ->assertJsonPath('paginas', 2)
+            ->assertJsonCount(50, 'cidades')
+            ->assertJsonPath('cidades.0.nome', 'Campinas')
+            ->assertJsonPath('cidades.0.ibge', 3509502)
+            ->assertJsonPath('cidades.0.do_ip', true)
+            ->assertJsonPath('cidades.1.do_ip', false);
+
+        // Segunda página: as 10 restantes, só de SP.
+        $this->actingAs($admin)->getJson('/admin/visitas-site/cidades?ip=187.127.60.51&page=2')
+            ->assertJsonPath('pagina', 2)
+            ->assertJsonCount(10, 'cidades')
+            ->assertJsonPath('cidades.9.nome', 'Cidade 59');
+
+        // Busca sem acento e sem diferença de maiúscula.
+        $this->actingAs($admin)->getJson('/admin/visitas-site/cidades?ip=187.127.60.51&busca=CAMPÍNAS')
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('cidades.0.nome', 'Campinas');
+    }
+
+    public function test_cidades_de_ip_estrangeiro_ou_sem_base_explica_o_motivo(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->localDoIp(['pais' => 'US', 'uf' => null, 'estado' => 'California', 'cidade' => 'Mountain View']);
+        $this->actingAs($admin)->getJson('/admin/visitas-site/cidades?ip=8.8.8.8')
+            ->assertOk()
+            ->assertJsonPath('uf', null)
+            ->assertJsonPath('motivo', 'IP de fora do Brasil (Mountain View, US).')
+            ->assertJsonCount(0, 'cidades');
+
+        $this->localDoIp(null, false);
+        $this->actingAs($admin)->getJson('/admin/visitas-site/cidades?ip=8.8.8.8')
+            ->assertJsonPath('motivo', 'A base de localização de IP ainda não foi baixada no servidor.');
+
+        $this->actingAs($admin)->get('/admin/visitas-site/cidades?ip=abc')->assertSessionHasErrors('ip');
+    }
+
+    public function test_quem_nao_e_admin_nao_ve_as_cidades(): void
+    {
+        $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
+
+        $this->actingAs($gerente)->getJson('/admin/visitas-site/cidades?ip=8.8.8.8')->assertForbidden();
+    }
+
+    public function test_local_do_ip_le_a_base_dbip_quando_existe(): void
+    {
+        $arquivo = getenv('DBIP_TESTE') ?: '';
+        if ($arquivo === '' || ! is_file($arquivo)) {
+            $this->markTestSkipped('Defina DBIP_TESTE com o caminho da base DB-IP City Lite para este teste.');
+        }
+
+        $local = new LocalDoIp($arquivo);
+        $this->assertSame('SP', $local->buscar('187.127.60.51')['uf']);
+        $this->assertSame('DF', $local->buscar('189.6.1.1')['uf']);
+        $this->assertSame('São Paulo', $local->buscar('177.67.80.1')['cidade']);
+        $this->assertNull($local->buscar('8.8.8.8')['uf']);
     }
 }

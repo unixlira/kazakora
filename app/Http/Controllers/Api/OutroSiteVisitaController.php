@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\GeoDoVisitante;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
@@ -48,10 +50,18 @@ class OutroSiteVisitaController extends Controller
                 // Sem cookie em outro domínio: o visitante é o IP.
                 'visitor_id' => $ip !== null ? substr(md5($ip), 0, 32) : 'anonimo',
                 'ip' => $ip,
+                // O aviso passa pela Cloudflare do kazakora.com: localização do visitante.
+                ...LocalizacaoDaVisita::doRequest($request),
                 'path' => Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
                 'user_agent' => Str::limit($userAgent, 250, ''),
                 'consentiu' => false,
             ]);
+
+            // Lugar aproximado do IP, igual à loja (2026-10-24); a "sessão" é o visitante.
+            if ($ip !== null) {
+                $visitante = substr(md5($ip), 0, 32);
+                rescue(fn () => app(GeoDoVisitante::class)->registrar($request, $site, $visitante, $visitante), null, false);
+            }
         }
 
         return response('', 204);

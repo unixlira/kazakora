@@ -183,8 +183,13 @@ Route::get('/avaliar', [ReviewController::class, 'index'])
     ->name('avaliacoes.minhas');
 
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
-    ->middleware('auth')
+    ->middleware(['auth', 'throttle:20,1'])
     ->name('avaliacoes.armazenar');
+
+// Modal "Avalie sua compra" depois do login: fechar sem avaliar (2026-10-23).
+Route::post('/avaliar/dispensar', [ReviewController::class, 'dispensar'])
+    ->middleware('auth')
+    ->name('avaliacoes.dispensar');
 
 // "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
 Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');
@@ -217,12 +222,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
     // CAPTCHA depois de 3 buscas com erro do mesmo IP (pedido 2026-10-22). Antes do {ref}.
     Route::get('/rastreio/captcha', [TrackingController::class, 'captcha'])->middleware('throttle:30,1')->name('rastreio.captcha');
-    Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 });
+
+// Link direto do rastreio fora do login (2026-10-23): com Pix aberto
+// (pedidos:novo-pix) o cliente paga sem entrar; sem Pix aberto o próprio
+// controller manda para o login e volta (regra de 2026-10-17 mantida).
+Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])
+    ->where('ref', '[0-9]+-[a-f0-9]{10}')->name('rastreio.ver');
+Route::get('/rastreio/{ref}/pix', [TrackingController::class, 'statusDoPix'])
+    ->where('ref', '[0-9]+-[a-f0-9]{10}')->middleware('throttle:20,1')->name('rastreio.pix');
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
 // Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.
 Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGratis'])->middleware('throttle:30,1')->name('finalizacao.entrega-gratis');
+
+// Medição do checkout (pedido do Lira 2026-10-23): o que a pessoa fez na tela,
+// sem o que ela digitou. Fora do CSRF (sendBeacon); ver CheckoutEventosController.
+Route::post('/finalizacao/eventos', [\App\Modules\Analytics\Http\Controllers\CheckoutEventosController::class, 'store'])->middleware('throttle:60,1')->name('finalizacao.eventos');
 
 // Checkout no subdomínio seguro (pedido 2026-10-23): https://seguro.<loja>/pagamento
 // é a mesma tela de /finalizacao (RedirecionarCheckoutSeguro, App\Support\CheckoutSeguro).
@@ -231,15 +247,19 @@ Route::get('/pagamento', [CheckoutController::class, 'delivery'])->name('pagamen
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');
+    // Carrinho abandonado (pedido 2026-10-24): contato de quem clicou "Ir para Entrega". Com CSRF; ver LeadCheckoutController.
+    Route::post('/lead', [\App\Modules\Checkout\Http\Controllers\LeadCheckoutController::class, 'store'])->middleware('throttle:10,1')->name('lead.salvar');
     Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
+    Route::patch('/itens/{product}', [CheckoutController::class, 'updateItem'])->whereNumber('product')->middleware('throttle:60,1')->name('itens.atualizar');
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/cupom', [CheckoutController::class, 'applyCouponJson'])->middleware('throttle:20,1')->name('cupom.aplicar');
     Route::delete('/cupom', [CheckoutController::class, 'removeCouponJson'])->name('cupom.remover');
     Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');
     Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->middleware('throttle:10,1')->name('pagamento.proxima-parte');
     Route::get('/{order}/status', [CheckoutController::class, 'status'])->name('status');
-    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->middleware('auth')->name('confirmacao');
+    // Sem middleware auth: o convidado não fica logado (2026-10-24); confirmation() confere o dono.
+    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->name('confirmacao');
 });
 
 Route::get('/pedidos', [CheckoutController::class, 'myOrders'])->middleware('auth')->name('pedidos.meus');
@@ -252,6 +272,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
 });
+// Boleto com o logo da KazaKora (2026-10-24): link assinado, abre sem login.
+Route::get('/boleto/{payment}', [\App\Modules\Checkout\Http\Controllers\BoletoController::class, 'pdf'])
+    ->whereNumber('payment')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('boleto.pdf');
 // Livro digital ganho no pedido (Promoção PDFs, 2026-10-21): link com token
 // único do e-mail e da página do pedido, abre sem login (2026-10-22). O GET
 // mostra os termos de uso e conta a tentativa; o PDF sai no POST do
@@ -620,6 +645,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:pedidos.view');
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
+    // Carrinho abandonado (pedido 2026-10-24): só leitura, nada é enviado ao cliente daqui.
+    Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
@@ -698,6 +725,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
+        // Central de campanhas (2026-10-23): Meta e Google numa lista só, só leitura.
+        Route::get('publicidade/campanhas', [\App\Modules\Admin\Http\Controllers\PublicidadeCampanhasController::class, 'index'])->name('publicidade.campanhas');
         // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo, só leitura.
         Route::get('publicidade/shopee', [\App\Modules\Admin\Http\Controllers\PublicidadeShopeeController::class, 'index'])->name('publicidade.shopee');
     });
@@ -935,6 +964,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('suporte/{chamado}/humano', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'humano'])->whereNumber('chamado')->name('suporte.humano');
         Route::patch('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'atualizar'])->whereNumber('chamado')->name('suporte.atualizar');
         Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
+        // Chat da Shopee (2026-10-25): conversas do sellerchat. Enviar só por ação do atendente.
+        Route::get('chat-shopee', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'index'])->name('chat-shopee.index');
+        Route::get('chat-shopee/pendentes', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'pendentes'])->name('chat-shopee.pendentes');
+        Route::post('chat-shopee/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'enviar'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-shopee.enviar');
+        Route::post('chat-shopee/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'lida'])->whereNumber('conversa')->name('chat-shopee.lida');
+        // Abas Amazon e TikTok Shop de Perguntas MK Place (2026-10-25). Enviar só por ação do atendente.
+        Route::post('chat-marketplace/{canal}/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'enviar'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-marketplace.enviar');
+        Route::post('chat-marketplace/{canal}/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'lida'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->name('chat-marketplace.lida');
         // Perguntas MK Place (pedido 2026-10-20): Manuela atende, humano assume quando precisa.
         Route::get('perguntas-marketplace', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'index'])->name('perguntas-marketplace.index');
         Route::get('perguntas-marketplace/chegando', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'chegando'])->name('perguntas-marketplace.chegando');
@@ -1003,6 +1040,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // visitas daquele IP no período), pedido 2026-10-12.
         Route::get('visitas-site/visitante', [SiteVisitLogController::class, 'visitante'])->name('visitas-site.visitante');
         Route::delete('visitas-site/visitante', [SiteVisitLogController::class, 'apagar'])->name('visitas-site.apagar');
+        // Cidades do estado do IP, paginadas (olho da coluna Ações do histórico, 2026-10-24).
+        Route::get('visitas-site/cidades', [SiteVisitLogController::class, 'cidades'])->name('visitas-site.cidades');
 
         // Visitas FerraKora e Visitas Beauty Kora (2026-10-12): o mesmo log
         // para os outros sites, lido de site_visits pela coluna site
@@ -1045,6 +1084,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('integracoes/amazon/conectar', [IntegrationController::class, 'connectAmazon'])->name('integracoes.amazon.conectar');
         Route::post('integracoes/shopee/importar-produtos', [IntegrationController::class, 'importShopeeProducts'])->name('integracoes.shopee.importar-produtos');
         Route::post('integracoes/bling/loja-tiktok', [IntegrationController::class, 'saveBlingTiktokLoja'])->name('integracoes.bling.loja-tiktok');
+        // App próprio do TikTok Shop (chat em Perguntas MK Place, 2026-10-25): autorizar a loja.
+        // O retorno é a URL de callback cadastrada no app do Partner Center.
+        Route::get('integracoes/tiktok-shop/conectar', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'conectarTikTok'])->name('integracoes.tiktok-shop.conectar');
+        Route::get('integracoes/tiktok-shop/retorno', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'retornoTikTok'])->name('integracoes.tiktok-shop.retorno');
 
         Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
         Route::post('integracoes/webhooks/{channel_webhook_log}/reprocessar', [WebhookLogController::class, 'reprocess'])->name('integracoes.webhooks.reprocessar');

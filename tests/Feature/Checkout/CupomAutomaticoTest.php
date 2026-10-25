@@ -18,8 +18,8 @@ use Tests\TestCase;
 
 /**
  * 5% do Pix viram 3% + 2% (pedido do Lira 2026-10-24): o cupom BEMVINDO (3%,
- * qualquer pagamento) entra sozinho no checkout e o Pix dá mais 2% sobre o
- * valor antes do cupom.
+ * qualquer pagamento) é oferecido no pop-up do checkout (não entra mais
+ * sozinho) e o Pix dá mais 2% sobre o valor antes do cupom.
  */
 class CupomAutomaticoTest extends TestCase
 {
@@ -69,30 +69,28 @@ class CupomAutomaticoTest extends TestCase
         $this->assertFalse($cupom->one_per_customer);
     }
 
-    public function test_checkout_abre_com_o_cupom_aplicado(): void
+    public function test_checkout_abre_sem_cupom_e_oferece_o_bemvindo_no_popup(): void
     {
         $this->noCarrinho(200);
 
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Checkout/CheckoutV2', false)
-            ->where('couponCode', 'BEMVINDO')
-            ->where('discountAmount', 6)
+            ->where('couponCode', null)
+            ->where('discountAmount', 0)
+            ->missing('cupomAutomatico')
+            ->where('cupomPrimeiraCompra.code', 'BEMVINDO')
+            ->where('cupomPrimeiraCompra.descricao', '3% de desconto')
             ->where('pixDiscountPercentage', 2));
-        $this->assertSame('BEMVINDO', session('checkout_draft.coupon_code'));
+        $this->assertNull(session('checkout_draft.coupon_code'));
     }
 
-    public function test_pix_soma_5_por_cento(): void
+    public function test_aceitou_o_cupom_e_pagou_no_pix_soma_5_por_cento(): void
     {
         $this->noCarrinho(200);
-        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
-            $mock->shouldReceive('isConfigured')->andReturn(true);
-            $mock->shouldReceive('createPixPayment')->once()->andReturn([
-                'id' => 77, 'status' => 'pending',
-                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
-            ]);
-        });
+        $this->mockPix();
 
         $this->get('/finalizacao');
+        $this->postJson('/finalizacao/cupom', ['code' => 'BEMVINDO'])->assertOk()->assertJson(['code' => 'BEMVINDO', 'discount_amount' => 6]);
         $this->postJson('/finalizacao/entrega', $this->entrega())->assertOk();
         $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
 
@@ -103,12 +101,29 @@ class CupomAutomaticoTest extends TestCase
         $this->assertEquals(190, (float) $order->total);
     }
 
-    public function test_cartao_fica_so_com_os_3_por_cento(): void
+    public function test_fechou_o_popup_e_pagou_no_pix_fica_so_com_os_2_por_cento(): void
+    {
+        $this->noCarrinho(200);
+        $this->mockPix();
+
+        $this->get('/finalizacao');
+        $this->postJson('/finalizacao/entrega', $this->entrega())->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertNull($order->coupon_code);
+        $this->assertEquals(4, (float) $order->pix_discount_amount);
+        $this->assertEquals(4, (float) $order->discount_amount);
+        $this->assertEquals(196, (float) $order->total);
+    }
+
+    public function test_cartao_com_o_cupom_fica_com_os_3_por_cento(): void
     {
         $this->noCarrinho(200);
 
         // Tela v1 (Payment.vue): total do cartão e o desconto que o Pix somaria.
         $this->get('/finalizacao');
+        $this->postJson('/finalizacao/cupom', ['code' => 'BEMVINDO'])->assertOk();
         $this->postJson('/finalizacao/entrega', $this->entrega())->assertOk();
         $this->withSession(['checkout_version' => 1])->get('/finalizacao/pagamento')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('couponCode', 'BEMVINDO')
@@ -117,19 +132,20 @@ class CupomAutomaticoTest extends TestCase
             ->where('pixDiscountAmount', 4));
     }
 
-    public function test_cliente_que_tira_o_cupom_nao_ganha_ele_de_novo(): void
+    public function test_cartao_sem_o_cupom_nao_tem_desconto(): void
     {
         $this->noCarrinho(200);
+
         $this->get('/finalizacao');
-
-        $this->deleteJson('/finalizacao/cupom')->assertOk();
-
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+        $this->postJson('/finalizacao/entrega', $this->entrega())->assertOk();
+        $this->withSession(['checkout_version' => 1])->get('/finalizacao/pagamento')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('couponCode', null)
-            ->where('discountAmount', 0));
+            ->where('discountAmount', 0)
+            ->where('total', 200)
+            ->where('pixDiscountAmount', 4));
     }
 
-    public function test_outro_cupom_troca_o_automatico(): void
+    public function test_outro_cupom_tira_o_popup(): void
     {
         Coupon::create(['code' => 'DEZOFF', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 10, 'is_active' => true]);
         $this->noCarrinho(200);
@@ -137,15 +153,15 @@ class CupomAutomaticoTest extends TestCase
 
         $this->postJson('/finalizacao/cupom', ['code' => 'DEZOFF'])->assertOk()->assertJson(['discount_amount' => 20]);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF'));
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF')->where('cupomPrimeiraCompra', null));
     }
 
-    public function test_cupom_desligado_nao_entra(): void
+    public function test_cupom_desligado_nao_tem_popup(): void
     {
         Coupon::buscar('BEMVINDO')->update(['is_active' => false]);
         $this->noCarrinho(200);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', null));
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', null)->where('cupomPrimeiraCompra', null));
     }
 
     public function test_pix_nao_passa_do_que_sobra_depois_do_cupom(): void
@@ -154,18 +170,15 @@ class CupomAutomaticoTest extends TestCase
         $this->assertEquals(2.0, DescontoPix::descontoSobreCupom(200, 198, 2));
     }
 
-    public function test_pagina_de_produto_mostra_5_por_cento_no_pix(): void
+    public function test_pagina_de_produto_mostra_so_os_2_por_cento_do_pix_sem_o_cupom(): void
     {
         $product = Product::factory()->create(['price' => 200, 'stock' => 5, 'is_active' => true, 'checkout_discount_percentage' => 2, 'discount_percentage' => null, 'discount_amount' => null]);
 
-        $this->assertEquals(round((float) $product->final_price * 0.95, 2), DescontoPix::precoPix($product));
-
-        config(['loja.cupom_automatico' => '']);
-        \Illuminate\Support\Once::flush();
-        $this->assertEquals(round((float) $product->final_price * 0.98, 2), DescontoPix::precoPix($product->fresh()));
+        $this->assertEquals(round((float) $product->final_price * 0.98, 2), DescontoPix::precoPix($product));
+        $this->assertEquals(2.0, DescontoPix::percentualNaVitrine($product));
     }
 
-    public function test_ferrakora_tambem_ganha_o_cupom_sozinho(): void
+    public function test_ferrakora_so_tem_cupom_quando_o_site_manda(): void
     {
         Mail::fake();
         Bus::fake();
@@ -175,16 +188,30 @@ class CupomAutomaticoTest extends TestCase
 
         $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $itens])
             ->assertOk()
+            ->assertJsonPath('cupom', null)
+            ->assertJsonPath('cupom_boas_vindas.codigo', 'BEMVINDO')
+            ->assertJsonPath('cupom_boas_vindas.descricao', '3% de desconto')
+            ->assertJsonPath('total', 20000)
+            ->assertJsonPath('total_pix', 19600);
+
+        $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $itens, 'cupom' => 'BEMVINDO'])
+            ->assertOk()
             ->assertJsonPath('cupom.codigo', 'BEMVINDO')
+            ->assertJsonPath('cupom_boas_vindas', null)
             ->assertJsonPath('desconto_cupom', 600)
             ->assertJsonPath('total', 19400)
             ->assertJsonPath('desconto_pix', 400)
             ->assertJsonPath('total_pix', 19000);
+    }
 
-        $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $itens, 'sem_cupom_automatico' => true])
-            ->assertOk()
-            ->assertJsonPath('cupom', null)
-            ->assertJsonPath('total', 20000)
-            ->assertJsonPath('total_pix', 19600);
+    private function mockPix(): void
+    {
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 77, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
     }
 }

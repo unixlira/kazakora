@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Rules\CpfValido;
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\LivroDigital;
@@ -17,15 +18,19 @@ use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
+use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
+use App\Modules\Checkout\Support\BoletoComMarca;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
+use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
+use App\Modules\Checkout\Support\LeadsDoCheckout;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Services\Meta\ConversoesMeta;
 use App\Modules\Inventory\Models\StockMovement;
@@ -38,12 +43,12 @@ use App\Services\Stripe\StripePaymentService;
 use App\Support\CupomAutomatico;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +64,16 @@ use Stripe\Exception\ApiErrorException;
 class CheckoutController extends Controller
 {
     private const SESSION_KEY = 'checkout_draft';
+
+    /**
+     * Sem login automático (pedido do Lira 2026-10-24): o convidado ganha a
+     * conta e os e-mails, mas não entra nela. Os pedidos que ele criou neste
+     * navegador ficam aqui, para acompanhar o pagamento (status, 2ª parte,
+     * confirmação) sem sessão logada. Para ver a conta, entra em /entrar.
+     */
+    private const SESSION_PEDIDOS_CONVIDADO = 'checkout_pedidos_convidado';
+
+    private const PEDIDOS_CONVIDADO_MAX = 10;
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
@@ -208,6 +223,22 @@ class CheckoutController extends Controller
         $entrega = $produto
             ? rescue(fn () => app(FreteEmbutido::class)->entregaDoCarrinho(collect([['product' => $produto, 'quantity' => $quantidade]])), null, false)
             : null;
+        $turbo = $entrega['turbo'] ?? null;
+        if (! empty($turbo['prazo'])) {
+            $turbo['mensagem'] = app(DiaDeEntrega::class)->fraseCorreios((int) $turbo['prazo']);
+        }
+
+        $opcoes = PrazoPorCep::opcoes($prazo, $entrega);
+
+        // Fora da Grande SP o grátis sai pelo PAC (pedido do Lira 2026-10-24): a tela
+        // mostra o prazo real do CEP ("Receba em até 10 dias úteis" no Maranhão), não
+        // a frase do Flex. Grande SP = CEP 01000-000 a 09999-999 (capital e as 38
+        // cidades da região metropolitana).
+        $grandeSp = (int) $cep >= 1000000 && (int) $cep <= 9999999;
+        $gratis = collect($opcoes)->first(fn (array $opcao) => in_array($opcao['tipo'], ['flex', 'padrao'], true));
+        $pac = ! $grandeSp && ! $prazo['entrega_expressa'] && $gratis
+            ? ['ate' => $gratis['ate'], 'mensagem' => "Receba em até {$gratis['ate']} dias úteis"]
+            : null;
 
         return response()->json([
             'final_price' => $produto?->final_price,
@@ -221,8 +252,19 @@ class CheckoutController extends Controller
                 'uf' => strtoupper(trim((string) ($viaCep['uf'] ?? ''))),
             ] : null,
             'prazo_gratis' => $entrega['prazo'] ?? null,
-            'turbo' => $entrega['turbo'] ?? null,
-            'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
+            // Prazo em dia de verdade (pedido do Lira 2026-10-24): sábado à noite,
+            // domingo e feriado não prometem "1 dia", dizem "a partir de TERÇA". Na
+            // área do Full o grátis sai pelo Full: mesmo dia dele ("Receba SEGUNDA").
+            'flex_mensagem' => $prazo['entrega_expressa']['mensagem'] ?? app(DiaDeEntrega::class)->fraseFlex(),
+            'pac' => $pac,
+            'turbo' => $turbo,
+            'opcoes' => $opcoes,
+            // Página do produto (pedido 2026-10-24): Turbo de motoboy na Grande SP em
+            // horário comercial (Full + motoboy, sem Flex); fora dele, Flex + Turbo SEDEX.
+            // Motoboy só junto do Full: em Mauá (fora do Full) fica o Flex grátis e o
+            // motoboy não aparece com ele (pedido do Lira 2026-10-24).
+            'motoboy' => $prazo['entrega_expressa'] ? app(EntregaExpressa::class)->motoboy($cep) : null,
+            'fim_de_semana' => app(EntregaExpressa::class)->fimDeSemana(),
         ]);
     }
 
@@ -374,8 +416,9 @@ class CheckoutController extends Controller
             }
         }
 
-        // Um CPF e um e-mail por conta (pedido 2026-10-12): dado já cadastrado
-        // volta como aviso, em vez de estourar o índice único (erro 500).
+        // CPF já cadastrado não trava mais (2026-10-24): a compra vai para a
+        // conta dona do CPF. Só avisa o que não dá para vincular (conta apagada
+        // ou e-mail de outra conta), em vez de estourar o índice único (500).
         if (! $request->user() && $emUso = $this->dadosEmUso($data['guest'])) {
             return redirect()->route('finalizacao.entrega')->withErrors($emUso);
         }
@@ -419,6 +462,14 @@ class CheckoutController extends Controller
         if (! $request->user() && ! empty($data['guest']['email'])) {
             rescue(fn () => $this->cart->lembrarEmail($data['guest']['email']), null, false);
         }
+        // Carrinho abandonado (pedido 2026-10-24): o lead chega em "pagamento".
+        // registrar() nunca lança erro; só loga, sem dado pessoal.
+        app(LeadsDoCheckout::class)->registrar($request, [
+            'nome' => $data['guest']['name'] ?? null,
+            'email' => $data['guest']['email'] ?? null,
+            'cpf' => $data['guest']['cpf'] ?? null,
+            'telefone' => $data['guest']['phone'] ?? ($data['new_address']['phone'] ?? null),
+        ], \App\Modules\Checkout\Models\LeadCheckout::ETAPA_PAGAMENTO);
         // Grava a sessão já aqui (em vez de esperar a fase terminate() do
         // kernel) — sob PHP-FPM com fastcgi_finish_request, a resposta do
         // redirect pode chegar ao navegador antes do terminate() rodar, e o
@@ -481,10 +532,6 @@ class CheckoutController extends Controller
     public function removeCouponJson(Request $request): JsonResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY, []);
-        // Tirou o cupom automático: ele não volta sozinho nesta compra.
-        if (CupomAutomatico::eh($draft['coupon_code'] ?? null)) {
-            $draft['cupom_automatico_removido'] = true;
-        }
         unset($draft['coupon_code']);
         $request->session()->put(self::SESSION_KEY, $draft);
 
@@ -536,28 +583,6 @@ class CheckoutController extends Controller
     private function subtotalParaCupom($cartItems): float
     {
         return round($cartItems->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
-    }
-
-    /**
-     * Põe o cupom automático (BEMVINDO, config loja.cupom_automatico) no
-     * rascunho quando ainda não há cupom, ele vale para o carrinho (não só
-     * Oferta do Dia/Relâmpago) e o cliente não tirou ele nesta compra
-     * (pedido do Lira 2026-10-24). A tela já abre com o cupom aplicado.
-     */
-    private function comCupomAutomatico(Request $request, array $draft, $cartItems, float $subtotal): array
-    {
-        if (! empty($draft['coupon_code']) || ! empty($draft['cupom_automatico_removido']) || $this->subtotalParaCupom($cartItems) <= 0) {
-            return $draft;
-        }
-
-        $user = $request->user();
-        $coupon = CupomAutomatico::para($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
-        if ($coupon) {
-            $draft['coupon_code'] = $coupon->code;
-            $request->session()->put(self::SESSION_KEY, $draft);
-        }
-
-        return $draft;
     }
 
     /**
@@ -663,9 +688,16 @@ class CheckoutController extends Controller
         if ($useMercadoPago && $includesCard) {
             $cardValidator = Validator::make($request->all(), [
                 'mp_card_token' => ['required', 'string'],
-                'mp_card_installments' => ['required', 'integer', 'min:1'],
+                // Parcelas: o Brick só oferece de 1 a 12 (maxInstallments).
+                'mp_card_installments' => ['required', 'integer', 'min:1', 'max:12'],
                 'mp_payment_method_id' => ['required', 'string'],
-                'mp_issuer_id' => ['nullable', 'string'],
+                // O Brick manda o emissor como texto, mas número não pode
+                // derrubar o pagamento: o servidor nem usa esse campo.
+                'mp_issuer_id' => ['nullable'],
+            ], [
+                'mp_card_installments.*' => 'Escolha em quantas parcelas pagar no cartão.',
+                'mp_card_token.required' => 'Confira os dados do cartão.',
+                'mp_payment_method_id.required' => 'Confira os dados do cartão.',
             ]);
 
             if ($cardValidator->fails()) {
@@ -715,7 +747,16 @@ class CheckoutController extends Controller
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
+        // Aceite dos termos, da privacidade e dos cookies (2026-10-24): é a
+        // frase abaixo do "Finalizar pedido", no lugar do aviso flutuante.
+        // Vem antes do pedido para o rastreio da Meta já enxergar o aceite.
+        rescue(fn () => Cookies::registrarAceite($request));
+
         $visitante = ! $request->user();
+        // Medição do checkout (2026-10-23) e carrinho abandonado (2026-10-24):
+        // código do visitante e ID da sessão lidos antes de criar o pedido.
+        $visitanteMedicao = CheckoutEvento::visitante($request);
+        $sessaoDoLead = $request->session()->getId();
 
         try {
             [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
@@ -875,10 +916,6 @@ class CheckoutController extends Controller
         } catch (GuestEmailAlreadyExistsException|UniqueConstraintViolationException) {
             // E-mail ou CPF cadastrado entre a entrega e o pagamento (ou duas
             // abas ao mesmo tempo): nada foi gravado, volta com o aviso.
-            if ($visitante && Auth::check()) {
-                // A conta criada nesta tentativa foi desfeita pelo rollback.
-                Auth::logout();
-            }
             $emUso = $visitante && isset($draft['guest']) ? $this->dadosEmUso($draft['guest']) : [];
 
             return redirect()->route('finalizacao.entrega')->withErrors($emUso ?: ['guest.email' => 'Este CPF ou e-mail já estão em uso. Entre na sua conta para continuar.']);
@@ -923,6 +960,13 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
+        if ($visitante) {
+            $this->lembrarPedidoDoConvidado($request, $order);
+        }
+
+        CheckoutEvento::pedidoCriado($request, $visitanteMedicao, $order->user_id);
+        app(LeadsDoCheckout::class)->converter($order, $sessaoDoLead);
+
         if ($useMercadoPago) {
             if ($methods[0] === Payment::METHOD_BOLETO) {
                 // O pedido está feito; o pagamento chega em dias. Carrinho e
@@ -960,7 +1004,7 @@ class CheckoutController extends Controller
      */
     public function storeSecondPayment(Request $request, Order $order): Response
     {
-        abort_unless($order->user_id === optional($request->user())->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         $data = $request->validate([
             'method_type' => ['required', 'in:card,pix'],
@@ -1032,7 +1076,7 @@ class CheckoutController extends Controller
      */
     public function status(Request $request, Order $order): JsonResponse
     {
-        abort_unless($order->user_id === optional($request->user())->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         foreach ($order->payments as $payment) {
             if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
@@ -1108,7 +1152,7 @@ class CheckoutController extends Controller
 
     public function confirmation(Request $request, Order $order): Response
     {
-        abort_if($order->user_id !== $request->user()->id, 403);
+        abort_unless($this->podeAcompanhar($request, $order), 403);
 
         $pago = $order->status === Order::STATUS_PAID && ConversoesMeta::pedidoDaLoja($order);
 
@@ -1199,7 +1243,7 @@ class CheckoutController extends Controller
                     'pago_em' => $pagamento->updated_at?->toIso8601String(),
                     'boleto' => $pagamento->boletoPendente() ? [
                         'linha_digitavel' => $pagamento->boleto_linha_digitavel,
-                        'url' => $pagamento->boleto_url,
+                        'url' => BoletoComMarca::url($pagamento),
                         'vencimento' => $pagamento->expira_em?->toIso8601String(),
                     ] : null,
                 ] : null,
@@ -1462,8 +1506,16 @@ class CheckoutController extends Controller
             ...$this->paymentPropsFor($draft),
             'order' => $order->only('id', 'total', 'external_order_id'),
             'methodType' => Payment::METHOD_BOLETO,
-            'mercadoPagoBoleto' => MercadoPagoPaymentService::dadosDoBoleto($mpPayment),
+            'mercadoPagoBoleto' => $this->boletoComLinkDaLoja($order, MercadoPagoPaymentService::dadosDoBoleto($mpPayment)),
         ]);
+    }
+
+    /** Botão do boleto na tela do checkout abre o PDF com o logo da loja (BoletoComMarca). */
+    private function boletoComLinkDaLoja(Order $order, array $boleto): array
+    {
+        $payment = $order->payments()->where('method_type', Payment::METHOD_BOLETO)->latest('id')->first();
+
+        return [...$boleto, 'pdfUrl' => ($payment ? BoletoComMarca::url($payment) : null) ?? $boleto['pdfUrl']];
     }
 
     private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpPayment): Response
@@ -1544,16 +1596,20 @@ class CheckoutController extends Controller
      */
     private function mercadoPagoOrderPayload(float $amount, User $user, array $data, bool $capture, string $externalReference): array
     {
+        // Valor em texto com duas casas ("607.20"), como no exemplo da API de
+        // Orders; (string) 607.2 virava "607.2".
+        $valor = number_format($amount, 2, '.', '');
+
         return [
             'type' => 'online',
             'processing_mode' => 'automatic',
             'capture_mode' => $capture ? 'automatic' : 'manual',
             'external_reference' => $externalReference,
-            'total_amount' => (string) $amount,
+            'total_amount' => $valor,
             'payer' => $this->mercadoPagoPayer($user),
             'transactions' => [
                 'payments' => [[
-                    'amount' => (string) $amount,
+                    'amount' => $valor,
                     'payment_method' => [
                         'id' => $data['mp_payment_method_id'],
                         'type' => 'credit_card',
@@ -1606,7 +1662,6 @@ class CheckoutController extends Controller
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
-        $draft = $this->comCupomAutomatico(request(), $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
         $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
@@ -1745,18 +1800,28 @@ class CheckoutController extends Controller
      *
      * @return array<string, string>
      */
+    /**
+     * Só o que NÃO dá para vincular: CPF preso numa conta apagada, ou e-mail de
+     * uma conta com outro CPF (pedido 2026-10-24: CPF ou e-mail já cadastrado
+     * deixou de travar; a compra vai para a conta dona do CPF).
+     */
     private function dadosEmUso(array $guest): array
     {
-        $emailEmUso = User::emailEmUso($guest['email'] ?? null);
-        $cpfEmUso = User::cpfEmUso($guest['cpf'] ?? null);
+        if (User::contaDoCpf($guest['cpf'] ?? null)) {
+            return [];
+        }
 
-        if ($emailEmUso && $cpfEmUso) {
+        $cpfPreso = User::cpfEmUso($guest['cpf'] ?? null);
+        $dono = User::withTrashed()->where('email', trim((string) ($guest['email'] ?? '')))->first();
+        $emailPreso = $dono && ($dono->trashed() || preg_replace('/\D/', '', (string) $dono->cpf) !== '');
+
+        if ($emailPreso && $cpfPreso) {
             return ['guest.email' => 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.', 'guest.cpf' => self::MSG_CPF_EM_USO];
         }
 
         return array_filter([
-            'guest.email' => $emailEmUso ? self::MSG_EMAIL_EM_USO : null,
-            'guest.cpf' => $cpfEmUso ? self::MSG_CPF_EM_USO : null,
+            'guest.email' => $emailPreso ? self::MSG_EMAIL_EM_USO : null,
+            'guest.cpf' => $cpfPreso ? self::MSG_CPF_EM_USO : null,
         ]);
     }
 
@@ -1779,10 +1844,49 @@ class CheckoutController extends Controller
         return ['visitante_latitude' => (float) $lat, 'visitante_longitude' => (float) $lng];
     }
 
+    /** Dono logado do pedido, ou o convidado que criou o pedido neste navegador (sem login). */
+    private function podeAcompanhar(Request $request, Order $order): bool
+    {
+        if ($user = $request->user()) {
+            return $order->user_id === $user->id;
+        }
+
+        return in_array($order->id, (array) $request->session()->get(self::SESSION_PEDIDOS_CONVIDADO, []), true);
+    }
+
+    private function lembrarPedidoDoConvidado(Request $request, Order $order): void
+    {
+        $pedidos = (array) $request->session()->get(self::SESSION_PEDIDOS_CONVIDADO, []);
+        $pedidos[] = $order->id;
+
+        $request->session()->put(self::SESSION_PEDIDOS_CONVIDADO, array_slice(array_values(array_unique($pedidos)), -self::PEDIDOS_CONVIDADO_MAX));
+    }
+
     private function createGuestAccount(array $guest): User
     {
         if ($this->dadosEmUso($guest)) {
             throw new GuestEmailAlreadyExistsException();
+        }
+
+        // CPF já cadastrado (2026-10-24): a compra entra na conta existente, sem
+        // mexer em nome, e-mail ou senha dela e sem abrir sessão. Só completa o
+        // telefone se estiver vazio.
+        if ($existente = User::contaDoCpf($guest['cpf'] ?? null)) {
+            if (blank($existente->phone) && ! empty($guest['phone'])) {
+                $existente->forceFill(['phone' => $guest['phone']])->save();
+            }
+
+            return $existente;
+        }
+
+        // E-mail de conta sem CPF: o CPF informado completa o cadastro dela.
+        if ($semCpf = User::where('email', trim((string) ($guest['email'] ?? '')))->first()) {
+            $semCpf->forceFill(['cpf' => $guest['cpf']])->save();
+            if (blank($semCpf->phone) && ! empty($guest['phone'])) {
+                $semCpf->forceFill(['phone' => $guest['phone']])->save();
+            }
+
+            return $semCpf;
         }
 
         // Pedido 2026-10-10: quem compra sem conta recebe uma senha
@@ -1802,7 +1906,8 @@ class CheckoutController extends Controller
         // Senha temporária: a loja pede para trocar ao entrar (pedido 2026-10-10).
         $user->forceFill(['deve_trocar_senha' => true])->save();
 
-        Auth::login($user);
+        // Sem Auth::login (pedido do Lira 2026-10-24): a conta nasce, mas o
+        // cliente só entra nela fazendo login com a senha do e-mail.
 
         // Só depois do commit: se a cobrança falhar, a transação desfaz a
         // conta e nenhum e-mail com senha de conta inexistente sai.
@@ -1890,17 +1995,18 @@ class CheckoutController extends Controller
     {
         $user = $request->user();
         $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        $ufReferencia = $this->ufReferencia($request);
         if ($cepDoRascunho = $this->cepDoRascunho($request, $draft)) {
             app(FreteEmbutido::class)->usarCep($cepDoRascunho);
         }
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $draft = $this->comCupomAutomatico($request, $draft, $cartItems, $subtotal);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
 
         return [
             'items' => $cartItems,
             'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
+            'ufReferencia' => $ufReferencia,
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
@@ -1917,7 +2023,54 @@ class CheckoutController extends Controller
             'draft' => $draft ?: null,
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
+            // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais e
+            // pop-up do cupom de boas-vindas (só com cupom cadastrado e válido).
+            'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos($cartItems->map(fn ($item) => data_get($item, 'product.id'))),
+            'cupomPrimeiraCompra' => fn () => $coupon || $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomPrimeiraCompra($subtotal, $user),
         ];
+    }
+
+    /**
+     * +/− de quantidade no resumo do checkout (pedido 2026-10-23, modelo
+     * Yampi). Respeita a compra direta e o estoque; nunca tira o item.
+     */
+    public function updateItem(Request $request, int $product): JsonResponse
+    {
+        // Sem validate(): erro de validação aqui vira redirect e a tela de
+        // fetch não segue redirect. Quantidade fora do intervalo é ajustada.
+        $quantidade = (int) $request->input('quantity');
+        if ($quantidade < 1) {
+            return response()->json(['ok' => false, 'message' => 'Quantidade inválida.'], 422);
+        }
+        $this->cart->alterarNaFinalizacao($product, min($quantidade, 999));
+
+        $item = $this->cart->items()->first(fn ($item) => (int) data_get($item, 'product.id') === $product);
+
+        return response()->json(['ok' => (bool) $item, 'quantity' => $item['quantity'] ?? null]);
+    }
+
+    /**
+     * Cupom do pop-up de boas-vindas (config loja.cupom_primeira_compra; sem
+     * ela, o BEMVINDO de loja.cupom_automatico, pedido do Lira 2026-10-24:
+     * o cupom deixou de entrar sozinho e passou a ser oferecido aqui). Null
+     * (sem pop-up) quando não há código, o cupom não existe, não vale para
+     * este carrinho ou o cliente logado já comprou. Nunca cria cupom.
+     *
+     * @return array{code: string, descricao: string}|null
+     */
+    private function cupomPrimeiraCompra(float $subtotal, ?User $user): ?array
+    {
+        $codigo = (string) config('loja.cupom_primeira_compra') ?: CupomAutomatico::codigo();
+        $coupon = $codigo !== '' ? Coupon::buscar($codigo) : null;
+
+        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email)) {
+            return null;
+        }
+        if ($user && $user->orders()->whereIn('status', Coupon::STATUS_USO)->exists()) {
+            return null;
+        }
+
+        return ['code' => $coupon->code, 'descricao' => $coupon->descricaoDesconto()];
     }
 
     /**
@@ -1949,6 +2102,24 @@ class CheckoutController extends Controller
         }
 
         return ['media' => round((float) $avaliacao->media, 1), 'total' => (int) $avaliacao->total];
+    }
+
+    /**
+     * Estado da região em que o cliente navegou (CEP digitado ou IP), guardado
+     * na sessão na 1ª vez que o checkout abre: o checkout troca o CEP do
+     * cookie pelo da entrega, e o aviso de "outra região" precisa do original.
+     */
+    private function ufReferencia(Request $request): ?string
+    {
+        $chave = 'checkout.uf_referencia';
+        if ($request->session()->has($chave)) {
+            return $request->session()->get($chave) ?: null;
+        }
+
+        $uf = app(FreteEmbutido::class)->ufDaNavegacao();
+        $request->session()->put($chave, $uf ?? '');
+
+        return $uf;
     }
 
     private function wantsJsonDelivery(Request $request): bool

@@ -22,6 +22,8 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
+// Carrinho abandonado (lead_checkout): 3 meses desde a última interação (decisão do Lira 2026-10-24).
+Schedule::command('leads:limpar')->dailyAt('03:52')->withoutOverlapping(30);
 // Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram
 // metade do banco e deixavam o backup horário lento. Jobs falhos ficam 15 dias.
 Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');
@@ -93,6 +95,10 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
 
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
+// Chat da Shopee no admin (Atendimento > Shopee): não lidas e recentes a cada 2 min.
+Schedule::command('shopee:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
+// Mensagens de comprador da Amazon (e-mail) e do TikTok Shop (API) — canal sem configuração é pulado.
+Schedule::command('atendimento:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
 // Rede de segurança do webhook (2026-10-11, produção na VPS): venda de hoje
 // da Shopee e do Mercado Livre a cada 2 min, como já é no TikTok. Se o aviso
 // do canal se perder (painel apontando pro lugar errado, canal fora do ar),
@@ -340,6 +346,10 @@ Schedule::command('marketplace:diagnostico')->cron('20 */3 * * *')->withoutOverl
 // Tabela de estados e municípios do IBGE usada na NF-e (2026-10-15):
 // atualiza 1x por mês; se a API falhar não apaga nada.
 Schedule::command('ibge:sincronizar')->monthlyOn(1, '04:10')->withoutOverlapping(30);
+
+// Base IP → estado da tela Visitas ao site (2026-10-24): a DB-IP publica
+// a do mês nos primeiros dias.
+Schedule::command('geoip:atualizar')->monthlyOn(5, '04:30')->withoutOverlapping(30);
 
 // Tabela de frete por localidade (2026-10-25): localidades dos Correios e
 // PAC/SEDEX das 4 categorias de tamanho, de novo todo mês (só agenda o job).

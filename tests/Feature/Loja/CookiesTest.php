@@ -122,6 +122,12 @@ class CookiesTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('cookies.aceito', false));
     }
 
+    public function test_ok_do_aviso_de_2026_10_18_continua_valendo(): void
+    {
+        $this->withCookie(Cookies::COOKIE_OK, '2026-10-18')->get('/politica-de-entrega')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('cookies.aceito', true));
+    }
+
     public function test_origem_vai_sem_o_restante_do_endereco(): void
     {
         $this->withHeader('User-Agent', self::NAVEGADOR)->withHeader('Referer', 'https://www.google.com/search?q=maria@exemplo.com')->get('/politica-de-entrega');

@@ -187,6 +187,15 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Chat do TikTok Shop pelo app próprio (Customer Service API, 2026-10-25).
+        'tiktok' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/tiktok.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'reviews' => [
             'driver' => 'daily',
             'path' => storage_path('logs/reviews.log'),

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\BoletoComMarca;
 use App\Modules\Checkout\Support\CartStockChangedException;
+use App\Modules\Checkout\Support\CepUf;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
@@ -15,6 +18,7 @@ use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,8 +31,9 @@ use Illuminate\Support\Facades\Log;
  * BeautyKoraCheckoutController).
  *
  * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo), cupom?, sem_cupom_automatico?, email?}
- *              (sem cupom entra o automático, BEMVINDO; sem_cupom_automatico=true quando o cliente tira)
- *              → cupom{codigo, descricao, desconto} ou cupom_erro
+ *              (sem cupom não entra nenhum; sem_cupom_automatico é aceito e ignorado desde 2026-10-24)
+ *              → cupom{codigo, descricao, desconto} ou cupom_erro; cupom_boas_vindas{codigo, descricao}
+ *              ou null: o cupom que o pop-up de boas-vindas do site oferece
  * POST pedido  {itens, frete?, turbo?, cupom?, total_esperado (centavos), cliente{name,email,cpf,phone},
  *               endereco{zip,street,number,complement,neighborhood,city,state},
  *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
@@ -55,8 +60,15 @@ abstract class CheckoutOutroSiteController extends Controller
             'email' => ['nullable', 'string', 'max:255'],
         ]);
 
+        // Região de quem navega (IP) antes de o resumo trocar pelo CEP da entrega.
+        $ufNavegacao = rescue(fn () => app(FreteEmbutido::class)->ufDaNavegacao(), null, false);
+
         try {
-            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null, empty($dados['sem_cupom_automatico']))));
+            $resumo = $this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null);
+            $ufEntrega = CepUf::porCep($dados['cep'] ?? null);
+
+            // Aviso de entrega fora da região do cliente (pedido 2026-10-25).
+            return $this->semCache(response()->json([...$resumo, 'outra_regiao' => $ufNavegacao !== null && $ufEntrega !== null && $ufNavegacao !== $ufEntrega]));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }
@@ -124,7 +136,7 @@ abstract class CheckoutOutroSiteController extends Controller
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         } catch (PrecoMudouException $e) {
-            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'], empty($dados['sem_cupom_automatico']))], 409);
+            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'])], 409);
         } catch (UniqueConstraintViolationException) {
             return response()->json(['message' => 'Este CPF ou e-mail já tem cadastro na KazaKora. Use os dados da sua conta.'], 422);
         } catch (MercadoPagoException $e) {
@@ -150,6 +162,9 @@ abstract class CheckoutOutroSiteController extends Controller
         }
 
         $order->refresh();
+        // Prova do aceite dos termos, da privacidade e dos cookies (2026-10-24):
+        // a frase abaixo do botão de finalizar no site de origem.
+        rescue(fn () => Cookies::registrarAceite($request, $this->checkout->site(), $order->user_id));
         rescue(fn () => $this->depoisDoPedido($request, $order, $dados));
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
@@ -161,7 +176,7 @@ abstract class CheckoutOutroSiteController extends Controller
                 'qr_code_base64' => $qr['qr_code_base64'] ?? null,
                 'expira_em' => $mp['date_of_expiration'] ?? null,
             ] : null,
-            'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($mp) : null,
+            'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($order, $mp) : null,
         ], 201);
     }
 
@@ -216,10 +231,12 @@ abstract class CheckoutOutroSiteController extends Controller
             : response()->json(collect($endereco)->only(['zip', 'street', 'neighborhood', 'city', 'state']));
     }
 
-    /** Boleto gerado: linha digitável, código de barras, PDF e vencimento. */
-    private function boleto(array $mp): array
+    /** Boleto gerado: linha digitável, código de barras, PDF (com o topo da loja, BoletoComMarca) e vencimento. */
+    private function boleto(Order $order, array $mp): array
     {
         $boleto = MercadoPagoPaymentService::dadosDoBoleto($mp);
+        $payment = $order->payments()->where('method_type', Payment::METHOD_BOLETO)->latest('id')->first();
+        $boleto['pdfUrl'] = ($payment ? BoletoComMarca::url($payment) : null) ?? $boleto['pdfUrl'];
 
         return [
             'linha_digitavel' => $boleto['linhaDigitavel'],

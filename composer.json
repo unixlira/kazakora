@@ -15,6 +15,7 @@
         "laravel/horizon": "^5.50",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
+        "maxmind-db/reader": "^1.12",
         "nfephp-org/sped-da": "^1.1",
         "nfephp-org/sped-nfe": "^5.2",
         "setasign/fpdf": "^1.9",

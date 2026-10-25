@@ -770,7 +770,7 @@ class OrderController extends Controller
                 'valor' => (float) $pagamento->amount,
                 'transacao' => $pagamento->mercadopago_payment_id ?? $pagamento->stripe_payment_intent_id,
                 'pedido_no_provedor' => $pagamento->mercadopago_order_id,
-                'boleto_url' => $pagamento->boleto_url,
+                'boleto_url' => \App\Modules\Checkout\Support\BoletoComMarca::url($pagamento),
                 'expira_em' => $pagamento->expira_em,
                 'motivo_recusa' => $pagamento->motivo_recusa,
                 'motivo_recusa_texto' => MotivoRecusaMercadoPago::texto($pagamento->motivo_recusa),

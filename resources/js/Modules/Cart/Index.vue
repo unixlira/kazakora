@@ -39,10 +39,14 @@ const removeItem = async (productId) => {
         <div class="mx-auto max-w-[1000px] px-4 py-12 md:px-6">
             <h1 class="text-3xl font-bold">Carrinho</h1>
 
-            <p v-if="items.length === 0" class="mt-12 text-center text-store-fg-muted">
-                Seu carrinho está vazio.
-                <Link href="/" class="mt-3 block font-medium text-store-accent hover:underline">Ver catálogo</Link>
-            </p>
+            <!-- Carrinho vazio (pedido 2026-10-23): frase e, abaixo, botão verde para a lista de produtos. -->
+            <div v-if="items.length === 0" class="mt-12 flex flex-col items-center text-center">
+                <p class="text-store-fg-muted">Seu carrinho está vazio.</p>
+                <Link href="/?todos=1#produtos"
+                    class="mt-4 inline-flex items-center justify-center rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2">
+                    Ver catálogo
+                </Link>
+            </div>
 
             <template v-else>
                 <div class="mt-8 divide-y divide-store-border rounded-2xl border border-store-border bg-store-bg-raised">

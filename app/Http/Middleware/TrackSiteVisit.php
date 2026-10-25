@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Support\Privacidade\Cookies;
 use Closure;
@@ -34,7 +35,11 @@ use Symfony\Component\HttpFoundation\Response;
  *   IP que deu OK no dia entra no cookie (SiteVisit::visitantesPorDia). A
  *   página do OK conta (registrarOk).
  *
- * Depois de 6 meses o IP e o navegador são apagados (privacidade:limpar).
+ * - Em todos: latitude, longitude e CEP aproximados do IP, da Cloudflare
+ *   (LocalizacaoDaVisita, pedido 2026-10-24).
+ *
+ * Depois de 6 meses o IP, o navegador e a localização são apagados
+ * (privacidade:limpar).
  */
 class TrackSiteVisit
 {
@@ -130,6 +135,7 @@ class TrackSiteVisit
             'referer' => $referer,
             'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
             'ip' => $request->ip(),
+            ...LocalizacaoDaVisita::doRequest($request),
             ...$utm,
             'origem' => OrigemVisita::classificar($refererCompleto, $utm, $clique[0]),
             'click_id_param' => $clique[0],
@@ -161,7 +167,7 @@ class TrackSiteVisit
         return is_string($valor) && $valor !== '' ? Str::limit(strip_tags($valor), $limite, '') : null;
     }
 
-    private static function dispositivo(string $userAgent): string
+    public static function dispositivo(string $userAgent): string
     {
         return match (true) {
             (bool) preg_match('/ipad|tablet|kindle|playbook|silk/i', $userAgent) => 'tablet',
@@ -179,9 +185,7 @@ class TrackSiteVisit
         // Só o site da loja (pedido 2026-10-11: "é somente o kazakora.com,
         // não misturar com nenhuma plataforma"): acesso pelo IP, pelo
         // homolog ou por outro domínio apontado pra cá não conta.
-        $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
-        // O checkout em seguro.<loja> (2026-10-23) também é o site da loja.
-        if ($dominio !== '' && preg_replace('/^(www|seguro)\./', '', $request->getHost()) !== $dominio) {
+        if (! self::dominioDaLoja($request)) {
             return false;
         }
 
@@ -196,12 +200,23 @@ class TrackSiteVisit
         return ! self::naoENavegador($request);
     }
 
+    /** A requisição veio pelo domínio da loja (APP_URL), não pelo IP nem por outro domínio. */
+    public static function dominioDaLoja(Request $request): bool
+    {
+        $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+        // O checkout em seguro.<loja> (2026-10-23) também é o site da loja.
+        $host = preg_replace('/^(www|seguro)\./', '', $request->getHost());
+
+        return $dominio === '' || $host === $dominio;
+    }
+
     /**
      * Todo navegador de verdade se apresenta como "Mozilla/..." e, quando
      * manda Referer http(s), manda com caminho ("https://site.com/"). Referer
      * sem caminho ("http://kazakora.com") é robô fingindo que veio da loja.
      */
-    private static function naoENavegador(Request $request): bool
+    public static function naoENavegador(Request $request): bool
     {
         $userAgent = (string) $request->userAgent();
 

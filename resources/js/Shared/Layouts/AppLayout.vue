@@ -8,7 +8,7 @@ import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
-import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
+import ModalAvaliacao from '@/Shared/Components/ModalAvaliacao.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 
@@ -96,6 +96,20 @@ const pararDeOuvir = router.on('start', () => {
 });
 onUnmounted(pararDeOuvir);
 
+// "Entrar em Contato" do menu do celular (pedido 2026-10-24, 2ª versão): em vez
+// de rolar até o rodapé, fecha o menu e abre um modal com "Por e-mail" (página
+// Fale conosco) e "Mais rápido" (WhatsApp com a mensagem já escrita).
+const contatoModalAberto = ref(false);
+const WHATSAPP_CONTATO = `${COMPANY.whatsappLink}?text=${encodeURIComponent('Olá, vim pelo site e tenho dúvidas.')}`;
+const abrirContato = () => {
+    mobileMenuOpen.value = false;
+    contatoModalAberto.value = true;
+};
+const fecharContato = () => { contatoModalAberto.value = false; };
+const escFechaContato = (e) => { if (e.key === 'Escape') fecharContato(); };
+onMounted(() => window.addEventListener('keydown', escFechaContato));
+onUnmounted(() => window.removeEventListener('keydown', escFechaContato));
+
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
 // a lista de resultados abre logo no topo. Ao digitar, a BuscaInstantanea
 // mostra foto e nome dos produtos (2026-10-15).
@@ -173,7 +187,7 @@ const REDES = [
         <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
         <FaixaPromo />
         <TrocarSenhaModal />
-        <AvisoCookies />
+        <ModalAvaliacao />
         <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
              (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
         <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
@@ -197,9 +211,15 @@ const REDES = [
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
             :class="{ 'loja-topo-fume': topoFlutuando }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
-            <div class="mx-auto flex max-w-[1320px] items-center gap-4 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
-                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
-                <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
+            <!-- max-lg:relative: no celular o logo fica centralizado em cima da linha (pedido do Lira 2026-10-23); no computador não, para o mega menu seguir com a largura do topo. -->
+            <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 max-lg:relative md:px-6 lg:gap-8 lg:py-4">
+                <!-- Celular: menu (três listras) à esquerda do logo (pedido do Lira 2026-10-23). -->
+                <button type="button" class="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
+                    <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
+                </button>
+
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. Centralizado no celular (2026-10-23). -->
+                <Link href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
                     <picture>
                         <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
                         <img :src="marca.logoNav" alt="KazaKora" class="h-6 w-auto md:h-8" width="160" height="28" fetchpriority="high">
@@ -290,14 +310,19 @@ const REDES = [
                 <BuscaInstantanea v-model="search" class="hidden max-w-xs flex-1 lg:block" @buscar="submitSearch" />
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
-                    <!-- Celular: lupa, coração, carrinho e conta ficam dentro do menu (pedido 2026-10-15). -->
+                    <!-- Celular: lupa e conta ficam dentro do menu (pedido 2026-10-15); o carrinho fica aqui no topo (2026-10-23). -->
+                    <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente.
                     <Link href="/favoritos" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
-                        <!-- Coração vermelho igual ao do menu do celular (pedido 2026-10-15). -->
                         <i class="fas fa-heart text-base text-[#ef4444]"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
-                    <Link href="/carrinho" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
-                        <i class="fas fa-cart-shopping text-base"></i>
+                    -->
+                    <!-- Celular: carrinho no topo, à direita, onde ficava o botão do menu (pedido do Lira 2026-10-23).
+                         Sacolinha de mão no lugar do carrinho de supermercado, o mesmo desenho da Mavo (feather shopping-bag, 2026-10-23). -->
+                    <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                        <!-- Bolinha laranja ao lado da sacola, só no celular, com o "0" dentro quando o carrinho está vazio; some quando o contador aparece (pedido 2026-10-23). -->
+                        <span class="relative"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-[22px] w-[22px]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                            <span v-if="cartCount === 0" class="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#f27a2a] text-[0.6rem] font-store-mono font-semibold leading-none text-white lg:hidden" aria-hidden="true">0</span></span>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
 
@@ -368,32 +393,39 @@ const REDES = [
                             <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-4 py-3 text-left text-[15px] font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                         </div>
                     </div>
-
-                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
-                        <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
-                    </button>
                 </div>
             </div>
 
             <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
-                <div class="grid grid-cols-4 gap-2">
+                <!-- Duas linhas de 3 (pedido 2026-10-23, sem Favoritos e Carrinho): aqui Buscar, Rastrear pedido e Conta; abaixo da linha, Departamentos, Produtos e Entrar em Contato (abre o modal de contato). -->
+                <div class="grid grid-cols-3 gap-2">
                     <button type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
                         :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile" @click="alternarBuscaMobile">
-                        <i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                        <!-- Bolinha laranja sempre visível ao lado da lupa, mesmo sem termo pesquisado (pedido 2026-10-23). -->
+                        <span class="relative"><i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                            <span class="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full bg-[#f27a2a]" aria-hidden="true"></span></span>
                         <span>{{ buscaMobileAberta ? 'Fechar' : 'Buscar' }}</span>
                     </button>
+                    <!-- Favoritos desligados (pedido do Lira 2026-10-23); para voltar, descomente e troque grid-cols-3 por 4.
                     <Link href="/favoritos" class="menu-mobile-icone" preserve-scroll>
                         <span class="relative"><i class="fas fa-heart text-lg text-[#ef4444]"></i>
                             <span v-if="favoritesCount > 0" class="menu-mobile-contador">{{ favoritesCount }}</span></span>
                         <span>Favoritos</span>
                     </Link>
+                    -->
+                    <!-- Carrinho fora do menu do celular (pedido do Lira 2026-10-23); para voltar, descomente e tire o Rastrear pedido daqui.
                     <Link href="/carrinho" class="menu-mobile-icone">
                         <span class="relative"><i class="fas fa-cart-shopping text-lg"></i>
                             <span v-if="cartCount > 0" class="menu-mobile-contador">{{ cartCount }}</span></span>
                         <span>Carrinho</span>
+                    </Link>
+                    -->
+                    <Link href="/rastreio" class="menu-mobile-icone">
+                        <i class="fas fa-truck-fast text-lg text-[#10b981]"></i>
+                        <span>Rastrear pedido</span>
                     </Link>
                     <button v-if="user" type="button" class="menu-mobile-icone"
                         :class="{ 'menu-mobile-icone-ativo': contaMobileAberta }"
@@ -432,8 +464,9 @@ const REDES = [
                     <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-3 py-2.5 text-left text-red-600" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                 </nav>
 
-                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15, sem o WhatsApp); ícones coloridos e chamativos, uma cor por botão. -->
-                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-4 gap-2 border-t border-store-border pt-4">
+                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15); ícones coloridos e chamativos, uma cor por botão.
+                     Pedido 2026-10-24: só Departamentos, Produtos e Entrar em Contato; saíram Ofertas do Dia, Mandar mensagem, Utilidades para Casa e o WhatsApp. -->
+                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-3 gap-2 border-t border-store-border pt-4">
                     <a href="/#categorias" class="menu-mobile-icone">
                         <i class="fas fa-table-cells-large text-xl text-[#8b5cf6]"></i>
                         <span>Departamentos</span>
@@ -442,14 +475,10 @@ const REDES = [
                         <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
                         <span>Produtos</span>
                     </a>
-                    <Link href="/rastreio" class="menu-mobile-icone">
-                        <i class="fas fa-truck-fast text-xl text-[#10b981]"></i>
-                        <span>Rastrear pedido</span>
-                    </Link>
-                    <Link href="/fale-conosco" class="menu-mobile-icone">
-                        <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
-                        <span>Mandar mensagem</span>
-                    </Link>
+                    <button type="button" class="menu-mobile-icone" aria-haspopup="dialog" @click="abrirContato">
+                        <i class="fas fa-headset text-xl text-[#3b82f6]"></i>
+                        <span>Entrar em Contato</span>
+                    </button>
                 </nav>
             </div>
         </header>
@@ -486,7 +515,7 @@ const REDES = [
                                 <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                             </ul>
                         </div>
-                        <div>
+                        <div id="contato" class="scroll-mt-24">
                             <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
@@ -552,6 +581,14 @@ const REDES = [
                             <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]">
                                 <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
                             </div>
+                            <!-- Norton Safe Web (2026-10-23): classificação "Seguro" para kazakora.com.
+                                 SVG vetorial de 5 KB, mesma caixa branca e altura dos outros selos. -->
+                            <a href="https://safeweb.norton.com/report?url=kazakora.com" target="_blank" rel="noopener"
+                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                title="Ver a classificação do Norton Safe Web">
+                                <img :src="imagensLiberadas ? '/images/selos/selo-norton.svg' : undefined" :alt="imagensLiberadas ? 'Norton Safe Web' : ''" width="104" height="40" loading="lazy" decoding="async"
+                                    class="h-[22px] w-auto sm:h-[30px] lg:h-[34px]">
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -568,12 +605,6 @@ const REDES = [
             </div>
         </footer>
 
-        <!-- WhatsApp float -->
-        <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="WhatsApp"
-            class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
-            <i class="fab fa-whatsapp"></i>
-        </a>
-
         <!-- Modal inicial de desconto: visual conversion-first, sem criar cupom falso. -->
         <Teleport to="body">
             <div v-if="discountModalOpen" class="fixed inset-0 z-[115] flex items-center justify-center p-4">
@@ -589,6 +620,35 @@ const REDES = [
                     <div class="mt-5 grid gap-2 sm:grid-cols-2">
                         <Link href="/?todos=1#produtos" class="rounded-full bg-store-accent px-5 py-3 text-center text-sm font-bold text-store-accent-contrast no-underline" @click="closeDiscountModal">Ver ofertas</Link>
                         <button type="button" class="rounded-full border border-store-border-strong px-5 py-3 text-sm font-bold text-store-fg hover:bg-store-bg-sunken" @click="closeDiscountModal">Continuar navegando</button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Entrar em Contato do menu do celular (pedido 2026-10-24): duas saídas, e-mail ou WhatsApp. -->
+        <Teleport to="body">
+            <div v-if="contatoModalAberto" class="fixed inset-0 z-[115] flex items-end justify-center p-4 sm:items-center">
+                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="fecharContato"></div>
+                <div role="dialog" aria-modal="true" aria-labelledby="contato-modal-titulo" class="relative w-full max-w-[400px] rounded-[1.5rem] border border-store-border bg-store-bg-raised p-5 text-store-fg shadow-2xl">
+                    <button type="button" class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-sunken text-store-fg-muted hover:text-store-fg" aria-label="Fechar" @click="fecharContato">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                    <h3 id="contato-modal-titulo" class="pr-10 text-lg font-semibold">Como prefere falar com a gente?</h3>
+                    <div class="mt-4 flex flex-col gap-2">
+                        <Link href="/fale-conosco" class="flex items-center gap-3 rounded-xl border border-store-border p-3 no-underline hover:bg-store-bg-sunken" @click="fecharContato">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3b82f6] text-xl text-white"><i class="fas fa-envelope"></i></span>
+                            <span>
+                                <span class="block text-sm font-semibold text-store-fg">Por e-mail</span>
+                                <span class="block text-xs text-store-fg-muted">Formulário da página de contato</span>
+                            </span>
+                        </Link>
+                        <a :href="WHATSAPP_CONTATO" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-store-border p-3 no-underline hover:bg-store-bg-sunken" @click="fecharContato">
+                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white"><i class="fa-brands fa-whatsapp"></i></span>
+                            <span>
+                                <span class="block text-sm font-semibold text-store-fg">Mais rápido</span>
+                                <span class="block text-xs text-store-fg-muted">WhatsApp {{ COMPANY.whatsappDisplay }}</span>
+                            </span>
+                        </a>
                     </div>
                 </div>
             </div>

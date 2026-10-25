@@ -170,12 +170,12 @@ class ManuelaProductFlowTest extends TestCase
         $this->assertSame([['origem' => 'mercado_livre', 'id' => 'MLB1', 'nome' => 'Ring Light 26cm Com Tripé', 'preco' => 'R$ 59,90', 'link' => 'https://produto.mercadolivre.com.br/MLB-1']], $response['response']['encontrados']);
     }
 
-    public function test_nao_acha_em_lugar_nenhum_e_chama_uma_pessoa(): void
+    public function test_nao_acha_em_lugar_nenhum_alerta_o_atendimento_sem_responder_o_cliente(): void
     {
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push($this->geminiCall('buscar_produto', ['termo' => 'drone']))
-                ->push($this->text('[HUMANO] Não encontrei esse drone por aqui, José. Vou pedir pra uma pessoa do time verificar pra você.')),
+                ->push($this->text('[ALERTA_ATENDIMENTO] Cliente quer saber se temos drone; não achei em nenhum catálogo.')),
             'graph.facebook.com/*' => fn () => Http::response(['messages' => [['id' => 'wamid.'.Str::random(8)]]]),
         ]);
 
@@ -183,7 +183,7 @@ class ManuelaProductFlowTest extends TestCase
 
         $conversation = WhatsAppConversation::query()->sole();
         $this->assertTrue($conversation->needs_human);
-        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY, 'Não encontrei esse drone por aqui, José. Vou pedir pra uma pessoa do time verificar pra você.'], WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->pluck('body')->all());
+        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY], WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->pluck('body')->all());
     }
 
     public function test_aviso_de_outro_catalogo_nao_impede_nova_tentativa_quando_o_google_cai(): void
@@ -193,7 +193,7 @@ class ManuelaProductFlowTest extends TestCase
             'generativelanguage.googleapis.com/*' => Http::sequence()
                 ->push($this->geminiCall('buscar_produto', ['termo' => 'drone']))
                 ->push($busy, 503)->push($busy, 503)
-                ->push($this->text('Não achei o drone, José.')),
+                ->push($this->text('Achei o drone, José. Quer mais informações?')),
             'graph.facebook.com/*' => fn () => Http::response(['messages' => [['id' => 'wamid.'.Str::random(8)]]]),
         ]);
 
@@ -201,7 +201,7 @@ class ManuelaProductFlowTest extends TestCase
         // 1 minuto depois) roda na hora e não pode ser barrada pelo aviso.
         $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.IN1', 'Tem drone?'))->assertOk();
 
-        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY, 'Não achei o drone, José.'], WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->pluck('body')->all());
+        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY, 'Achei o drone, José. Quer mais informações?'], WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->pluck('body')->all());
     }
 
     public function test_busca_por_similaridade_do_nome(): void

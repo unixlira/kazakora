@@ -3,10 +3,15 @@
 namespace Tests\Feature\Checkout;
 
 use App\Models\User;
+use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Mail\BoletoAguardandoPagamento;
+use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\BoletoComMarca;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
@@ -16,6 +21,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /** Boleto pelo Mercado Pago no checkout da loja (pedido 2026-10-14). */
@@ -62,7 +68,7 @@ class BoletoMercadoPagoTest extends TestCase
         ];
     }
 
-    /** @return array{0: User, 1: Product, 2: ShippingMethod, 3: \App\Modules\Checkout\Models\Address} */
+    /** @return array{0: User, 1: Product, 2: ShippingMethod, 3: Address} */
     private function cenario(): array
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'cliente@exemplo.com', 'name' => 'Maria da Silva']);
@@ -87,11 +93,11 @@ class BoletoMercadoPagoTest extends TestCase
         $order = Order::firstOrFail();
 
         Http::assertSent(function (HttpRequest $request) use ($order, $user) {
-            $payer = $request['payer'];
+            $payer = $request['payer'] ?? null;
 
             return $request->method() === 'POST'
                 && str_ends_with($request->url(), 'v1/payments')
-                && $request['payment_method_id'] === 'bolbradesco'
+                && ($request['payment_method_id'] ?? null) === 'bolbradesco'
                 && $request['date_of_expiration'] === '2026-10-17T23:59:59.000-03:00'
                 && $payer['email'] === "pedido-{$order->id}@kazakora.com"
                 && $payer['first_name'] === 'Maria' && $payer['last_name'] === 'Da Silva'
@@ -114,13 +120,62 @@ class BoletoMercadoPagoTest extends TestCase
         $resposta->assertInertia(fn ($page) => $page
             ->where('methodType', 'boleto')
             ->where('mercadoPagoBoleto.linhaDigitavel', self::LINHA)
-            ->where('mercadoPagoBoleto.pdfUrl', 'https://www.mercadopago.com.br/payments/9001/ticket?caller_id=1'));
+            ->where('mercadoPagoBoleto.pdfUrl', fn ($url) => str_contains($url, "/boleto/{$payment->id}?signature=")));
 
+        // Tela e e-mail levam ao boleto com o logo da loja (2026-10-24).
         Mail::assertSent(BoletoAguardandoPagamento::class, fn ($mail) => $mail->hasTo('cliente@exemplo.com')
-            && $mail->linhaDigitavel === self::LINHA && $mail->order->is($order));
+            && $mail->linhaDigitavel === self::LINHA && $mail->order->is($order)
+            && str_contains((string) $mail->pdfUrl, "/boleto/{$payment->id}?signature="));
 
         // Pedido feito: o carrinho esvazia.
-        $this->assertSame(0, app(\App\Modules\Cart\Support\CartManager::class)->items()->count());
+        $this->assertSame(0, app(CartManager::class)->items()->count());
+    }
+
+    public function test_email_do_boleto_vai_para_quem_comprou_com_o_pdf_anexado(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+        $fpdf = new \setasign\Fpdi\Fpdi('P', 'pt');
+        $fpdf->AddPage();
+        $fpdf->SetFont('Helvetica', '', 10);
+        $fpdf->Text(40, 200, 'Bradesco 237');
+        Http::fake([
+            'api.mercadopago.com/v1/payments' => Http::response($this->respostaDoBoleto(), 201),
+            'www.mercadopago.com.br/*' => Http::response($fpdf->Output('S'), 200, ['Content-Type' => 'application/pdf']),
+        ]);
+        [$user, $product, $metodo, $address] = $this->cenario();
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->withSession(['checkout_draft' => ['shipping_method_id' => $metodo->id, 'address_id' => $address->id]])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'boleto', 'terms_accepted' => true]);
+
+        $order = Order::firstOrFail();
+
+        Mail::assertSent(BoletoAguardandoPagamento::class, function (BoletoAguardandoPagamento $mail) use ($order) {
+            $mail->build();
+
+            return $mail->hasTo('cliente@exemplo.com')
+                && str_starts_with((string) $mail->pdf, '%PDF')
+                && $mail->hasAttachedData($mail->pdf, "boleto-pedido-{$order->numero}.pdf", ['mime' => 'application/pdf']);
+        });
+    }
+
+    public function test_sem_o_pdf_do_mercado_pago_o_email_do_boleto_sai_sem_anexo(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+        Http::fake([
+            'api.mercadopago.com/v1/payments' => Http::response($this->respostaDoBoleto(), 201),
+            'www.mercadopago.com.br/*' => Http::response('fora do ar', 503),
+        ]);
+        [$user, $product, $metodo, $address] = $this->cenario();
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->withSession(['checkout_draft' => ['shipping_method_id' => $metodo->id, 'address_id' => $address->id]])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'boleto', 'terms_accepted' => true]);
+
+        Mail::assertSent(BoletoAguardandoPagamento::class, fn (BoletoAguardandoPagamento $mail) => $mail->hasTo('cliente@exemplo.com')
+            && $mail->pdf === null && $mail->linhaDigitavel === self::LINHA);
     }
 
     public function test_boleto_nao_pode_ser_dividido_com_cartao(): void
@@ -166,8 +221,8 @@ class BoletoMercadoPagoTest extends TestCase
             'subtotal' => 100, 'total' => 100,
         ]);
         $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 100, 'quantity' => 1, 'subtotal' => 100]);
-        (new \App\Modules\Inventory\Models\StockMovement)->forceFill([
-            'product_id' => $product->id, 'type' => \App\Modules\Inventory\Models\StockMovement::TYPE_SALE, 'stock_after' => 4,
+        (new StockMovement)->forceFill([
+            'product_id' => $product->id, 'type' => StockMovement::TYPE_SALE, 'stock_after' => 4,
             'quantity' => -1, 'reference_type' => $order->getMorphClass(), 'reference_id' => $order->id,
         ])->save();
         $order->forceFill(['created_at' => now()->subHours($horas)])->save();
@@ -205,7 +260,7 @@ class BoletoMercadoPagoTest extends TestCase
 
         $this->assertSame(Payment::STATUS_CAPTURED, $payment->fresh()->status);
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
-        Queue::assertPushed(\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class);
+        Queue::assertPushed(GenerateInvoiceJob::class);
     }
 
     public function test_boleto_ainda_pendente_no_prazo_nao_muda_nada(): void
@@ -264,5 +319,99 @@ class BoletoMercadoPagoTest extends TestCase
         $resposta = $this->respostaDoBoleto();
         unset($resposta['transaction_details']['digitable_line']);
         $this->assertSame(self::LINHA, MercadoPagoPaymentService::dadosDoBoleto($resposta)['linhaDigitavel']);
+    }
+
+    private function boletoDoPedido(?string $site = null): Payment
+    {
+        $order = Order::create([
+            'origin' => Order::ORIGIN_STORE,
+            'site_origem' => $site,
+            'status' => Order::STATUS_AWAITING_PAYMENT,
+            'shipping_name' => 'Maria', 'shipping_phone' => '11999990000', 'shipping_zip' => '01001-000',
+            'shipping_street' => 'Praça da Sé', 'shipping_number' => '1', 'shipping_neighborhood' => 'Sé',
+            'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
+            'subtotal' => 100, 'total' => 100,
+        ]);
+
+        return Payment::create([
+            'order_id' => $order->id,
+            'provider' => Payment::PROVIDER_MERCADOPAGO,
+            'mercadopago_payment_id' => '9001',
+            'method_type' => Payment::METHOD_BOLETO,
+            'amount' => 100,
+            'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+            'boleto_linha_digitavel' => self::LINHA,
+            'boleto_url' => 'https://www.mercadopago.com.br/payments/9001/ticket?caller_id=1',
+        ]);
+    }
+
+    private function pdfDoMercadoPago(): string
+    {
+        $pdf = new \FPDF('P', 'pt', 'A4');
+        $pdf->AddPage();
+        $pdf->SetFont('Helvetica', '', 12);
+        $pdf->Text(30, 300, self::LINHA);
+
+        return $pdf->Output('S');
+    }
+
+    public function test_boleto_da_kazakora_sai_com_o_logo_no_topo(): void
+    {
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response($this->pdfDoMercadoPago(), 200, ['Content-Type' => 'application/pdf'])]);
+        $payment = $this->boletoDoPedido();
+
+        $url = BoletoComMarca::url($payment);
+        $resposta = $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+
+        $pdf = $resposta->getContent();
+        $this->assertStringStartsWith('%PDF', $pdf);
+        // Página do Mercado Pago importada + o logo (imagem PNG com transparência).
+        $this->assertStringContainsString('/XObject', $pdf);
+        $this->assertStringContainsString('/SMask', $pdf);
+        Storage::disk('local')->assertExists("boletos/v4/{$payment->id}.pdf");
+
+        // Segunda vez sai do arquivo guardado, sem baixar de novo.
+        $this->get($url)->assertOk();
+        Http::assertSentCount(1);
+    }
+
+    public function test_dados_da_empresa_no_topo_seguem_o_rodape_do_checkout(): void
+    {
+        $this->assertSame([
+            '© '.now('America/Sao_Paulo')->format('Y').' KazaKora | Grupo AlphaKora',
+            'CNPJ: 65.604.590/0001-07',
+            'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
+        ], BoletoComMarca::dadosDaEmpresa());
+    }
+
+    public function test_link_do_boleto_sem_assinatura_e_recusado(): void
+    {
+        $payment = $this->boletoDoPedido();
+
+        $this->get("/boleto/{$payment->id}")->assertForbidden();
+    }
+
+    public function test_sem_o_pdf_do_mercado_pago_vai_para_o_boleto_original(): void
+    {
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response('erro', 500)]);
+        $payment = $this->boletoDoPedido();
+
+        $this->get(BoletoComMarca::url($payment))->assertRedirect($payment->boleto_url);
+    }
+
+    public function test_boleto_da_ferrakora_e_da_beauty_kora_tambem_sai_com_o_topo(): void
+    {
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response($this->pdfDoMercadoPago(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        foreach ([Order::SITE_FERRAKORA, Order::SITE_BEAUTYKORA] as $site) {
+            $payment = $this->boletoDoPedido($site);
+
+            $this->assertNotSame($payment->boleto_url, BoletoComMarca::url($payment));
+            $this->get(BoletoComMarca::url($payment))->assertOk()->assertHeader('Content-Type', 'application/pdf');
+            $payment->forceDelete();
+        }
     }
 }

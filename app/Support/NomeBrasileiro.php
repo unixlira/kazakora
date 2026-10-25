@@ -45,4 +45,32 @@ final class NomeBrasileiro
         return self::NOMES[hexdec(substr($hash, 0, 8)) % count(self::NOMES)].' '
             .self::SOBRENOMES[hexdec(substr($hash, 8, 8)) % count(self::SOBRENOMES)];
     }
+
+    /** Femininos que não terminam em "a" (os 40 primeiros de NOMES já são femininos). */
+    private const FEMININOS_SEM_A = [
+        'aline', 'simone', 'cristiane', 'tatiane', 'raquel', 'thais', 'kelly', 'elaine', 'viviane', 'beatriz',
+        'isabel', 'ester', 'ingrid', 'carmen', 'rute', 'ruth', 'lourdes', 'michele', 'michelle', 'gisele',
+        'jaqueline', 'caroline', 'daniele', 'danielle', 'miriam', 'mirian', 'iris', 'liz', 'solange', 'ivone',
+        'cleide', 'rosiane', 'rosilene', 'luciene', 'eliane', 'josiane', 'adriane', 'denise', 'alice', 'beth',
+        'yasmin', 'isis', 'ines', 'nicole', 'evelyn', 'karen', 'sueli', 'neide', 'ivete', 'joice', 'suelen', 'rayane', 'rafaele',
+    ];
+
+    /**
+     * Palpite de gênero pelo primeiro nome, para a foto do carrossel de
+     * avaliações do checkout combinar com o nome (pedido 2026-10-24).
+     * Feminino: está na metade feminina de NOMES, na lista acima ou termina em "a".
+     */
+    public static function feminino(string $nome): bool
+    {
+        $primeiro = mb_strtolower(trim((string) strtok(trim($nome), ' ')));
+        $primeiro = strtr($primeiro, ['á' => 'a', 'à' => 'a', 'â' => 'a', 'ã' => 'a', 'é' => 'e', 'ê' => 'e', 'í' => 'i', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ú' => 'u', 'ç' => 'c']);
+        $femininos = array_map(
+            fn (string $n) => strtr(mb_strtolower($n), ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u']),
+            array_slice(self::NOMES, 0, 40),
+        );
+
+        return in_array($primeiro, $femininos, true)
+            || in_array($primeiro, self::FEMININOS_SEM_A, true)
+            || str_ends_with($primeiro, 'a');
+    }
 }

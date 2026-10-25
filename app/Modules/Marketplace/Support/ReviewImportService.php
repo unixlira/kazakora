@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use Illuminate\Support\Carbon;
@@ -181,6 +182,14 @@ class ReviewImportService
         if (blank($review->reviewer_name)) {
             $review->reviewer_name = $this->anonimiza->nomeUnico($productId);
             $review->nome_original = (string) $data['reviewer_name'];
+        }
+
+        // UF real do cliente (carrossel do checkout, 2026-10-24): estado de
+        // entrega do pedido do canal que gerou a avaliação. Sem pedido nosso
+        // (anúncio de outra loja, pedido não importado), fica sem UF.
+        if (blank($review->uf) && filled($data['order_sn'] ?? null)) {
+            $review->uf = Order::query()->where('origin', $channel)->where('external_order_id', $data['order_sn'])
+                ->value('shipping_state') ?: null;
         }
 
         // Data real da avaliação no canal, só na criação — não fica

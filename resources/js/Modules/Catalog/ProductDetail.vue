@@ -197,21 +197,9 @@ const currentUnitPrice = computed(() => unitPriceForQuantity(quantity.value));
 const currentTotal = computed(() => currentUnitPrice.value * quantity.value);
 
 // Características: resumo curto na lateral (estilo Mercado Livre) + tabela completa mais abaixo.
-const keySpecs = computed(() => {
-    const specs = [];
-    if (props.product.brand) specs.push({ label: 'Marca', value: props.product.brand });
-    if (props.product.model) specs.push({ label: 'Modelo', value: props.product.model });
-    if (props.product.color) specs.push({ label: 'Cor', value: props.product.color });
-    if (props.product.variation) specs.push({ label: 'Variação', value: props.product.variation });
-    if (props.product.category) specs.push({ label: 'Categoria', value: props.product.category.name });
-    return specs;
-});
+const keySpecs = computed(() => (props.product.ficha_tecnica ?? []).map(([label, value]) => ({ label, value })));
 
-const fullSpecs = computed(() => {
-    const specs = [...keySpecs.value];
-    if (props.product.sku) specs.push({ label: 'SKU', value: props.product.sku });
-    return specs;
-});
+const fullSpecs = computed(() => keySpecs.value);
 
 const scrollToSpecs = () => {
     document.getElementById('caracteristicas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -316,9 +304,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div class="max-w-3xl">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Produto KazaKora</span>
-                            <span v-if="product.category" class="rounded-full bg-store-accent-soft px-3 py-1 text-xs font-semibold text-store-accent-strong">
-                                {{ product.category.name }}
-                            </span>
                         </div>
                         <h1 class="mt-3 font-display text-3xl font-semibold leading-tight text-store-fg md:text-5xl">{{ product.name }}</h1>
                         <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-store-fg-muted">
@@ -434,13 +419,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <button type="button" class="mt-1 text-sm font-semibold text-store-accent hover:underline" @click="showPaymentModal = true">Ver meios de pagamento</button>
                             </div>
 
-                            <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
+                            <!-- Favorito desligado (pedido do Lira 2026-10-23); para voltar, descomente.
                             <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors"
                                 :class="ehFavorito(product.id) ? 'favorito-ativo' : 'border-store-border bg-store-bg-raised hover:bg-store-bg-sunken'"
                                 :aria-pressed="ehFavorito(product.id)" :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'"
                                 @click="toggleFavorite(product.id)">
                                 <i class="text-lg" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
                             </button>
+                            -->
                         </div>
 
                         <div v-if="variations.length" class="mt-5 border-t border-store-border pt-5">

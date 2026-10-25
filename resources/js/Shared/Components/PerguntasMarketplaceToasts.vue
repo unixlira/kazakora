@@ -65,7 +65,11 @@ function receber(data) {
     const firstRun = desde === null;
     desde = data.desde;
 
-    if (page.props.sidebarBadges) page.props.sidebarBadges.perguntasMkplace = data.total;
+    if (page.props.sidebarBadges) {
+        page.props.sidebarBadges.perguntasMkplace = data.total;
+        // Menu: perguntas pra você + chat da Shopee não lido (aba da mesma tela).
+        page.props.sidebarBadges.atendimentoMkplace = data.total + (page.props.sidebarBadges.shopeeChatNaoLidas ?? 0);
+    }
     if (firstRun) return;
 
     const novas = data.perguntas.filter((p) => !avisadas.has(p.id));

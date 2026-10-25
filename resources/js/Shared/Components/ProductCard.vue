@@ -48,7 +48,7 @@ if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
-import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
+import { cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
@@ -73,7 +73,16 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // Card deitado (pedido 2026-10-24, Utilidades para casa no celular): foto à
+    // esquerda; nome, estrelas, preço e parcela à direita; "X% OFF" na foto.
+    horizontal: {
+        type: Boolean,
+        default: false,
+    },
 });
+
+// Mesmo parcelamento da página do produto (12x sem juros).
+const PARCELAS = 12;
 
 
 const secondImage = computed(() => {
@@ -120,7 +129,6 @@ const prefetchProduct = () => router.prefetch(`/produtos/${props.product.slug}`,
 
 const onPointerEnter = () => {
     isHovering.value = true;
-    prefetchProduct();
 
     if (supportsHover) {
         hasHovered.value = true;
@@ -128,6 +136,19 @@ const onPointerEnter = () => {
 };
 
 const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
+
+// Card inteiro clicável (pedido 2026-10-23): clicar em qualquer parte abre o
+// produto. Botões e links de dentro (carrinho, Avaliar, Detalhes) fazem a
+// própria ação. Ctrl/Cmd+clique abre em outra aba, como num link.
+const clicarCard = (evento) => {
+    if (evento.target.closest('a, button, input, textarea, select')) return;
+    if (window.getSelection?.().toString()) return;
+    if (evento.ctrlKey || evento.metaKey) {
+        window.open(`/produtos/${props.product.slug}`, '_blank', 'noopener');
+        return;
+    }
+    goToProduct();
+};
 
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
@@ -147,10 +168,6 @@ const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const notaTexto = computed(() => nota.value.toFixed(1).replace('.', ','));
 const totalAvaliacoes = computed(() => Number(props.product.reviews_count ?? 0));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
-
-// Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
-// igual à faixa do topo (FaixaPromo). Antes era "Oferta MM.MM" pelo mês.
-const SELO_DO_MES = 'Black November';
 
 // Nome do produto (pedido 2026-10-10): 2 linhas no celular e 3 no computador.
 // Se não couber, mede de verdade e corta na última palavra que deixa espaço
@@ -245,7 +262,6 @@ onBeforeUnmount(() => {
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 // Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).
 const preco = computed(() => props.product.preco_vitrine ?? props.product);
-const aPartirDe = computed(() => Boolean(props.product.preco_vitrine?.a_partir_de));
 const precoAntes = computed(() => {
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
     if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);
@@ -258,17 +274,18 @@ const precoPartes = computed(() => {
     const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
-// Variações com preços diferentes: o carrinho do card abre o produto para
-// escolher (o preço do card é o da mais barata, não o do produto da página).
-const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props.product.id, preco.value.final_price));
+const parcela = computed(() => Number(preco.value.final_price) / PARCELAS);
 </script>
 
 <template>
     <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
          com estilo próprio (página do produto, pedido 2026-10-22). -->
-    <article class="card-produto group flex font-store text-store-fg h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
-        <div class="relative aspect-square cursor-pointer bg-white"
-            @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
+    <article class="card-produto group flex cursor-pointer font-store text-store-fg overflow-hidden border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]"
+        :class="horizontal ? 'card-horizontal flex-row items-center rounded-xl' : 'h-full flex-col rounded-[1.15rem]'"
+        @mouseenter="prefetchProduct" @touchstart.passive="prefetchProduct" @click="clicarCard">
+        <div class="relative aspect-square bg-white"
+            :class="{ 'm-2 w-[120px] shrink-0 overflow-hidden rounded-lg': horizontal }"
+            @mouseenter="onPointerEnter" @mouseleave="isHovering = false">
             <template v-if="primaryImage(product)">
                 <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
                 <img ref="fotoEl" :src="imagensLiberadas ? primaryImage(product) : undefined" :alt="product.name" loading="lazy" decoding="async"
@@ -283,7 +300,8 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
             </div>
-            <!-- Favorito com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15). -->
+            <!-- Favorito desligado (pedido do Lira 2026-10-23); para voltar, descomente.
+                 Era: com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15).
             <button type="button"
                 class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full shadow transition-colors"
                 :class="ehFavorito(product.id) ? 'favorito-ativo' : 'bg-store-bg-raised'"
@@ -291,36 +309,35 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 @click.stop="toggleFavorite(product.id)">
                 <i class="text-sm" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
             </button>
+            -->
 
 
-            <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->
+            <!-- Card deitado: o "X% OFF" vermelho fica no canto de cima da foto (exemplo do Lira 2026-10-24). -->
+            <span v-if="horizontal && precoAntes" class="absolute left-0 top-1.5 z-[6] whitespace-nowrap rounded-r-full bg-[#d71920] py-0.5 pl-1.5 pr-2 text-[10px] font-bold leading-tight text-white shadow">{{ descontoPct }}% OFF</span>
+
+            <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card).
+                 No card deitado vai para a direita, longe do "X% OFF". -->
             <button v-if="canReview && !hasReviewed" type="button"
-                class="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-store-bg-raised px-2.5 py-1 text-[11px] font-semibold text-store-accent shadow hover:underline"
+                class="absolute z-10 flex items-center gap-1 rounded-full bg-store-bg-raised px-2.5 py-1 text-[11px] font-semibold text-store-accent shadow hover:underline"
+                :class="horizontal ? 'right-1.5 top-1.5' : 'left-2.5 top-2.5'"
                 @click.stop="showReviewModal = true">
                 <i class="fas fa-star text-amber-400"></i> Avaliar
             </button>
 
-            <!-- Selo promocional sobre a foto (canto inferior esquerdo): "Oferta do dia"
-                 nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
-            <div class="promo-badge">
+            <!-- Selo promocional sobre a foto (canto inferior esquerdo): só nas ofertas
+                 (Relâmpago e do Dia). Sem selo de campanha (pedido 2026-10-23). -->
+            <div v-if="preco.oferta_relampago || preco.oferta_do_dia" class="promo-badge" :class="{ 'promo-badge-compacto': horizontal }">
                 <span class="promo-badge-icon">%</span>
-                <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : (preco.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
+                <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : 'Oferta do Dia' }}</span>
             </div>
 
-            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
-            <button type="button" :disabled="product.stock < 1"
-                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
-                :class="'bottom-0 translate-y-1/2'"
-                :aria-label="aPartirDe ? 'Escolher a variação' : 'Adicionar ao carrinho'" @click.stop="comprarPeloCard">
-                <i class="fas fa-cart-shopping text-sm"></i>
-            </button>
         </div>
 
-        <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
+        <div class="flex min-w-0 flex-1 flex-col" :class="horizontal ? 'gap-1.5 py-2.5 pl-1 pr-3' : 'gap-2 px-4 pb-4 pt-4'">
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
-                <h3 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
+                <h3 ref="tituloEl" class="titulo-card overflow-hidden font-semibold group-hover:text-store-accent" :title="product.name">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
@@ -336,16 +353,28 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>
                 </div>
             </div>
-            <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
-                 computador), laterais inclinadas "/ texto /", parte cinza do caminhão
-                 arredondada à direita e mais larga. -->
-            <div class="envio-express mx-auto flex h-6 text-white">
-                <span class="relative z-[1] flex w-[46px] shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-2 pr-1">
-                    <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px] md:text-xs"></i>
-                </span>
-                <span class="-ml-3 flex items-center justify-center whitespace-nowrap bg-[#7B1E3A] pl-4 pr-4 text-[10px] font-extrabold uppercase italic leading-none tracking-tight md:text-[11px]">Envio Express</span>
+            <!-- Card deitado (exemplo do Lira 2026-10-24): preço com o riscado ao lado,
+                 parcela embaixo e o frete. O "X% OFF" está na foto. -->
+            <div v-if="horizontal">
+                <div class="flex items-end gap-x-1.5">
+                    <div class="flex shrink-0 items-start leading-none text-store-fg">
+                        <span class="mr-0.5 mt-[2px] text-xs font-medium">R$</span>
+                        <span class="text-xl font-semibold tracking-tight">{{ precoPartes.inteiro }}</span>
+                        <span class="ml-px mt-[2px] text-[10px] font-semibold">{{ precoPartes.centavos }}</span>
+                    </div>
+                    <s v-if="precoAntes" class="min-w-0 truncate whitespace-nowrap pb-px text-[11px] text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                </div>
+                <p class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
+                    <i class="far fa-credit-card" aria-hidden="true"></i>
+                    ou {{ PARCELAS }}x de <span class="font-semibold text-store-verde-texto">{{ formatPrice(parcela) }}</span>
+                </p>
+                <p v-if="product.stock <= 0" class="mt-1 text-[11px] font-semibold text-red-600">Esgotado</p>
+                <p v-else class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto">
+                    Frete grátis
+                    <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                </p>
             </div>
-            <div class="mt-auto pt-1">
+            <div v-else class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
                      centavos pequenos no alto. -->
@@ -387,15 +416,11 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card.
                          Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
                          avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
-                    <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
+                    <Link :href="`/produtos/${product.slug}`"
                         class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
-                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center botao-detalhes rounded-lg bg-[#ff9500] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:hidden">
-                    Ver detalhes
-                </Link>
             </div>
         </div>
     </article>

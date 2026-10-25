@@ -1783,6 +1783,8 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                     'rating' => $rating,
                     'comment' => trim((string) ($comment['comment'] ?? '')) ?: null,
                     'reviewer_name' => trim((string) ($comment['buyer_username'] ?? '')) ?: 'Cliente Shopee',
+                    // Pedido que gerou a avaliação: dá a UF real do cliente (carrossel do checkout).
+                    'order_sn' => trim((string) ($comment['order_sn'] ?? '')) ?: null,
                     'images' => array_values(array_filter((array) ($comment['media']['image_url_list'] ?? []))),
                     // Achado real 2026-08-16: um item_id só (anúncio inteiro)
                     // pode ter mais de um produto local vinculado quando tem

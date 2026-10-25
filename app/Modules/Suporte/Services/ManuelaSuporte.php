@@ -197,7 +197,7 @@ TXT;
             $order->invoice ? "Nota fiscal: nº {$order->invoice->numero} ({$order->invoice->status})" : 'Nota fiscal: ainda não emitida',
             $rastreio ? "Código de rastreio: {$rastreio}".($order->shipping_carrier_name ? " ({$order->shipping_carrier_name})" : '') : 'Código de rastreio: ainda não gerado',
             'Entrega para: '.trim(($order->shipping_city ?? '').'/'.($order->shipping_state ?? ''), '/'),
-            'Frete grátis em todos os pedidos. Prazo de envio: até 1 dia útil após o pagamento.',
+            'Entrega GRÁTIS FULL e FLEX para a casa do cliente. Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado. Prazo de envio: até 1 dia útil após o pagamento.',
         ]));
     }
 }

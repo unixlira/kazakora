@@ -40,20 +40,21 @@ const fechar = () => {
         <span aria-hidden="true" class="pointer-events-none absolute -left-12 -top-16 -z-10 h-40 w-44 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
         <span aria-hidden="true" class="pointer-events-none absolute -bottom-20 right-10 -z-10 h-40 w-48 rounded-full bg-[#f27a2a] opacity-50 blur-2xl"></span>
 
-        <a href="/#ofertas" class="mx-auto flex max-w-[1320px] flex-col items-center justify-center gap-0.5 px-12 py-2 text-center text-white no-underline sm:flex-row sm:gap-4 sm:py-2.5">
-            <span class="whitespace-nowrap text-sm font-black uppercase italic leading-none tracking-[0.08em] sm:text-base">
-                Black <span class="text-[#f27a2a]">November</span>
+        <!-- Uma linha só, centralizada, em toda tela (pedido 2026-10-24): a
+             fonte encolhe com a largura em vez de quebrar; px igual dos dois
+             lados para o "X" não tirar o texto do centro. -->
+        <a href="/#ofertas" class="mx-auto flex max-w-[1320px] items-center justify-center whitespace-nowrap px-10 py-2 text-center text-[clamp(0.625rem,3.3vw,1rem)] leading-none text-white no-underline sm:px-14 sm:py-2.5">
+            <span class="font-black uppercase italic tracking-[0.06em]">
+                Black <span class="text-[#f27a2a]">November</span>,
             </span>
-            <p class="text-[0.8rem] font-medium leading-snug sm:text-sm">
+            <span class="ml-[0.4em] font-medium">
                 <template v-if="desconto >= 5">
-                    <span class="hidden sm:inline">Aproveite a maior oferta do ano! Desconto de até </span>
-                    <span class="sm:hidden">Garanta até </span>
-                    <strong class="text-base font-black tracking-tight text-[#f6c343] sm:text-lg">{{ desconto }}% OFF</strong>
+                    garanta até <strong class="text-[1.15em] font-black tracking-tight text-[#f6c343]">{{ desconto }}% OFF</strong>
                 </template>
                 <template v-else>
-                    Aproveite a maior oferta do ano com <strong class="font-black text-[#f6c343]">frete grátis</strong>
+                    com <strong class="font-black text-[#f6c343]">frete grátis</strong>
                 </template>
-            </p>
+            </span>
         </a>
 
         <button type="button" aria-label="Fechar"

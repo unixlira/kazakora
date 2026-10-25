@@ -460,6 +460,7 @@ const confirmarApagar = () => {
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Horário</th>
+                                <th scope="col" class="px-4 py-3">Página</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
                                 <th scope="col" class="px-4 py-3">CPF</th>
                                 <th scope="col" class="px-4 py-3 text-right">Ações</th>
@@ -468,6 +469,11 @@ const confirmarApagar = () => {
                         <tbody class="divide-y divide-[var(--surface-border)]">
                             <tr v-for="v in detalhe.dados.visitas" :key="v.id" class="align-top">
                                 <td class="whitespace-nowrap px-4 py-2 tabular-nums text-slate-500 dark:text-slate-400">{{ v.quando }}</td>
+                                <td class="px-4 py-2">
+                                    <a :href="v.url" target="_blank" rel="noopener noreferrer"
+                                        class="block max-w-xs truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
+                                        :title="v.path">{{ v.path }}</a>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <template v-if="v.cliente">
                                         {{ v.cliente }}
@@ -489,7 +495,7 @@ const confirmarApagar = () => {
                                 </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="4" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
+                                <td colspan="5" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>
                         </tbody>
                     </table>

@@ -50,7 +50,7 @@ const ABAS = [
         </div>
 
         <nav class="abas-indicadores mb-5 flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Abas de Indicadores">
-            <Link v-for="a in ABAS" :key="a.chave" :href="`/admin/indicadores?aba=${a.chave}`" preserve-scroll
+            <Link v-for="a in ABAS" :key="a.chave" :href="`/admin/indicadores?aba=${a.chave}`" preserve-scroll :data-clique="`Indicadores: aba ${a.rotulo}`"
                 class="inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm font-semibold transition-colors"
                 :class="aba === a.chave ? 'border-[var(--color-primary)] text-[var(--surface-foreground)]' : 'border-transparent text-[var(--texto-suave)] hover:text-[var(--surface-foreground)]'"
                 :aria-current="aba === a.chave ? 'page' : undefined">

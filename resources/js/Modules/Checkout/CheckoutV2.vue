@@ -24,6 +24,8 @@ const props = defineProps({
     // Livros de brinde dos produtos do carrinho: { imagem, quantidade, titulos } ou null.
     livrosBrinde: { type: Object, default: null },
     subtotal: { type: Number, default: 0 },
+    // UF da região em que o cliente navegou (CEP ou IP); base do aviso de entrega em outra região.
+    ufReferencia: { type: String, default: null },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
     discountAmount: { type: Number, default: 0 },
@@ -123,6 +125,10 @@ const onCep = async (event) => {
 
 const enderecoSelecionado = computed(() => props.addresses.find((address) => address.id === addressId.value) ?? null);
 const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (enderecoSelecionado.value?.zip ?? '')));
+
+// Aviso (pedido 2026-10-25): entrega em outro estado que não o da região do cliente.
+const ufEntrega = computed(() => (usarNovoEndereco.value ? endereco.state : (enderecoSelecionado.value?.state ?? '')).toUpperCase().trim());
+const entregaOutraRegiao = computed(() => !!props.ufReferencia && ufEntrega.value.length === 2 && ufEntrega.value !== props.ufReferencia.toUpperCase());
 
 // ---------- 3. Entrega ----------
 // Frete grátis com o frete embutido (pedido 2026-10-12): o preço dos produtos
@@ -1098,6 +1104,11 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <div v-else-if="descontoPlataforma > 0" role="status" class="mb-3 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                                     <i class="fa-solid fa-box text-lg text-emerald-700"></i>
                                     <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
+                                </div>
+
+                                <div v-if="entregaOutraRegiao" role="alert" data-testid="aviso-frete-outra-regiao" class="mb-3 flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                    <i class="fa-solid fa-triangle-exclamation mt-0.5 text-lg text-amber-600"></i>
+                                    <span>A disponibilidade do frete grátis atende somente a sua região. Tem certeza que você vai enviar para outra? Nesse caso, você terá que pagar uma taxa.</span>
                                 </div>
 
                                 <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): uma exclui a outra; a tela nasce no grátis. -->

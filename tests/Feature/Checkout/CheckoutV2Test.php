@@ -74,6 +74,20 @@ class CheckoutV2Test extends TestCase
                 ->where('avaliacaoItens.total', 3));
     }
 
+    public function test_checkout_guarda_o_estado_da_regiao_de_navegacao_para_o_aviso_de_frete(): void
+    {
+        $this->noCarrinho();
+
+        $this->app->forgetInstance(\App\Modules\Checkout\Support\FreteEmbutido::class);
+        $this->get('/finalizacao?simular_uf=CE')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('ufReferencia', 'CE'));
+
+        // Mesmo depois de o checkout trocar o CEP da navegação, a referência continua a original.
+        $this->app->forgetInstance(\App\Modules\Checkout\Support\FreteEmbutido::class);
+        $this->withCookie((string) config('frete_embutido.cookie'), '01310100')->get('/finalizacao')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('ufReferencia', 'CE'));
+    }
+
     public function test_resumo_sem_avaliacao_nao_mostra_estrelas(): void
     {
         $this->noCarrinho();

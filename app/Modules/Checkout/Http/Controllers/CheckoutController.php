@@ -27,6 +27,7 @@ use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
+use App\Modules\Checkout\Support\CepUf;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -1984,6 +1985,7 @@ class CheckoutController extends Controller
     {
         $user = $request->user();
         $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        $ufReferencia = $this->ufReferencia($request);
         if ($cepDoRascunho = $this->cepDoRascunho($request, $draft)) {
             app(FreteEmbutido::class)->usarCep($cepDoRascunho);
         }
@@ -1994,6 +1996,7 @@ class CheckoutController extends Controller
         return [
             'items' => $cartItems,
             'avaliacaoItens' => $this->avaliacaoDosItens($cartItems),
+            'ufReferencia' => $ufReferencia,
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
@@ -2089,6 +2092,25 @@ class CheckoutController extends Controller
         }
 
         return ['media' => round((float) $avaliacao->media, 1), 'total' => (int) $avaliacao->total];
+    }
+
+    /**
+     * Estado da região em que o cliente navegou (CEP digitado ou IP), guardado
+     * na sessão na 1ª vez que o checkout abre: o checkout troca o CEP do
+     * cookie pelo da entrega, e o aviso de "outra região" precisa do original.
+     */
+    private function ufReferencia(Request $request): ?string
+    {
+        $chave = 'checkout.uf_referencia';
+        if ($request->session()->has($chave)) {
+            return $request->session()->get($chave) ?: null;
+        }
+
+        $destino = app(FreteEmbutido::class)->destino();
+        $uf = $destino['uf'] ?? CepUf::porCep($destino['cep'] ?? null);
+        $request->session()->put($chave, $uf ?? '');
+
+        return $uf;
     }
 
     private function wantsJsonDelivery(Request $request): bool

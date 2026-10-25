@@ -24,13 +24,59 @@ use Illuminate\Support\Str;
  * repetir rosto no mesmo carrossel. Máximo de 5 avaliações (pedido 2026-10-24):
  * se o gênero do nome já usou todos os rostos dele, a avaliação é pulada e
  * entra a próxima, então nunca há duas pessoas com a mesma foto.
+ *
+ * Só elogio claro (pedido 2026-10-25, "nada meia duvidoso"): nota 5 e texto
+ * que elogia sem ressalva, dúvida ou reclamação (ver elogioClaro). Vale para
+ * o checkout e para a página do produto; a lista completa de avaliações da
+ * página continua mostrando todas.
  */
 class AvaliacoesDoCheckout
 {
     public const LIMITE = 5;
 
-    // Candidatas lidas do banco: avaliação cujo rosto já saiu é pulada, então precisa sobrar.
-    private const CANDIDATAS = 40;
+    // Candidatas lidas do banco: avaliação com ressalva ou cujo rosto já saiu é pulada, então precisa sobrar.
+    private const CANDIDATAS = 300;
+
+    // Texto até este tamanho aparece inteiro no carrossel (sem "..." escondendo o resto).
+    public const TAMANHO_MAXIMO = 220;
+
+    /** Ressalva, dúvida ou reclamação: um destes tira a avaliação do carrossel (texto sem acento, minúsculo). */
+    private const RESSALVAS = [
+        // contraste
+        '\\bmas\\b', '\\bporem\\b', '(^|[.,;!])\\s*mais\\b', '\\bmais (nao|n|consegui|veio|faltou|so|tem|cabe|eu|ainda|achei|da|e|precisa)\\b',
+        '\\b(gostei|bom|boa|bonit[oa]|lind[oa]) mais\\b',
+        '\\bso que\\b', '(?<!vale a )(?<!valeu a )\\bpena\\b', '\\bapesar\\b', '\\bentretanto\\b', '\\bcontudo\\b', '\\bno entanto\\b',
+        '\\binfelizmente\\b', '\\bexceto\\b', '\\btirando\\b', '\\bfora isso\\b', '\\bobs\\b', '\\bunic[oa] (coisa|problema|detalhe|diferenca)\\b',
+        // dúvida ou ainda sem usar
+        '\\?', '\\bainda (nao|n|testando|vou|em teste|sem)\\b', '\\b(nao|n) (testei|usei|abri|montei|instalei|liguei|cheguei|aprendi|sei|creio)\\b',
+        '\\btestarei\\b', '\\btestando\\b', '\\bem teste\\b', '\\bvou (testar|ver|usar|instalar|montar|ligar|abri|abrir)\\b', '\\bvamos (ver|aguardar|testar)\\b',
+        '\\bver se\\b', '\\bespero\\b', '\\bparec(e|em|ia)\\b', '\\baparent', '\\bacho que\\b', '\\bcreio\\b', '\\bsera que\\b',
+        '\\bduvid', '\\bmedo de\\b', '\\bveremos\\b', '\\bate agora\\b', '\\bpor enquanto\\b', '\\bdurar\\b', '\\bnem\\b',
+        // reclamação
+        '\\b(nao|n) (funciona|funcionou|veio|vem|chegou|gostei|recomendo|e|tem|serve|liga|ligou|carrega|encaixa|acompanha|condiz|corresponde)\\b',
+        '\\bdefeit', '\\bquebr', '\\bfalt(a|ou|ando|aram)\\b', '\\berrad', '\\btrocad', '\\boutra cor\\b', '\\bpedi\\b.*\\b(veio|chegou|mandaram)\\b', '\\bmandaram\\b', '\\batras', '\\bdemor',
+        '\\bruim\\b', '\\bpessim', '\\bhorrivel\\b', '\\bfrac[oa]s?\\b', '\\bfragil\\b', '\\bdevolv', '\\breclam', '\\bproblema',
+        '\\bdecepc', '\\bdiferent', '\\bmenor\\b', '\\bbarulh', '\\bcomplicad', '\\bdificil\\b', '\\bdificuldade', '\\ba desejar\\b',
+        '\\bpoderia\\b', '\\bpodia\\b', '\\brazoavel\\b', '\\bmediano\\b', '\\bregular\\b', '\\bok\\b', '\\bnormal\\b', '\\bcaro\\b',
+        '\\bdescasc', '\\bamassad', '\\briscad', '\\bvaza', '\\bsujo\\b', '\\bcheiro forte\\b', '\\bmole\\b', '\\btort[oa]\\b', '\\bcurt[oa]\\b',
+        '\\bpouco\\b', '\\bmeio\\b', '\\bcuidado\\b', '\\bperd(i|eu)\\b',
+        // promessa no lugar de experiência ("vai amar", "vou tentar instalar")
+        '\\bvai (amar|adorar|gostar)\\b', '\\bvou (tentar|colocar)\\b', '\\baprender\\b', '\\btestar\\b',
+        '\\ba principio\\b', '\\bsaber se\\b', '\\bse vai\\b', '\\bpecas pequenas\\b',
+        '\\bda trabalho\\b', '\\bpaciencia\\b', '\\bprovisori',
+    ];
+
+    /** "Não" só passa nestas expressões de elogio; qualquer outro "não" tira a avaliação. */
+    private const NAO_ELOGIO = '/\\b(nao|n) (decepciona|se arrepende|vai se arrepender|tem erro|balanca)\\b/';
+
+    /** Elogio direto: o texto precisa ter pelo menos um (texto sem acento, minúsculo). */
+    private const ELOGIOS = [
+        '\\bexcelent', '\\botim[oa]s?\\b', '\\bperfeit', '\\bame+i+\\b', '\\badorei\\b', '\\badorou\\b', '\\bamou\\b', '\\bamando\\b',
+        '\\bgost(ei|ou|amos)\\b', '\\brecomend', '\\bmaravilh', '\\blind[oa]s?\\b', '\\btop\\b', '\\bshow\\b', '\\bsuperou\\b', '\\bsurpreend',
+        '\\bvale a pena\\b', '\\bvaleu\\b', '\\bsatisfeit', '\\bnota 10\\b', '\\bsensacional\\b', '\\bincrivel\\b', '\\bespetacular\\b',
+        '\\b(muito|bem|super) (bo[am]|bem)\\b', '\\bde qualidade\\b', '\\bqualidade (excelente|otima|muito boa)\\b', '\\bparabens\\b',
+        '\\b(pode|podem|comprem?) (comprar )?sem medo\\b', '\\bencantad', '\\bapaixonad',
+    ];
 
     public const AVATARES_FEMININOS = 16;
 
@@ -55,13 +101,12 @@ class AvaliacoesDoCheckout
         }
 
         $base = fn () => Review::query()
-            ->where('rating', '>=', 4)
+            ->where('rating', 5)
             ->whereNotNull('comment')
             ->whereRaw('LENGTH(TRIM(comment)) >= 15')
             ->with(['user:id,name', 'images'])
             ->withCount('images')
             ->orderByRaw('images_count > 0 desc')
-            ->orderByDesc('rating')
             ->latest()
             ->orderByDesc('id')
             ->when($catalogo, fn ($q) => $q->whereIn('product_id', Product::query()->whereIn('id', $catalogo)->orWhereIn('parent_product_id', clone $catalogo)->select('id')))
@@ -69,13 +114,14 @@ class AvaliacoesDoCheckout
 
         $avaliacoes = $base()
             ->whereIn('product_id', Product::query()->whereIn('id', $grupos)->orWhereIn('parent_product_id', $grupos)->select('id'))
-            ->get();
+            ->get()
+            ->filter(fn (Review $review) => self::elogioClaro((string) $review->comment));
 
-        // Produto do carrinho sem avaliação: o carrossel não some, mostra as
+        // Produto do carrinho sem avaliação (ou só com as que têm ressalva): o carrossel não some, mostra as
         // melhores da loja (pedido 2026-10-25). Com avaliação, só as do produto.
         // Só na KazaKora: os outros sites ($catalogo) seguem sem completar.
         if ($avaliacoes->isEmpty() && $catalogo === null) {
-            $avaliacoes = $base()->get();
+            $avaliacoes = $base()->get()->filter(fn (Review $review) => self::elogioClaro((string) $review->comment));
         }
 
         $usados = [];
@@ -99,12 +145,44 @@ class AvaliacoesDoCheckout
                 'nota' => (int) $review->rating,
                 'nome' => $nome,
                 'uf' => $review->uf ? strtoupper($review->uf) : null,
-                'texto' => Str::limit(trim((string) $review->comment), 220),
+                'texto' => trim((string) $review->comment),
                 'avatar' => asset('images/avaliacoes/avatares/'.$arquivo),
             ];
         }
 
         return $resultado;
+    }
+
+    /**
+     * Elogio claro: até TAMANHO_MAXIMO caracteres, pelo menos um elogio direto
+     * e nenhuma ressalva, dúvida ou reclamação ("parece bom", "ainda não
+     * testei", "mas faltou...", "veio outra cor"). Na dúvida fica fora: o
+     * catálogo tem milhares de nota 5 e sempre sobra elogio.
+     */
+    public static function elogioClaro(string $texto): bool
+    {
+        $texto = trim(preg_replace('/\\s+/u', ' ', $texto) ?? '');
+        if (mb_strlen($texto) < 15 || mb_strlen($texto) > self::TAMANHO_MAXIMO) {
+            return false;
+        }
+        $normal = mb_strtolower(Str::ascii($texto));
+        $semNaoElogio = preg_replace(self::NAO_ELOGIO, ' ', $normal);
+        if (preg_match('/\\b(nao|n)\\b/', $semNaoElogio)) {
+            return false;
+        }
+
+        foreach (self::RESSALVAS as $padrao) {
+            if (preg_match('/'.$padrao.'/', $semNaoElogio)) {
+                return false;
+            }
+        }
+        foreach (self::ELOGIOS as $padrao) {
+            if (preg_match('/'.$padrao.'/', $normal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

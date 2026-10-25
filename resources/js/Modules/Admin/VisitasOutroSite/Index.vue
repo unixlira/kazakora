@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import CardLocalizacao from '@/Modules/Admin/VisitasSite/CardLocalizacao.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
@@ -276,6 +277,7 @@ const confirmarApagar = () => {
                         <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i> Carregando…
                     </p>
                     <p v-else-if="detalhe.erro" class="px-4 py-10 text-center text-red-600">{{ detalhe.erro }}</p>
+                    <CardLocalizacao v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" :localizacao="detalhe.dados.localizacao" :total="detalhe.dados.total" />
                     <table v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>

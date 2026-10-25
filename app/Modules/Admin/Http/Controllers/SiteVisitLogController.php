@@ -8,6 +8,7 @@ use App\Models\IbgeMunicipio;
 use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\LocalDoIp;
+use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Modules\Audit\Models\AuditLog;
 use App\Support\Privacidade\Cookies;
@@ -179,9 +180,10 @@ class SiteVisitLogController extends Controller
      * entra: aqui é o caminho inteiro da pessoa.
      *
      * Paginado (POR_PAGINA_HISTORICO, parâmetro page); "De onde veio",
-     * "sem dado" e cookies olham o período inteiro, não só a página.
+     * "sem dado", cookies e localização olham o período inteiro, não só a
+     * página.
      */
-    public function visitante(Request $request): JsonResponse
+    public function visitante(Request $request, LocalDoIp $local): JsonResponse
     {
         $validated = $this->validarVisitante($request, [
             'todos' => ['nullable', 'boolean'],
@@ -256,6 +258,7 @@ class SiteVisitLogController extends Controller
             // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
             'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),
             'cookies' => $cookies,
+            'localizacao' => LocalizacaoDaVisita::resumo($query, $validated['ip'] ?? null, $local),
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],
             'de' => $de->format('d/m/Y'),

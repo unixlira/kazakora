@@ -358,6 +358,16 @@ const cartaoNumeroPrevia = computed(() => {
     return digitos.replace(/(.{4})/g, '$1 ').trim();
 });
 
+// E-mail que o Brick recebe. Sem e-mail válido ainda (Identificação vazia),
+// vai um endereço neutro só para o Brick não abrir o campo dele: esse valor
+// nunca chega ao pagamento, que usa o e-mail da Identificação no servidor.
+const EMAIL_BRICK_NEUTRO = 'pagador@kazakora.com';
+const emailDoBrick = () => {
+    const email = String(pessoa.email ?? '').trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : EMAIL_BRICK_NEUTRO;
+};
+let emailNoBrick = null;
+
 const desmontarBrick = () => {
     brick?.unmount();
     brick = null;
@@ -374,8 +384,14 @@ const montarBrick = async () => {
         const MercadoPago = await loadMercadoPagoSdk();
         const mp = new MercadoPago(props.mercadoPagoPublicKey, { locale: 'pt-BR' });
         await nextTick();
+        emailNoBrick = emailDoBrick();
         brick = await mp.bricks().create('cardPayment', 'cartao-brick-v2', {
-            initialization: { amount: totalCartao.value },
+            // E-mail do pagador vem da Identificação (pedido 2026-10-25): com
+            // payer.email preenchido o Brick não mostra o campo de e-mail. O
+            // servidor não usa o e-mail do Brick: o pagamento vai ao Mercado
+            // Pago com o e-mail da conta/convidado salvo em salvarEntrega()
+            // logo antes (CheckoutController::mercadoPagoPayer).
+            initialization: { amount: totalCartao.value, payer: { email: emailDoBrick() } },
             customization: {
                 visual: { hidePaymentButton: true, hideFormTitle: true, style: { theme: 'default' } },
                 paymentMethods: { maxInstallments: 12 },
@@ -401,6 +417,18 @@ watch([metodo, totalCartao], ([novoMetodo]) => {
         return;
     }
     brickTimer = setTimeout(montarBrick, 400);
+});
+
+// E-mail da Identificação mudou com o cartão aberto: remonta o Brick com o
+// valor atual, mas só se o cliente ainda não começou a digitar o cartão
+// (remontar apaga o que foi digitado). O pagamento usa o e-mail atual de
+// qualquer jeito, porque vem do servidor.
+watch(() => pessoa.email, () => {
+    if (metodo.value !== 'card' || props.order || !brick || cartaoBin.value) return;
+    clearTimeout(brickTimer);
+    brickTimer = setTimeout(() => {
+        if (metodo.value === 'card' && !cartaoBin.value && emailDoBrick() !== emailNoBrick) montarBrick();
+    }, 800);
 });
 
 // ---------- Selos de confiança ----------

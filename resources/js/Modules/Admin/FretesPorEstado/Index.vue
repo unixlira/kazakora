@@ -1,14 +1,25 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
-import { Head } from '@inertiajs/vue3';
+import ImportarPlanilha from './ImportarPlanilha.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 const props = defineProps({
     produtos: { type: Array, default: () => [] },
     pacotePadrao: { type: Object, required: true },
     melhorEnvio: { type: Object, default: () => ({ conectado: false, ambiente: 'sandbox' }) },
+    cidadesComRegra: { type: Object, default: () => ({}) },
 });
+
+// Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades do estado; cada cidade abre a página dela (PAC e SEDEX por categoria e regras).
+const regrasPorUf = reactive({ ...props.cidadesComRegra });
+
+// Regras em massa por planilha (2026-10-25); depois de gravar, recarrega a contagem por estado.
+const importando = ref(false);
+function aposImportar() {
+    router.reload({ only: ['cidadesComRegra'], onSuccess: () => Object.assign(regrasPorUf, props.cidadesComRegra) });
+}
 
 // Duas abas (2026-10-12): Correios (contrato próprio) e Melhor Envio. A aba
 // fica na URL (?aba=melhor-envio) para dar F5 sem voltar para a primeira.
@@ -179,6 +190,13 @@ const campos = [
     <AdminLayout>
         <div class="mb-2 flex items-center justify-between">
             <h1 class="text-2xl font-bold">Fretes por estado</h1>
+            <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                @click="importando = true"
+            >
+                <i class="fas fa-file-import text-primary" aria-hidden="true"></i>Importar planilha de fretes
+            </button>
         </div>
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Quanto custa mandar o pacote da empresa{{ resultado?.origem ? ` (CEP ${cep(resultado.origem)})` : '' }} para a capital de cada estado.
@@ -290,6 +308,7 @@ const campos = [
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">Prazo PAC</th>
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">SEDEX</th>
                                 <th scope="col" class="px-4 py-2 text-right font-semibold">Prazo SEDEX</th>
+                                <th scope="col" class="px-4 py-2 text-center font-semibold">Cidades</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -298,7 +317,7 @@ const campos = [
                                     <span class="inline-flex items-center gap-2">
                                         <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                         <span>
-                                            <span class="font-semibold">{{ l.estado }}</span>
+                                            <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                             <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                         </span>
                                     </span>
@@ -320,9 +339,24 @@ const campos = [
                                     </template>
                                 </td>
                                 <td class="px-4 py-2 text-right tabular-nums">{{ dias(l.sedex.prazo) }}</td>
+                                <td class="px-4 py-2 text-center">
+                                    <Link
+                                        :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`"
+                                        class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
+                                        :title="`Ver as cidades de ${l.estado}`"
+                                        :aria-label="`Ver as cidades de ${l.estado}`"
+                                    >
+                                        <i class="fas fa-eye" aria-hidden="true"></i>
+                                        <span
+                                            v-if="regrasPorUf[l.uf]"
+                                            class="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-green-600 px-1 text-[10px] font-bold leading-4 text-white"
+                                            :title="`${regrasPorUf[l.uf]} com regra própria`"
+                                        >{{ regrasPorUf[l.uf] }}</span>
+                                    </Link>
+                                </td>
                             </tr>
                             <tr v-if="!filtradas.length">
-                                <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Nenhum estado encontrado.</td>
+                                <td colspan="7" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">Nenhum estado encontrado.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -331,6 +365,7 @@ const campos = [
                     <i class="fas fa-star text-amber-500" aria-hidden="true"></i> = serviço mais barato para o estado.
                     Cor do preço: verde é dos mais baratos do país, vermelho dos mais caros. Média: PAC {{ dinheiro(faixaPac?.media) }}, SEDEX {{ dinheiro(faixaSedex?.media) }}.
                     Prazo em dias úteis depois da postagem. Valores guardados por 6 horas.
+                    <i class="fas fa-eye ml-1 text-primary" aria-hidden="true"></i> ou o nome do estado = cidades do estado (número verde: cidades com regra); a cidade abre o PAC e o SEDEX de cada categoria e a regra dela.
                 </p>
             </section>
         </template>
@@ -407,7 +442,7 @@ const campos = [
                                             <span class="inline-flex items-center gap-2">
                                                 <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                                 <span>
-                                                    <span class="font-semibold">{{ l.estado }}</span>
+                                                    <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                                     <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                                 </span>
                                             </span>
@@ -469,5 +504,7 @@ const campos = [
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Consultando o Melhor Envio para os 27 estados…
             </div>
         </div>
+
+        <ImportarPlanilha v-if="importando" @fechar="importando = false" @importado="aposImportar" />
     </AdminLayout>
 </template>

@@ -826,6 +826,31 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Frete por cidade (2026-10-24): regra por categoria de pacote. Desde
+        // 2026-10-25 sem item próprio no menu: fica dentro de Fretes por estado
+        // (estado → cidades → cidade); os endereços antigos redirecionam.
+        Route::get('logistica/fretes-por-estado/cidades', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'index'])->name('logistica.fretes-por-estado.cidades');
+        Route::put('logistica/fretes-por-estado/categorias', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'salvarCategorias'])->name('logistica.fretes-por-estado.categorias')->middleware('permission:operacional.edit');
+        Route::get('logistica/fretes-por-estado/cidades/{municipio}', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'show'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade');
+        Route::put('logistica/fretes-por-estado/cidades/{municipio}/regra', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'salvarRegra'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade.regra.salvar')->middleware('permission:operacional.edit');
+        Route::delete('logistica/fretes-por-estado/cidades/{municipio}/regra', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'removerRegra'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade.regra.remover')->middleware('permission:operacional.edit');
+        Route::get('logistica/fretes-por-cidade', fn (\Illuminate\Http\Request $request) => redirect()->route('admin.logistica.fretes-por-estado.cidades', $request->query()));
+        Route::get('logistica/fretes-por-cidade/{municipio}', fn (\Illuminate\Http\Request $request, int $municipio) => redirect()->route('admin.logistica.fretes-por-estado.cidade', ['municipio' => $municipio, ...$request->query()]))->whereNumber('municipio');
+        // Frete por distrito (2026-10-25): distritos da cidade e a regra de cada um.
+        Route::get('logistica/fretes-por-estado/cidades/{municipio}/distritos', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'distritos'])->whereNumber('municipio')->name('logistica.fretes-por-estado.distritos');
+        Route::put('logistica/fretes-por-estado/cidades/{municipio}/distritos', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'salvarDistrito'])->whereNumber('municipio')->name('logistica.fretes-por-estado.distritos.salvar')->middleware('permission:operacional.edit');
+        Route::delete('logistica/fretes-por-estado/cidades/{municipio}/distritos/{regra}', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'removerDistrito'])->whereNumber(['municipio', 'regra'])->name('logistica.fretes-por-estado.distritos.remover')->middleware('permission:operacional.edit');
+        // Regras de frete por planilha (2026-10-25): prévia, gravar e o modelo para baixar.
+        Route::get('logistica/fretes-por-estado/importar/modelo', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'modelo'])->name('logistica.fretes-por-estado.importar.modelo');
+        Route::post('logistica/fretes-por-estado/importar/previa', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'previa'])->name('logistica.fretes-por-estado.importar.previa')->middleware('permission:operacional.edit');
+        Route::post('logistica/fretes-por-estado/importar', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'aplicar'])->name('logistica.fretes-por-estado.importar')->middleware('permission:operacional.edit');
+        // Tabela de frete por localidade (2026-10-25): PAC/SEDEX salvos por cidade/distrito e categoria de tamanho.
+        Route::get('logistica/frete-por-localidade', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'index'])->name('logistica.frete-por-localidade');
+        Route::get('logistica/frete-por-localidade/status', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'status'])->name('logistica.frete-por-localidade.status');
+        Route::get('logistica/frete-por-localidade/buscar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'buscar'])->name('logistica.frete-por-localidade.buscar');
+        Route::post('logistica/frete-por-localidade/atualizar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'atualizar'])->name('logistica.frete-por-localidade.atualizar')->middleware('permission:operacional.edit');
+        Route::put('logistica/frete-por-localidade/categorias/{chave}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'salvarCategoria'])->where('chave', '[a-z_]+')->name('logistica.frete-por-localidade.categorias.salvar')->middleware('permission:operacional.edit');
+        Route::put('logistica/frete-por-localidade/produtos/{product}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'classificar'])->whereNumber('product')->name('logistica.frete-por-localidade.produtos.classificar')->middleware('permission:operacional.edit');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

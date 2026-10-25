@@ -30,7 +30,13 @@ class PrazoPorCep
         // Fora da entrega expressa: prazo mais rápido dos Correios para esse CEP
         // e produto. Em cache por 1 dia (a consulta é lenta).
         $prazoDias = null;
-        if (! $expressa && $product) {
+        // Produto com categoria e CEP na tabela por localidade (2026-10-25): prazo salvo, sem API.
+        $salvo = ! $expressa && $product
+            ? app(TabelaFreteLocalidades::class)->linha($cep, app(FreteEmbutido::class)->categoriaFrete($product))
+            : null;
+        if ($salvo) {
+            $prazoDias = collect([$salvo['prazo_pac'], $salvo['prazo_sedex']])->filter(fn ($dias) => $dias > 0)->min();
+        } elseif (! $expressa && $product) {
             $prazoDias = Cache::remember("prazo-cep:{$cep}:{$product->id}", now()->addDay(), function () use ($product, $cep) {
                 $dias = collect(rescue(fn () => $this->correios->quote(collect([['product' => $product, 'quantity' => 1, 'subtotal' => (float) $product->final_price]]), $cep), [], false))
                     ->pluck('estimated_days')->filter(fn ($dias) => $dias > 0);

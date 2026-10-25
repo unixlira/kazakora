@@ -27,6 +27,14 @@ return [
     // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
     'turbo_max' => 60.0,
 
+    // Trava do frete (pedido do Lira em 2026-10-24): depois que o visitante
+    // calcula o frete de um produto (CEP na página do produto ou no checkout),
+    // o valor fica guardado pelo IP e pela hash do aparelho. Voltando ao site
+    // dentro deste prazo, o frete daquele produto para aquele CEP não sobe
+    // (se cair, ele paga o menor). 0 desliga.
+    'trava_dias' => (int) env('FRETE_TRAVA_DIAS', 30),
+    'trava_cookie' => 'kz_aparelho',
+
     // Tabela de entrega da página do produto (pedido do Lira em 2026-10-23):
     // "em até (prazo dos Correios + folga) dias úteis (mas geralmente chega
     // no prazo dos Correios)". Sem prazo dos Correios, vale o padrão.

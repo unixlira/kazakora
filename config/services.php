@@ -197,6 +197,8 @@ return [
         'api_base_url' => env('CORREIOS_API_BASE_URL', 'https://api.correios.com.br/prepostagem'),
         'preco_base_url' => env('CORREIOS_PRECO_BASE_URL', 'https://api.correios.com.br/preco'),
         'prazo_base_url' => env('CORREIOS_PRAZO_BASE_URL', 'https://api.correios.com.br/prazo'),
+        // API de CEP (localidades, distritos e faixas) para a tabela de frete por localidade.
+        'cep_base_url' => env('CORREIOS_CEP_BASE_URL', 'https://api.correios.com.br/cep'),
         // Rastreio (SRO): usa o mesmo token do Preço/Prazo; o da pré-postagem
         // é recusado (GTW-012, API 87).
         'rastro_base_url' => env('CORREIOS_RASTRO_BASE_URL', 'https://api.correios.com.br/srorastro'),

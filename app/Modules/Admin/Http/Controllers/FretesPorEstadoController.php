@@ -3,13 +3,22 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\IbgeMunicipio;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\FreteRegiao;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Checkout\Services\MelhorEnvioTabelaPorEstado;
+use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
+use App\Modules\Checkout\Support\DistritosDoMunicipio;
+use App\Modules\Checkout\Support\RegrasDeFrete;
 use App\Services\MelhorEnvio\MelhorEnvioAuthService;
+use App\Support\SiteAtual;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,6 +31,15 @@ use Inertia\Response;
  * Duas abas (2026-10-12): Correios (contrato próprio) e Melhor Envio (todas
  * as transportadoras da conta conectada), para comparar e decidir o frete
  * grátis. O pacote é o mesmo nas duas.
+ *
+ * Frete por cidade (2026-10-24): o olho da coluna Cidades abre as cidades
+ * do estado e cada cidade abre a página dela (FretesPorCidadeController,
+ * dentro desta tela desde 2026-10-25, sem item próprio no menu), que usa os
+ * distritos daqui.
+ *
+ * Frete por distrito (2026-10-25): cada cidade abre os distritos dela (IBGE +
+ * CEP descoberto no ViaCEP) e cada distrito pode ter regra própria, com CEP
+ * ou faixa de CEP. A regra do distrito ganha da regra da cidade.
  */
 class FretesPorEstadoController extends Controller
 {
@@ -52,7 +70,198 @@ class FretesPorEstadoController extends Controller
                 'conectado' => (bool) $melhorEnvio->currentToken(),
                 'ambiente' => MelhorEnvioTabelaPorEstado::ambiente(),
             ],
+            // Cidades com regra própria ou com algum distrito com regra.
+            'cidadesComRegra' => self::regrasDoSite(SiteAtual::KAZAKORA)
+                ->join('ibge_municipios', 'ibge_municipios.id', '=', 'frete_regiao_locais.municipio_id')
+                ->groupBy('ibge_municipios.uf')
+                ->selectRaw('ibge_municipios.uf as uf, count(distinct frete_regiao_locais.municipio_id) as n')
+                ->pluck('n', 'uf')
+                ->map(fn ($n) => (int) $n),
         ]);
+    }
+
+    /**
+     * Distritos da cidade (IBGE + CEPs do ViaCEP) com a regra de cada um. Os
+     * distritos com regra que não estão na lista (digitados à mão) entram também.
+     */
+    public function distritos(int $municipio, DistritosDoMunicipio $busca): JsonResponse
+    {
+        $cidade = IbgeMunicipio::query()->findOrFail($municipio);
+        $achados = $busca->buscar($cidade);
+
+        $regras = self::regrasDeDistrito(SiteAtual::KAZAKORA)
+            ->where('frete_regiao_locais.municipio_id', $cidade->id)
+            ->get(['frete_regiao_locais.distrito', 'frete_regiao_locais.distrito_id', 'frete_regiao_locais.cep_inicio', 'frete_regiao_locais.cep_fim', 'frete_regioes.*'])
+            ->keyBy(fn ($r) => IbgeMunicipio::normalizar($r->distrito));
+
+        $lista = collect($achados['distritos'])->map(function ($d) use ($regras) {
+            $regra = $regras->pull(IbgeMunicipio::normalizar($d['nome']));
+
+            return ['id' => $d['id'], 'nome' => $d['nome'], 'cep_sugerido' => $d['cep'], 'regra' => self::regraDeDistritoParaTela($regra)];
+        });
+        foreach ($regras as $regra) {
+            $lista->push(['id' => $regra->distrito_id ? (int) $regra->distrito_id : null, 'nome' => $regra->distrito, 'cep_sugerido' => null, 'regra' => self::regraDeDistritoParaTela($regra)]);
+        }
+
+        $regraCidade = self::regrasDeCidade(SiteAtual::KAZAKORA)
+            ->where('frete_regiao_locais.municipio_id', $cidade->id)
+            ->first(['frete_regioes.*']);
+
+        return response()->json([
+            'cidade' => ['id' => $cidade->id, 'nome' => $cidade->nome, 'uf' => $cidade->uf, 'regra' => self::regraParaTela($regraCidade)],
+            'cep_geral' => $achados['cep_geral'],
+            'distritos' => $lista->sortBy(fn ($d) => IbgeMunicipio::normalizar($d['nome']))->values(),
+        ]);
+    }
+
+    /**
+     * Cria ou troca a regra de um distrito da cidade. O CEP (ou a faixa) é
+     * conferido no ViaCEP: CEP de outra cidade é recusado.
+     */
+    public function salvarDistrito(Request $request, int $municipio, CompletarEnderecoPeloCep $viaCep): JsonResponse
+    {
+        $cidade = IbgeMunicipio::query()->findOrFail($municipio);
+        $request->merge([
+            'cep_inicio' => preg_replace('/\D/', '', (string) $request->input('cep_inicio')) ?: null,
+            'cep_fim' => preg_replace('/\D/', '', (string) $request->input('cep_fim')) ?: null,
+        ]);
+
+        $validador = Validator::make($request->all(), [
+            'distrito' => ['required', 'string', 'min:2', 'max:120'],
+            'distrito_id' => ['nullable', 'integer'],
+            'cep_inicio' => ['nullable', 'digits:8'],
+            'cep_fim' => ['nullable', 'digits:8'],
+            'tipo_preco' => ['required', Rule::in(FreteRegiao::TIPOS)],
+            'valor' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'prazo_dias' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'ativo' => ['boolean'],
+        ], [
+            'distrito.required' => 'Diga o nome do distrito.',
+            'cep_inicio.digits' => 'O CEP tem 8 números.',
+            'cep_fim.digits' => 'O CEP final tem 8 números.',
+            'tipo_preco.in' => 'Escolha o tipo da regra.',
+            'valor.max' => 'O valor pode ir até R$ 1.000.',
+        ]);
+        if ($validador->fails()) {
+            return response()->json(['message' => 'Regra inválida.', 'errors' => $validador->errors()], 422);
+        }
+        $dados = $validador->validated();
+        $nome = trim($dados['distrito']);
+        $cepInicio = $dados['cep_inicio'] ?? null;
+        $cepFim = $dados['cep_fim'] ?? null;
+        if ($cepFim && ! $cepInicio) {
+            return response()->json(['message' => 'Regra inválida.', 'errors' => ['cep_inicio' => ['Diga o CEP inicial da faixa.']]], 422);
+        }
+        if ($cepFim && $cepFim < $cepInicio) {
+            return response()->json(['message' => 'Regra inválida.', 'errors' => ['cep_fim' => ['O CEP final tem que ser maior que o inicial.']]], 422);
+        }
+
+        foreach (array_filter([$cepInicio, $cepFim]) as $cep) {
+            $doCep = $viaCep->buscar($cep);
+            if ($doCep && (int) ($doCep['ibge'] ?? 0) !== $cidade->id) {
+                $formatado = substr($cep, 0, 5).'-'.substr($cep, 5);
+
+                return response()->json(['message' => 'Regra inválida.', 'errors' => ['cep_inicio' => [
+                    "O CEP {$formatado} é de ".trim(($doCep['localidade'] ?? '?').' - '.($doCep['uf'] ?? '')).", não de {$cidade->nome}.",
+                ]]], 422);
+            }
+        }
+
+        $regra = DB::transaction(function () use ($cidade, $dados, $nome, $cepInicio, $cepFim) {
+            $existente = self::regrasDeDistrito(SiteAtual::KAZAKORA)
+                ->where('frete_regiao_locais.municipio_id', $cidade->id)
+                ->get(['frete_regiao_locais.distrito', 'frete_regioes.id'])
+                ->first(fn ($r) => IbgeMunicipio::normalizar($r->distrito) === IbgeMunicipio::normalizar($nome));
+            $regra = $existente ? FreteRegiao::query()->find($existente->id) : new FreteRegiao(['site' => SiteAtual::KAZAKORA]);
+
+            $regra->fill([
+                'nome' => "{$nome} ({$cidade->nome} - {$cidade->uf})",
+                'tipo_preco' => $dados['tipo_preco'],
+                'valor' => round((float) $dados['valor'], 2),
+                'prazo_dias' => $dados['prazo_dias'] ?? null,
+                'ativo' => (bool) ($dados['ativo'] ?? true),
+            ])->save();
+
+            $regra->locais()->delete();
+            $regra->locais()->create([
+                'municipio_id' => $cidade->id,
+                'distrito_id' => $dados['distrito_id'] ?? null,
+                'distrito' => $nome,
+                'cep_inicio' => $cepInicio,
+                'cep_fim' => $cepInicio ? ($cepFim ?: $cepInicio) : null,
+            ]);
+
+            return $regra;
+        });
+        RegrasDeFrete::esquecer();
+
+        $salva = self::regrasDeDistrito(SiteAtual::KAZAKORA)
+            ->where('frete_regioes.id', $regra->id)
+            ->first(['frete_regiao_locais.distrito', 'frete_regiao_locais.cep_inicio', 'frete_regiao_locais.cep_fim', 'frete_regioes.*']);
+
+        return response()->json(['regra' => self::regraDeDistritoParaTela($salva)]);
+    }
+
+    /** Tira a regra do distrito: ele volta para a regra da cidade (ou os Correios). */
+    public function removerDistrito(int $municipio, int $regra): JsonResponse
+    {
+        $ids = self::regrasDeDistrito(SiteAtual::KAZAKORA)
+            ->where('frete_regiao_locais.municipio_id', $municipio)
+            ->where('frete_regioes.id', $regra)
+            ->pluck('frete_regioes.id');
+        abort_if($ids->isEmpty(), 404);
+        FreteRegiao::query()->whereIn('id', $ids)->delete();
+        RegrasDeFrete::esquecer();
+
+        return response()->json(['regra' => null]);
+    }
+
+    /**
+     * Regras de uma cidade só (um local, de município) do site: as que esta
+     * tela cria. Regras com vários locais ou por UF/CEP ficam de fora.
+     */
+    private static function regrasDeCidade(string $site): Builder
+    {
+        // Só a regra de todos os pacotes; as por categoria ficam na página da cidade.
+        return self::regrasDoSite($site)->whereNull('frete_regiao_locais.distrito')->whereNull('frete_regioes.categoria');
+    }
+
+    /** Regras de um distrito só (um local, município + distrito) do site. */
+    private static function regrasDeDistrito(string $site): Builder
+    {
+        return self::regrasDoSite($site)->whereNotNull('frete_regiao_locais.distrito');
+    }
+
+    /** Regras de um local só, de município (com ou sem distrito), do site. */
+    private static function regrasDoSite(string $site): Builder
+    {
+        return DB::table('frete_regiao_locais')
+            ->join('frete_regioes', 'frete_regioes.id', '=', 'frete_regiao_locais.frete_regiao_id')
+            ->where('frete_regioes.site', $site)
+            ->whereNotNull('frete_regiao_locais.municipio_id')
+            ->whereNotExists(fn ($q) => $q->from('frete_regiao_locais as outro')
+                ->whereColumn('outro.frete_regiao_id', 'frete_regiao_locais.frete_regiao_id')
+                ->whereColumn('outro.id', '!=', 'frete_regiao_locais.id'));
+    }
+
+    private static function regraDeDistritoParaTela(?object $regra): ?array
+    {
+        return $regra ? [
+            ...self::regraParaTela($regra),
+            'cep_inicio' => $regra->cep_inicio,
+            'cep_fim' => $regra->cep_fim !== $regra->cep_inicio ? $regra->cep_fim : null,
+        ] : null;
+    }
+
+    private static function regraParaTela(?object $regra): ?array
+    {
+        return $regra ? [
+            'id' => (int) $regra->id,
+            'tipo_preco' => $regra->tipo_preco,
+            'valor' => round((float) $regra->valor, 2),
+            'prazo_dias' => $regra->prazo_dias !== null ? (int) $regra->prazo_dias : null,
+            'ativo' => (bool) $regra->ativo,
+        ] : null;
     }
 
     public function cotar(Request $request, CorreiosTabelaPorEstado $tabela): JsonResponse

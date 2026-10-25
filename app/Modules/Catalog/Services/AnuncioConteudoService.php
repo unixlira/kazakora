@@ -329,7 +329,7 @@ class AnuncioConteudoService
             throw new RuntimeException('Gemini não configurado.');
         }
 
-        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true);
+        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true, ficha: $this->fichaTecnica($product));
         $descricao = (string) ($dados['descricao'] ?? '');
         unset($dados['descricao']);
 
@@ -366,7 +366,38 @@ class AnuncioConteudoService
     {
         $imagens = $this->imagensDoProduto($product);
 
-        return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens));
+        return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens), ficha: $this->fichaTecnica($product));
+    }
+
+    /**
+     * Dados técnicos já cadastrados (marca, modelo, cor, peso, medidas da
+     * embalagem): vão ao Gemini como fato, para a descrição trazer a ficha
+     * técnica (2026-10-24). Tamanho e voltagem não têm campo próprio: vêm da
+     * descrição e das fotos. Campo vazio fica de fora.
+     *
+     * @return array<string, string>
+     */
+    public function fichaTecnica(Product $product): array
+    {
+        $product->loadMissing('fiscalData');
+        $fiscal = $product->fiscalData;
+        $numero = fn ($valor) => rtrim(rtrim(number_format((float) $valor, 3, ',', ''), '0'), ',');
+        $ficha = [
+            'Marca' => $product->brand,
+            'Modelo' => $product->model,
+            'Cor' => $product->color,
+            'Variação' => $product->variation,
+        ];
+
+        if ($fiscal && (float) $fiscal->peso_liquido > 0) {
+            $ficha['Peso do produto'] = $numero($fiscal->peso_liquido).' kg';
+        }
+
+        if ($fiscal && (float) $fiscal->altura_cm > 0 && (float) $fiscal->largura_cm > 0 && (float) $fiscal->profundidade_cm > 0) {
+            $ficha['Medidas da embalagem (altura x largura x profundidade)'] = $numero($fiscal->altura_cm).' x '.$numero($fiscal->largura_cm).' x '.$numero($fiscal->profundidade_cm).' cm';
+        }
+
+        return array_filter(array_map(fn ($valor) => trim((string) $valor), $ficha), fn ($valor) => $valor !== '');
     }
 
     /**
@@ -376,11 +407,12 @@ class AnuncioConteudoService
      * quando o Gemini falha; quem chama decide o plano B (automaticoDe).
      * Descrição vazia = o Gemini trabalha só com o nome e as fotos.
      * $comDescricao devolve também "descricao" (texto para o cadastro).
+     * $ficha: dados técnicos cadastrados (rótulo => valor), ver fichaTecnica().
      *
      * @param  array<int, string|null>  $imagens
      * @return array<string, mixed>
      */
-    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens, bool $comDescricao = false): array
+    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens, bool $comDescricao = false, array $ficha = []): array
     {
         $partes = [];
 
@@ -397,7 +429,7 @@ class AnuncioConteudoService
             throw new RuntimeException('Sem descrição e nenhuma foto pôde ser lida.');
         }
 
-        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens, $comDescricao)];
+        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens, $comDescricao, $ficha)];
 
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
@@ -440,7 +472,7 @@ class AnuncioConteudoService
         };
     }
 
-    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens, bool $comDescricao = false): string
+    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens, bool $comDescricao = false, array $ficha = []): string
     {
         $ultimaImagem = max(0, $totalImagens - 1);
         $temDescricao = trim($descricao) !== '';
@@ -449,8 +481,11 @@ class AnuncioConteudoService
             : 'Não há descrição cadastrada: escreva a partir do nome e do que dá pra ver nas imagens (olhe todas, inclusive textos e medidas impressos nelas).';
         $fonte = $temDescricao ? 'da descrição e do que dá pra ver nas imagens' : 'do nome e do que dá pra ver nas imagens (incluindo textos escritos nelas)';
         $campoDescricao = $comDescricao
-            ? "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- '\","
+            ? "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- ', e por último a seção 'Ficha técnica:' (regra da ficha técnica abaixo)\","
             : '';
+        $dadosFicha = $ficha === []
+            ? ''
+            : "\n\nDados técnicos cadastrados (confiáveis, use exatamente como estão):\n".collect($ficha)->map(fn ($valor, $rotulo) => "- {$rotulo}: {$valor}")->implode("\n");
         // Gatilhos e emojis valem só para a KazaKora (pedido do Lira, 2026-10-19);
         // a Beauty Kora usa o mesmo serviço e continua sem emoji.
         $kazakora = $loja === 'KazaKora';
@@ -465,7 +500,7 @@ class AnuncioConteudoService
         Monte o conteúdo da página de venda deste produto da loja {$loja}.
 
         Produto: {$nome}
-        {$base}
+        {$base}{$dadosFicha}
 
         Há {$totalImagens} imagem(ns), numeradas de 0 a {$ultimaImagem} (a 0 é a foto principal).
 
@@ -474,6 +509,8 @@ class AnuncioConteudoService
         - Use SÓ informações {$fonte}. Não invente medidas, materiais, garantias, prazos, brindes nem números.
         - {$estilo}
         - {$semPreco}
+        - Ficha técnica (vale para qualquer tipo de produto): inclua as informações técnicas que existirem, entre tamanho/medidas, peso, voltagem, marca, modelo e cor, vindas dos dados técnicos cadastrados, da descrição e das imagens (inclusive o que estiver impresso na embalagem). Cada item numa linha curta e clara, no formato "Rótulo: valor" (ex.: "Voltagem: Bivolt", "Cor: Preto"). Só os que você souber: item sem dado confiável fica de fora, nunca escreva "não informado" nem invente. Medidas da embalagem não são medidas do produto: só diga que são da embalagem. Sem a voltagem nos títulos dos blocos.
+        - {$this->regraFicha($comDescricao)}
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
         - Use todas as imagens: um bloco para cada foto (até 10), na ordem que conta a história de venda, não na ordem das fotos.
         - "destaques" são as 3 promessas que aparecem com um check logo abaixo do nome do produto: o principal resultado, a principal facilidade e o que acompanha o produto.
@@ -496,6 +533,13 @@ class AnuncioConteudoService
         }
         Quantidades: um bloco por imagem (mínimo 3, máximo 10, o último é o CTA), 3 a 4 linhas no comparativo, 4 a 6 benefícios, 3 a 4 dúvidas.
         TXT;
+    }
+
+    private function regraFicha(bool $comDescricao): string
+    {
+        return $comDescricao
+            ? 'No campo "descricao", a seção "Ficha técnica:" fecha o texto, com um item por linha começando por "- ". Nos blocos, nos benefícios e nas dúvidas, cite um dado técnico sempre que ele ajudar a decidir a compra (ex.: tamanho, voltagem, compatibilidade).'
+            : 'Nos blocos, nos benefícios e nas dúvidas, cite os dados técnicos sempre que ajudarem a decidir a compra (ex.: tamanho, voltagem, compatibilidade).';
     }
 
     /** @return array<string, mixed> */

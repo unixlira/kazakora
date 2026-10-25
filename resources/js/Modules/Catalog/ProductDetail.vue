@@ -304,9 +304,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div class="max-w-3xl">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Produto KazaKora</span>
-                            <span v-if="product.category" class="rounded-full bg-store-accent-soft px-3 py-1 text-xs font-semibold text-store-accent-strong">
-                                {{ product.category.name }}
-                            </span>
                         </div>
                         <h1 class="mt-3 font-display text-3xl font-semibold leading-tight text-store-fg md:text-5xl">{{ product.name }}</h1>
                         <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-store-fg-muted">

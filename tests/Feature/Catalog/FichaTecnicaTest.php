@@ -64,6 +64,8 @@ class FichaTecnicaTest extends TestCase
             ->component('Catalog/ProductDetailV2', false)
             ->where('product.ficha_tecnica', fn ($ficha) => collect($ficha)->contains(fn ($l) => $l[0] === 'Voltagem' && $l[1] === '110V')
                 && collect($ficha)->contains(fn ($l) => $l[1] === '7 x 6 x 5 cm')
-                && collect($ficha)->contains(fn ($l) => $l[1] === '2 kg')));
+                && collect($ficha)->contains(fn ($l) => $l[1] === '2 kg'))
+            ->where('variations.0.ficha_tecnica', fn ($ficha) => collect($ficha)->contains(fn ($l) => $l[0] === 'Voltagem')
+                || collect($ficha)->contains(fn ($l) => $l[1] === '2 kg')));
     }
 }

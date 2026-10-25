@@ -501,9 +501,9 @@ const highlights = computed(() => {
 });
 
 // Ficha técnica (pedido 2026-10-24): marca, modelo, cor, voltagem, dimensões e
-// peso vêm prontos do servidor (FichaTecnica). SKU, categoria e variação não aparecem.
+// peso vêm prontos do servidor (FichaTecnica) e seguem a variação escolhida. SKU, categoria e variação não aparecem.
 const specs = computed(() => [
-    ...(props.product.ficha_tecnica ?? []),
+    ...(selecionada.value.ficha_tecnica ?? props.product.ficha_tecnica ?? []),
     ['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`],
 ]);
 

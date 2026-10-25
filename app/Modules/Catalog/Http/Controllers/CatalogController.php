@@ -421,13 +421,15 @@ class CatalogController extends Controller
             ->with([
                 'images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1),
                 'quantityDiscounts',
+                'fiscalData',
+                'parent.fiscalData',
             ])
             ->orderBy('id')
             ->get()
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix'));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix')->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation)));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto

@@ -54,7 +54,7 @@ class CheckoutEventosTest extends TestCase
         $this->assertSame(75, $saiu->rolagem);
         $this->assertSame('celular', $saiu->dispositivo);
         $this->assertSame('abc123def456', $saiu->pagina_id);
-        $this->assertStringStartsWith('s-', $saiu->visitor_id);
+        $this->assertStringStartsWith('n-', $saiu->visitor_id);
         $this->assertSame('nome', CheckoutEvento::firstWhere('evento', 'preencheu')->campo);
     }
 

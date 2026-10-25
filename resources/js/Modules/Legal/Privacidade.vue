@@ -95,8 +95,9 @@ const direitos = [
                 <LegalCard id="cookies" title="Cookies e dados de navegação" class="scroll-mt-28">
                     <p>
                         Cookies são pequenos arquivos que a Loja grava no seu navegador. Usamos três tipos.
-                        <strong>Necessários</strong>: mantêm o login, o carrinho, o CEP digitado para calcular o frete e a
-                        proteção contra fraudes nos formulários; funcionam desde o primeiro acesso, porque sem eles a Loja não
+                        <strong>Necessários</strong>: mantêm o login, o carrinho, o CEP digitado para calcular o frete, a
+                        proteção contra fraudes nos formulários e um código aleatório de navegação, que liga as páginas abertas
+                        pelo mesmo navegador no registro de acesso; funcionam desde o primeiro acesso, porque sem eles a Loja não
                         abre o carrinho nem o pagamento (LGPD, art. 7º, V e IX). <strong>Estatística</strong>: um código
                         aleatório de visitante, que não leva o seu nome, para contarmos visitas e páginas vistas.
                         <strong>Publicidade</strong>: o Pixel da Meta (Facebook e Instagram), que mede as visitas, os produtos
@@ -111,7 +112,9 @@ const direitos = [
                         versão do texto aceito, por 5 anos.
                     </p>
                     <p>
-                        Em toda visita registramos a página aberta, a data e a hora, o endereço IP, o tipo de aparelho
+                        Em toda visita, desde a primeira página e mesmo sem login, registramos a página aberta, a data e a hora, o
+                        endereço IP, o código de navegação (cookie necessário, que mostra quais e quantas páginas o mesmo navegador
+                        abriu), o tipo de aparelho
                         (celular, tablet ou computador), o site de onde você veio e a campanha (UTM), sem o restante do
                         endereço. Depois do aceite, registramos também o navegador completo, o código de visitante e o código
                         de clique dos anúncios (como fbclid ou gclid), e a Loja passa a avisar a Meta, pelo nosso servidor
@@ -124,7 +127,7 @@ const direitos = [
                         onde vêm as visitas e medir os nossos anúncios. Não vendemos esses dados. O IP, a data e a hora de
                         cada acesso ficam guardados por 6 meses, em sigilo, por obrigação do Marco Civil da Internet
                         (Lei nº 12.965/14, art. 15); depois disso, IP, navegador e códigos de visitante e de clique são
-                        apagados e sobram só números gerais. Os cookies de estatística duram 12 meses e os da Meta até 90 dias.
+                        apagados e sobram só números gerais. O cookie de navegação dura 6 meses, os de estatística 12 meses e os da Meta até 90 dias.
                     </p>
                     <p>
                         Você pode apagar ou bloquear os cookies a qualquer momento nas configurações do seu navegador, e pedir

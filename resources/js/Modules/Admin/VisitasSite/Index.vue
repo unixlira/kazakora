@@ -382,7 +382,7 @@ const confirmarApagar = () => {
                             Páginas abertas {{ detalhe.linha ? nomeAlvo(detalhe.linha) : '' }}
                         </h2>
                         <p class="text-sm text-slate-500 dark:text-slate-400">
-                            {{ periodoTexto }}<template v-if="detalhe.dados">, {{ numero(detalhe.dados.total) }} {{ detalhe.dados.total === 1 ? 'página' : 'páginas' }}, em ordem de horário</template>
+                            {{ periodoTexto }}<template v-if="detalhe.dados">, {{ numero(detalhe.dados.total) }} {{ detalhe.dados.total === 1 ? 'página' : 'páginas' }}<template v-if="detalhe.dados.de_outro_ip"> ({{ numero(detalhe.dados.de_outro_ip) }} do mesmo navegador em outro IP)</template>, em ordem de horário</template>
                             <template v-if="detalhe.linha && !detalhe.linha.ip"> (cookie <span class="font-mono text-xs">{{ detalhe.linha.visitor_id }}</span>)</template>
                         </p>
                     </div>
@@ -469,6 +469,18 @@ const confirmarApagar = () => {
                             a partir de 12/10/2026 e somente de quem deu OK no aviso de cookies; as visitas anteriores
                             não têm cookies.
                         </p>
+                        <div v-if="(detalhe.dados.codigos ?? []).length" class="mt-2 border-t border-[var(--surface-border)] pt-2" data-testid="codigos-navegacao">
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Código de navegação (liga as páginas do mesmo navegador, sem login; n- = cookie kazakora_navegacao, s- = sessão, antes de 25/10/2026):
+                            </p>
+                            <ul class="mt-1 flex flex-wrap gap-1.5">
+                                <li v-for="c in detalhe.dados.codigos" :key="c.codigo"
+                                    class="rounded-md border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-0.5 text-xs">
+                                    <span class="font-mono">{{ c.codigo }}</span>
+                                    <span class="ml-1 tabular-nums text-slate-400">{{ numero(c.paginas) }} {{ c.paginas === 1 ? 'página' : 'páginas' }}</span>
+                                </li>
+                            </ul>
+                        </div>
                         <p class="mt-2 text-xs text-slate-400">
                             Só aparecem cookies de identificação e marketing. Sessão, login e token de segurança nunca são gravados.
                         </p>
@@ -491,6 +503,8 @@ const confirmarApagar = () => {
                                 <td class="px-4 py-2" data-testid="visita-rota">
                                     <a :href="v.url" target="_blank" rel="noopener noreferrer" :title="v.url"
                                         class="break-all font-mono text-xs text-primary hover:underline">{{ v.path }}</a>
+                                    <span v-if="v.outro_ip" class="mt-0.5 block font-mono text-[11px] text-slate-400"
+                                        title="Mesmo navegador (cookie de navegação), aberto de outro IP">outro IP: {{ v.outro_ip }}</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <template v-if="v.cliente">

@@ -48,6 +48,7 @@ visita a loja.
 | `kazakora_cookies` | Necessário | lembra o OK | 12 meses | art. 8º § 2º |
 | `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_cupom_1a` | Necessário | lembra que o pop-up do cupom de 1ª compra do checkout já apareceu, para não mostrar de novo (2026-10-23). Gravado pelo navegador (JS), sem dado pessoal: só o valor `1` | 12 meses | art. 7º V |
+| `kazakora_navegacao` | Necessário | código aleatório (32 hex) criado no 1º acesso, sem login e sem OK; liga as páginas do mesmo navegador no registro de acesso (`site_visits.visitor_id` = `n-<código>`). `Cookies::visitanteSemOk`, pedido 2026-10-25 | 6 meses | art. 7º II e IX; Marco Civil art. 15 |
 | `kazakora_visitor` | Estatística | contar visitante único | 12 meses | art. 7º I (consentimento) |
 | `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Só carrega depois do OK (`resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
 
@@ -88,7 +89,7 @@ jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento apro
 |---|---|---|
 | página, data/hora | sim | sim |
 | IP | sim (Marco Civil) | sim |
-| visitante | código tirado da sessão (`s-...`), sem cookie novo | `kazakora_visitor` |
+| visitante | cookie necessário `kazakora_navegacao` (`n-...`, desde 25/10/2026; antes, código da sessão `s-...`) | `kazakora_visitor` |
 | navegador completo | **não** | sim |
 | aparelho (celular/tablet/computador) | sim | sim |
 | origem (site, sem `?...`) e UTM | sim | sim |
@@ -115,7 +116,7 @@ Contagem de visitantes (painel e Indicadores, `SiteVisit::visitantesPorDia`,
 pedido 2026-10-11), sem repetir a mesma pessoa/IP:
 - Com o OK: visitante único pelo cookie `kazakora_visitor` (fator principal).
   Dois cookies no mesmo IP são duas pessoas.
-- Sem o OK: o código da sessão muda a cada sessão, então conta um visitante
+- Sem o OK: o cookie de navegação (`n-...`) liga as páginas do mesmo navegador, mas a contagem segue um visitante
   por IP no dia.
 - Visita sem OK de um IP que no mesmo dia deu OK entra no cookie dele (quem
   navegou antes de dar OK não conta duas vezes). A página do OK já conta.

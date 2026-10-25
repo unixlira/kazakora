@@ -44,8 +44,8 @@ class CheckoutEvento extends Model
 
     /**
      * Mesmo visitante do log de visitas (TrackSiteVisit): cookie
-     * kazakora_visitor se a pessoa deu OK nos cookies, senão um código tirado
-     * da sessão. Aqui nunca se cria cookie.
+     * kazakora_visitor se a pessoa deu OK nos cookies, senão o cookie
+     * necessário de navegação (Cookies::visitanteSemOk, criado se faltar).
      */
     public static function visitante(Request $request): string
     {
@@ -53,7 +53,7 @@ class CheckoutEvento extends Model
             return substr($cookie, 0, 36);
         }
 
-        return 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
+        return Cookies::visitanteSemOk($request);
     }
 
     /**

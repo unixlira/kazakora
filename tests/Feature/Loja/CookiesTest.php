@@ -22,16 +22,43 @@ class CookiesTest extends TestCase
 
         $resposta->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('cookies.aceito', false))
-            ->assertCookieMissing(Cookies::COOKIE_VISITANTE);
+            ->assertCookieMissing(Cookies::COOKIE_VISITANTE)
+            ->assertCookie(Cookies::COOKIE_NAVEGACAO);
 
         $visita = SiteVisit::sole();
         $this->assertFalse($visita->consentiu);
-        $this->assertStringStartsWith('s-', $visita->visitor_id);
+        $this->assertStringStartsWith('n-', $visita->visitor_id);
         $this->assertNull($visita->user_agent);
         $this->assertNotNull($visita->ip);
         $this->assertSame('instagram', $visita->utm_source);
         $this->assertSame('black', $visita->utm_campaign);
         $this->assertSame('celular', $visita->dispositivo);
+    }
+
+    public function test_cookie_de_navegacao_liga_as_paginas_do_mesmo_navegador_sem_ok_e_sem_login(): void
+    {
+        // Pedido 2026-10-25: desde a primeira página, sem login e sem OK, as
+        // páginas do mesmo navegador ficam no mesmo visitante, mesmo trocando
+        // de sessão (o login regenera a sessão; ela some em 2 h).
+        $primeira = $this->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-entrega')
+            ->assertOk()
+            ->assertCookie(Cookies::COOKIE_NAVEGACAO)
+            ->assertCookieMissing(Cookies::COOKIE_VISITANTE);
+        $codigo = $primeira->getCookie(Cookies::COOKIE_NAVEGACAO)->getValue();
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $codigo);
+
+        // Navegador novo (outra sessão), mesmo cookie.
+        $this->flushSession();
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withCookie(Cookies::COOKIE_NAVEGACAO, $codigo)
+            ->get('/politica-de-privacidade')
+            ->assertOk();
+
+        $visitas = SiteVisit::query()->orderBy('id')->get();
+        $this->assertSame(['/politica-de-entrega', '/politica-de-privacidade'], $visitas->pluck('path')->all());
+        $this->assertSame(['n-'.$codigo], $visitas->pluck('visitor_id')->unique()->values()->all());
+        $this->assertFalse($visitas->contains('consentiu', true));
+        $this->assertNull($visitas->first()->cookies);
     }
 
     public function test_pixel_da_meta_vai_nas_props_para_o_front_so_carregar_apos_o_ok(): void

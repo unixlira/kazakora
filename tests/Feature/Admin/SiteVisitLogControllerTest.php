@@ -501,4 +501,31 @@ class SiteVisitLogControllerTest extends TestCase
         $this->assertSame('São Paulo', $local->buscar('177.67.80.1')['cidade']);
         $this->assertNull($local->buscar('8.8.8.8')['uf']);
     }
+
+    public function test_olho_segue_o_cookie_de_navegacao_em_outro_ip_e_a_lixeira_so_apaga_o_ip(): void
+    {
+        // Pedido 2026-10-25: o IPv6 do celular muda no meio da navegação; o
+        // código de navegação (n-...) liga as páginas do mesmo navegador.
+        $this->travelTo('2026-10-25 20:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('n-lead', '2026-10-25 10:00:00', '2804::1', '/', null, 1, false);
+        $this->visita('n-lead', '2026-10-25 10:01:00', '2804::1', '/produtos/caneca', null, 1, false);
+        $this->visita('n-lead', '2026-10-25 10:05:00', '2804::2', '/carrinho', null, 1, false);
+        $this->visita('n-outro', '2026-10-25 11:00:00', '2804::9', '/ofertas', null, 1, false);
+
+        $this->actingAs($admin)->getJson('/admin/visitas-site/visitante?de=2026-10-25&ate=2026-10-25&ip=2804::1')
+            ->assertOk()
+            ->assertJsonPath('total', 3)
+            ->assertJsonPath('de_outro_ip', 1)
+            ->assertJsonPath('visitas.0.path', '/')
+            ->assertJsonPath('visitas.0.outro_ip', null)
+            ->assertJsonPath('visitas.2.path', '/carrinho')
+            ->assertJsonPath('visitas.2.outro_ip', '2804::2')
+            ->assertJsonPath('codigos.0.codigo', 'n-lead')
+            ->assertJsonPath('codigos.0.paginas', 3);
+
+        $this->actingAs($admin)->delete('/admin/visitas-site/visitante', ['de' => '2026-10-25', 'ate' => '2026-10-25', 'ip' => '2804::1']);
+        $this->assertSame(['/carrinho', '/ofertas'], DB::table('site_visits')->orderBy('id')->pluck('path')->all());
+    }
 }

@@ -44,6 +44,13 @@ const cookies = [
         base: 'Execução de contrato (art. 7º, V)',
     },
     {
+        nome: 'kazakora_navegacao',
+        tipo: 'Necessário',
+        finalidade: 'Código aleatório criado no primeiro acesso que liga as páginas abertas pelo mesmo navegador no nosso registro de acesso (quais páginas e quantas), para segurança, prevenção de fraudes e atendimento. Não leva seu nome, e-mail nem CPF e não é enviado a terceiros.',
+        duracao: '6 meses',
+        base: 'Cumprimento de obrigação legal e legítimo interesse (art. 7º, II e IX; Marco Civil, art. 15)',
+    },
+    {
         nome: 'kazakora_visitor',
         tipo: 'Estatística',
         finalidade: 'Código aleatório que conta visitas e páginas vistas para melhorarmos a loja. Não identifica você pelo nome e só é criado depois do seu aceite ao finalizar a compra.',
@@ -123,8 +130,9 @@ const cookies = [
 
                 <LegalCard title="Registros de acesso (Marco Civil da Internet)">
                     <p>
-                        Por obrigação legal (art. 15 da Lei nº 12.965/14), guardamos o endereço IP, a data e a hora de cada acesso
-                        à loja por <strong>6 meses</strong>, em sigilo, e só entregamos por ordem judicial. Depois desse prazo, o IP
+                        Por obrigação legal (art. 15 da Lei nº 12.965/14), guardamos o endereço IP, a data, a hora e a página de cada
+                        acesso à loja por <strong>6 meses</strong>, em sigilo, e só entregamos por ordem judicial. O cookie necessário
+                        <strong>kazakora_navegacao</strong> liga esses acessos do mesmo navegador desde a primeira página, com ou sem login. Depois desse prazo, o IP
                         e os dados do navegador são apagados automaticamente; ficam só números gerais, sem identificar ninguém.
                     </p>
                 </LegalCard>

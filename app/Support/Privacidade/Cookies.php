@@ -14,6 +14,11 @@ use Illuminate\Support\Str;
  * - Necessários (sessão, XSRF-TOKEN e este cookie de OK): funcionam sem o
  *   OK — sem eles a loja não abre carrinho, login nem checkout.
  * - Estatística (kazakora_visitor): só depois do OK.
+ * - Navegação (kazakora_navegacao, pedido 2026-10-25): necessário, criado no
+ *   primeiro acesso. Código aleatório que liga as páginas do mesmo navegador
+ *   no registro de acesso (Marco Civil), sem login e sem OK; não leva nome,
+ *   e-mail nem CPF. Antes dele o visitante sem OK era a sessão, que muda no
+ *   login e some em 2 h, e o histórico do olho se partia.
  *
  * Desde 2026-10-24 não há mais aviso flutuante: o aceite vem junto com o
  * "Finalizar pedido" (frase abaixo do botão) e é gravado por registrarAceite().
@@ -34,6 +39,12 @@ class Cookies
 
     /** Identificador aleatório de visitante, só para estatística. */
     public const COOKIE_VISITANTE = 'kazakora_visitor';
+
+    /** Código de navegação do registro de acesso (necessário, sem OK). */
+    public const COOKIE_NAVEGACAO = 'kazakora_navegacao';
+
+    /** 6 meses, o mesmo prazo do registro de acesso (Marco Civil, art. 15). */
+    public const DURACAO_NAVEGACAO_MINUTOS = 60 * 24 * 183;
 
     /** 12 meses: depois disso o aviso aparece de novo. */
     public const DURACAO_MINUTOS = 60 * 24 * 365;
@@ -95,6 +106,25 @@ class Cookies
         }
 
         return $visitante;
+    }
+
+    /**
+     * Visitante sem o OK: o código do cookie de navegação, com prefixo "n-".
+     * Sem o cookie (primeiro acesso), cria agora e já marca na requisição,
+     * para o log de visitas, o funil e a localização desta mesma resposta
+     * usarem o mesmo código.
+     */
+    public static function visitanteSemOk(Request $request): string
+    {
+        $codigo = $request->cookie(self::COOKIE_NAVEGACAO);
+
+        if (! is_string($codigo) || preg_match('/^[a-f0-9]{32}$/', $codigo) !== 1) {
+            $codigo = bin2hex(random_bytes(16));
+            Cookie::queue(self::COOKIE_NAVEGACAO, $codigo, self::DURACAO_NAVEGACAO_MINUTOS);
+            $request->cookies->set(self::COOKIE_NAVEGACAO, $codigo);
+        }
+
+        return 'n-'.$codigo;
     }
 
     public static function registravel(string $nome): bool

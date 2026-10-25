@@ -18,8 +18,9 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * - Sempre: IP, data/hora e página — é o registro de acesso que o Marco
  *   Civil da Internet (Lei 12.965/2014, art. 15) obriga a loja a guardar
- *   por 6 meses. Sem o OK, o "visitante" é um código tirado da sessão (sem
- *   cookie novo) e o navegador fica de fora.
+ *   por 6 meses. Sem o OK, o "visitante" é o cookie necessário de navegação
+ *   (kazakora_navegacao, "n-...", desde 2026-10-25; antes era a sessão,
+ *   "s-...") e o navegador fica de fora.
  * - Com o OK: cookie de visitante (kazakora_visitor), navegador completo e
  *   os cookies permitidos do visitante (Cookies::COOKIES_REGISTRAVEIS,
  *   coluna site_visits.cookies, pedido 2026-10-12). Sem o OK nenhum cookie
@@ -73,7 +74,7 @@ class TrackSiteVisit
                 Cookie::queue(self::VISITOR_COOKIE, $visitorId, Cookies::DURACAO_MINUTOS);
             }
         } else {
-            $visitorId = 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
+            $visitorId = Cookies::visitanteSemOk($request);
         }
 
         $referer = $request->headers->get('referer');

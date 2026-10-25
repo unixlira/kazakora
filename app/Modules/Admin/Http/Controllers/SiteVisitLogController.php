@@ -54,6 +54,12 @@ use Inertia\Response;
  * Rotas do visitante (pedido 2026-10-25): o histórico volta a mostrar a
  * página (path, com link para a loja) de cada acesso, numerado em ordem
  * de horário.
+ *
+ * Mesmo navegador em outro IP (pedido 2026-10-25): o olho de um IP também
+ * traz as visitas dos mesmos códigos de visitante (cookie de navegação
+ * kazakora_navegacao ou kazakora_visitor) feitas de outro IP no período,
+ * porque o IPv6 do celular muda no meio da navegação. Essas linhas mostram
+ * o IP. A lixeira continua apagando só o IP da linha.
  */
 class SiteVisitLogController extends Controller
 {
@@ -70,6 +76,9 @@ class SiteVisitLogController extends Controller
 
     /** Visitas de fora (não internas) lidas para o "De onde veio" do olho. */
     private const MAX_ENTRADAS = 500;
+
+    /** Códigos de visitante de um IP que o olho segue em outros IPs (IP de operadora junta muita gente). */
+    private const MAX_CODIGOS_DO_IP = 50;
 
     /** Agrupa visitas sem IP (anonimizadas) pelo cookie; com IP, o IP basta. */
     private const CHAVE_ANONIMO = 'CASE WHEN ip IS NULL THEN visitor_id END';
@@ -199,7 +208,7 @@ class SiteVisitLogController extends Controller
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim);
 
-        $query = $this->doVisitante($periodo(), $validated);
+        $query = $this->historicoDoVisitante($periodo(), $periodo(), $validated);
         if (! (bool) ($validated['todos'] ?? false)) {
             $this->tirarEquipeERobos($query, $periodo());
         }
@@ -222,6 +231,8 @@ class SiteVisitLogController extends Controller
                 'quando' => $v->created_at?->format('d/m/Y H:i:s'),
                 'path' => $v->path,
                 'url' => $site.$v->path,
+                // Só quando a visita veio de outro IP do mesmo navegador.
+                'outro_ip' => isset($validated['ip']) && $v->ip !== $validated['ip'] ? ($v->ip ?? 'anonimizado') : null,
                 'cliente' => $v->user?->name,
                 'cpf' => filled($v->user?->cpf),
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),
@@ -262,6 +273,17 @@ class SiteVisitLogController extends Controller
             // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
             'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),
             'cookies' => $cookies,
+            // Códigos que ligam as páginas: n-... = cookie de navegação (sem OK,
+            // desde 2026-10-25), s-... = sessão (antes disso), UUID = kazakora_visitor.
+            'codigos' => (clone $query)->toBase()
+                ->selectRaw('visitor_id, COUNT(*) as paginas')
+                ->where('visitor_id', '!=', 'anonimo')
+                ->groupBy('visitor_id')
+                ->orderByDesc('paginas')
+                ->limit(20)
+                ->get()
+                ->map(fn ($c) => ['codigo' => $c->visitor_id, 'paginas' => (int) $c->paginas])
+                ->values(),
             // Cliques nos selos do rodapé, somados nas visitas do período (2026-10-25).
             'selos' => [
                 'google' => (int) (clone $query)->sum('cliques_selo_google'),
@@ -274,6 +296,7 @@ class SiteVisitLogController extends Controller
             'de' => $de->format('d/m/Y'),
             'ate' => $ate->format('d/m/Y'),
             'total' => $total,
+            'de_outro_ip' => isset($validated['ip']) ? (clone $query)->where(fn (Builder $q) => $q->whereNull('ip')->orWhere('ip', '!=', $validated['ip']))->count() : 0,
             'pagina' => $paginaAtual,
             'paginas' => $paginas,
             'por_pagina' => self::POR_PAGINA_HISTORICO,
@@ -457,6 +480,27 @@ class SiteVisitLogController extends Controller
         return isset($validated['ip'])
             ? $query->where('ip', $validated['ip'])
             : $query->whereNull('ip')->where('visitor_id', $validated['visitor_id']);
+    }
+
+    /**
+     * Histórico do olho: o IP mais as visitas, de outro IP, dos códigos de
+     * visitante vistos nesse IP no período ("anonimo", das visitas com mais
+     * de 6 meses, não liga nada).
+     */
+    private function historicoDoVisitante(Builder $query, Builder $periodo, array $validated): Builder
+    {
+        if (! isset($validated['ip'])) {
+            return $this->doVisitante($query, $validated);
+        }
+
+        $codigos = $periodo->where('ip', $validated['ip'])
+            ->where('visitor_id', '!=', 'anonimo')
+            ->distinct()
+            ->limit(self::MAX_CODIGOS_DO_IP)
+            ->pluck('visitor_id');
+
+        return $query->where(fn (Builder $q) => $q->where('ip', $validated['ip'])
+            ->when($codigos->isNotEmpty(), fn (Builder $q) => $q->orWhereIn('visitor_id', $codigos->all())));
     }
 
     /**

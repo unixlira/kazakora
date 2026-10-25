@@ -82,7 +82,8 @@ return [
     | Pop-up de cupom no checkout (pedido 2026-10-23, modelo Yampi). Código de
     | um cupom JÁ cadastrado em Admin > Cupons; vazio usa o cupom_automatico
     | (BEMVINDO, 2026-10-24). Inexistente, inativo ou que não vale para o
-    | carrinho: o pop-up não aparece. Aparece uma vez só por navegador (cookie).
+    | carrinho: o pop-up não aparece. Aparece toda vez que o checkout abre sem
+    | cupom (desde 2026-10-25; antes era uma vez por navegador).
     */
     'cupom_primeira_compra' => env('LOJA_CUPOM_PRIMEIRA_COMPRA'),
 

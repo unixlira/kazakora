@@ -8,7 +8,6 @@ use App\Modules\Analytics\Support\OrigemVisita;
 use App\Support\Privacidade\Cookies;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -18,12 +17,14 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * - Sempre: IP, data/hora e página — é o registro de acesso que o Marco
  *   Civil da Internet (Lei 12.965/2014, art. 15) obriga a loja a guardar
- *   por 6 meses. Sem o OK, o "visitante" é um código tirado da sessão (sem
- *   cookie novo) e o navegador fica de fora.
- * - Com o OK: cookie de visitante (kazakora_visitor), navegador completo e
+ *   por 6 meses.
+ * - Sempre, desde 2026-10-25: cookie de visitante (kazakora_visitor) criado
+ *   no primeiro acesso (Cookies::garantirVisitante), para o histórico de
+ *   páginas do visitante existir desde a entrada no site.
+ * - Com o OK: navegador completo e
  *   os cookies permitidos do visitante (Cookies::COOKIES_REGISTRAVEIS,
- *   coluna site_visits.cookies, pedido 2026-10-12). Sem o OK nenhum cookie
- *   é gravado.
+ *   coluna site_visits.cookies, pedido 2026-10-12). Sem o OK a coluna
+ *   cookies fica vazia.
  * - Em todos: origem (UTM), aparelho (celular/tablet/computador) e o site
  *   de onde veio sem o "?..." (pode ter dado pessoal).
  * - Em todos: a origem classificada (OrigemVisita: Instagram, Google Ads,
@@ -43,8 +44,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class TrackSiteVisit
 {
-    private const VISITOR_COOKIE = Cookies::COOKIE_VISITANTE;
-
     /**
      * Robôs e programas que não são navegador (pedido 2026-10-12: curl,
      * scanners e monitores entravam como visita "Direto").
@@ -53,6 +52,12 @@ class TrackSiteVisit
 
     public function handle(Request $request, Closure $next): Response
     {
+        // O cookie de visitante nasce antes da página, para o resto da
+        // requisição (geolocalização, lead, checkout) já usar o mesmo código.
+        if ($request->isMethod('get') && $this->paginaDaLoja($request)) {
+            rescue(fn () => Cookies::garantirVisitante($request), null, false);
+        }
+
         $response = $next($request);
 
         if ($this->shouldTrack($request, $response)) {
@@ -65,16 +70,7 @@ class TrackSiteVisit
     private function registrar(Request $request): void
     {
         $consentiu = Cookies::aceitou($request);
-
-        if ($consentiu) {
-            $visitorId = $request->cookie(self::VISITOR_COOKIE) ?: (string) Str::uuid();
-
-            if (! $request->cookie(self::VISITOR_COOKIE)) {
-                Cookie::queue(self::VISITOR_COOKIE, $visitorId, Cookies::DURACAO_MINUTOS);
-            }
-        } else {
-            $visitorId = 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
-        }
+        $visitorId = Cookies::visitante($request);
 
         $referer = $request->headers->get('referer');
 
@@ -185,15 +181,21 @@ class TrackSiteVisit
         // Só o site da loja (pedido 2026-10-11: "é somente o kazakora.com,
         // não misturar com nenhuma plataforma"): acesso pelo IP, pelo
         // homolog ou por outro domínio apontado pra cá não conta.
+        if (! $this->paginaDaLoja($request)) {
+            return false;
+        }
+
+        return ! $request->headers->has('X-Inertia-Partial-Component');
+    }
+
+    /** Página da loja aberta por navegador: domínio da loja, fora do admin e dos arquivos. */
+    private function paginaDaLoja(Request $request): bool
+    {
         if (! self::dominioDaLoja($request)) {
             return false;
         }
 
         if ($request->is('admin*') || $request->is('build/*') || $request->is('storage/*')) {
-            return false;
-        }
-
-        if ($request->headers->has('X-Inertia-Partial-Component')) {
             return false;
         }
 

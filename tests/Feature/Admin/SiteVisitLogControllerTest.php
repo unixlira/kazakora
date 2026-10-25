@@ -339,6 +339,34 @@ class SiteVisitLogControllerTest extends TestCase
         $this->assertStringNotContainsString('segredo', $resposta->getContent());
     }
 
+    public function test_olho_mostra_pagina_de_cada_visita_e_rotas_visitadas(): void
+    {
+        $this->travelTo('2026-10-25 15:00:00');
+        config(['app.url' => 'https://kazakora.com']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('ana', '2026-10-25 10:00:00', '1.1.1.1', '/');
+        $this->visita('ana', '2026-10-25 10:01:00', '1.1.1.1', '/produtos/caneca', null, 3, false);
+        $this->visita('ana', '2026-10-25 10:05:00', '1.1.1.1', '/checkout', null, 1, false);
+        $this->visita('bia', '2026-10-25 11:00:00', '1.1.1.1', '/carrinho', null, 1, false);
+        // Outro IP não entra.
+        $this->visita('caio', '2026-10-25 10:00:00', '2.2.2.2', '/contato');
+
+        $this->actingAs($admin)
+            ->getJson('/admin/visitas-site/visitante?de=2026-10-25&ate=2026-10-25&ip=1.1.1.1')
+            ->assertOk()
+            ->assertJsonPath('total', 6)
+            ->assertJsonPath('visitas.0.path', '/')
+            ->assertJsonPath('visitas.1.path', '/produtos/caneca')
+            ->assertJsonPath('visitas.1.url', 'https://kazakora.com/produtos/caneca')
+            ->assertJsonPath('rotas.distintas', 4)
+            ->assertJsonPath('rotas.lista.0.path', '/produtos/caneca')
+            ->assertJsonPath('rotas.lista.0.vezes', 3)
+            ->assertJsonPath('rotas.lista.0.ultima', '25/10/2026 10:01')
+            ->assertJsonPath('visitantes', 2)
+            ->assertJsonMissing(['path' => '/contato']);
+    }
+
     public function test_olho_sem_cookies_devolve_lista_vazia(): void
     {
         $this->travelTo('2026-10-12 15:00:00');

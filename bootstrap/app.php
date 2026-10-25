@@ -56,6 +56,8 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\AtivarFreteEmbutido::class,
             HandleInertiaRequests::class,
             TrackSiteVisit::class,
+            // Lugar aproximado do IP por sessão, base do frete pela localização (2026-10-24).
+            \App\Http\Middleware\RegistrarGeoDoVisitante::class,
             PreventBrowserCaching::class,
             ExpireStaleSession::class,
             GuardarCupomDaUrl::class,

@@ -904,7 +904,7 @@ const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item
 // conta como um item a mais. O aviso de "itens na mesma caixa" segue só com os físicos.
 const totalProdutosResumo = computed(() => totalItens.value + (props.livrosBrinde ? 1 : 0));
 const precoUnitario = (item) => (item.quantity > 0 ? item.subtotal / item.quantity : item.subtotal);
-// Selo do item e relógio do topo só com oferta de verdade: Oferta Relâmpago
+// Selo do item só com oferta de verdade: Oferta Relâmpago
 // (fim vindo do servidor) ou Oferta do Dia (vale até 23:59:59 de hoje em SP).
 const fimDaOfertaDoDia = () => `${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })}T23:59:59-03:00`;
 const ofertaDoItem = (item) => {
@@ -912,11 +912,6 @@ const ofertaDoItem = (item) => {
     if (item.product?.oferta_do_dia) return { nome: 'Oferta do Dia', fim: fimDaOfertaDoDia() };
     return null;
 };
-// A que acaba primeiro entre as do carrinho.
-const ofertaFim = computed(() => itens.value
-    .map((item) => ofertaDoItem(item)?.fim)
-    .filter(Boolean)
-    .sort((a, b) => new Date(a) - new Date(b))[0] ?? null);
 
 const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
     ? round2(totalCartao.value - descontoPixCalculado.value)
@@ -941,7 +936,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 <template>
     <Head title="Finalize sua compra" />
 
-    <CheckoutLayout :oferta-fim="props.order ? null : ofertaFim" :sem-relogio="!!props.order">
+    <CheckoutLayout :sem-relogio="!!props.order">
         <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
         <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
             :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">

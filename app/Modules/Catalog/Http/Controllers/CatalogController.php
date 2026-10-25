@@ -207,6 +207,7 @@ class CatalogController extends Controller
                 ->orWhere('brand', 'like', $termo)
                 ->orWhere('model', 'like', $termo)
                 ->orWhere('sku', 'like', $termo)
+                ->orWhere('tags', 'like', $termo)
                 ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
         }
     }

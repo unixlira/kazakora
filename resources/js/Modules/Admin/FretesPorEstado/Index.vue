@@ -432,7 +432,7 @@ const campos = [
                                     <th scope="col" class="px-4 py-2 text-right font-semibold">Prazo</th>
                                     <th scope="col" class="px-4 py-2 text-right font-semibold">Correios contrato</th>
                                     <th scope="col" class="px-4 py-2 text-right font-semibold">Diferença</th>
-                                    <th scope="col" class="px-4 py-2"><span class="sr-only">Opções</span></th>
+                                    <th scope="col" class="px-4 py-2 text-right font-semibold">Cidades</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -465,15 +465,30 @@ const campos = [
                                             <template v-else>—</template>
                                         </td>
                                         <td class="px-4 py-2 text-right">
-                                            <button
-                                                v-if="l.opcoes.length > 1"
-                                                type="button"
-                                                class="whitespace-nowrap text-xs font-semibold text-primary hover:underline"
-                                                :aria-expanded="!!abertos[l.uf]"
-                                                @click="abertos[l.uf] = !abertos[l.uf]"
-                                            >
-                                                {{ abertos[l.uf] ? 'ocultar' : `ver todas (${l.opcoes.length})` }}
-                                            </button>
+                                            <span class="inline-flex items-center justify-end gap-2">
+                                                <button
+                                                    v-if="l.opcoes.length > 1"
+                                                    type="button"
+                                                    class="whitespace-nowrap text-xs font-semibold text-primary hover:underline"
+                                                    :aria-expanded="!!abertos[l.uf]"
+                                                    @click="abertos[l.uf] = !abertos[l.uf]"
+                                                >
+                                                    {{ abertos[l.uf] ? 'ocultar' : `ver todas (${l.opcoes.length})` }}
+                                                </button>
+                                                <Link
+                                                    :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`"
+                                                    class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
+                                                    :title="`Ver as cidades de ${l.estado}`"
+                                                    :aria-label="`Ver as cidades de ${l.estado}`"
+                                                >
+                                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                                    <span
+                                                        v-if="regrasPorUf[l.uf]"
+                                                        class="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-green-600 px-1 text-[10px] font-bold leading-4 text-white"
+                                                        :title="`${regrasPorUf[l.uf]} com regra própria`"
+                                                    >{{ regrasPorUf[l.uf] }}</span>
+                                                </Link>
+                                            </span>
                                         </td>
                                     </tr>
                                     <tr v-if="abertos[l.uf]" class="bg-slate-50 dark:bg-slate-900/40">
@@ -496,6 +511,7 @@ const campos = [
                     <p class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
                         "Correios contrato" é o mais barato entre PAC e SEDEX da aba Correios para o mesmo pacote. Diferença em verde: o Melhor Envio sai mais barato.
                         Prazo em dias úteis. Valores guardados por 6 horas.
+                        <i class="fas fa-eye ml-1 text-primary" aria-hidden="true"></i> = cidades do estado.
                     </p>
                 </section>
             </template>

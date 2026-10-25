@@ -7,9 +7,10 @@
 // (pedido do Lira 2026-10-24, modelo Mavo), guardados no navegador para não
 // recomeçar ao atualizar. Zerou na tela, a barra some; na próxima visita recomeça. Desde 2026-10-25 não usa mais o
 // fim da Oferta Relâmpago do carrinho: mostrava 568:47:51 (oferta de 23 dias).
-// Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
-// da loja (no celular, desde 2026-10-24: selos e depois sanfonas de pagamento
-// e dados da empresa). Sem menu, busca e rodapé da loja. Sempre claro (cores fixas).
+// Rodapé TOTALMENTE estático desde 2026-10-25 (pedido do Lira): só texto e
+// imagens, sem link nem sanfona, igual em todas as telas. No celular as
+// bandeiras e os selos ficam sempre centralizados. Sem menu, busca e rodapé
+// da loja. Sempre claro (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -21,30 +22,6 @@ const props = defineProps({
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
-
-// Menus do rodapé no celular (pedido 2026-10-24). Abrem em outra aba para o
-// cliente não perder o pagamento em andamento.
-const MENUS_RODAPE = [
-    {
-        titulo: 'Institucional',
-        links: [
-            { texto: 'Termos de Uso', href: '/termos-de-uso' },
-            { texto: 'Política de Privacidade', href: '/politica-de-privacidade' },
-            { texto: 'Política de Cookies', href: '/politica-de-cookies' },
-            { texto: 'Política de Entrega', href: '/politica-de-entrega' },
-            { texto: 'Trocas e Devoluções', href: '/trocas-e-devolucoes' },
-        ],
-    },
-    {
-        titulo: 'Atendimento',
-        links: [
-            { texto: 'Fale Conosco', href: '/fale-conosco' },
-            { texto: 'Rastrear pedido', href: '/rastreio' },
-            { texto: 'WhatsApp', href: COMPANY.whatsappLink },
-            { texto: 'E-mail', href: `mailto:${COMPANY.email}`, mesmaAba: true },
-        ],
-    },
-];
 
 const RELOGIO_MINUTOS = 30;
 const RELOGIO_CHAVE = 'kz_checkout_relogio_fim';
@@ -106,90 +83,40 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
         <slot />
 
         <footer class="mt-auto px-4 pb-10 pt-2">
+            <!-- Rodapé estático (2026-10-25): nada clicável, só texto e imagens. -->
             <div class="mx-auto max-w-[1200px] border-t border-slate-300/70 pt-8 text-center">
-                <!-- No computador as bandeiras ficam abertas; no celular vão para a sanfona "Formas de Pagamento". -->
-                <div class="hidden md:block">
-                    <!-- Sem link "Problemas no pagamento?" no computador (pedido 2026-10-25): o rodapé não tira o foco dos botões de pagamento. -->
-                    <p class="text-sm font-medium text-slate-600">Formas de pagamento</p>
-                    <ul class="mx-auto mt-3 flex max-w-[420px] flex-nowrap items-center justify-center gap-1.5" aria-label="Bandeiras aceitas">
-                        <li v-for="bandeira in BANDEIRAS" :key="bandeira" class="min-w-0 flex-1">
-                            <img :src="`/images/payments/novas/${bandeira}.webp`" :alt="bandeira" width="249" height="167" loading="lazy" class="h-auto w-full rounded-[6px] border border-slate-200 bg-white">
-                        </li>
-                    </ul>
-                </div>
+                <p class="text-sm font-medium text-slate-600">Formas de pagamento</p>
+                <ul class="mx-auto mt-3 flex max-w-[420px] flex-wrap items-center justify-center gap-1.5" aria-label="Bandeiras aceitas">
+                    <li v-for="bandeira in BANDEIRAS" :key="bandeira" class="w-[calc(25%-0.3rem)] sm:w-auto sm:min-w-0 sm:flex-1">
+                        <img :src="`/images/payments/novas/${bandeira}.webp`" :alt="bandeira" width="249" height="167" loading="lazy" class="mx-auto h-auto w-full rounded-[6px] border border-slate-200 bg-white">
+                    </li>
+                </ul>
 
-                <!-- Selos do checkout (no celular são a primeira linha do rodapé). RA Verificada: o mesmo selo oficial do rodapé da loja (2026-10-24, no lugar da imagem com QR Code); abre em outra aba, o cliente não sai do pagamento. -->
-                <div class="flex items-center justify-center gap-2 md:mt-5">
+                <!-- Selos sem link (o RA também, com semLink). -->
+                <div class="mt-5 flex flex-wrap items-center justify-center gap-2">
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-7 w-auto">
                     </div>
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
-                        <SeloReclameAqui :altura="28" />
+                        <SeloReclameAqui :altura="28" sem-link />
                     </div>
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-6 w-auto">
                     </div>
                 </div>
 
-                <!-- Só no celular: menus sanfona com <details> nativo (teclado e leitor de tela de graça).
-                     Ordem pedida em 2026-10-24: selos, Formas de Pagamento, Dados da Empresa, depois Institucional e Atendimento. -->
-                <nav class="mx-auto mt-6 max-w-[420px] space-y-2 text-left md:hidden" aria-label="Pagamento, empresa, institucional e atendimento">
-                    <details class="rodape-menu rounded-[8px] border border-slate-200 bg-white">
-                        <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold text-slate-700">
-                            Formas de Pagamento
-                            <i class="fa-solid fa-chevron-down rodape-menu-seta text-xs text-slate-500 transition-transform" aria-hidden="true"></i>
-                        </summary>
-                        <ul class="grid grid-cols-4 gap-1.5 border-t border-slate-200 p-3" aria-label="Bandeiras aceitas">
-                            <li v-for="bandeira in BANDEIRAS" :key="bandeira">
-                                <img :src="`/images/payments/novas/${bandeira}.webp`" :alt="bandeira" width="249" height="167" loading="lazy" class="h-auto w-full rounded-[6px] border border-slate-200 bg-white">
-                            </li>
-                        </ul>
-                    </details>
-                    <details class="rodape-menu rounded-[8px] border border-slate-200 bg-white">
-                        <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold text-slate-700">
-                            Dados da Empresa
-                            <i class="fa-solid fa-chevron-down rodape-menu-seta text-xs text-slate-500 transition-transform" aria-hidden="true"></i>
-                        </summary>
-                        <dl class="space-y-2 border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-                            <div><dt class="font-semibold text-slate-700">Loja</dt><dd>{{ COMPANY.nomeFantasia }} | Grupo AlphaKora: kazakora.com</dd></div>
-                            <div><dt class="font-semibold text-slate-700">CNPJ</dt><dd>{{ COMPANY.cnpj }}</dd></div>
-                            <div><dt class="font-semibold text-slate-700">Endereço</dt><dd>{{ COMPANY.enderecoCompleto }}</dd></div>
-                            <div><dt class="font-semibold text-slate-700">Contato</dt><dd>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</dd></div>
-                            <div><dt class="font-semibold text-slate-700">Horário</dt><dd>{{ COMPANY.horario }}</dd></div>
-                        </dl>
-                    </details>
-                    <details v-for="menu in MENUS_RODAPE" :key="menu.titulo" class="rodape-menu rounded-[8px] border border-slate-200 bg-white">
-                        <summary class="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-4 text-sm font-semibold text-slate-700">
-                            {{ menu.titulo }}
-                            <i class="fa-solid fa-chevron-down rodape-menu-seta text-xs text-slate-500 transition-transform" aria-hidden="true"></i>
-                        </summary>
-                        <ul class="border-t border-slate-200 px-4 py-1 text-sm">
-                            <li v-for="link in menu.links" :key="link.href">
-                                <a :href="link.href" :target="link.mesmaAba ? null : '_blank'" rel="noopener" class="block py-2.5 text-slate-600 hover:text-slate-900">{{ link.texto }}</a>
-                            </li>
-                        </ul>
-                    </details>
-                </nav>
-
-                <div class="mt-6 hidden space-y-1 text-xs text-slate-600 md:block">
+                <div class="mt-6 space-y-1 text-xs text-slate-600">
                     <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
                     <p>{{ COMPANY.enderecoCompleto }}</p>
                     <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
                     <p>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
                 </div>
-                <p class="mt-5 text-xs text-slate-500 md:hidden">© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora</p>
             </div>
         </footer>
     </div>
 </template>
 
 <style scoped>
-.rodape-menu > summary::-webkit-details-marker {
-    display: none;
-}
-.rodape-menu[open] .rodape-menu-seta {
-    transform: rotate(180deg);
-}
 /* Barra do relógio: roxa (pedido 2026-10-24). */
 .checkout-oferta-relogio {
     background: #6D28D9;

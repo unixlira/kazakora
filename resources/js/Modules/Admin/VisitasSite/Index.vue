@@ -45,12 +45,6 @@ const marcas = (o) => [
     [o.click_id_param, o.click_id_param ? (o.click_id ?? 'sem valor (sem OK de cookies)') : null],
 ].filter(([nome, valor]) => nome && valor);
 
-const DISPOSITIVOS = {
-    celular: { label: 'Celular', icone: 'fa-mobile-screen' },
-    tablet: { label: 'Tablet', icone: 'fa-tablet-screen-button' },
-    computador: { label: 'Computador', icone: 'fa-desktop' },
-};
-
 const filtros = reactive({
     de: props.filtros.de ?? props.hoje,
     ate: props.filtros.ate ?? props.hoje,
@@ -158,8 +152,46 @@ const fecharDetalhe = () => {
     document.body.style.overflow = '';
 };
 
+// Ações de uma visita: cidades do estado do IP (base de IP do servidor + IBGE), paginadas.
+const cidades = reactive({ aberto: false, carregando: false, erro: '', ip: null, busca: '', dados: null });
+const corpoCidades = ref(null);
+
+const carregarCidades = async (pagina = 1) => {
+    const ip = cidades.ip;
+    Object.assign(cidades, { carregando: true, erro: '' });
+    const query = new URLSearchParams({ ip, ...(cidades.busca.trim() ? { busca: cidades.busca.trim() } : {}), ...(pagina > 1 ? { page: pagina } : {}) });
+    try {
+        const r = await fetch(`/admin/visitas-site/cidades?${query}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(dados.message || 'Não foi possível carregar as cidades.');
+        if (cidades.ip === ip) {
+            cidades.dados = dados;
+            if (corpoCidades.value) corpoCidades.value.scrollTop = 0;
+        }
+    } catch (e) {
+        if (cidades.ip === ip) cidades.erro = e.message;
+    } finally {
+        if (cidades.ip === ip) cidades.carregando = false;
+    }
+};
+
+const abrirCidades = (ip) => {
+    Object.assign(cidades, { aberto: true, ip, busca: '', dados: null });
+    document.body.style.overflow = 'hidden';
+    carregarCidades();
+};
+
+const fecharCidades = () => {
+    Object.assign(cidades, { aberto: false, ip: null });
+    if (!detalhe.aberto) document.body.style.overflow = '';
+};
+
 const onKeydown = (event) => {
-    if (event.key === 'Escape' && detalhe.aberto) fecharDetalhe();
+    if (event.key !== 'Escape') return;
+    if (cidades.aberto) fecharCidades();
+    else if (detalhe.aberto) fecharDetalhe();
 };
 onMounted(() => document.addEventListener('keydown', onKeydown));
 onUnmounted(() => {
@@ -195,7 +227,7 @@ const confirmarApagar = () => {
                 <h1 class="mb-1 text-2xl font-bold">Visitas Kazakora</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     Quem visitou o kazakora.com, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
-                    O olho mostra todas as páginas que a pessoa abriu. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).
+                    O olho mostra o histórico da pessoa e o mapa, as cidades do estado do IP. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).
                 </p>
             </div>
             <button type="button"
@@ -315,6 +347,7 @@ const confirmarApagar = () => {
                             <td class="whitespace-nowrap px-4 py-2.5">
                                 <div class="flex justify-end gap-1.5">
                                     <ActionIcon icon="fa-eye" label="Ver as páginas que abriu" color="slate" @click="abrirDetalhe(visita)" />
+                                    <ActionIcon v-if="visita.ip" icon="fa-map-location-dot" label="Ver as cidades do estado deste IP" color="slate" @click="abrirCidades(visita.ip)" />
                                     <ActionIcon icon="fa-trash" label="Apagar as visitas do período" color="red" @click="paraApagar = visita" />
                                 </div>
                             </td>
@@ -425,37 +458,14 @@ const confirmarApagar = () => {
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Horário</th>
-                                <th scope="col" class="px-4 py-3">Página</th>
-                                <th scope="col" class="px-4 py-3">Aparelho</th>
-                                <th scope="col" class="px-4 py-3">Origem</th>
-                                <th scope="col" class="px-4 py-3">Navegador</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
+                                <th scope="col" class="px-4 py-3">CPF</th>
+                                <th scope="col" class="px-4 py-3 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--surface-border)]">
                             <tr v-for="v in detalhe.dados.visitas" :key="v.id" class="align-top">
                                 <td class="whitespace-nowrap px-4 py-2 tabular-nums text-slate-500 dark:text-slate-400">{{ v.quando }}</td>
-                                <td class="px-4 py-2">
-                                    <a :href="v.url" target="_blank" rel="noopener noreferrer"
-                                        class="block max-w-xs truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
-                                        :title="v.path">{{ v.path }}</a>
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
-                                    <template v-if="DISPOSITIVOS[v.dispositivo]">
-                                        <i class="fas mr-1" :class="DISPOSITIVOS[v.dispositivo].icone" aria-hidden="true"></i>{{ DISPOSITIVOS[v.dispositivo].label }}
-                                    </template>
-                                    <span v-else class="text-slate-400">—</span>
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-2 text-xs">
-                                    <span v-if="v.origem.chave === 'interno'" class="text-slate-400" title="Clicou de outra página da loja">Interno</span>
-                                    <span v-else class="inline-block max-w-[14rem] truncate rounded-full px-2 py-0.5 font-medium align-middle"
-                                        :class="[corOrigem(v.origem.chave), v.origem.chave === 'sem_dado' ? 'italic' : '']"
-                                        :title="v.origem.referer || v.origem.rotulo">{{ v.origem.rotulo }}</span>
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
-                                    <template v-if="v.navegador">{{ v.navegador }}</template>
-                                    <span v-else class="text-slate-400" title="Sem o OK de cookies o navegador não é gravado">sem OK de cookies</span>
-                                </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <template v-if="v.cliente">
                                         {{ v.cliente }}
@@ -463,9 +473,21 @@ const confirmarApagar = () => {
                                     </template>
                                     <span v-else class="text-slate-400">—</span>
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-2 text-xs">
+                                    <span v-if="v.cpf" title="Cliente logado com CPF no cadastro"
+                                        class="rounded-full bg-green-100 px-2.5 py-0.5 font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Sim</span>
+                                    <span v-else :title="v.cliente ? 'Cliente logado sem CPF no cadastro' : 'Ninguém logado nesta visita'"
+                                        class="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">Não</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2">
+                                    <div class="flex justify-end">
+                                        <ActionIcon v-if="detalhe.linha?.ip" icon="fa-eye" label="Ver as cidades do estado deste IP" color="slate" @click="abrirCidades(detalhe.linha.ip)" />
+                                        <span v-else class="text-xs text-slate-400" title="IP apagado depois de 6 meses (privacidade)">sem IP</span>
+                                    </div>
+                                </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
+                                <td colspan="4" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -491,6 +513,94 @@ const confirmarApagar = () => {
                         </button>
                     </div>
                 </nav>
+            </div>
+        </div>
+
+        <!-- Cidades do estado do IP (Ações). Acima do histórico (z maior). -->
+        <div v-if="cidades.aberto" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="fecharCidades"></div>
+            <div role="dialog" aria-modal="true" aria-labelledby="cidades-titulo"
+                class="relative flex w-full max-w-2xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
+                style="max-height: 90vh;">
+                <div class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-6 py-4">
+                    <div>
+                        <h2 id="cidades-titulo" class="text-lg font-semibold">
+                            Cidades {{ cidades.dados?.estado ? `de ${cidades.dados.estado} (${cidades.dados.uf})` : 'do estado' }}
+                        </h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            IP <span class="font-mono text-xs">{{ cidades.ip }}</span>
+                            <template v-if="cidades.dados?.cidade_ip">, localização aproximada: {{ cidades.dados.cidade_ip }}</template>
+                            <template v-if="cidades.dados?.uf">, {{ numero(cidades.dados.total) }} {{ cidades.dados.total === 1 ? 'cidade' : 'cidades' }}</template>
+                        </p>
+                    </div>
+                    <button type="button"
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-[var(--surface-muted)]"
+                        aria-label="Fechar" @click="fecharCidades">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <form v-if="cidades.dados?.uf" class="flex gap-2 border-b border-[var(--surface-border)] px-6 py-3" @submit.prevent="carregarCidades()">
+                    <label for="cidades-busca" class="sr-only">Buscar cidade</label>
+                    <input id="cidades-busca" v-model="cidades.busca" type="search" autocomplete="off" placeholder="Buscar cidade…"
+                        class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm">
+                    <button type="submit" class="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                        <i class="fas fa-magnifying-glass mr-1" aria-hidden="true"></i> Buscar
+                    </button>
+                </form>
+
+                <div ref="corpoCidades" class="overflow-auto px-2 pb-2">
+                    <p v-if="cidades.carregando" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                        <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i> Carregando…
+                    </p>
+                    <p v-else-if="cidades.erro" class="px-4 py-10 text-center text-red-600">{{ cidades.erro }}</p>
+                    <p v-else-if="cidades.dados?.motivo" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">{{ cidades.dados.motivo }}</p>
+                    <table v-else-if="cidades.dados" class="w-full text-left text-sm">
+                        <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">Cidade</th>
+                                <th scope="col" class="px-4 py-3">Código IBGE</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--surface-border)]">
+                            <tr v-for="c in cidades.dados.cidades" :key="c.ibge" :class="c.do_ip ? 'bg-primary/10 font-semibold' : ''">
+                                <td class="px-4 py-2">
+                                    {{ c.nome }}
+                                    <span v-if="c.do_ip" class="ml-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-white">cidade do IP</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ c.ibge }}</td>
+                            </tr>
+                            <tr v-if="cidades.dados.cidades.length === 0">
+                                <td colspan="2" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma cidade com esse nome.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <nav v-if="cidades.dados && cidades.dados.paginas > 1"
+                    class="flex items-center justify-between gap-3 border-t border-[var(--surface-border)] px-6 py-3 text-sm"
+                    aria-label="Páginas das cidades">
+                    <p class="text-slate-500 dark:text-slate-400">
+                        Página <span class="font-semibold text-[var(--foreground)]">{{ cidades.dados.pagina }}</span>
+                        de <span class="font-semibold text-[var(--foreground)]">{{ cidades.dados.paginas }}</span>
+                        <span class="hidden sm:inline">({{ numero(cidades.dados.por_pagina) }} por página)</span>
+                    </p>
+                    <div class="flex gap-1">
+                        <button type="button" :disabled="cidades.carregando || cidades.dados.pagina <= 1"
+                            class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-slate-600 hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300"
+                            @click="carregarCidades(cidades.dados.pagina - 1)">
+                            <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i> Anterior
+                        </button>
+                        <button type="button" :disabled="cidades.carregando || cidades.dados.pagina >= cidades.dados.paginas"
+                            class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-slate-600 hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300"
+                            @click="carregarCidades(cidades.dados.pagina + 1)">
+                            Próxima <i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </nav>
+                <p class="border-t border-[var(--surface-border)] px-6 py-2 text-[11px] text-slate-400">
+                    Estado e cidade do IP são aproximados (celular costuma cair na cidade da operadora).
+                    <a href="https://db-ip.com" target="_blank" rel="noopener noreferrer" class="hover:underline">IP Geolocation by DB-IP</a>
+                </p>
             </div>
         </div>
 

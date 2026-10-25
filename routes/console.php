@@ -340,3 +340,7 @@ Schedule::command('marketplace:diagnostico')->cron('20 */3 * * *')->withoutOverl
 // Tabela de estados e municípios do IBGE usada na NF-e (2026-10-15):
 // atualiza 1x por mês; se a API falhar não apaga nada.
 Schedule::command('ibge:sincronizar')->monthlyOn(1, '04:10')->withoutOverlapping(30);
+
+// Base IP → estado da tela Visitas ao site (2026-10-24): a DB-IP publica
+// a do mês nos primeiros dias.
+Schedule::command('geoip:atualizar')->monthlyOn(5, '04:30')->withoutOverlapping(30);

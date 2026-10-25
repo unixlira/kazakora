@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Services;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Support\GatilhosAnuncio;
+use App\Modules\Catalog\Support\ModeloDescricaoParafusadeira;
 use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
@@ -480,17 +481,22 @@ class AnuncioConteudoService
             ? "Descrição cadastrada:\n{$descricao}"
             : 'Não há descrição cadastrada: escreva a partir do nome e do que dá pra ver nas imagens (olhe todas, inclusive textos e medidas impressos nelas).';
         $fonte = $temDescricao ? 'da descrição e do que dá pra ver nas imagens' : 'do nome e do que dá pra ver nas imagens (incluindo textos escritos nelas)';
-        $campoDescricao = $comDescricao
-            ? "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- ', e por último a seção 'Ficha técnica:' (regra da ficha técnica abaixo)\","
-            : '';
+        $kazakora = $loja === 'KazaKora';
+        // Desde 2026-10-25 a descrição da KazaKora segue o modelo da parafusadeira 18V.
+        $modelo = $comDescricao && $kazakora;
+        $campoDescricao = match (true) {
+            $modelo => "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro, no MODELO DA DESCRIÇÃO abaixo (gancho, vantagens com ✅, indicações de uso, ficha técnica, conteúdo da embalagem e fecho), com quebras de linha como no exemplo\",",
+            $comDescricao => "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- ', e por último a seção 'Ficha técnica:' (regra da ficha técnica abaixo)\",",
+            default => '',
+        };
         $dadosFicha = $ficha === []
             ? ''
             : "\n\nDados técnicos cadastrados (confiáveis, use exatamente como estão):\n".collect($ficha)->map(fn ($valor, $rotulo) => "- {$rotulo}: {$valor}")->implode("\n");
         // Gatilhos e emojis valem só para a KazaKora (pedido do Lira, 2026-10-19);
         // a Beauty Kora usa o mesmo serviço e continua sem emoji.
-        $kazakora = $loja === 'KazaKora';
         $semPreco = TextoIaSemPreco::regra();
         $estilo = $kazakora ? 'Sem HTML e sem markdown; emojis pertinentes em todos os textos (regra abaixo).' : 'Sem HTML, sem emojis, sem markdown.';
+        $modeloDescricao = $modelo ? "\n".ModeloDescricaoParafusadeira::regras()."\n" : '';
         $gatilhos = $kazakora ? "\n".GatilhosAnuncio::regras()."\n" : '';
         $etapas = $kazakora
             ? [' Gatilhos: necessidade, vontade e curiosidade.', ' Gatilhos: autoridade, prova social e reciprocidade.', ' Gatilhos: urgência e escassez.']
@@ -510,7 +516,7 @@ class AnuncioConteudoService
         - {$estilo}
         - {$semPreco}
         - Ficha técnica (vale para qualquer tipo de produto): inclua as informações técnicas que existirem, entre tamanho/medidas, peso, voltagem, marca, modelo e cor, vindas dos dados técnicos cadastrados, da descrição e das imagens (inclusive o que estiver impresso na embalagem). Cada item numa linha curta e clara, no formato "Rótulo: valor" (ex.: "Voltagem: Bivolt", "Cor: Preto"). Só os que você souber: item sem dado confiável fica de fora, nunca escreva "não informado" nem invente. Medidas da embalagem não são medidas do produto: só diga que são da embalagem. Sem a voltagem nos títulos dos blocos.
-        - {$this->regraFicha($comDescricao)}
+        - {$this->regraFicha($comDescricao, $kazakora)}
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
         - Use todas as imagens: um bloco para cada foto (até 10), na ordem que conta a história de venda, não na ordem das fotos.
         - "destaques" são as 3 promessas que aparecem com um check logo abaixo do nome do produto: o principal resultado, a principal facilidade e o que acompanha o produto.
@@ -518,7 +524,7 @@ class AnuncioConteudoService
           1) Desejo: 2 a 3 blocos que mostram o resultado e a cena de uso (antes e depois, o problema resolvido no dia a dia).{$etapas[0]}
           2) Quebra de objeção: os blocos do meio respondem, cada um, a uma dúvida real de quem está para comprar (funciona mesmo, potência, tamanho, manutenção, durabilidade), com título em forma de pergunta ou de resposta.{$etapas[1]}
           3) CTA: o último bloco fecha a venda com o que vem na caixa e um convite direto para comprar, sem prometer prazo, brinde, garantia ou desconto que não esteja nas informações acima.{$etapas[2]}
-        {$gatilhos}
+        {$gatilhos}{$modeloDescricao}
         {$this->regrasCta($loja)}
 
         Formato (JSON):
@@ -535,8 +541,12 @@ class AnuncioConteudoService
         TXT;
     }
 
-    private function regraFicha(bool $comDescricao): string
+    private function regraFicha(bool $comDescricao, bool $kazakora = false): string
     {
+        if ($comDescricao && $kazakora) {
+            return 'No campo "descricao", a seção "📋 FICHA TÉCNICA" segue o modelo da descrição (itens "🔹 Rótulo: valor", uma linha cada). Nos blocos, nos benefícios e nas dúvidas, cite um dado técnico sempre que ele ajudar a decidir a compra (ex.: tamanho, voltagem, compatibilidade).';
+        }
+
         return $comDescricao
             ? 'No campo "descricao", a seção "Ficha técnica:" fecha o texto, com um item por linha começando por "- ". Nos blocos, nos benefícios e nas dúvidas, cite um dado técnico sempre que ele ajudar a decidir a compra (ex.: tamanho, voltagem, compatibilidade).'
             : 'Nos blocos, nos benefícios e nas dúvidas, cite os dados técnicos sempre que ajudarem a decidir a compra (ex.: tamanho, voltagem, compatibilidade).';
@@ -655,7 +665,7 @@ class AnuncioConteudoService
             if (Str::endsWith($linha, ':') && mb_strlen($linha) <= 120) {
                 $secoes[] = $atual;
                 $atual = ['titulo' => rtrim($linha, ':'), 'textos' => [], 'itens' => []];
-            } elseif (preg_match('/^[-•]\s*(.+)$/u', $linha, $m)) {
+            } elseif (preg_match('/^(?:[-•]|✅|✔️?|🔹|📌)\s*(.+)$/u', $linha, $m)) {
                 $atual['itens'][] = $m[1];
             } else {
                 $atual['textos'][] = $linha;

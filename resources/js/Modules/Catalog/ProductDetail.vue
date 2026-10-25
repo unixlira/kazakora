@@ -196,14 +196,7 @@ const unitPriceForQuantity = (qty) => {
 const currentUnitPrice = computed(() => unitPriceForQuantity(quantity.value));
 const currentTotal = computed(() => currentUnitPrice.value * quantity.value);
 
-// Características: resumo curto na lateral (estilo Mercado Livre) + tabela completa mais abaixo.
-const keySpecs = computed(() => (props.product.ficha_tecnica ?? []).map(([label, value]) => ({ label, value })));
-
-const fullSpecs = computed(() => keySpecs.value);
-
-const scrollToSpecs = () => {
-    document.getElementById('caracteristicas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
+// Características (dimensões, peso, estoque) não aparecem mais na página (pedido 2026-10-25).
 
 // Quebra a descrição livre em blocos: parágrafos normais, ou um cabeçalho
 // ("Principais benefícios:") seguido de uma lista com marcadores ("- item").
@@ -485,7 +478,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span class="w-10 text-center text-sm font-semibold">{{ quantity }}</span>
                                     <button type="button" class="flex h-11 w-11 items-center justify-center text-store-fg-muted hover:text-store-fg" :disabled="quantity >= product.stock" @click="quantity = Math.min(product.stock, quantity + 1)"><i class="fas fa-plus text-xs"></i></button>
                                 </div>
-                                <p class="text-xs text-store-fg-muted">{{ Math.max(0, product.stock - quantity) }} disponíve{{ product.stock - quantity === 1 ? 'l' : 'is' }}</p>
+                                <!-- Quantidade em estoque nunca aparece para o cliente (pedido 2026-10-25). -->
                             </div>
                             <p v-if="product.stock > 0 && quantityDiscounts.length" class="mt-2 text-sm font-semibold text-store-fg">Total: {{ formatPrice(currentTotal) }}</p>
 
@@ -534,17 +527,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                             <p v-else class="text-left text-sm leading-relaxed text-store-fg-muted md:text-base">{{ block.text }}</p>
                         </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Características: tabela completa -->
-            <section v-if="fullSpecs.length" id="caracteristicas" class="mt-14 scroll-mt-24">
-                <h2 class="mb-6 text-center font-display text-2xl font-semibold text-store-fg md:text-3xl">Características</h2>
-                <div class="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-store-border">
-                    <div v-for="(spec, index) in fullSpecs" :key="spec.label" class="flex items-center justify-between gap-4 px-5 py-3 text-sm" :class="index % 2 === 0 ? 'bg-store-bg-raised' : 'bg-store-bg-sunken'">
-                        <span class="text-store-fg-muted">{{ spec.label }}</span>
-                        <span class="font-medium text-store-fg">{{ spec.value }}</span>
                     </div>
                 </div>
             </section>

@@ -55,6 +55,25 @@ class FichaTecnica
         return $linhas;
     }
 
+    /**
+     * Medidas da embalagem para o fim da descrição (pedido 2026-10-25, no
+     * lugar da tabela Informação adicional): "28C x 8L x 23A CM".
+     */
+    public static function dimensoesEmbalagem(Product $produto): ?string
+    {
+        $fiscal = self::medidas($produto);
+
+        $comprimento = (float) $fiscal?->profundidade_cm;
+        $largura = (float) $fiscal?->largura_cm;
+        $altura = (float) $fiscal?->altura_cm;
+
+        if ($comprimento <= 0 || $largura <= 0 || $altura <= 0) {
+            return null;
+        }
+
+        return self::numero($comprimento).'C x '.self::numero($largura).'L x '.self::numero($altura).'A CM';
+    }
+
     public static function voltagem(Product $produto): ?string
     {
         foreach ([$produto->variation, $produto->color, $produto->model] as $texto) {

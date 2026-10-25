@@ -25,6 +25,8 @@ Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram
 // metade do banco e deixavam o backup horário lento. Jobs falhos ficam 15 dias.
 Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');
+// Travas de frete vencidas há mais de 30 dias (pedido 2026-10-24).
+Schedule::command('model:prune', ['--model' => [\App\Modules\Checkout\Models\FreteTrava::class]])->dailyAt('03:58');
 Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(60);
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de

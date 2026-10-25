@@ -27,7 +27,7 @@ class FreteRegiao extends Model
 
     protected $table = 'frete_regioes';
 
-    protected $fillable = ['site', 'nome', 'prioridade', 'ativo', 'tipo_preco', 'valor', 'prazo_dias', 'servico', 'peso_min_g', 'peso_max_g'];
+    protected $fillable = ['site', 'nome', 'prioridade', 'ativo', 'tipo_preco', 'categoria', 'valor', 'prazo_dias', 'servico', 'peso_min_g', 'peso_max_g'];
 
     protected function casts(): array
     {

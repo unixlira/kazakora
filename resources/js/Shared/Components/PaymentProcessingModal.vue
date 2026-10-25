@@ -24,6 +24,8 @@ const props = defineProps({
 
 const emit = defineEmits(['retry']);
 
+const nomeDaLoja = import.meta.env.VITE_APP_NAME || 'KazaKora';
+
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -172,8 +174,15 @@ const copyPixCode = async () => {
                                 {{ copied ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
                             </button>
 
-                            <p class="mt-5 text-[11px] text-zinc-500">Pix processado por</p>
-                            <p class="text-lg font-black uppercase tracking-tight text-zinc-800">KAZA<span class="text-[#F27A2A]">KORA</span></p>
+                            <!-- Logo v5 (Ks laranja, resto branco) direto no fundo escuro
+                                 (pedido 2026-10-24); a logo do rodapé de cada loja. -->
+                            <div class="-mx-5 -mb-6 mt-6 flex items-center justify-center gap-3 rounded-b-lg bg-gradient-to-br from-[#1c1c1e] to-[#111] px-5 py-4 sm:-mx-8 sm:-mb-8" data-testid="pix-processado-por">
+                                <span class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+                                    <i class="fas fa-lock text-[10px] text-[#F27A2A]" aria-hidden="true"></i> Pix processado por
+                                </span>
+                                <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.webp'" :alt="nomeDaLoja"
+                                    width="136" height="24" class="h-6 w-auto">
+                            </div>
                         </div>
                     </div>
                 </template>

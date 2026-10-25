@@ -236,6 +236,10 @@ class CheckoutController extends Controller
             'prazo_gratis' => $entrega['prazo'] ?? null,
             'turbo' => $entrega['turbo'] ?? null,
             'opcoes' => PrazoPorCep::opcoes($prazo, $entrega),
+            // Página do produto (pedido 2026-10-24): Turbo de motoboy na área do Full em
+            // horário comercial; sábado depois das 13h e domingo, Flex também abaixo do Full.
+            'motoboy' => app(EntregaExpressa::class)->motoboy($cep),
+            'fim_de_semana' => app(EntregaExpressa::class)->fimDeSemana(),
         ]);
     }
 

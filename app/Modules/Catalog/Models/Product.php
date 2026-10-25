@@ -251,7 +251,7 @@ class Product extends Model
     public function variacoesAtivas(): HasMany
     {
         return $this->children()->where('is_active', true)
-            ->select(['id', 'parent_product_id', 'price', 'discount_percentage', 'discount_amount', 'checkout_discount_percentage', 'checkout_discount_amount', 'stock']);
+            ->select(['id', 'parent_product_id', 'price', 'discount_percentage', 'discount_amount', 'checkout_discount_percentage', 'checkout_discount_amount', 'stock', 'categoria_frete']);
     }
 
     /** Carrega as variações ativas do pai para o card mostrar o menor preço. */
@@ -377,6 +377,9 @@ class Product extends Model
                 'checkout_discount_percentage',
                 'checkout_discount_amount',
                 'stock',
+                // Sem ela o frete embutido do card ia pelos Correios e o da
+                // página pela tabela por localidade: preços diferentes (2026-10-25).
+                'categoria_frete',
                 'created_at',
             ])
             // Anúncio com variação mostra o menor preço (pedido 2026-10-16).

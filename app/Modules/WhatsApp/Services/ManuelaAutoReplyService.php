@@ -67,10 +67,12 @@ class ManuelaAutoReplyService
                 return [
                     'intent' => 'manuela_'.$remote['provider'],
                     'confidence' => 1.0,
-                    'reply' => ManuelaSaudacao::semTudoBem($remote['reply'], $message),
+                    'reply' => $remote['reply'] === '' ? '' : ManuelaSaudacao::semTudoBem($remote['reply'], $message),
                     'needs_human' => $remote['needs_human'] || $this->needsHuman(Str::lower(Str::ascii($message)), $this->settings->all()),
+                    'alerta_atendimento' => $remote['alerta_atendimento'],
+                    'rascunho' => $remote['rascunho'],
                     'needs_data' => [],
-                    'suggested_next_action' => $remote['needs_human'] ? 'handoff' : 'reply',
+                    'suggested_next_action' => $remote['alerta_atendimento'] ? 'alerta_atendimento' : ($remote['needs_human'] ? 'handoff' : 'reply'),
                     'sales_stage' => 'atendimento',
                     'source' => $remote['provider'],
                 ];
@@ -111,6 +113,7 @@ class ManuelaAutoReplyService
 
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
+        $alerta = ManuelaAgentClient::ALERT_TAG;
         $saudacao = ManuelaSaudacao::regra($s['brand_name']);
         $tom = ManuelaTom::regra();
         $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
@@ -131,12 +134,14 @@ Você trabalha com vendas: o assunto da conversa são os produtos da loja. Siga 
 1. O cliente falou de um produto (que viu no Instagram, num vídeo, ouviu falar, quer comprar, tem dúvida): chame buscar_produto com as palavras que descrevem o produto. Nunca diga que a loja não tem um produto sem ter buscado.
 2. A busca achou: pergunte se é aquele produto, citando o nome (ex: "É a Webcam Full HD 1080p? Quer mais informações sobre ela?"). Se vierem 2 ou 3 parecidos, cite os nomes e pergunte qual é. Ainda não despeje a descrição.
 3. O cliente confirmou: chame abrir_produto e pergunte qual é a dúvida dele. Se ele já tinha feito a pergunta antes, responda direto.
-4. A dúvida: responda SÓ com o que está na ficha do produto (descrição, preço, estoque, marca, modelo). Se a resposta não estiver na ficha, não chute: mande o link do produto e peça pra ele dar uma olhada na página pra ver se encontra a informação por lá.
+4. A dúvida: ANTES de responder, leia a descrição inteira da ficha (e marca, modelo, cor, variação) e confira se a resposta está lá; sem ficha aberta deste produto, abra com abrir_produto primeiro. Responda SÓ com o que está na ficha. Se a resposta não estiver na ficha, não chute e não diga "não sei": é caso de resposta negativa (regra abaixo).
 5. Depois do link: se ele achou ou ficou satisfeito, siga ajudando na compra (mande o link quando ele quiser comprar). Se não encontrou, continua com a dúvida, ficou insatisfeito ou pediu uma pessoa, comece a resposta com {$tag} e diga com carinho que uma pessoa do time vai continuar o atendimento.
-6. Se a busca não achar no site, o sistema já mandou ao cliente a mensagem "{$this->searchingElsewhere()}" e procurou nos anúncios da loja na Shopee e no Mercado Livre: não repita esse aviso. Achou lá: siga o mesmo fluxo, com o link do anúncio. Não achou em nenhum lugar: diga que não encontrou esse produto e comece a resposta com {$tag} pra uma pessoa do time verificar.
+6. Se a busca não achar no site, o sistema já mandou ao cliente a mensagem "{$this->searchingElsewhere()}" e procurou nos anúncios da loja na Shopee e no Mercado Livre: não repita esse aviso. Achou lá: siga o mesmo fluxo, com o link do anúncio. Não achou em nenhum lugar: é caso de resposta negativa (regra abaixo), não diga ao cliente que não encontrou.
 7. Produto sem estoque (em_estoque falso): conte que no momento está sem estoque e ofereça pra uma pessoa do time avisar quando chegar, com {$tag}.
 
 {$productBlock}
+
+Resposta negativa (regra do Lira, 25/10/2026): se a sua resposta ao cliente seria negativa ou sem resposta ("não sei", "não tem", "não temos", "não encontrei", "não consigo confirmar"), NÃO responda isso ao cliente. Escreva só {$alerta} seguido de uma linha curta com o que o cliente quer saber e o que faltou. O sistema não envia essa mensagem ao cliente: ele alerta o time de Atendimento, que assume a conversa.
 
 Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
@@ -159,6 +164,7 @@ PROMPT;
     {
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
+        $alerta = ManuelaAgentClient::ALERT_TAG;
         $loja = WhatsAppNumeros::nome(WhatsAppNumeros::FERRAKORA);
         $site = WhatsAppNumeros::site(WhatsAppNumeros::FERRAKORA);
         $saudacao = ManuelaSaudacao::regra($loja);
@@ -177,7 +183,9 @@ Como você conversa:
 Produtos, preço e compra:
 - Você não tem a ficha dos produtos aqui. Para preço, estoque, especificação e compra, mande o cliente ao site {$site}, onde estão o preço e o estoque atualizados. Nunca diga um preço, prazo ou estoque de cabeça.
 - Não dá desconto, cupom, brinde nem preço diferente do site, nem promete que vai conseguir. Se pedirem, diga com educação que o preço é o do site.
-- Dúvida técnica que você não sabe responder com segurança: comece a resposta com {$tag} e diga que uma pessoa do time vai confirmar.
+- Dúvida técnica que você não sabe responder com segurança: é caso de resposta negativa (regra abaixo), não responda "não sei" ao cliente.
+
+Resposta negativa: se a sua resposta seria negativa ou sem resposta ("não sei", "não tem", "não consigo confirmar"), NÃO responda isso ao cliente. Escreva só {$alerta} seguido de uma linha curta com o que o cliente quer saber. O sistema não envia essa mensagem ao cliente: ele alerta o time de Atendimento, que assume a conversa.
 
 Troca, garantia e defeito:
 - Peça o número do pedido e uma foto ou um vídeo curto mostrando o problema, comece a resposta com {$tag} e diga que uma pessoa do time vai analisar. Não prometa troca, reembolso nem prazo.

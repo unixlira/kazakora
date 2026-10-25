@@ -182,7 +182,7 @@ function salvarCategorias() {
                                 <span v-else class="text-xs text-slate-400 dark:text-slate-500">{{ col.chave === 'todas' ? 'Correios normal' : '—' }}</span>
                             </td>
                             <td class="px-3 py-2 text-right">
-                                <Link :href="linkCidade(c)" class="whitespace-nowrap text-xs font-semibold text-primary hover:underline">{{ temRegra(c) ? 'editar' : 'criar regra' }}</Link>
+                                <Link v-if="temRegra(c)" :href="linkCidade(c)" class="whitespace-nowrap text-xs font-semibold text-primary hover:underline">editar</Link>
                             </td>
                         </tr>
                         <tr v-if="!filtradas.length">

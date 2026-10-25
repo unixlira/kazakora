@@ -1030,7 +1030,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <ul v-if="anuncio.cta.garantias?.length">
                                         <li v-for="(garantia, index) in anuncio.cta.garantias" :key="index">{{ garantia }}</li>
                                     </ul>
-                                    <button v-if="inStock" type="button" class="btn" :disabled="buyingNow" @click="comprarPeloCta">{{ anuncio.cta.botao }}</button>
+                                    <!-- Sem texto não há botão (2026-10-25: CTA gravado sem "botao" virou uma barra verde vazia). -->
+                                    <button v-if="inStock && anuncio.cta.botao?.trim()" type="button" class="btn" :disabled="buyingNow" @click="comprarPeloCta">{{ anuncio.cta.botao }}</button>
                                 </div>
                             </div>
 

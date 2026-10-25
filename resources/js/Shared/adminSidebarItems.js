@@ -168,13 +168,11 @@ export const sidebarSections = [
         heading: 'Atendimento',
         items: [
             { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
-            // Chat da Shopee (2026-10-25): conversas do sellerchat, sincronizadas a cada 2 min.
-            { label: 'Shopee', href: '/admin/chat-shopee', icon: 'fas fa-bag-shopping', cor: 'laranja', permission: 'pedidos.view', badgeKey: 'shopeeChatNaoLidas' },
             { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
             // Perguntas MK Place (2026-10-20): perguntas dos anúncios; a Manuela
             // atende e o contador mostra as que esperam uma pessoa. alertaFixo:
             // alerta vermelho que não some no clique e acende o título da seção.
-            { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'perguntasMkplace', alertaFixo: true },
+            { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'atendimentoMkplace', alertaFixo: true },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },

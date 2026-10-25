@@ -3,14 +3,19 @@
 // anúncios de todos os marketplaces. Lista à esquerda (com o ícone do canal),
 // pergunta e rascunho da Manuela à direita, onde o atendente edita e envia
 // pela API. A Manuela atende primeiro; o que ela não sabe fica em "Pra você",
-// com alerta no topo do admin.
+// com alerta no topo do admin. Aba "Chat da Shopee" (2026-10-25): conversas
+// dos compradores da Shopee na mesma tela (ChatShopee.vue).
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { notifyError, notifySuccess } from '@/Shared/notify';
 import { canalPergunta } from '@/Shared/canaisPerguntas';
+import ChatShopee from './ChatShopee.vue';
 
 const props = defineProps({
+    aba: { type: String, default: 'perguntas' },
+    abas: { type: Object, default: () => ({}) },
+    chat: { type: Object, default: null },
     perguntas: { type: Array, required: true },
     filtro: { type: String, default: 'humano' },
     busca: { type: String, default: '' },
@@ -30,6 +35,12 @@ const FILTROS = [
 ];
 const POR = { manuela: 'Manuela', humano: 'Atendente', ml: 'Direto no marketplace' };
 const LIMITE = 2000;
+
+const ABAS = [
+    ['perguntas', 'Perguntas dos anúncios', 'fas fa-comment-dots', 'pra você'],
+    ['chat-shopee', 'Chat da Shopee', 'fas fa-bag-shopping', 'não lidas'],
+];
+const trocarAba = (aba) => router.get('/admin/perguntas-marketplace', aba === 'perguntas' ? {} : { aba });
 
 const termo = ref(props.busca);
 const recarregar = () => router.reload({ only: ['perguntas', 'contagem', 'canais', 'autoResposta', 'sidebarBadges'], preserveScroll: true });
@@ -135,8 +146,9 @@ const alternarAuto = async () => {
     }
 };
 
+// A aba do chat recarrega sozinha (ChatShopee.vue).
 let timer = null;
-onMounted(() => { timer = setInterval(recarregar, 30000); });
+onMounted(() => { timer = setInterval(() => { if (props.aba === 'perguntas') recarregar(); }, 30000); });
 onUnmounted(() => clearInterval(timer));
 </script>
 
@@ -149,11 +161,12 @@ onUnmounted(() => clearInterval(timer));
                 <div class="flex items-center gap-3">
                     <span class="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-lg text-primary"><i class="fas fa-comment-dots"></i></span>
                     <div>
-                        <h1 class="font-display text-2xl font-semibold">Perguntas MK Place</h1>
-                        <p class="text-sm text-slate-500">Perguntas dos anúncios nos marketplaces. A Manuela atende primeiro; o que ela não souber fica em "Pra você".</p>
+                        <!-- Título em DM Sans (sans-serif moderna do admin) no lugar da Fraunces serifada (Lira, 2026-10-25). -->
+                        <h1 class="text-2xl font-bold tracking-tight">Perguntas MK Place</h1>
+                        <p class="text-sm text-slate-500">Perguntas dos anúncios e chat da Shopee. A Manuela atende as perguntas primeiro; o que ela não souber fica em "Pra você".</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-2 shadow-sm">
+                <div v-if="aba === 'perguntas'" class="flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-2 shadow-sm">
                     <div class="text-sm">
                         <p class="font-semibold">Manuela responde sozinha</p>
                         <p class="text-xs text-slate-500">{{ auto ? 'Ligado: o que está na ficha vai direto ao comprador.' : 'Desligado: ela deixa rascunho e você envia.' }}</p>
@@ -167,6 +180,20 @@ onUnmounted(() => clearInterval(timer));
                 </div>
             </div>
 
+            <!-- Abas: perguntas dos anúncios | chat da Shopee -->
+            <nav class="flex gap-1 border-b border-[var(--surface-border)]" aria-label="Tipo de atendimento">
+                <button v-for="[k, rotulo, icone, pendente] in ABAS" :key="k" type="button"
+                    class="-mb-px flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold tracking-tight transition-colors"
+                    :class="aba === k ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'"
+                    :aria-current="aba === k ? 'page' : undefined" @click="aba !== k && trocarAba(k)">
+                    <i :class="icone"></i>{{ rotulo }}
+                    <span v-if="abas[k]" class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white" :title="`${abas[k]} ${pendente}`">{{ abas[k] }}</span>
+                </button>
+            </nav>
+
+            <ChatShopee v-if="aba === 'chat-shopee' && chat" v-bind="chat" />
+
+            <template v-else>
             <div class="flex flex-wrap items-center gap-2">
                 <button v-for="[k, rotulo] in FILTROS" :key="k" type="button"
                     class="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold"
@@ -303,6 +330,7 @@ onUnmounted(() => clearInterval(timer));
                     </article>
                 </section>
             </div>
+            </template>
         </div>
     </AdminLayout>
 </template>

@@ -9,20 +9,31 @@ use App\Modules\Marketplace\Models\ShopeeChatMensagem;
 use App\Modules\Marketplace\Support\ShopeeChatService;
 use App\Services\Shopee\Exceptions\ShopeeException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
- * Atendimento > Shopee: chat do comprador (sellerchat). O sync (shopee:chat-sync,
- * a cada 2 min) traz as conversas; aqui o atendente lê e, se quiser, responde.
+ * Chat do comprador da Shopee (sellerchat), na aba "Chat da Shopee" da tela
+ * Perguntas MK Place (pedido do Lira 2026-10-25). O sync (shopee:chat-sync, a
+ * cada 2 min) traz as conversas; ali o atendente lê e, se quiser, responde.
  * Não existe resposta automática: toda mensagem enviada parte de um clique.
  */
 class ShopeeChatController extends Controller
 {
     private const FILTROS = ['nao_lidas', 'todas'];
 
-    public function index(Request $request): Response
+    /** Endereço antigo (Atendimento > Shopee): abre a aba do chat em Perguntas MK Place. */
+    public function index(Request $request): RedirectResponse
+    {
+        return redirect('/admin/perguntas-marketplace?'.http_build_query(['aba' => 'chat-shopee'] + $request->only('filtro', 'busca', 'conversa')));
+    }
+
+    /**
+     * Dados da aba "Chat da Shopee" (PerguntasMarketplaceController::index).
+     *
+     * @return array<string, mixed>
+     */
+    public static function dados(Request $request): array
     {
         $filtro = in_array($request->query('filtro'), self::FILTROS, true) ? $request->query('filtro') : 'todas';
         $busca = trim((string) $request->query('busca', ''));
@@ -45,9 +56,9 @@ class ShopeeChatController extends Controller
             $atendentes = User::query()->whereIn('id', $mensagens->pluck('enviada_por_user_id')->filter()->unique())->pluck('name', 'id');
         }
 
-        return Inertia::render('Admin/ShopeeChat/Index', [
-            'conversas' => $conversas->map(fn (ShopeeChatConversa $c) => $this->linha($c))->values(),
-            'selecionada' => $selecionada ? $this->linha($selecionada) : null,
+        return [
+            'conversas' => $conversas->map(fn (ShopeeChatConversa $c) => self::linha($c))->values(),
+            'selecionada' => $selecionada ? self::linha($selecionada) : null,
             'mensagens' => $mensagens->map(fn (ShopeeChatMensagem $m) => [
                 'id' => $m->id,
                 'tipo' => $m->tipo,
@@ -65,7 +76,7 @@ class ShopeeChatController extends Controller
             ],
             'ultimaSincronizacao' => ShopeeChatConversa::query()->max('sincronizada_em'),
             'limiteTexto' => ShopeeChatService::LIMITE_TEXTO,
-        ]);
+        ];
     }
 
     public function pendentes(): JsonResponse
@@ -98,7 +109,7 @@ class ShopeeChatController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    private function linha(ShopeeChatConversa $c): array
+    private static function linha(ShopeeChatConversa $c): array
     {
         return [
             'id' => $c->id,

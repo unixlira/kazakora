@@ -136,14 +136,30 @@ class ShopeeChatTest extends TestCase
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->get('/admin/chat-shopee')
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace?aba=chat-shopee')
             ->assertOk()
             ->assertInertia(fn ($p) => $p
-                ->where('conversas.0.comprador', 'Esperando')
-                ->where('selecionada.id', $nova->id)
-                ->where('mensagens.0.texto', 'Preciso de ajuda')
-                ->where('contagem.nao_lidas', 1)
-                ->where('sidebarBadges.shopeeChatNaoLidas', 1));
+                ->component('Admin/PerguntasMarketplace/Index', false)
+                ->where('aba', 'chat-shopee')
+                ->where('abas.chat-shopee', 1)
+                ->where('chat.conversas.0.comprador', 'Esperando')
+                ->where('chat.selecionada.id', $nova->id)
+                ->where('chat.mensagens.0.texto', 'Preciso de ajuda')
+                ->where('chat.contagem.nao_lidas', 1)
+                ->where('sidebarBadges.shopeeChatNaoLidas', 1)
+                ->where('sidebarBadges.atendimentoMkplace', 1));
+    }
+
+    public function test_endereco_antigo_abre_a_aba_do_chat_em_perguntas_mk_place(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/admin/chat-shopee?conversa=7')
+            ->assertRedirect('/admin/perguntas-marketplace?aba=chat-shopee&conversa=7');
+
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace')
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p->where('aba', 'perguntas')->where('abas.chat-shopee', 0));
     }
 
     public function test_enviar_resposta_so_com_acao_do_atendente_e_grava_a_mensagem(): void

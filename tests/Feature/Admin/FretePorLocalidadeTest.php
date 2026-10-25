@@ -109,6 +109,60 @@ class FretePorLocalidadeTest extends TestCase
         $this->assertSame(7, DB::table('frete_localidades')->count());
     }
 
+    public function test_padrao_do_estado_copia_a_referencia_e_so_ela_vai_para_os_correios(): void
+    {
+        // Água Doce do Norte como referência do ES (em produção é Afonso Cláudio).
+        config(['frete_embutido.padrao_por_uf' => ['ES' => 3200169]]);
+        $tabela = app(TabelaFreteLocalidades::class);
+        $tabela->importarUf('ES');
+
+        $this->assertSame(['ES' => '29820000'], $tabela->referencias());
+        $this->assertSame(['29820000'], $tabela->cepsPendentes(100));
+        $this->assertSame(1, $tabela->cotar($tabela->cepsPendentes(100)));
+
+        // 6 CEPs de cotação x 4 categorias, todos iguais à referência.
+        $this->assertSame(24, DB::table('frete_tabela')->count());
+        $this->assertSame([], $tabela->cepsPendentes(100));
+        $ref = DB::table('frete_tabela')->where('cep_destino', '29820000')->get()->keyBy('categoria');
+        foreach (DB::table('frete_tabela')->get() as $linha) {
+            foreach (['pac_preco', 'pac_prazo', 'sedex_preco', 'sedex_prazo', 'categoria_versao'] as $c) {
+                $this->assertEquals($ref[$linha->categoria]->{$c}, $linha->{$c}, "{$linha->cep_destino} {$linha->categoria} {$c}");
+            }
+        }
+        $this->assertEquals(10.0, $tabela->linha('29015210', 'pequena')['pac']); // Vitória
+
+        // Referência com valor próprio (o fake dos Correios dá o mesmo preço a
+        // todo CEP): recotação em lote de uma cidade do ES, o que desfez o
+        // padrão em 25/10, traz o valor dos Correios e a cópia volta por cima.
+        DB::table('frete_tabela')->where('cep_destino', '29820000')->where('categoria', 'pequena')->update(['pac_preco' => 25.94]);
+        $tabela->cotar(['29000001']);
+        $this->assertEquals(25.94, (float) DB::table('frete_tabela')->where('cep_destino', '29000001')->where('categoria', 'pequena')->value('pac_preco'));
+        $this->assertEquals(25.94, $tabela->linha('29015210', 'pequena')['pac']);
+
+        // Reimportar o estado também reaplica.
+        DB::table('frete_tabela')->where('cep_destino', '29823000')->update(['sedex_prazo' => 1]);
+        $tabela->importarUf('ES');
+        $this->assertSame(3, (int) DB::table('frete_tabela')->where('cep_destino', '29823000')->where('categoria', 'media')->value('sedex_prazo'));
+
+        // Página da cidade (Fretes por estado → cidades) mostra o valor da referência.
+        DB::table('ibge_estados')->insert(['id' => 32, 'sigla' => 'ES', 'nome' => 'Espírito Santo', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('ibge_municipios')->insert(['id' => 3205309, 'nome' => 'Vitória', 'nome_normalizado' => 'vitoria', 'estado_id' => 32, 'uf' => 'ES', 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($this->admin())->get('/admin/logistica/fretes-por-estado/cidades/3205309')
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p->where('localidades.0.nome', 'Vitória')->where('localidades.0.regras.pequena.pac', 25.94)->where('localidades.0.regras.pequena.pac_prazo', 7));
+    }
+
+    public function test_sem_a_referencia_importada_o_estado_segue_a_cotacao_normal(): void
+    {
+        config(['frete_embutido.padrao_por_uf' => ['ES' => 3200102]]); // Afonso Cláudio fora do fixture
+        $tabela = app(TabelaFreteLocalidades::class);
+        $tabela->importarUf('ES');
+
+        $this->assertSame([], $tabela->referencias());
+        $this->assertCount(6, $tabela->cepsPendentes(100));
+        $this->assertSame(0, $tabela->aplicarPadroes());
+    }
+
     public function test_preco_dos_correios_em_formato_brasileiro(): void
     {
         $this->assertSame(23.45, TabelaFreteLocalidades::valor('23,45'));

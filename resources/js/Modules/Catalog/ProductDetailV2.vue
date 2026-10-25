@@ -11,6 +11,7 @@ import '../../../css/fontes-poppins.css';
 import '../../../css/fontes-manrope.css';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
+import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
 import { COMPANY } from '@/Shared/company';
 import { fotoAvaliacaoAmpliada, miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
@@ -27,6 +28,7 @@ const props = defineProps({
     // Modelos ligados (2026-10-21): anúncios separados do mesmo grupo.
     modelos: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
+    avaliacoesCarrossel: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
     canReview: { type: Boolean, default: false },
@@ -966,6 +968,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </form>
 
+                            <!-- Carrossel de depoimentos (pedido 2026-10-25): o mesmo componente do checkout,
+                                 com avaliações reais deste produto; some quando não há nenhuma. -->
+                            <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="carrossel-depoimentos" />
+
                             <!-- COMPRAR AGORA no fim da caixa, depois do frete/prazo (pedido do Lira 2026-10-23):
                                  no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
                                  Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
@@ -1775,6 +1781,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .selos-compra .selo-full { color: #0aac48; font-style: italic; font-weight: 800; }
 .pd2 .compra .selos-compra .selo-full i { margin: 0 2px 0 0; font-size: .95em; color: inherit; }
 .pd2 .compra .selos-compra .aviso-frete { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: #777; }
+.pd2 .compra .carrossel-depoimentos { margin: 0 0 12px; border: 1px solid #ebebeb; border-radius: 8px; box-shadow: none; }
+.pd2 .compra .carrossel-depoimentos p { margin: 0; }
+.dark .pd2 .compra .carrossel-depoimentos { background: var(--card); border-color: var(--line); }
+.dark .pd2 .compra .carrossel-depoimentos .text-slate-900 { color: var(--ink); }
+.dark .pd2 .compra .carrossel-depoimentos :is(.text-slate-700, .text-slate-500) { color: var(--text); }
 .dark .pd2 .compra .selos-compra { background: var(--card); border-color: var(--line); }
 .dark .pd2 .compra .selos-compra li { color: var(--text); }
 .dark .pd2 .compra .selos-compra li + li { border-color: var(--line); }

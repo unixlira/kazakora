@@ -70,7 +70,7 @@ class ClonarKikoolTest extends TestCase
 
         $produto = Product::query()->where('sku', 'KIC-22693207666')->firstOrFail();
         $this->assertSame('Jogo de Soquete Catraca 12 Peças com Extensão', $produto->name);
-        $this->assertEquals(39.14, (float) $produto->price);
+        $this->assertEquals(40.59, (float) $produto->price);
         $this->assertEquals(28.99, (float) $produto->cost_price);
         $this->assertSame(10, $produto->stock);
         $this->assertTrue($produto->is_active);

@@ -7,6 +7,8 @@
 // Oferta do Dia); sem oferta no ar, 30 minutos a partir da primeira visita
 // ao checkout (pedido do Lira 2026-10-24, modelo Mavo), guardados no
 // navegador para não recomeçar ao atualizar. Zerou, a barra some.
+// Oferta que só acaba daqui a mais de 24 h (Relâmpago cadastrada por semanas)
+// também usa os 30 minutos: antes a barra mostrava "568:47:51" (2026-10-25).
 // Rodapé curto com as formas de pagamento, os selos e 4 linhas com os dados
 // da loja (no celular, desde 2026-10-24: selos e depois sanfonas de pagamento
 // e dados da empresa). Sem menu, busca e rodapé da loja. Sempre claro (cores fixas).
@@ -50,6 +52,7 @@ const MENUS_RODAPE = [
 
 const RELOGIO_MINUTOS = 30;
 const RELOGIO_CHAVE = 'kz_checkout_relogio_fim';
+const OFERTA_MAX_MS = 86400000;
 const agora = ref(Date.now());
 const fimDoRelogio = ref(NaN);
 let relogio = null;
@@ -73,7 +76,8 @@ onBeforeUnmount(() => clearInterval(relogio));
 const restante = computed(() => {
     if (props.semRelogio) return 0;
     const fimOferta = props.ofertaFim ? new Date(props.ofertaFim).getTime() : NaN;
-    const fim = Number.isFinite(fimOferta) && fimOferta > agora.value ? fimOferta : fimDoRelogio.value;
+    const ofertaValida = Number.isFinite(fimOferta) && fimOferta > agora.value && fimOferta - agora.value <= OFERTA_MAX_MS;
+    const fim = ofertaValida ? fimOferta : fimDoRelogio.value;
 
     return Number.isFinite(fim) ? Math.max(0, Math.floor((fim - agora.value) / 1000)) : 0;
 });

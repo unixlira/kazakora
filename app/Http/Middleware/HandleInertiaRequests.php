@@ -35,6 +35,7 @@ class HandleInertiaRequests extends Middleware
         OversellDetectedNotification::class,
         LowStockNotification::class,
         \App\Notifications\AlertaAdminNotification::class,
+        \App\Notifications\ManuelaAlertaAtendimentoNotification::class,
         // TikTokRelatorioNotification fica de fora de propósito (pedido do
         // Lira 2026-10-11): o alerta vermelho/verde aparece no sino do admin
         // E da loja. Só admins recebem essa notificação, cliente nunca vê.

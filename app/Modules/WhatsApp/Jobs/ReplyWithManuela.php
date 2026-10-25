@@ -2,6 +2,7 @@
 
 namespace App\Modules\WhatsApp\Jobs;
 
+use App\Models\User;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\GeminiClient;
@@ -11,10 +12,12 @@ use App\Modules\WhatsApp\Services\ManuelaProductSearch;
 use App\Modules\WhatsApp\Services\ManuelaVisao;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Notifications\ManuelaAlertaAtendimentoNotification;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -158,6 +161,14 @@ class ReplyWithManuela
             $conversation->update(['ai_enabled' => false]);
         }
 
+        // Resposta negativa ("não sei", "não tem"): nada vai ao cliente; o
+        // time de Atendimento é alertado para assumir (pedido do Lira 2026-10-25).
+        if ($reply['alerta_atendimento'] ?? false) {
+            $this->alertarAtendimento($conversation, $text !== '' ? $text : $inbound->preview(), (string) ($reply['rascunho'] ?? ''));
+
+            return;
+        }
+
         if (! filled($reply['reply'])) {
             return;
         }
@@ -166,6 +177,17 @@ class ReplyWithManuela
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
 
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    private function alertarAtendimento(WhatsAppConversation $conversation, string $pergunta, string $rascunho): void
+    {
+        Log::info('whatsapp.manuela_alerta_atendimento', ['conversation_id' => $conversation->id, 'message_id' => $this->inboundMessageId]);
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            rescue(fn () => Notification::send($admins, new ManuelaAlertaAtendimentoNotification($conversation, $pergunta, $rascunho)), report: true);
+        }
     }
 
     /**

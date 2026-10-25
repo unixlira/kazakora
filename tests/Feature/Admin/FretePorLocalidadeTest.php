@@ -3,6 +3,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Modules\Admin\Models\AlertaAdmin;
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -12,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
 /**
@@ -33,6 +36,9 @@ class FretePorLocalidadeTest extends TestCase
         ['numero' => 20481, 'uf' => 'ES', 'localidade' => 'Vitória', 'codificada' => 'S', 'tipo' => 'M', 'codigoIbge' => '3205309', 'faixas' => [['cepInicial' => '29000000', 'cepFinal' => '29099999', 'tipoFaixa' => 'T'], ['cepInicial' => '29000001', 'cepFinal' => '29099999', 'tipoFaixa' => 'C']]],
         ['numero' => 18221, 'uf' => 'ES', 'localidade' => 'Baía Nova', 'numeroLocalidadeSuperior' => 20481, 'localidadeSuperior' => 'Vitória', 'codificada' => 'I', 'tipo' => 'P'],
     ];
+
+    /** null = Correios normais; 'fora' = HTTP 500; 'recusa' = responde tudo com txErro. */
+    private ?string $correios = null;
 
     protected function setUp(): void
     {
@@ -58,6 +64,14 @@ class FretePorLocalidadeTest extends TestCase
             $url = $request->url();
             if (str_contains($url, '/token/')) {
                 return Http::response(['token' => 'token-falso']);
+            }
+            if ($this->correios === 'fora') {
+                return Http::response([], 500);
+            }
+            if ($this->correios === 'recusa' && str_contains($url, '/preco/')) {
+                return Http::response(collect($request['parametrosProduto'])->map(fn ($p) => [
+                    'coProduto' => $p['coProduto'], 'nuRequisicao' => $p['nuRequisicao'], 'txErro' => 'Contrato não encontrado',
+                ])->all());
             }
             if (str_contains($url, '/cep/v1/localidades')) {
                 return Http::response(['itens' => self::LOCALIDADES_ES, 'page' => ['number' => 0, 'size' => 1000, 'totalElements' => 7, 'totalPages' => 1]]);
@@ -218,6 +232,55 @@ class FretePorLocalidadeTest extends TestCase
         $this->assertSame('parado', $status['fase']);
         $this->assertSame(6, $status['cotados']);
         $this->assertNull($status['erro']);
+    }
+
+    public function test_correios_fora_alerta_no_painel_e_fecha_quando_volta(): void
+    {
+        Sleep::fake();
+        $admin = $this->admin();
+        $this->correios = 'fora';
+
+        // Fila síncrona: as 6 tentativas rodam em seguida.
+        PreencherTabelaFreteJob::iniciar(['ES']);
+
+        $status = PreencherTabelaFreteJob::status();
+        $this->assertSame('parado', $status['fase']);
+        $this->assertStringContainsString('Parou depois de 6 falhas', $status['erro']);
+
+        $alerta = AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::FRETE_TABELA)->sole();
+        $this->assertSame(6, $alerta->ocorrencias);
+        $this->assertSame('/admin/logistica/frete-por-localidade', $alerta->link);
+        $this->assertSame(1, $admin->unreadNotifications()->count()); // um aviso só no sino
+
+        $this->correios = null;
+        PreencherTabelaFreteJob::iniciar(['ES']);
+
+        $this->assertSame(0, AlertaAdmin::query()->abertos()->count());
+        $this->assertSame(0, $admin->unreadNotifications()->count());
+    }
+
+    public function test_correios_recusando_tudo_nao_apaga_o_preco_salvo(): void
+    {
+        $tabela = app(TabelaFreteLocalidades::class);
+        $tabela->importarUf('ES');
+        $tabela->cotar($tabela->cepsPendentes(100));
+        DB::table('frete_tabela')->update(['cotado_em' => now()->subDays(40)]);
+
+        $this->correios = 'recusa';
+        PreencherTabelaFreteJob::iniciar([]);
+
+        $this->assertEquals(50.0, (float) DB::table('frete_tabela')->where('cep_destino', '29823000')->where('categoria', 'media')->value('pac_preco'));
+        $this->assertSame(0, DB::table('frete_tabela')->whereNull('pac_preco')->count());
+        $this->assertStringContainsString('Contrato não encontrado', AlertaAdmin::query()->abertos()->sole()->mensagem);
+    }
+
+    public function test_comando_com_falha_alerta_no_painel(): void
+    {
+        config(['services.correios.numero_usuario' => null, 'services.correios.codigo_acesso_contrato' => null]);
+
+        $this->artisan('frete:tabela-localidades', ['--agora' => true, '--uf' => ['ES']])->assertFailed();
+
+        $this->assertStringContainsString('não está configurada', AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::FRETE_TABELA)->sole()->mensagem);
     }
 
     public function test_tela_classifica_produto_muda_categoria_e_busca_localidade(): void

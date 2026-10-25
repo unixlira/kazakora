@@ -934,7 +934,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <!-- Opções em caixas de rádio, uma por linha, centralizadas (pedido do Lira 2026-10-24):
-                                         Full e Flex em verde, Turbo em laranja (caixa branca até ser marcado); marcar uma desmarca as outras. -->
+                                         Full e Flex em verde, Turbo em laranja da logo; marcar uma desmarca as outras. -->
                                     <label v-if="prazo.expressa" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
                                         <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
@@ -1796,19 +1796,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep .opcao-frete .valor b { font-weight: 800; }
 .pd2 .prazo-cep .opcao-frete.verde { background: #e7f8ec; border-color: #00a650; color: #00801a; }
 .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #00801a; }
-/* Turbo (2026-10-24): o vermelho cheio parecia erro/desmarcado (Lira). Desmarcado fica em caixa
-   branca de borda cinza com o texto laranja do Envio Prioritário do checkout; marcado ganha o fundo
-   laranja claro e a borda laranja. */
-.pd2 .prazo-cep .opcao-frete.turbo { background: #fff; border-color: #d4d9e1; color: #c2410c; }
-.pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #F44D00; }
-.pd2 .prazo-cep .opcao-frete.turbo.marcado { background: #fff4ec; border-color: #F44D00; }
+/* Turbo (Lira, 2026-10-24): fundo e borda no laranja oficial da logo (#FF7F00), como o verde do
+   Full/Flex; o texto vai num laranja mais escuro para ler bem sobre o fundo claro. */
+.pd2 .prazo-cep .opcao-frete.turbo { background: #fff2e5; border-color: #FF7F00; color: #a34f00; }
+.pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #FF7F00; }
 .pd2 .prazo-cep .opcao-frete.marcado { box-shadow: 0 0 0 1px currentColor; }
 .pd2 .prazo-cep .opcao-frete:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
 .dark .pd2 .prazo-cep .opcao-frete.verde { background: rgba(0, 171, 33, .15); border-color: #22c55e; color: #4ade80; }
 .dark .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #4ade80; }
-.dark .pd2 .prazo-cep .opcao-frete.turbo { background: #1f2736; border-color: #3f3f46; color: #fb923c; }
-.dark .pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #fb923c; }
-.dark .pd2 .prazo-cep .opcao-frete.turbo.marcado { background: rgba(244, 77, 0, .15); border-color: #F44D00; }
+.dark .pd2 .prazo-cep .opcao-frete.turbo { background: rgba(255, 127, 0, .15); border-color: #FF7F00; color: #ffa04d; }
+.dark .pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #ffa04d; }
 /* Celular: menos sobra nas laterais para o Turbo do motoboy caber numa linha a partir de 360px. */
 @media (max-width: 480px) { .pd2 .compra .prazo-cep { padding-left: 6px; padding-right: 6px; } .pd2 .prazo-cep label.opcao-frete { padding: 10px 4px; } }
 </style>

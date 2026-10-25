@@ -97,6 +97,7 @@ class EntregaExpressaTest extends TestCase
     /** Turbo de motoboy (pedido 2026-10-24): área do Full, seg a sex em horário comercial e sábado até 13h. */
     public function test_motoboy_so_na_area_e_em_horario_comercial(): void
     {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
         $servico = app(EntregaExpressa::class);
         $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
 
@@ -108,6 +109,19 @@ class EntregaExpressaTest extends TestCase
         $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-09 18:00')));
         $this->assertNull($servico->motoboy('01001-000', $dia('2026-10-09 07:59')));
         $this->assertNull($servico->motoboy('20040-020', $dia('2026-10-09 10:00')));
+    }
+
+    /** Teste do fim de semana (Lira, 2026-10-24): com ignorar_horario o Turbo aparece domingo e de madrugada, só na área. */
+    public function test_motoboy_sem_regra_de_horario_quando_ignorar_horario(): void
+    {
+        config(['entrega_expressa.motoboy.ignorar_horario' => true]);
+        $servico = app(EntregaExpressa::class);
+        $dia = fn (string $data) => Carbon::parse($data, 'America/Sao_Paulo');
+
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-11 10:00')));
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-10 21:30')));
+        $this->assertNotNull($servico->motoboy('01001-000', $dia('2026-10-09 03:00')));
+        $this->assertNull($servico->motoboy('20040-020', $dia('2026-10-11 10:00')));
     }
 
     public function test_fim_de_semana_e_sabado_depois_das_13h_ou_domingo(): void
@@ -125,6 +139,7 @@ class EntregaExpressaTest extends TestCase
 
     public function test_endpoint_de_prazo_manda_motoboy_e_fim_de_semana(): void
     {
+        config(['entrega_expressa.motoboy.ignorar_horario' => false]);
         Carbon::setTestNow($this->em('09:00'));
         $this->getJson('/frete/prazo?cep=01001-000')->assertJsonPath('motoboy.preco', 39)->assertJsonPath('fim_de_semana', false);
         $this->getJson('/frete/prazo?cep=20040-020')->assertJsonPath('motoboy', null);

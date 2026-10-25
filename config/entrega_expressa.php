@@ -31,6 +31,9 @@ return [
         'mensagem' => 'Receba em até 3 horas',
         'semana' => ['08:00', '18:00'],
         'sabado' => ['08:00', '13:00'],
+        // TEMPORÁRIO (Lira, 2026-10-24): teste no fim de semana, o Turbo do motoboy
+        // aparece a qualquer hora. Para voltar ao horário comercial: false.
+        'ignorar_horario' => (bool) env('ENTREGA_MOTOBOY_IGNORAR_HORARIO', true),
     ],
 
     'faixas' => [

@@ -75,6 +75,16 @@ class EntregaExpressa
             return null;
         }
 
+        $oferta = [
+            'preco' => (float) config('entrega_expressa.motoboy.preco', 39.00),
+            'mensagem' => (string) config('entrega_expressa.motoboy.mensagem', 'Receba em até 3 horas'),
+        ];
+
+        // Teste do fim de semana (Lira, 2026-10-24): sem a regra do horário comercial.
+        if (config('entrega_expressa.motoboy.ignorar_horario', false)) {
+            return $oferta;
+        }
+
         $agora = Carbon::instance($agora ?? now())->setTimezone('America/Sao_Paulo');
         $janela = match (true) {
             $agora->isSunday() => null,
@@ -96,10 +106,7 @@ class EntregaExpressa
             return null;
         }
 
-        return [
-            'preco' => (float) config('entrega_expressa.motoboy.preco', 39.00),
-            'mensagem' => (string) config('entrega_expressa.motoboy.mensagem', 'Receba em até 3 horas'),
-        ];
+        return $oferta;
     }
 
     /** Sábado a partir do fim do expediente (13h) ou domingo, no horário de Brasília. */

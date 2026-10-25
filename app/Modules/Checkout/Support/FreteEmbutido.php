@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Support;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Fiscal\Models\Company;
 use App\Services\Correios\CorreiosTokenService;
@@ -34,6 +35,12 @@ use Throwable;
  * para a cidade, UF ou faixa de CEP do cliente, o frete embutido segue a
  * regra (valor fixo, acréscimo, desconto ou teto sobre os Correios). O custo
  * real da caixa (custo) continua o dos Correios: a loja paga a diferença.
+ * A regra pode ser só de uma categoria de tamanho do pacote (Pequena, Média,
+ * Grande, Extra Grande; FreteCategoriaPacote).
+ *
+ * Trava do frete (pedido 2026-10-24, TravaDeFrete): o frete que o visitante
+ * viu ao calcular pelo CEP fica guardado pelo IP e pela hash do aparelho e,
+ * enquanto valer, não sobe para ele.
  */
 class FreteEmbutido
 {
@@ -51,8 +58,8 @@ class FreteEmbutido
     /** @var array<string, ?array> tabela por CEP, nesta requisição */
     private array $tabelas = [];
 
-    /** @var array<int, int>|null peso tarifável (g) por produto */
-    private ?array $pesos = null;
+    /** @var array<int, array{0: int, 1: float}>|null peso tarifável (g) e maior lado (cm) por produto */
+    private ?array $pacotes = null;
 
     private ?array $destino = null;
 
@@ -160,6 +167,7 @@ class FreteEmbutido
     {
         $tabela = $this->tabela($this->destino()['cep']);
         $peso = $this->pesoTarifavel($product);
+        $categoria = FreteCategoriaPacote::classificar($peso, $this->maiorLado($product));
 
         $faixa = $this->faixa($tabela, $peso);
 
@@ -167,13 +175,13 @@ class FreteEmbutido
             $pac = (float) config('frete_embutido.fallback_pac', 30);
             $sedex = (float) config('frete_embutido.fallback_sedex', 60);
 
-            return $this->comRegra(['embutido' => $pac, 'servico' => 'pac', 'prazo' => null, 'pac' => $pac, 'sedex' => $sedex, 'prazo_pac' => null, 'prazo_sedex' => null, 'estimado' => true], $peso);
+            return $this->comTrava($product, $this->comRegra(['embutido' => $pac, 'servico' => 'pac', 'prazo' => null, 'pac' => $pac, 'sedex' => $sedex, 'prazo_pac' => null, 'prazo_sedex' => null, 'estimado' => true], $peso, $categoria));
         }
 
         // O mais barato dos dois vai embutido (em SP o SEDEX do contrato sai mais em conta que o PAC).
         $sedexMaisBarato = $faixa['sedex'] <= $faixa['pac'];
 
-        return $this->comRegra([
+        return $this->comTrava($product, $this->comRegra([
             'embutido' => $sedexMaisBarato ? $faixa['sedex'] : $faixa['pac'],
             'servico' => $sedexMaisBarato ? 'sedex' : 'pac',
             'prazo' => $sedexMaisBarato ? $faixa['prazo_sedex'] : $faixa['prazo_pac'],
@@ -182,16 +190,16 @@ class FreteEmbutido
             'prazo_pac' => $faixa['prazo_pac'],
             'prazo_sedex' => $faixa['prazo_sedex'],
             'estimado' => false,
-        ], $peso);
+        ], $peso, $categoria));
     }
 
     /**
      * Aplica a regra de frete do destino (se houver) ao frete de 1 unidade:
      * embutido passa a ser o da regra e correios guarda a cotação original.
      */
-    private function comRegra(array $frete, int $peso): array
+    private function comRegra(array $frete, int $peso, ?string $categoria): array
     {
-        $regra = RegrasDeFrete::paraPeso($this->regras(), $peso);
+        $regra = RegrasDeFrete::paraPacote($this->regras(), $peso, $categoria);
         if (! $regra) {
             return $frete;
         }
@@ -203,6 +211,44 @@ class FreteEmbutido
             'prazo' => $regra['prazo_dias'] ?? $frete['prazo'],
             'regra' => $regra['nome'],
         ];
+    }
+
+    /**
+     * Trava do visitante para o produto e o CEP (TravaDeFrete): o frete nunca
+     * sobe acima do que ele já viu. Só com CEP digitado e na loja.
+     */
+    private function comTrava(Product $product, array $frete): array
+    {
+        $cep = $this->cepDigitado();
+        if (! $cep) {
+            return $frete;
+        }
+
+        $trava = app(TravaDeFrete::class)->doProduto($this->site(), $cep, (int) $product->id, $product->parent_product_id ? (int) $product->parent_product_id : null);
+        if (! $trava || $trava->embutido >= $frete['embutido']) {
+            return $frete;
+        }
+
+        return [
+            ...$frete,
+            'correios' => $frete['correios'] ?? $frete['embutido'],
+            'embutido' => $trava->embutido,
+            'prazo' => $trava->prazo_dias ?? $frete['prazo'],
+            'travado' => true,
+        ];
+    }
+
+    /** CEP que o visitante digitou (produto ou checkout), na loja; null fora dela ou pelo IP. */
+    private function cepDigitado(): ?string
+    {
+        $destino = $this->destino();
+
+        return $this->ligado && $destino['origem'] === 'cep' ? $destino['cep'] : null;
+    }
+
+    private function site(): string
+    {
+        return app(SiteAtual::class)->atual() ?? SiteAtual::KAZAKORA;
     }
 
     /** Regras de frete do site atual que valem para o destino (memória da requisição). */
@@ -220,7 +266,7 @@ class FreteEmbutido
         }
 
         return $this->regras = app(RegrasDeFrete::class)->paraDestino(
-            app(SiteAtual::class)->atual() ?? SiteAtual::KAZAKORA,
+            $this->site(),
             $cep,
             $destino['uf'],
         );
@@ -245,8 +291,11 @@ class FreteEmbutido
         $embutido = 0.0;
         $extraItemAItem = 0.0;
         $peso = 0;
+        $lado = 0.0;
         $unidades = 0;
         $estimado = false;
+        $prazosTravados = [];
+        $cepDigitado = $this->cepDigitado();
 
         foreach ($itens as $item) {
             $qtd = (int) $item['quantity'];
@@ -255,7 +304,15 @@ class FreteEmbutido
             $embutido += $f['embutido'] * $qtd;
             $extraItemAItem += max(0, $f['sedex'] - ($f['correios'] ?? $f['embutido'])) * $qtd;
             $peso += $this->pesoTarifavel($item['product']) * $qtd;
+            $lado = max($lado, $this->maiorLado($item['product']));
             $unidades += $qtd;
+            if (! empty($f['travado'])) {
+                $prazosTravados[] = $f['prazo'];
+            }
+            // Frete calculado pelo CEP do visitante: fica travado para ele.
+            if ($cepDigitado) {
+                app(TravaDeFrete::class)->registrar($this->site(), $cepDigitado, (int) $item['product']->id, $f);
+            }
         }
 
         if ($itens->isEmpty()) {
@@ -283,10 +340,15 @@ class FreteEmbutido
         $real = $sedexMaisBarato ? $caixa['sedex'] : $caixa['pac'];
         $prazo = $sedexMaisBarato ? $caixa['prazo_sedex'] : $caixa['prazo_pac'];
 
-        // Regra da cidade/UF: o cliente paga o frete da regra pela caixa inteira.
-        $regra = RegrasDeFrete::paraPeso($this->regras(), $peso);
+        // Regra da cidade/UF: o cliente paga o frete da regra pela caixa inteira
+        // (categoria da caixa: peso somado e o maior lado dos itens).
+        $regra = RegrasDeFrete::paraPacote($this->regras(), $peso, FreteCategoriaPacote::classificar($peso, $lado));
         $doCliente = $regra ? RegrasDeFrete::aplicar($regra, $real) : $real;
         $prazo = $regra['prazo_dias'] ?? $prazo;
+        // Todos os itens travados: vale o prazo que o visitante já viu.
+        if ($prazosTravados !== [] && count($prazosTravados) === $itens->count() && ! in_array(null, $prazosTravados, true)) {
+            $prazo = max($prazosTravados);
+        }
 
         $turbo = null;
         if (! $sedexMaisBarato && $caixa['prazo_pac'] && $caixa['prazo_sedex'] && $caixa['prazo_sedex'] < $caixa['prazo_pac']) {
@@ -458,26 +520,50 @@ class FreteEmbutido
 
     /**
      * Peso que os Correios cobram (g): o real, ou o cúbico (C x L x A / 6000 kg)
-     * quando ele passa de 5 kg (regra do PAC/SEDEX). Mapa de todos os produtos
-     * em cache por 1 h (uma consulta só por requisição).
+     * quando ele passa de 5 kg (regra do PAC/SEDEX).
      */
     public function pesoTarifavel(Product $product): int
     {
-        if ($this->pesos === null) {
-            $this->pesos = Cache::remember('frete-embutido:pesos', now()->addHour(), fn () => DB::table('product_fiscal_data')
+        return $this->pacoteDoProduto($product)[0] ?? (int) config('frete_embutido.peso_padrao_g', 1000);
+    }
+
+    /** Maior lado da caixa do produto (cm); sem medidas = 0. */
+    public function maiorLado(Product $product): float
+    {
+        return $this->pacoteDoProduto($product)[1] ?? 0.0;
+    }
+
+    /** Categoria de tamanho do pacote de 1 unidade (FreteCategoriaPacote). */
+    public function categoria(Product $product): ?string
+    {
+        return FreteCategoriaPacote::classificar($this->pesoTarifavel($product), $this->maiorLado($product));
+    }
+
+    /**
+     * Peso tarifável e maior lado do produto (ou do pai). Mapa de todos os
+     * produtos em cache por 1 h (uma consulta só por requisição).
+     *
+     * @return array{0: int, 1: float}|null
+     */
+    private function pacoteDoProduto(Product $product): ?array
+    {
+        if ($this->pacotes === null) {
+            $this->pacotes = Cache::remember('frete-embutido:pacotes', now()->addHour(), fn () => DB::table('product_fiscal_data')
                 ->whereNotNull('peso_bruto')->where('peso_bruto', '>', 0)
                 ->get(['product_id', 'peso_bruto', 'altura_cm', 'largura_cm', 'profundidade_cm'])
                 ->mapWithKeys(function ($f) {
                     $real = (int) round((float) $f->peso_bruto * 1000);
                     $cubico = (int) round((float) $f->altura_cm * (float) $f->largura_cm * (float) $f->profundidade_cm / 6);
 
-                    return [(int) $f->product_id => $cubico > 5000 ? max($real, $cubico) : $real];
+                    return [(int) $f->product_id => [
+                        $cubico > 5000 ? max($real, $cubico) : $real,
+                        (float) max((float) $f->altura_cm, (float) $f->largura_cm, (float) $f->profundidade_cm),
+                    ]];
                 })->all());
         }
 
-        return $this->pesos[$product->id]
-            ?? ($product->parent_product_id ? ($this->pesos[$product->parent_product_id] ?? null) : null)
-            ?? (int) config('frete_embutido.peso_padrao_g', 1000);
+        return $this->pacotes[$product->id]
+            ?? ($product->parent_product_id ? ($this->pacotes[$product->parent_product_id] ?? null) : null);
     }
 
     private static function digitos(mixed $valor): string

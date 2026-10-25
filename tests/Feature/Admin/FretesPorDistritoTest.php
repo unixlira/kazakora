@@ -151,9 +151,10 @@ class FretesPorDistritoTest extends TestCase
         $this->assertDatabaseHas('frete_regiao_locais', ['municipio_id' => self::AFONSO_CLAUDIO, 'distrito' => 'Serra Pelada', 'cep_inicio' => '29603000', 'cep_fim' => '29603000']);
 
         // Distrito com regra não vira regra da cidade inteira.
-        $this->actingAs($admin)->getJson('/admin/logistica/fretes-por-estado/es/cidades')
-            ->assertJsonPath('cidades.0.regra', null)
-            ->assertJsonPath('cidades.0.distritos_com_regra', 1);
+        $this->actingAs($admin)->get('/admin/logistica/fretes-por-cidade?uf=es')
+            ->assertInertia(fn ($page) => $page
+                ->where('cidades.0.regras.todas', null)
+                ->where('cidades.0.distritos_com_regra', 1));
 
         $this->actingAs($admin)
             ->getJson($url)

@@ -554,9 +554,7 @@ class CheckoutController extends Controller
         $draft = $request->session()->get(self::SESSION_KEY, []);
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $email = $request->user()?->email ?? ($draft['guest']['email'] ?? null);
-
-        if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), $email)) {
+        if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), ...$this->identidadeDoRascunho($draft, $request->user()))) {
             return ['erro' => $motivo];
         }
         if ($subtotal > 0 && $this->subtotalParaCupom($cartItems) <= 0) {
@@ -601,9 +599,24 @@ class CheckoutController extends Controller
             return [null, 'Este cupom não existe mais.'];
         }
 
-        $motivo = $coupon->motivoInvalido($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
+        $motivo = $coupon->motivoInvalido($subtotal, $user, ...$this->identidadeDoRascunho($draft, $user));
 
         return $motivo ? [null, $motivo] : [$coupon, null];
+    }
+
+    /**
+     * E-mail, CPF e celular de quem compra, para o cupom de uso único por
+     * pessoa (2026-10-25): os da conta logada e os digitados no checkout.
+     *
+     * @return array{email: ?string, cpf: ?string, telefone: ?string}
+     */
+    private function identidadeDoRascunho(array $draft, ?User $user): array
+    {
+        return [
+            'email' => $user?->email ?? ($draft['guest']['email'] ?? null),
+            'cpf' => $user?->cpf ?? ($draft['guest']['cpf'] ?? null),
+            'telefone' => $draft['guest']['phone'] ?? ($draft['new_address']['phone'] ?? $user?->phone),
+        ];
     }
 
     /**
@@ -777,6 +790,13 @@ class CheckoutController extends Controller
                 $address = ! empty($draft['address_id'])
                     ? $user->addresses()->findOrFail($draft['address_id'])
                     : $user->addresses()->create([...$draft['new_address'], 'is_default' => $user->addresses()->count() === 0]);
+
+                // Uso único por pessoa (2026-10-25) conferido de novo com a
+                // conta já resolvida: o convidado com CPF de conta antiga cai
+                // nela aqui, mesmo tendo digitado outro e-mail.
+                if ($coupon?->one_per_customer && $coupon->jaUsadoPor($user, $user->email, $user->cpf ?? ($draft['guest']['cpf'] ?? null), $address->phone)) {
+                    throw new CupomEsgotadoException(Coupon::MSG_JA_USOU);
+                }
 
                 $order = Order::create([
                     'user_id' => $user->id,

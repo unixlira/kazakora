@@ -322,11 +322,21 @@ class BoletoMercadoPagoTest extends TestCase
         // Página do Mercado Pago importada + o logo (imagem PNG com transparência).
         $this->assertStringContainsString('/XObject', $pdf);
         $this->assertStringContainsString('/SMask', $pdf);
-        Storage::disk('local')->assertExists("boletos/{$payment->id}.pdf");
+        Storage::disk('local')->assertExists("boletos/v2/{$payment->id}.pdf");
 
         // Segunda vez sai do arquivo guardado, sem baixar de novo.
         $this->get($url)->assertOk();
         Http::assertSentCount(1);
+    }
+
+    public function test_dados_da_empresa_abaixo_do_logo_seguem_o_rodape_do_checkout(): void
+    {
+        $this->assertSame([
+            'KazaKora: kazakora.com',
+            '© '.now('America/Sao_Paulo')->format('Y').' KazaKora | Grupo AlphaKora',
+            'CNPJ: 65.604.590/0001-07',
+            'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
+        ], BoletoComMarca::dadosDaEmpresa());
     }
 
     public function test_link_do_boleto_sem_assinatura_e_recusado(): void

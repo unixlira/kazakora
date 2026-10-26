@@ -466,6 +466,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->name('concorrencia.listar')
         ->middleware('permission:cadastros.view');
 
+    // Afiliados › Shopee (2026-10-26): escolher os produtos que vão ser
+    // clonados como anúncio de afiliado (preço = custo × 1,5). Só guarda a
+    // escolha; nada vai para a Shopee daqui.
+    Route::get('afiliados/shopee', [\App\Modules\Admin\Http\Controllers\AfiliadosShopeeController::class, 'index'])
+        ->name('afiliados.shopee')
+        ->middleware('permission:cadastros.view');
+    Route::post('afiliados/shopee/escolher', [\App\Modules\Admin\Http\Controllers\AfiliadosShopeeController::class, 'escolher'])
+        ->name('afiliados.shopee.escolher')
+        ->middleware('permission:cadastros.edit');
+
     Route::get('precificacao', [PricingCalculatorController::class, 'index'])
         ->name('precificacao.calculadora')
         ->middleware('permission:cadastros.view');

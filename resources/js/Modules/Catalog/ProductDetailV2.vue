@@ -905,14 +905,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                  entre as bandeiras e o "Calcular o prazo"; substituem os cards soltos. -->
                             <ul class="selos-compra">
                                 <li>
-                                    <img src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <!-- Texto do frete com FULL e FLEX e o aviso do estoque por estado (pedido 2026-10-24). -->
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FLEX</span> para a sua casa!<small class="aviso-frete">(Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado)</small></span>
+                                    <!-- Frete e Devoluções no desenho do print do Lira (pedido 2026-10-26): caminhão verde,
+                                         da mesma cor do escudo das devoluções. -->
+                                    <i class="fas fa-truck-fast icone-verde" aria-hidden="true"></i>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil. Para São Paulo, SP e Região <b class="verde">Expresso</b>.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
-                                    <img src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Estorno de 100% do seu dinheiro</b> 30 dias após o recebimento do produto.</span>
+                                    <i class="fas fa-shield-halved icone-verde" aria-hidden="true"></i>
+                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro<br>30 dias após o recebimento do produto.</span>
                                 </li>
                                 <li>
                                     <img src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
@@ -1760,6 +1761,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .selos-compra b { color: #1846c7; font-weight: 700; }
 .pd2 .compra .selos-compra .selo-full { color: #0aac48; font-style: italic; font-weight: 800; }
 .pd2 .compra .selos-compra .selo-full i { margin: 0 2px 0 0; font-size: .95em; color: inherit; }
+.pd2 .compra .selos-compra .icone-verde { justify-self: center; font-size: 26px; color: #0aac48; }
+.pd2 .compra .selos-compra b.verde { color: #0aac48; }
 .pd2 .compra .selos-compra .aviso-frete { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: #777; }
 .pd2 .compra .carrossel-depoimentos { margin: 0 0 12px; border: 1px solid #ebebeb; border-radius: 8px; box-shadow: none; }
 .pd2 .compra .carrossel-depoimentos p { margin: 0; }
@@ -1770,6 +1773,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .compra .selos-compra li { color: var(--text); }
 .dark .pd2 .compra .selos-compra li + li { border-color: var(--line); }
 .dark .pd2 .compra .selos-compra b { color: var(--blue); }
+.dark .pd2 .compra .selos-compra b.verde, .dark .pd2 .compra .selos-compra .icone-verde { color: #4ade80; }
 .pd2 .compra .prazo-cep { margin: 0 0 10px; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }

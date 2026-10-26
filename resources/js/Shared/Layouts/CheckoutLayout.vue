@@ -12,7 +12,6 @@
 // bandeiras e os selos ficam sempre centralizados. Sem menu, busca e rodapé
 // da loja. Sempre claro (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
-import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -82,7 +81,6 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
         </div>
 
         <slot />
-        <AvisoCookies />
 
         <footer class="mt-auto px-4 pb-10 pt-2">
             <!-- Rodapé estático (2026-10-25): nada clicável, só texto e imagens. -->

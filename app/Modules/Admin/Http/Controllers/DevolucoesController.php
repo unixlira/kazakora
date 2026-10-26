@@ -298,16 +298,38 @@ class DevolucoesController extends Controller
     /** Número do menu lateral — casos com alguma pendência. */
     public static function contagemDeAlertas(): int
     {
-        return (int) cache()->remember('devolucoes.contagem_alertas', 300, fn () => MarketplaceReturn::query()
-            ->whereIn('situacao', [...MarketplaceReturn::EM_ABERTO, MarketplaceReturn::ENCERRADA])
-            ->get()
-            ->filter(fn (MarketplaceReturn $caso) => $caso->alertas() !== [])
-            ->count());
+        return self::contagemDoMenu()['alertas'];
     }
 
-    private function limparContagem(): void
+    /**
+     * Casos em aberto ainda sem alerta (2026-10-26): devolução nova com prazo
+     * folgado não tem pendência, e o Lira quer a bolinha do menu acesa quando
+     * ela chega. Fica separado de `alertas` para o menu reacender nos dois casos.
+     */
+    public static function contagemDeNovas(): int
     {
-        cache()->forget('devolucoes.contagem_alertas');
+        return self::contagemDoMenu()['novas'];
+    }
+
+    /** @return array{alertas: int, novas: int} */
+    private static function contagemDoMenu(): array
+    {
+        return cache()->remember('devolucoes.contagem_menu', 300, function () {
+            $casos = MarketplaceReturn::query()
+                ->whereIn('situacao', [...MarketplaceReturn::EM_ABERTO, MarketplaceReturn::ENCERRADA])
+                ->get();
+            $comAlerta = $casos->filter(fn (MarketplaceReturn $caso) => $caso->alertas() !== []);
+
+            return [
+                'alertas' => $comAlerta->count(),
+                'novas' => $casos->diff($comAlerta)->whereIn('situacao', MarketplaceReturn::EM_ABERTO)->count(),
+            ];
+        });
+    }
+
+    public static function limparContagem(): void
+    {
+        cache()->forget('devolucoes.contagem_menu');
     }
 
     /** Pedido do site sai com o nome da loja (KazaKora, FerraKora ou Beauty Kora). */

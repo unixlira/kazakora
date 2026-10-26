@@ -24,7 +24,7 @@ class SincronizarDevolucoes extends Command
         MarketplaceReturn::query()->where('manual', true)->whereIn('situacao', MarketplaceReturn::EM_ABERTO)
             ->each(fn (MarketplaceReturn $caso) => $sync->avisar($caso));
 
-        cache()->forget('devolucoes.contagem_alertas');
+        \App\Modules\Admin\Http\Controllers\DevolucoesController::limparContagem();
 
         $this->info("Mercado Livre: {$total['mercado_livre']} caso(s) · Shopee: {$total['shopee']} caso(s).");
 

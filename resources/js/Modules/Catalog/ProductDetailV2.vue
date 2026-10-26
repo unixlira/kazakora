@@ -637,10 +637,12 @@ const buyNow = () => {
     if (exigirVariacao()) return;
     buyingNow.value = true;
     // AddToCart da Meta (2026-10-18): mesmo event_id no Pixel e no servidor.
+    // Sai no clique (2026-10-25): desde 23/10 o "Comprar" vai para o
+    // seguro.<loja> numa página nova e o onSuccess nunca roda.
     const eventId = novoEventId();
     const item = { id: selecionada.value.id, preco: selecionada.value.final_price, quantidade: quantity.value };
+    rastrearAddToCart(item, eventId);
     router.post('/comprar-agora', { product_id: selecionada.value.id, quantity: quantity.value, meta_event_id: eventId }, {
-        onSuccess: () => rastrearAddToCart(item, eventId),
         onFinish: () => { buyingNow.value = false; },
     });
 };

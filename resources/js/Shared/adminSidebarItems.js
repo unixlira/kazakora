@@ -48,6 +48,14 @@ export const sidebarSections = [
         ],
     },
     {
+        // Afiliados (pedido do Lira 2026-10-26): produtos escolhidos para
+        // virar anúncio de afiliado, uma tela por canal. Começa pela Shopee.
+        heading: 'Afiliados',
+        items: [
+            { label: 'Shopee', href: '/admin/afiliados/shopee', icon: 'fas fa-handshake', marca: 'shopee', permission: 'cadastros.view' },
+        ],
+    },
+    {
         // Oportunidades (pedido do Lira 2026-10-12): Google e TikTok (antes
         // submenu do Radar) e os mais vendidos de TERCEIROS em cada
         // marketplace (correção do Lira 2026-10-12: não são as vendas da

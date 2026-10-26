@@ -30,7 +30,7 @@ createInertiaApp({
         });
         router.on('success', (e) => {
             const aceito = !!e.detail.page.props.cookies?.aceito;
-            if (aceito && !pixelOk) rastrearPagina(e.detail.page);
+            if (aceito && !pixelOk) rastrearPagina(e.detail.page, { imediato: true });
             pixelOk = aceito;
         });
 

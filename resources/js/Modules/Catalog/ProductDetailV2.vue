@@ -919,12 +919,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
-                            <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26):
-                                 carrinho verde no frete, na mesma cor do escudo das devoluções. -->
+                            <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26).
+                                 Frete igual ao print do Lira (2026-10-26 20h14): caminhão branco no quadrado azul-marinho,
+                                 "Via Correios Expresso" em cinza e "para São Paulo, SP e Região" em verde. -->
                             <ul class="fretefundo">
                                 <li>
-                                    <span class="selo-icone carrinho"><i class="fas fa-cart-shopping" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br>Para São Paulo, SP e Região Expresso.</span>
+                                    <span class="selo-icone"><i class="fas fa-truck" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> <span class="frete-via">Via Correios Expresso</span><br><span class="frete-regiao">para <b>São Paulo, SP e Região</b></span></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
@@ -1762,6 +1763,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo :is(.escudo, .carrinho) { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
 .pd2 .compra .fretefundo :is(.escudo, .carrinho) i { color: #0aac48; font-size: 16px; }
 .pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
+.pd2 .compra .fretefundo .frete-via { color: #9a9a9a; font-size: 13px; }
+.pd2 .compra .fretefundo .frete-regiao, .pd2 .compra .fretefundo .frete-regiao b { color: #0aac48; font-size: 13px; }
+.dark .pd2 .compra .fretefundo .frete-regiao, .dark .pd2 .compra .fretefundo .frete-regiao b { color: #4ade80; }
 .pd2 .compra .selos-compra { list-style: none; margin: 0 0 10px; padding: 4px 14px; border: 1px solid #ebebeb; border-radius: 8px; background: #f9f9f9; }
 .pd2 .compra .selos-compra li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 12px 0; font-size: 14px; line-height: 1.5; color: #545454; }
 .pd2 .compra .selos-compra li + li { border-top: 1px solid #e6e6e6; }

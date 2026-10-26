@@ -762,6 +762,15 @@ class BlingInvoiceImporter
         // documentos) continua sendo atualizado.
         $jaAutorizadaPorNos = $invoice->exists && $invoice->status === Invoice::STATUS_AUTHORIZED;
 
+        // Nota cancelada por nós direto na SEFAZ (botão do admin ou
+        // nfe:cancelar-pedidos-cancelados, 2026-10-26): o Bling não fica
+        // sabendo e segue dizendo "autorizada". Cancelamento na SEFAZ é
+        // fato consumado; o Bling não ressuscita a nota.
+        if ($invoice->exists && $invoice->status === Invoice::STATUS_CANCELLED && filled($invoice->protocolo_cancelamento)
+            && ($chave === '' || $chave === $invoice->chave_acesso)) {
+            $status = Invoice::STATUS_CANCELLED;
+        }
+
         $invoice->fill([
             'origem' => Invoice::ORIGEM_PEDIDO,
             'status' => $status,

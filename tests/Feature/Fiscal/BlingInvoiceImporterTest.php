@@ -121,6 +121,32 @@ class BlingInvoiceImporterTest extends TestCase
         $this->assertSame($xml, Storage::disk('local')->get($invoice->xml_path));
     }
 
+    public function test_note_cancelled_by_us_at_sefaz_is_not_revived_by_bling(): void
+    {
+        Http::fake([
+            '*/pedidos/vendas/26759086886' => Http::response(['data' => [
+                'id' => 26759086886, 'numeroLoja' => '585846882986263720', 'notaFiscal' => ['id' => 55501], 'situacao' => ['id' => 894762],
+            ]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [['id' => 26759086886, 'numeroLoja' => '585846882986263720']]]),
+            '*/nfe/55501' => Http::response(['data' => [
+                'id' => 55501, 'numero' => '1795', 'serie' => '3', 'situacao' => 5, 'chaveAcesso' => self::CHAVE, 'valorNota' => 100.0,
+            ]]),
+            '*/nfe/documento/*' => Http::response(['data' => ['xml' => '<nfeProc/>']]),
+        ]);
+
+        $order = $this->makeOrder();
+        $order->update(['status' => Order::STATUS_CANCELLED]);
+        Invoice::create([
+            'order_id' => $order->id, 'serie' => 3, 'numero' => 1795, 'status' => Invoice::STATUS_CANCELLED, 'chave_acesso' => self::CHAVE,
+            'origem' => Invoice::ORIGEM_PEDIDO, 'ambiente' => Invoice::AMBIENTE_PRODUCAO, 'autorizada_em' => now()->subHours(3),
+            'protocolo_cancelamento' => '135269999999999', 'cancelada_em' => now(), 'valor_total' => 100,
+        ]);
+
+        app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+        $this->assertSame(Invoice::STATUS_CANCELLED, $order->invoice()->first()->status);
+    }
+
     /**
      * Pedido do Lira em 22/10/2026: a série 3 (notas do Bling) usa o mesmo
      * DANFE da KazaKora que a série 2. O PDF do Bling nem é baixado.

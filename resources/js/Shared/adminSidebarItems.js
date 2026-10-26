@@ -14,7 +14,8 @@
  * `direto: true` = seção sem cabeçalho de dropdown: os itens ficam sempre
  * à vista, como links normais.
  * `permission: null` = qualquer pessoa da equipe vê.
- * `badgeKey` = contador de pendências (page.props.sidebarBadges).
+ * `badgeKey` = contador de pendências (page.props.sidebarBadges); uma lista
+ * soma os contadores e reacende quando qualquer um deles sobe.
  */
 export const sidebarSections = [
     {
@@ -82,7 +83,8 @@ export const sidebarSections = [
             { label: 'Vídeos da embalagem', href: '/admin/videos-embalagem', icon: 'fas fa-video', cor: 'vermelho', permission: 'pedidos.view' },
             { label: 'Importar pedido', href: '/admin/importar-pedido', icon: 'fas fa-file-import', cor: 'azul', permission: 'configuracoes.integracoes' },
             // Devoluções e reclamações de todas as plataformas (2026-10-06).
-            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', cor: 'vermelho', permission: 'operacional.view', badgeKey: 'devolucoes' },
+            // Bolinha também para devolução nova sem pendência (2026-10-26).
+            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', cor: 'vermelho', permission: 'operacional.view', badgeKey: ['devolucoes', 'devolucoesNovas'] },
         ],
     },
     {

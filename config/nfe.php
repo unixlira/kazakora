@@ -32,6 +32,16 @@ return [
     // 480h, só com nota de devolução.
     'cancelamento_horas' => (int) env('NFE_CANCELAMENTO_HORAS', 24),
     'cancelamento_extemporaneo_horas' => (int) env('NFE_CANCELAMENTO_EXTEMPORANEO_HORAS', 480),
+    // Folga antes das 24h: o nfe:cancelar-pedidos-cancelados só cancela nota
+    // autorizada há menos de (24h − folga), para a SEFAZ nunca receber o
+    // pedido já fora do prazo (aí vira cancelamento com multa).
+    'cancelamento_auto_folga_minutos' => 30,
+
+    // Pedidos "cancelados" no sistema em que a venda valeu (Lira, 2026-10-19):
+    // Shopee #2429 concluída e paga, #1942 extravio indenizado; ML #1290 e
+    // #2287 com estorno coberto pelo ML. Nem cancelamento nem devolução
+    // automática mexem na nota deles.
+    'vendas_que_valeram' => [2429, 1942, 1290, 2287],
     // Só reserva: o valor de cada ano fica na tabela ufesp_valores, atualizada
     // sozinha pelo fiscal:atualizar-ufesp (ver UfespService).
     'ufesp' => (float) env('NFE_UFESP', 38.42),

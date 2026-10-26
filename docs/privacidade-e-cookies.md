@@ -16,7 +16,23 @@ visita a loja.
 
 ## Como está montado
 
-### Aceite dos cookies (desde 24/10/2026: no checkout, sem aviso flutuante)
+### Aceite dos cookies (desde 25/10/2026: faixa "ao navegar você concorda", aceite em 3 s)
+- **Pedido do Lira em 25/10/2026:** a faixa voltou (`AvisoCookies.vue`, na
+  `AppLayout` e na `CheckoutLayout`) com "Ao continuar navegando no site, você
+  concorda com o uso de cookies e dos seus dados de navegação, conforme a LGPD"
+  e botão OK. O OK grava o aceite na hora; **sem clique, a faixa some sozinha em
+  3 s e grava o aceite do mesmo jeito** (`POST /cookies/aceitar`). Versão
+  `2026-10-25`; os OKs de 2026-10-18 e 2026-10-24 continuam valendo.
+- Motivo: sem a faixa (24/10) o aceite só vinha no Finalizar pedido e o Pixel
+  da Meta não via ninguém antes do checkout. Com o aceite em 3 s, Pixel e API
+  de Conversões voltam a pegar quase toda visita, sem quebrar a regra "terceiro
+  só depois do aceite" (`pixelMeta.js` continua exigindo `cookies.aceito`).
+- Risco conhecido, escolha do Lira: aceite por "continuar navegando" é
+  consentimento fraco para a ANPD (ela pede ação clara e opção de recusar).
+  Não há botão de recusar.
+- O aceite no Finalizar pedido (abaixo) continua valendo.
+
+#### Histórico: 24/10/2026, só no checkout
 - Pedido do Lira em 24/10/2026: saiu o aviso flutuante (`AvisoCookies.vue`,
   botão OK). O aceite agora é a frase abaixo do **Finalizar pedido**
   (`CheckoutV2.vue`; no checkout antigo, a caixinha do `Payment.vue`): "Ao
@@ -26,7 +42,7 @@ visita a loja.
   `Cookies::registrarAceite()` grava a prova e cria os cookies, igual ao OK
   antigo. Beauty Kora e FerraKora: a API de pedido
   (`CheckoutOutroSiteController::pedido`) grava só a prova, com `origem` do site.
-- **Efeito:** quem só navega e não compra fica só com os cookies necessários.
+- **Efeito (24/10, corrigido em 25/10 pela faixa):** quem só navegava e não comprava ficava só com os cookies necessários.
   Pixel da Meta (PageView, ViewContent, AddToCart, no navegador e no servidor)
   só roda para quem já comprou ou deu OK no aviso antigo (versão 2026-10-18,
   que continua valendo: `Cookies::VERSOES_ANTERIORES`).

@@ -18,8 +18,9 @@ use Illuminate\Support\Str;
  *   entrada. Navegador completo, valor do clique e cookies de terceiros no
  *   log continuam só depois do OK.
  *
- * Desde 2026-10-24 não há mais aviso flutuante: o aceite vem junto com o
- * "Finalizar pedido" (frase abaixo do botão) e é gravado por registrarAceite().
+ * Aceite (gravado por registrarAceite()): desde 2026-10-25 a faixa de cookies
+ * voltou ("ao navegar você concorda"); o OK ou 3 s sem clique gravam o aceite
+ * (AvisoCookies.vue → /cookies/aceitar). O "Finalizar pedido" também aceita.
  *
  * Mudou o que a loja coleta? Troque VERSAO e atualize as políticas.
  */
@@ -27,10 +28,11 @@ class Cookies
 {
     // 2026-10-18: API de Conversões da Meta (o servidor também manda os eventos).
     // 2026-10-24: aceite na frase do checkout, no lugar do aviso flutuante.
-    public const VERSAO = '2026-10-24';
+    // 2026-10-25: faixa de volta, aceite ao navegar (OK ou 3 s sem clique).
+    public const VERSAO = '2026-10-25';
 
     /** OKs anteriores para os mesmos cookies (aviso de 2026-10-18): continuam valendo. */
-    public const VERSOES_ANTERIORES = ['2026-10-18'];
+    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24'];
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';

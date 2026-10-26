@@ -865,7 +865,8 @@ class AnuncioConteudoService
         $secoes = [];
         $atual = ['titulo' => null, 'textos' => [], 'itens' => []];
 
-        foreach (preg_split('/\R/', $descricao) as $linha) {
+        // Sem /u o \R corta o byte 0x85 do meio do ✅ e o JSON quebra (2026-10-26).
+        foreach (preg_split('/\R/u', $descricao) as $linha) {
             $linha = trim($linha);
 
             if ($linha === '') {

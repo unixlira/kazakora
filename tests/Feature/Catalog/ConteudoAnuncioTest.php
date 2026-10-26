@@ -171,6 +171,19 @@ class ConteudoAnuncioTest extends TestCase
         $this->assertCount(4, $conteudo->beneficios);
     }
 
+    public function test_regra_automatica_nao_corta_o_emoji_do_check(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+        $produto = $this->produto();
+        $produto->update(['description' => "Bike Spinning:\nTreine em casa.\n✅ Volante de 8 kg\n✅ Painel digital 📅"]);
+
+        $conteudo = app(AnuncioConteudoService::class)->gerar($produto->fresh());
+
+        $this->assertSame(ProductAdContent::FONTE_AUTOMATICO, $conteudo->fonte);
+        $this->assertTrue($conteudo->exists);
+        $this->assertSame(['Volante de 8 kg', 'Painel digital 📅'], $conteudo->destaques);
+    }
+
     public function test_json_ruim_do_gemini_tambem_cai_na_regra_automatica(): void
     {
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['candidates' => [['content' => ['parts' => [['text' => 'desculpe, não consigo']]]]]])]);

@@ -16,6 +16,8 @@
  * `permission: null` = qualquer pessoa da equipe vê.
  * `badgeKey` = contador de pendências (page.props.sidebarBadges); uma lista
  * soma os contadores e reacende quando qualquer um deles sobe.
+ * `alertaNoTitulo: true` = acende também a bolinha piscando no título da
+ * seção; some quando o item é aberto (Atendimento, 2026-10-26).
  */
 export const sidebarSections = [
     {
@@ -168,13 +170,13 @@ export const sidebarSections = [
     {
         heading: 'Atendimento',
         items: [
-            { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
-            { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
+            { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas', alertaNoTitulo: true },
+            { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos', alertaNoTitulo: true },
             // Perguntas MK Place (2026-10-20): perguntas dos anúncios; a Manuela
             // atende e o contador mostra as que esperam uma pessoa. alertaFixo:
             // alerta vermelho que não some no clique e acende o título da seção.
             { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'atendimentoMkplace', alertaFixo: true },
-            { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
+            { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos', alertaNoTitulo: true },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },
         ],

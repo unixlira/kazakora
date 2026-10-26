@@ -901,27 +901,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
-                            <!-- Quatro selos num quadro só, no desenho do print do Lira (pedido 2026-10-23):
-                                 entre as bandeiras e o "Calcular o prazo"; substituem os cards soltos. -->
-                            <ul class="selos-compra">
+                            <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26):
+                                 carrinho verde no frete, na mesma cor do escudo das devoluções. -->
+                            <ul class="fretefundo">
                                 <li>
-                                    <!-- Frete e Devoluções no desenho do print do Lira (pedido 2026-10-26): caminhão verde,
-                                         da mesma cor do escudo das devoluções. -->
-                                    <i class="fas fa-truck-fast icone-verde" aria-hidden="true"></i>
-                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil. Para São Paulo, SP e Região <b class="verde">Expresso</b>.</span>
+                                    <span class="selo-icone carrinho"><i class="fas fa-cart-shopping" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br>Para São Paulo, SP e Região Expresso.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
-                                    <i class="fas fa-shield-halved icone-verde" aria-hidden="true"></i>
-                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro<br>30 dias após o recebimento do produto.</span>
-                                </li>
-                                <li>
-                                    <img src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro<br>30 dias após o recebimento do produto</span>
                                 </li>
                             </ul>
 
@@ -1751,8 +1741,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo .selo-img { width: 38px; height: 38px; }
 .pd2 .compra .fretefundo .selo-icone { width: 38px; height: 30px; border-radius: 6px; background: #0d1b3e; }
 .pd2 .compra .fretefundo .selo-icone i { color: #fff; font-size: 17px; }
-.pd2 .compra .fretefundo .escudo { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
-.pd2 .compra .fretefundo .escudo i { color: #0aac48; font-size: 16px; }
+.pd2 .compra .fretefundo :is(.escudo, .carrinho) { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
+.pd2 .compra .fretefundo :is(.escudo, .carrinho) i { color: #0aac48; font-size: 16px; }
 .pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
 .pd2 .compra .selos-compra { list-style: none; margin: 0 0 10px; padding: 4px 14px; border: 1px solid #ebebeb; border-radius: 8px; background: #f9f9f9; }
 .pd2 .compra .selos-compra li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 12px 0; font-size: 14px; line-height: 1.5; color: #545454; }

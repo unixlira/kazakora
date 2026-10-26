@@ -69,6 +69,8 @@ export const sidebarSections = [
         items: [
             { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', marca: 'mercado-livre', permission: 'financeiro.view' },
             { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', marca: 'shopee', permission: 'financeiro.view' },
+            // Análise Profunda de Conta (pedido do Lira 2026-10-26).
+            { label: 'Análise Profunda Shopee', href: '/admin/estatisticas/analise-profunda/shopee', icon: 'fas fa-microscope', marca: 'shopee', permission: 'financeiro.view' },
         ],
     },
     {

@@ -723,6 +723,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('estatisticas/curva-abc/{canal}', [\App\Modules\Admin\Http\Controllers\EstatisticasController::class, 'curvaAbc'])
             ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\EstatisticasController::CANAIS))
             ->name('estatisticas.curva-abc');
+        // Análise Profunda de Conta (pedido do Lira 2026-10-26): todos os
+        // dados da Shopee numa tela, risco primeiro. Só leitura.
+        Route::get('estatisticas/analise-profunda/{canal}', [\App\Modules\Admin\Http\Controllers\AnaliseProfundaController::class, 'show'])
+            ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\AnaliseProfundaController::CANAIS))
+            ->name('estatisticas.analise-profunda');
         // Arquivos financeiros do TikTok enviados à mão (2026-10-11).
         Route::get('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'index'])->name('arquivos-tiktok.listar');
         Route::post('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'store'])->name('arquivos-tiktok.enviar');

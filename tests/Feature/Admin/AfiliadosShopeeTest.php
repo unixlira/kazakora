@@ -30,7 +30,7 @@ class AfiliadosShopeeTest extends TestCase
         $brinquedos = Category::factory()->create(['name' => 'Brinquedos e Games']);
         $outra = Category::factory()->create(['name' => 'Ferramentas']);
 
-        $bike = Product::factory()->create(['name' => 'Bike Spinning Ergométrica Mecânica', 'sku' => 'BIKE-1', 'cost_price' => 380, 'category_id' => $outra->id]);
+        $bike = Product::factory()->create(['name' => 'Bike Spinning Ergométrica Profissional 120kg', 'sku' => 'BIKE-1', 'cost_price' => 380, 'category_id' => $outra->id]);
         $carrinho = Product::factory()->create(['name' => 'Carrinho', 'cost_price' => 19.99, 'category_id' => $brinquedos->id]);
         Product::factory()->create(['name' => 'Variação do carrinho', 'cost_price' => 10, 'category_id' => $brinquedos->id, 'parent_product_id' => $carrinho->id]);
         $algodao = Product::factory()->create(['name' => 'Máquina de Algodão Doce', 'cost_price' => 73, 'category_id' => $outra->id]);

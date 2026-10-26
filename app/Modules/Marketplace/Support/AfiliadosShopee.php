@@ -66,7 +66,7 @@ class AfiliadosShopee
         $nome = mb_strtolower($produto->name);
 
         return match (true) {
-            str_contains($nome, 'spinning') && str_contains($nome, 'mec') => 'bike',
+            str_contains($nome, 'spinning') => 'bike',
             $produto->category?->name === 'Brinquedos e Games' || (str_contains($nome, 'algod') && str_contains($nome, 'doce')) => 'brinquedos',
             str_contains($nome, 'pote') && str_contains($nome, 'herm') => 'potes',
             str_contains($nome, 'medidor de press') => 'medidor',
@@ -89,7 +89,9 @@ class AfiliadosShopee
     private function filtro(Builder $q, string $grupo): void
     {
         match ($grupo) {
-            'bike' => $q->where('name', 'like', '%spinning%')->where('name', 'like', '%mec%'),
+            // Toda Bike Spinning da loja é mecânica, mas nem todo nome diz
+            // (a 82 do homolog virou "Bike Spinning Ergométrica Profissional 120kg").
+            'bike' => $q->where('name', 'like', '%spinning%'),
             'brinquedos' => $q->whereHas('category', fn (Builder $c) => $c->where('name', 'Brinquedos e Games'))
                 ->orWhere(fn (Builder $w) => $w->where('name', 'like', '%algod%')->where('name', 'like', '%doce%')),
             'potes' => $q->where('name', 'like', '%pote%')->where('name', 'like', '%herm%'),

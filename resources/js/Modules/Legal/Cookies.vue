@@ -53,9 +53,9 @@ const cookies = [
     {
         nome: '_fbp, _fbc',
         tipo: 'Publicidade',
-        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. O Pixel é carregado desde o primeiro acesso; o aviso pelo nosso servidor só acontece depois do seu aceite ao finalizar a compra. Você pode bloquear ou apagar esses cookies nas configurações do seu navegador.',
+        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. Só é criado depois do seu aceite ao finalizar a compra.',
         duracao: 'até 90 dias',
-        base: 'Pixel: legítimo interesse (art. 7º, IX). Aviso pelo servidor: consentimento (art. 7º, I)',
+        base: 'Consentimento (art. 7º, I)',
     },
 ];
 </script>
@@ -81,7 +81,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios desde o primeiro acesso, e a API de Conversões da Meta só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
+                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios, e só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 

@@ -51,6 +51,9 @@ return Application::configure(basePath: dirname(__DIR__))
             headers: Request::HEADER_X_FORWARDED_FOR,
         );
 
+        // _fbc criado pelo servidor (Cookies::criarFbc) tem que sair legível para o Pixel.
+        $middleware->encryptCookies(except: ['_fbc', '_fbp']);
+
         $middleware->web(append: [
             // Antes do Inertia: os preços da loja já saem com o frete (2026-10-12).
             \App\Http\Middleware\AtivarFreteEmbutido::class,

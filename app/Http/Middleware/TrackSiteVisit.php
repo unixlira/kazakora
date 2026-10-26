@@ -9,6 +9,7 @@ use App\Support\Privacidade\Cookies;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\IpUtils;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -48,7 +49,21 @@ class TrackSiteVisit
      * Robôs e programas que não são navegador (pedido 2026-10-12: curl,
      * scanners e monitores entravam como visita "Direto").
      */
-    public const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
+    public const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|facebookexternalua|externalads|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
+
+    /**
+     * Rede da própria Meta (pedido 2026-10-25): o robô que confere os anúncios
+     * navega com cara de celular (Chrome Android, iPhone) e entrava como
+     * visita "Interno" (112 linhas em 25/10). Cliente de verdade nunca sai
+     * daqui: o navegador do app do Facebook usa a internet do celular.
+     */
+    public const REDES_DA_META = [
+        '2a03:2880::/32', '31.13.24.0/21', '31.13.64.0/18', '66.220.144.0/20', '69.63.176.0/20',
+        '69.171.224.0/19', '157.240.0.0/16', '173.252.64.0/18', '129.134.0.0/16',
+    ];
+
+    /** Sessão: fbclid do anúncio, para o _fbc sair mesmo se o aceite vier depois, no checkout. */
+    public const SESSAO_FBCLID = 'meta_fbclid';
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -56,6 +71,7 @@ class TrackSiteVisit
         // requisição (geolocalização, lead, checkout) já usar o mesmo código.
         if ($request->isMethod('get') && $this->paginaDaLoja($request)) {
             rescue(fn () => Cookies::garantirVisitante($request), null, false);
+            rescue(fn () => self::guardarFbclid($request), null, false);
         }
 
         $response = $next($request);
@@ -82,8 +98,27 @@ class TrackSiteVisit
     }
 
     /**
+     * Clique de anúncio da Meta (?fbclid=): guarda na sessão com a hora do
+     * clique. O Pixel só cria o _fbc se carregar nesta página; com o aceite
+     * em 3 s, quem clica em Comprar antes perdia o vínculo com o anúncio
+     * (2026-10-25). Cookies::registrarAceite cria o _fbc com isto, e a
+     * passagem do checkout seguro leva junto.
+     */
+    private static function guardarFbclid(Request $request): void
+    {
+        $fbclid = $request->query('fbclid');
+
+        if (is_string($fbclid) && preg_match('/^[A-Za-z0-9_\-]{10,500}$/', $fbclid) === 1) {
+            $request->session()->put(self::SESSAO_FBCLID, ['valor' => $fbclid, 'em' => (int) floor(microtime(true) * 1000)]);
+        }
+    }
+
+    /**
      * Visita contável da página em que o cliente deu OK (CookiesController):
      * sem ela, quem dá OK e sai sem abrir outra página nunca entra na conta.
+     * Se a página já foi gravada há pouco (o cookie de visitante nasce no
+     * primeiro acesso desde 25/10 e a faixa aceita sozinha em 3 s), só
+     * completa aquela linha com o aceite: antes saíam duas visitas por entrada.
      */
     public static function registrarOk(Request $request, string $visitorId): void
     {
@@ -98,6 +133,28 @@ class TrackSiteVisit
         $query = [];
         parse_str($pagina['query'] ?? '', $query);
         $utm = fn (string $campo, int $limite) => is_string($query[$campo] ?? null) && $query[$campo] !== '' ? Str::limit(strip_tags($query[$campo]), $limite, '') : null;
+
+        $path = '/'.ltrim($pagina['path'] ?? '/', '/');
+        $recente = rescue(fn () => SiteVisit::query()->daLoja()
+            ->where('visitor_id', $visitorId)
+            ->where('path', Str::limit($path, 250, ''))
+            ->where('created_at', '>=', now()->subMinutes(30))
+            ->latest('id')
+            ->first(), null, false);
+
+        if ($recente) {
+            $clique = OrigemVisita::clickId($query);
+            $cookies = [...Cookies::doVisitante($request), Cookies::COOKIE_VISITANTE => $visitorId, Cookies::COOKIE_OK => Cookies::VERSAO];
+            ksort($cookies);
+            rescue(fn () => $recente->update([
+                'consentiu' => true,
+                'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
+                'click_id' => $recente->click_id ?? $clique[1],
+                'cookies' => $cookies,
+            ]), null, false);
+
+            return;
+        }
 
         // O Referer aqui é a própria página da loja: sem UTM/clique, a origem é Interno.
         rescue(fn () => self::gravar($request, $visitorId, true, $pagina['path'] ?? '/', null, [
@@ -223,6 +280,10 @@ class TrackSiteVisit
         $userAgent = (string) $request->userAgent();
 
         if (! str_starts_with($userAgent, 'Mozilla/') || preg_match(self::BOT_PATTERN, $userAgent) === 1) {
+            return true;
+        }
+
+        if (IpUtils::checkIp((string) $request->ip(), self::REDES_DA_META)) {
             return true;
         }
 

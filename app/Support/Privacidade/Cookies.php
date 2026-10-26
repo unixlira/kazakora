@@ -2,6 +2,7 @@
 
 namespace App\Support\Privacidade;
 
+use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Models\ConsentimentoCookie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -151,9 +152,47 @@ class Cookies
             Cookie::queue(self::COOKIE_VISITANTE, $visitante, self::DURACAO_MINUTOS);
             $request->cookies->set(self::COOKIE_OK, self::VERSAO);
             $request->cookies->set(self::COOKIE_VISITANTE, $visitante);
+            self::criarFbc($request);
         }
 
         return $visitante;
+    }
+
+    /** 90 dias, o mesmo prazo que o Pixel usa no _fbc. */
+    private const DURACAO_FBC_MINUTOS = 60 * 24 * 90;
+
+    /**
+     * _fbc do clique de anúncio guardado na sessão (TrackSiteVisit::guardarFbclid),
+     * no formato da Meta (fb.1.<hora do clique em ms>.<fbclid>), no domínio
+     * da loja inteiro (.kazakora.com, vale também no seguro.) e sem
+     * criptografia (bootstrap/app.php), para o Pixel ler. Não troca um _fbc
+     * que o Pixel já criou. Pedido 2026-10-25: com o aceite em 3 s, quem
+     * clicava em Comprar antes saía sem o vínculo com o anúncio.
+     */
+    private static function criarFbc(Request $request): void
+    {
+        $fbc = self::fbcDaSessao($request);
+
+        if ($fbc === null || (string) ($request->cookie('_fbc') ?? self::doVisitante($request)['_fbc'] ?? '') !== '') {
+            return;
+        }
+
+        $dominio = preg_replace('/^(www|seguro)\./', '', strtolower($request->getHost()));
+        Cookie::queue(Cookie::make('_fbc', $fbc, self::DURACAO_FBC_MINUTOS, '/', '.'.$dominio, true, false, false, 'lax'));
+    }
+
+    /** _fbc montado do fbclid da sessão, ou null. Também usado pela API de Conversões. */
+    public static function fbcDaSessao(Request $request): ?string
+    {
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $clique = $request->session()->get(TrackSiteVisit::SESSAO_FBCLID);
+
+        return is_array($clique) && is_string($clique['valor'] ?? null) && is_int($clique['em'] ?? null)
+            ? 'fb.1.'.$clique['em'].'.'.$clique['valor']
+            : null;
     }
 
     public static function registravel(string $nome): bool

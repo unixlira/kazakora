@@ -108,7 +108,8 @@ class ConversoesMeta
             'ua' => Str::limit((string) $request->userAgent(), 500, '') ?: null,
             'url' => $url ?? ($request->headers->get('referer') ?: $request->fullUrl()),
             'fbp' => $cookies['_fbp'] ?? null,
-            'fbc' => $cookies['_fbc'] ?? null,
+            // Sem _fbc no navegador (aceite no checkout antes de o Pixel carregar): o clique da sessão.
+            'fbc' => $cookies['_fbc'] ?? Cookies::fbcDaSessao($request),
         ];
     }
 

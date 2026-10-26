@@ -257,6 +257,14 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // é a rede de segurança e o que pega a Shopee (sem push de devolução).
 Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
 
+// Pedido cancelado no canal com NF-e autorizada (Lira, 2026-10-26: "sem
+// multa"). Até 24h da autorização a nota é cancelada na SEFAZ, sem multa
+// (de 10 em 10 min, com folga antes das 24h). Passou disso, todo dia às
+// 08:20 sai sozinha a NF-e de devolução. Venda que valeu (config
+// nfe.vendas_que_valeram, bpp_covered) fica de fora das duas.
+Schedule::command('nfe:cancelar-pedidos-cancelados')->everyTenMinutes()->withoutOverlapping(15);
+Schedule::command('devolucoes:vendas-canceladas --automatico')->dailyAt('08:20')->withoutOverlapping(60);
+
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
 // no consentimento, MENOS recibo retido como prova ou com pendência aberta
 // (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca

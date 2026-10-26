@@ -32,7 +32,7 @@ const cookies = [
     {
         nome: 'kazakora_cookies',
         tipo: 'Necessário',
-        finalidade: 'Lembra que você aceitou o uso de cookies (na faixa de cookies ou ao finalizar uma compra).',
+        finalidade: 'Lembra que você aceitou o uso de cookies ao finalizar uma compra.',
         duracao: '12 meses',
         base: 'Cumprimento de obrigação legal: prova do consentimento (art. 8º, § 2º)',
     },
@@ -53,9 +53,9 @@ const cookies = [
     {
         nome: '_fbp, _fbc',
         tipo: 'Publicidade',
-        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. Só é criado depois do seu aceite na faixa de cookies (OK ou 3 segundos de navegação) ou ao finalizar a compra.',
+        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. O Pixel é carregado desde o primeiro acesso: ao navegar no site você concorda com ele pelos Termos de Uso, e o aceite é registrado ao finalizar a compra. O aviso pelo nosso servidor só acontece depois desse aceite. Você pode bloquear ou apagar esses cookies nas configurações do seu navegador.',
         duracao: 'até 90 dias',
-        base: 'Consentimento (art. 7º, I)',
+        base: 'Consentimento pelo uso do site, conforme os Termos de Uso, registrado ao finalizar a compra (art. 7º, I)',
     },
 ];
 </script>
@@ -81,7 +81,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios, e só depois do seu aceite na faixa de cookies ou ao finalizar a compra. A KazaKora não vende dados.
+                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios desde o primeiro acesso, e a API de Conversões da Meta só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 
@@ -110,15 +110,14 @@ const cookies = [
                     <p>
                         Os cookies necessários funcionam desde o primeiro acesso, porque sem eles a loja não abre o carrinho nem o
                         pagamento. O de navegação (kazakora_visitor) também é criado no primeiro acesso e registra as páginas que
-                        você abre no site. Os de publicidade só são criados depois do seu aceite: a faixa de cookies do primeiro acesso
-                        informa que, ao continuar navegando, você concorda com o uso de cookies e dados, e o aceite é registrado quando
-                        você clica em <strong>OK</strong> ou, sem clique, 3 segundos depois de ela aparecer. A frase abaixo do botão
-                        <strong>Finalizar pedido</strong> também registra o aceite. Guardamos a data, a hora, o IP, o navegador e a versão do
-                        texto aceito, como a LGPD exige.
+                        você abre no site. O Pixel da Meta também carrega desde o primeiro acesso: ao navegar no site você concorda
+                        com o uso de cookies e dados, conforme os <Link href="/termos-de-uso" class="font-medium text-store-accent hover:underline">Termos de Uso</Link>.
+                        O aceite é registrado pela frase abaixo do botão <strong>Finalizar pedido</strong>. Guardamos a data, a hora, o IP,
+                        o navegador e a versão do texto aceito, como a LGPD exige.
                     </p>
                     <p>
-                        Para desfazer, apague os cookies do site nas configurações do seu navegador: a faixa de cookies
-                        aparece de novo na próxima visita, e o código de navegação recomeça do zero. Você também pode pedir pelo e-mail {{ COMPANY.email }}
+                        Para desfazer, apague ou bloqueie os cookies do site nas configurações do seu navegador: o código de
+                        navegação recomeça do zero. Você também pode pedir pelo e-mail {{ COMPANY.email }}
                         ou pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>.
                     </p>
                 </LegalCard>

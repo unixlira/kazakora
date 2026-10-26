@@ -57,6 +57,12 @@ class DevolucaoVendasCanceladas extends Command
             return self::FAILURE;
         }
 
+        if ($automatico && ! $simular && ! CancelarNotasDePedidosCancelados::servidorDeProducao()) {
+            $this->warn('Fora do servidor de produção (APP_URL não é '.config('nfe.automatico_host').'): --automatico não emite nada.');
+
+            return self::SUCCESS;
+        }
+
         $casos = $this->casos($devolucoes, $pedidos);
         $emitidas = [];
         $falhas = [];

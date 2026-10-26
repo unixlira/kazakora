@@ -42,6 +42,11 @@ return [
     // #2287 com estorno coberto pelo ML. Nem cancelamento nem devolução
     // automática mexem na nota deles.
     'vendas_que_valeram' => [2429, 1942, 1290, 2287],
+
+    // O homolog tem o certificado e o ambiente de produção da SEFAZ e uma
+    // cópia dos pedidos: cancelamento e devolução AUTOMÁTICOS só agem no
+    // servidor cujo APP_URL tem este host (2026-10-26).
+    'automatico_host' => 'kazakora.com',
     // Só reserva: o valor de cada ano fica na tabela ufesp_valores, atualizada
     // sozinha pelo fiscal:atualizar-ufesp (ver UfespService).
     'ufesp' => (float) env('NFE_UFESP', 38.42),

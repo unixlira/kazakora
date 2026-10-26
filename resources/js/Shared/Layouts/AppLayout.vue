@@ -9,6 +9,7 @@ import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import ModalAvaliacao from '@/Shared/Components/ModalAvaliacao.vue';
+import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import { cliqueSelo } from '@/Shared/cliqueSelo';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
@@ -189,6 +190,7 @@ const REDES = [
         <FaixaPromo />
         <TrocarSenhaModal />
         <ModalAvaliacao />
+        <AvisoCookies />
         <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
              (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
         <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">

@@ -20,9 +20,19 @@ createInertiaApp({
             .mount(el);
         liberarImagensDepoisDaPrimeiraPintura();
 
-        // Pixel da Meta (Shared/pixelMeta.js): desde 2026-10-25 roda sem esperar
-        // o OK de cookies. `navigate` cobre a primeira página e cada troca de página.
-        router.on('navigate', (e) => rastrearPagina(e.detail.page));
+        // Pixel da Meta: só roda depois do OK de cookies (Shared/pixelMeta.js).
+        // `navigate` cobre a primeira página e cada troca de página; o OK chega
+        // por recarga parcial de `cookies` e dispara a página atual em seguida.
+        let pixelOk = false;
+        router.on('navigate', (e) => {
+            pixelOk = !!e.detail.page.props.cookies?.aceito;
+            rastrearPagina(e.detail.page);
+        });
+        router.on('success', (e) => {
+            const aceito = !!e.detail.page.props.cookies?.aceito;
+            if (aceito && !pixelOk) rastrearPagina(e.detail.page);
+            pixelOk = aceito;
+        });
 
         // Tela de abertura (resources/views/app.blade.php): some quando a loja montou
         // e o CSS da loja (carregado sem travar a página) já chegou.

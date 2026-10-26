@@ -10,9 +10,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
- * OK do aviso de cookies (pedido 2026-10-10). O aviso flutuante saiu em
- * 2026-10-24 (o aceite agora vem no checkout); a rota fica para sites que
- * ainda mandem o OK.
+ * OK da faixa de cookies (pedido 2026-10-10). A faixa saiu em 2026-10-24 e
+ * voltou em 2026-10-25: chega aqui pelo OK ou sozinha depois de 3 s sem clique
+ * (AvisoCookies.vue). O "Finalizar pedido" grava o aceite pelo checkout.
  */
 class CookiesController extends Controller
 {

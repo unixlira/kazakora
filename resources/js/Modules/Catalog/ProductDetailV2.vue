@@ -772,7 +772,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                     </button>
                                     -->
-                                    <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`">-{{ percentualTotal }}%</span>
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
@@ -838,6 +837,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
                                 <div class="linha-por">
                                     <span class="por">{{ formatPrice(precoPor) }}</span>
+                                    <!-- Selo de desconto ao lado do preço, com seta para baixo (pedido 2026-10-26; antes ficava na foto com "-"). -->
+                                    <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`"><i class="fas fa-arrow-down" aria-hidden="true"></i>{{ percentualTotal }}%</span>
                                 </div>
                                 <div class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong></div>
                                 <div v-if="precoPix !== null && seloPix" class="linha-pix">
@@ -1775,8 +1776,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
 /* Endereço do CEP no azul do botão "calcular" desta caixa (#00c3ee, pedido do Lira 2026-10-24). */
 .pd2 .compra .prazo-cep .rua { color: #00c3ee; }
-/* Selo de desconto no canto da foto (pedido 2026-10-23): "-9%" quando o preço caiu. */
-.pd2 .selo-desconto { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); pointer-events: none; }
+/* Selo de desconto ao lado do preço (pedido 2026-10-26): seta para baixo + "9%" quando o preço caiu. */
+.pd2 .selo-desconto { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); }
+.pd2 .selo-desconto i { font-size: 12px; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
 .dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }

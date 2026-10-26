@@ -252,7 +252,8 @@ class AnuncioConteudoService
         }
 
         // Emoji é obrigatório no CTA: o que vier sem ganha um padrão.
-        $comEmoji = fn (string $valor, string $emoji, bool $noFim = true) => preg_match('/\p{Extended_Pictographic}/u', $valor)
+        // Faixas de emoji explícitas: o PCRE da VPS não conhece \p{Extended_Pictographic}.
+        $comEmoji = fn (string $valor, string $emoji, bool $noFim = true) => preg_match('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2764}]/u', $valor)
             ? $valor : ($noFim ? "{$valor} {$emoji}" : "{$emoji} {$valor}");
         $botao = $texto($cta['botao'] ?? null, 40);
 

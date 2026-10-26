@@ -921,11 +921,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26).
                                  Frete igual ao print do Lira (2026-10-26 20h14): "Via Correios Expresso" em cinza e
-                                 "para São Paulo, SP e Região" em verde. Caminhão verde #0aac48, igual ao escudo (pedido do Lira 2026-10-26). -->
+                                 "para São Paulo, SP e Região" em verde. Caminhão verde #0aac48, igual ao escudo (pedido do Lira 2026-10-26).
+                                 "Frete Grátis para todo o Brasil." antes da linha de São Paulo (pedido do Lira 2026-10-26). -->
                             <ul class="fretefundo">
                                 <li>
                                     <span class="selo-icone carrinho"><i class="fas fa-truck" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> <span class="frete-via">Via Correios Expresso</span><br><span class="frete-regiao">para <b>São Paulo, SP e Região</b></span></span>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-via">Via Correios Expresso</span> <span class="frete-regiao">para <b>São Paulo, SP e Região</b></span></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>

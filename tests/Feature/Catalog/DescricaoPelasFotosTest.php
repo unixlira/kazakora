@@ -116,12 +116,14 @@ class DescricaoPelasFotosTest extends TestCase
             ->assertJsonPath('message', 'Cadastre pelo menos uma foto antes de gerar a descrição.');
     }
 
-    public function test_botao_do_admin_sem_cota_responde_503(): void
+    public function test_botao_do_admin_sem_cota_passa_para_o_claude(): void
     {
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response(['error' => 'quota'], 429)]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->postJson("/admin/produtos/{$this->produto()->id}/descricao-ia")->assertStatus(503);
+        $this->actingAs($admin)->postJson("/admin/produtos/{$this->produto()->id}/descricao-ia")
+            ->assertStatus(202)
+            ->assertJsonStructure(['claude', 'message']);
     }
 
     public function test_api_do_ferrakora_manda_o_conteudo_na_pagina_do_produto(): void

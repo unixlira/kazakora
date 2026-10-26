@@ -13,7 +13,16 @@ class ProductAdContent extends Model
 {
     public const FONTE_GEMINI = 'gemini';
 
+    /** Gemini sem resposta: o Claude do PC do Lira escreveu (2026-10-25). */
+    public const FONTE_CLAUDE = 'claude';
+
     public const FONTE_AUTOMATICO = 'automatico';
+
+    /** Escrito por uma IA (Gemini ou Claude), não pela regra automática. */
+    public function porIa(): bool
+    {
+        return in_array($this->fonte, [self::FONTE_GEMINI, self::FONTE_CLAUDE], true);
+    }
 
     protected $fillable = [
         'product_id',

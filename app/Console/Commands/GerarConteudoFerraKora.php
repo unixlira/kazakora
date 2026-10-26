@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
@@ -96,7 +95,7 @@ class GerarConteudoFerraKora extends Command
                 }
             }
 
-            $ok = $conteudo->fonte === ProductAdContent::FONTE_GEMINI;
+            $ok = $conteudo->porIa();
             $ok ? $gemini++ : $falhas++;
             $this->line(sprintf('#%d %s (%d foto(s)) → %s, %d bloco(s)%s', $product->id, $product->name, $fotos, $conteudo->fonte, count($conteudo->blocos ?? []), $conteudo->erro ? " ({$conteudo->erro})" : ''));
         }
@@ -109,7 +108,7 @@ class GerarConteudoFerraKora extends Command
     /** Falta conteúdo, ele não veio do Gemini ou o produto mudou depois. */
     private function precisa(AnuncioConteudoService $servico, Product $product): bool
     {
-        return $product->adContent?->fonte !== ProductAdContent::FONTE_GEMINI || $servico->precisaGerar($product);
+        return ! $product->adContent?->porIa() || $servico->precisaGerar($product);
     }
 
     private function resumo(int $feitos, int $gemini, int $falhas, bool $simular): void

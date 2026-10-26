@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Catalog\Models\AnuncioClaudePedido;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
 use Illuminate\Console\Command;
@@ -12,6 +13,7 @@ use Illuminate\Console\Command;
  * 2026-10-09. Roda pelo agendador em lotes pequenos (cada produto é uma
  * chamada ao Gemini); --produto=ID gera um só, --forcar refaz mesmo sem
  * mudança. Conteúdo gerado antes do CTA (2026-10-20) ganha só o CTA.
+ * Gemini sem resposta: o texto vai para a fila do Claude (2026-10-25).
  */
 class GerarConteudoAnuncio extends Command
 {
@@ -44,10 +46,15 @@ class GerarConteudoAnuncio extends Command
 
             if (! $forcar && ! $servico->precisaGerar($product)) {
                 // Conteúdo de antes do CTA (2026-10-20): gera só a chamada final.
-                if ($servico->faltaCta($product->adContent)) {
+                // CTA já na fila do Claude: passa para o próximo sem gastar o lote.
+                if ($servico->faltaCta($product->adContent) && ! AnuncioClaudePedido::emAberto($product->id, AnuncioClaudePedido::TIPO_CTA)) {
                     $conteudo = $servico->completarCta($product);
                     $feitos++;
-                    $this->line(sprintf('#%d %s → CTA %s', $product->id, $product->name, empty($conteudo?->cta) ? 'falhou' : 'gerado'));
+                    $this->line(sprintf('#%d %s → CTA %s', $product->id, $product->name, match (true) {
+                        ! empty($conteudo?->cta) => 'gerado',
+                        AnuncioClaudePedido::emAberto($product->id, AnuncioClaudePedido::TIPO_CTA) !== null => 'na fila do Claude',
+                        default => 'falhou',
+                    }));
                 }
 
                 continue;

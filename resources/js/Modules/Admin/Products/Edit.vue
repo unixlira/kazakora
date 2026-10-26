@@ -124,9 +124,34 @@ const conteudoIa = ref(null);
 const gerandoDescricao = ref(false);
 const erroDescricao = ref('');
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
+// Gemini sem resposta (2026-10-25): o servidor devolve 202 com o pedido do
+// Claude e a tela consulta a cada 10 s até ficar pronto (até 20 min).
+const avisoDescricao = ref('');
+const esperarClaude = async (pedido) => {
+    const limite = Date.now() + 20 * 60 * 1000;
+    while (Date.now() < limite) {
+        await new Promise((ok) => setTimeout(ok, 10000));
+        const resposta = await fetch(`/admin/produtos/${props.product.id}/descricao-ia/${pedido}`, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        }).catch(() => null);
+        const dados = resposta?.ok ? await resposta.json().catch(() => ({})) : {};
+        if (dados.status === 'pronto') {
+            descricaoIa.value = dados.descricao;
+            conteudoIa.value = dados.conteudo;
+            return;
+        }
+        if (dados.status === 'falhou') {
+            erroDescricao.value = dados.message || 'O Claude não conseguiu escrever. Tente de novo.';
+            return;
+        }
+    }
+    erroDescricao.value = 'O Claude ainda não terminou (o PC do Homer pode estar desligado). Tente de novo mais tarde.';
+};
 const gerarDescricao = async () => {
     gerandoDescricao.value = true;
     erroDescricao.value = '';
+    avisoDescricao.value = '';
     try {
         const resposta = await fetch(`/admin/produtos/${props.product.id}/descricao-ia`, {
             method: 'POST',
@@ -139,12 +164,18 @@ const gerarDescricao = async () => {
             erroDescricao.value = dados.message || 'Não deu para gerar agora. Tente de novo.';
             return;
         }
+        if (dados.claude) {
+            avisoDescricao.value = dados.message;
+            await esperarClaude(dados.claude);
+            return;
+        }
         descricaoIa.value = dados.descricao;
         conteudoIa.value = dados.conteudo;
     } catch {
         erroDescricao.value = 'Falha de conexão. Tente de novo.';
     } finally {
         gerandoDescricao.value = false;
+        avisoDescricao.value = '';
     }
 };
 const usarDescricao = () => {
@@ -188,12 +219,13 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                                 class="rounded bg-violet-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
                                 @click="gerarDescricao">
                                 <i class="fas mr-1" :class="gerandoDescricao ? 'fa-spinner animate-spin' : 'fa-wand-magic-sparkles'"></i>
-                                {{ gerandoDescricao ? 'Olhando as fotos...' : 'Gerar descrição com IA pelas fotos' }}
+                                {{ gerandoDescricao ? (avisoDescricao ? 'O Claude está escrevendo...' : 'Olhando as fotos...') : 'Gerar descrição com IA pelas fotos' }}
                             </button>
                             <span class="text-xs text-slate-500">
                                 {{ images.length ? `A IA lê até 6 fotos e o nome. Nada é salvo antes de você revisar.` : 'Cadastre as fotos (aba Fotos e vídeo) para usar.' }}
                             </span>
                         </div>
+                        <p v-if="avisoDescricao" class="mt-3 text-sm text-violet-700" role="status">{{ avisoDescricao }}</p>
                         <p v-if="erroDescricao" class="mt-3 text-sm text-red-600" role="alert">{{ erroDescricao }}</p>
                         <div v-if="descricaoIa !== null" class="mt-4 space-y-3">
                             <label for="descricao-ia" class="block text-sm font-semibold text-slate-700">Descrição sugerida (pode editar aqui)</label>
@@ -245,12 +277,13 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                     <p class="text-sm text-slate-500">
                         Benefícios (abaixo das avaliações) e a descrição em blocos com imagem da página do produto.
                         São gerados pela IA (Gemini) a partir da descrição e das fotos sempre que elas mudam (sem
-                        descrição, só pelas fotos e pelo nome); se a IA falhar, o sistema monta tudo pela própria descrição.
+                        descrição, só pelas fotos e pelo nome); se o Gemini não responder, o Claude escreve em alguns
+                        minutos e, até lá, o sistema monta tudo pela própria descrição.
                     </p>
                     <div class="flex flex-wrap items-center gap-3">
                         <span v-if="adContent" class="rounded px-2 py-1 text-xs font-semibold"
-                            :class="adContent.fonte === 'gemini' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'">
-                            {{ adContent.fonte === 'gemini' ? 'Gerado com IA' : 'Montado pela regra automática' }} · {{ formatarData(adContent.gerado_em) }}
+                            :class="['gemini', 'claude'].includes(adContent.fonte) ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'">
+                            {{ { gemini: 'Gerado com IA', claude: 'Gerado com IA (Claude)' }[adContent.fonte] ?? 'Montado pela regra automática' }} · {{ formatarData(adContent.gerado_em) }}
                         </span>
                         <span v-else class="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">Ainda não gerado — a página usa a descrição como está.</span>
                         <button type="button" :disabled="gerandoAnuncio" class="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" @click="gerarAnuncio">

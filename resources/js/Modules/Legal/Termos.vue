@@ -43,6 +43,23 @@ const usoProibido = [
                     </p>
                 </LegalCard>
 
+                <!-- Cookies nos Termos (pedido do Lira 2026-10-26): sem faixa de cookies na entrada; ao
+                     navegar concorda, e o aceite é registrado no Finalizar pedido. -->
+                <LegalCard id="cookies" title="Cookies e dados de navegação" class="scroll-mt-28">
+                    <p>
+                        Ao navegar no site, você concorda com o uso de cookies e com a coleta dos seus dados de navegação,
+                        conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/18), a
+                        <Link href="/politica-de-privacidade" class="font-medium text-store-accent hover:underline">Política de Privacidade</Link>
+                        e a <Link href="/politica-de-cookies" class="font-medium text-store-accent hover:underline">Política de Cookies</Link>.
+                        Isso inclui o Pixel da Meta (Facebook e Instagram), que mede as visitas e as compras vindas dos nossos anúncios.
+                    </p>
+                    <p>
+                        Ao clicar em <strong>Finalizar pedido</strong>, você declara que leu e aceita estes Termos, a Política
+                        de Privacidade e o uso de cookies, e esse aceite fica registrado (data, hora, IP, navegador e versão do texto).
+                        Você pode apagar ou bloquear os cookies nas configurações do seu navegador a qualquer momento.
+                    </p>
+                </LegalCard>
+
                 <LegalCard title="Definições">
                     <dl class="flex flex-col gap-2.5">
                         <div v-for="item in definicoes" :key="item.termo" class="flex flex-wrap gap-1.5">

@@ -9,7 +9,7 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e, com o seu aceite (na faixa de cookies ou ao finalizar a compra), do Pixel da Meta (publicidade). Com esse aceite, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e do Pixel da Meta (publicidade), carregado desde o primeiro acesso: ao navegar você concorda, conforme os Termos de Uso. Com o seu aceite ao finalizar a compra, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
@@ -91,7 +91,7 @@ const direitos = [
                 </LegalCard>
 
                 <!-- Captação de dados por cookies (pedido 2026-10-24): o aceite saiu do aviso
-                     flutuante e foi para o "Finalizar pedido"; em 2026-10-25 a faixa voltou (OK ou 3 s). Detalhe técnico: docs/privacidade-e-cookies.md. -->
+                     flutuante e foi para o "Finalizar pedido"; em 2026-10-25 a faixa voltou (OK ou 3 s) e em 2026-10-26 saiu de novo. Detalhe técnico: docs/privacidade-e-cookies.md. -->
                 <LegalCard id="cookies" title="Cookies e dados de navegação" class="scroll-mt-28">
                     <p>
                         Cookies são pequenos arquivos que a Loja grava no seu navegador. Usamos três tipos.
@@ -101,15 +101,14 @@ const direitos = [
                         aleatório de visitante, criado no primeiro acesso e que não leva o seu nome, para registrarmos as
                         páginas abertas no site e quantas foram (LGPD, art. 7º, IX, legítimo interesse).
                         <strong>Publicidade</strong>: o Pixel da Meta (Facebook e Instagram), que mede as visitas, os produtos
-                        colocados no carrinho e as compras vindas dos nossos anúncios. Publicidade depende do seu
-                        consentimento (LGPD, art. 7º, I).
+                        colocados no carrinho e as compras vindas dos nossos anúncios; é carregado desde o primeiro acesso e
+                        pode ser bloqueado ou apagado nas configurações do seu navegador.
                     </p>
                     <p>
-                        O consentimento é dado pela faixa de cookies que aparece no primeiro acesso: ela informa que, ao
-                        continuar navegando, você concorda com o uso de cookies e dos seus dados de navegação. O aceite é
-                        registrado quando você clica em <strong>OK</strong> ou, sem clique, 3 segundos depois de a faixa aparecer.
-                        A frase abaixo do botão <strong>Finalizar pedido</strong> também registra o aceite. Antes do aceite, nenhum
-                        cookie de publicidade é criado; o histórico das páginas abertas no site é registrado desde o primeiro acesso, por legítimo interesse (LGPD, art. 7º, IX), com um código aleatório do próprio site.
+                        Ao navegar na Loja, você concorda com o uso de cookies e dos seus dados de navegação (LGPD, art. 7º, I),
+                        conforme os <Link href="/termos-de-uso" class="font-medium text-store-accent hover:underline">Termos de Uso</Link>.
+                        O aceite é registrado pela frase abaixo do botão <strong>Finalizar pedido</strong>; ele libera o aviso à
+                        Meta pelo nosso servidor, descrito abaixo. O histórico das páginas abertas no site é registrado desde o primeiro acesso, por legítimo interesse (LGPD, art. 7º, IX), com um código aleatório do próprio site.
                         Como prova do aceite (LGPD, art. 8º, § 2º), guardamos a data, a hora, o endereço IP, o navegador e a
                         versão do texto aceito, por 5 anos.
                     </p>
@@ -199,7 +198,7 @@ const direitos = [
                         <div><dt class="text-xs text-store-fg-faint">E-mail</dt><dd class="text-store-fg">{{ COMPANY.email }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">WhatsApp</dt><dd class="text-store-fg">{{ COMPANY.whatsappDisplay }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">Horário de atendimento</dt><dd class="text-store-fg">{{ COMPANY.horario }}</dd></div>
-                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">25/10/2026</dd></div>
+                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">26/10/2026</dd></div>
                     </dl>
                     <p class="mt-2">
                         Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados, para

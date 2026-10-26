@@ -16,7 +16,25 @@ visita a loja.
 
 ## Como está montado
 
-### Aceite dos cookies (desde 25/10/2026: faixa "ao navegar você concorda", aceite em 3 s)
+### Aceite dos cookies (desde 26/10/2026: sem faixa, aceite nos Termos de Uso e no Finalizar pedido)
+- **Pedido do Lira em 26/10/2026** ("não quero mais esse botão de cookies [...]
+  vai tá dentro do termos de uso [...] assim que você clicar em comprar, você
+  aceita"): a faixa (`AvisoCookies.vue`) saiu da loja e do checkout. Motivo: no
+  celular ela cobria o COMPRAR AGORA na primeira tela, e 74% dos visitantes da
+  Meta nunca aceitavam (leitura de ADS de 26/10).
+- **Pixel da Meta do navegador carrega para todo visitante, sem esperar aceite**
+  (`pixelMeta.js` só exige o ID; `app.js` chama `rastrearPagina` a cada
+  navegação). A API de Conversões (servidor) continua só com aceite
+  (`Cookies::aceitou`), que agora vem do Finalizar pedido (ou de OK antigo).
+- Os **Termos de Uso** ganharam a seção "Cookies e dados de navegação": ao
+  navegar no site, o visitante concorda com cookies e coleta de dados; o aceite
+  é registrado no Finalizar pedido. Políticas de Privacidade e de Cookies dizem
+  o mesmo. `VERSAO` não mudou (a frase do checkout é a mesma de 24/10).
+- Risco conhecido, escolha do Lira: aceite implícito pela navegação e Pixel antes
+  de qualquer clique contrariam o Guia de Cookies da ANPD (cookie de publicidade
+  só com consentimento por ação clara). Não reverter sem pedido do Lira.
+
+#### Histórico: 25/10/2026, faixa "ao navegar você concorda", aceite em 3 s
 - **Pedido do Lira em 25/10/2026:** a faixa voltou (`AvisoCookies.vue`, na
   `AppLayout` e na `CheckoutLayout`) com "Ao continuar navegando no site, você
   concorda com o uso de cookies e dos seus dados de navegação, conforme a LGPD"
@@ -66,7 +84,7 @@ visita a loja.
 | `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_cupom_1a` | Necessário | DESDE 2026-10-25 NÃO É MAIS GRAVADO (o pop-up aparece toda vez que o checkout abre sem cupom). Antes lembrava que o pop-up do cupom de 1ª compra do checkout já apareceu, para não mostrar de novo (2026-10-23). Gravado pelo navegador (JS), sem dado pessoal: só o valor `1` | 12 meses | art. 7º V |
 | `kazakora_visitor` | Navegação | liga as páginas abertas pelo mesmo navegador (histórico de navegação e número de páginas no olho de Visitas ao site). Desde 25/10/2026 criado no **primeiro acesso** (`Cookies::garantirVisitante`, no `TrackSiteVisit`), antes do aceite; o mesmo código fica na sessão (`kazakora_visitante`) para quem recusa cookie | 12 meses | art. 7º IX (legítimo interesse) |
-| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Só carrega depois do OK (`resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
+| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Desde 26/10/2026 carrega desde o primeiro acesso, sem esperar o OK (`resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 `SameSite=Lax`. A sessão só trafega em https quando o `APP_URL` é https
@@ -230,7 +248,9 @@ o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
 ## Regras para quem for mexer (Claude Code e Naia)
 
 1. **Pixel do Meta, Google Analytics, Google Ads, TikTok Pixel, Hotjar e afins
-   são cookies de terceiros não necessários.** Só podem carregar **depois** do OK
+   são cookies de terceiros não necessários.** Exceção decidida pelo Lira em
+   26/10/2026: o Pixel da Meta do navegador carrega sem OK (seção Aceite). Os
+   demais só podem carregar **depois** do OK
    (`page.props.cookies.aceito === true`), têm que entrar na tabela da
    `/politica-de-cookies` e a `VERSAO` tem que mudar. Com publicidade de
    terceiros, a ANPD recomenda dar ao cliente a opção de **recusar** — avaliar

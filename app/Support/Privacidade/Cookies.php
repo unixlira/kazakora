@@ -19,9 +19,10 @@ use Illuminate\Support\Str;
  *   entrada. Navegador completo, valor do clique e cookies de terceiros no
  *   log continuam só depois do OK.
  *
- * Aceite (gravado por registrarAceite()): desde 2026-10-25 a faixa de cookies
- * voltou ("ao navegar você concorda"); o OK ou 3 s sem clique gravam o aceite
- * (AvisoCookies.vue → /cookies/aceitar). O "Finalizar pedido" também aceita.
+ * Aceite (gravado por registrarAceite()): desde 2026-10-26 sem faixa de
+ * cookies; ao navegar o visitante concorda pelos Termos de Uso e o aceite é
+ * gravado no "Finalizar pedido". O Pixel da Meta do navegador carrega sem
+ * esperar o aceite (pixelMeta.js); a API de Conversões continua só com ele.
  *
  * Mudou o que a loja coleta? Troque VERSAO e atualize as políticas.
  */

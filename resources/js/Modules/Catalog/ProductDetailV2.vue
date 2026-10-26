@@ -344,7 +344,7 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 //          unidade. No momento da queda o fundo do número fica vermelho com a
 //          fonte branca e some em 1 s (fade out); a fonte fica vermelha e
 //          continua vermelha (correção do Lira em 2026-10-23).
-// O sorteio é novo a cada carregamento da página e fica OBRIGATORIAMENTE
+// O sorteio fica OBRIGATORIAMENTE
 // entre 7 e 36 (tarefa #2809, Lira em 2026-10-24; antes 19 a 37). O estoque
 // real não limita mais o número (Lira em 2026-10-24, teste no homolog; antes
 // o sorteio não passava do estoque e um produto com 10 mostrava sempre 10):
@@ -353,6 +353,24 @@ const vendidosLegenda = computed(() => '+1.538 vendidos');
 // todo produto com variação, ex.: Árvore de Natal; Lira, 2026-10-23: "sumiu novamente").
 const ESTOQUE_SORTEIO_MIN = 7;
 const ESTOQUE_SORTEIO_MAX = 36;
+// Número guardado no navegador, por produto (Lira em 2026-10-26: "fica
+// permanente esse número registrado só para ela"). A primeira visita sorteia;
+// a partir daí cada carregamento da página começa onde o anterior parou, então
+// cada atualização tira uma unidade e o número nunca volta a subir. Para em 1.
+// Trocar a variação na mesma página não tira outra unidade.
+const estoqueChave = () => `kz-estoque-${props.product.id}`;
+let estoqueDaPagina = null;
+const numeroDaPagina = () => {
+    if (estoqueDaPagina) return estoqueDaPagina;
+    let salvo = null;
+    try {
+        const lido = Number.parseInt(localStorage.getItem(estoqueChave()), 10);
+        if (lido >= 1 && lido <= ESTOQUE_SORTEIO_MAX) salvo = lido;
+    } catch (e) { /* sem localStorage: sorteia a cada carregamento, como antes */ }
+    estoqueDaPagina = salvo ?? ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
+    try { localStorage.setItem(estoqueChave(), String(Math.max(1, estoqueDaPagina - 1))); } catch (e) { /* idem */ }
+    return estoqueDaPagina;
+};
 const estoqueReal = computed(() => (faltaVariacao.value
     ? Math.max(0, ...opcoesVariacao.value.map((variant) => Number(variant.stock) || 0))
     : Number(selecionada.value.stock) || 0));
@@ -413,7 +431,7 @@ const animarEstoque = () => {
         estoqueBaixo.value = null;
         return;
     }
-    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
+    const numero = numeroDaPagina();
     estoqueBaixo.value = numero;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         estoqueBarra.value = numero;

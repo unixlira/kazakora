@@ -887,26 +887,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </template>
                             <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
 
-                            <!-- Quatro selos num quadro só, no desenho do print do Lira (pedido 2026-10-23):
-                                 entre as bandeiras e o "Calcular o prazo"; substituem os cards soltos. -->
-                            <ul class="selos-compra">
+                            <!-- Só o quadro do Frete acima do "Calcular o prazo", no lugar dos quatro selos (pedido do Lira 2026-10-26):
+                                 "Frete Grátis para todo o Brasil." e, em verde, "Expresso Turbo para todas as regiões do Brasil";
+                                 caminhão verde inclinado (fa-truck-fast) no círculo, igual ao do homolog. -->
+                            <ul class="fretefundo">
                                 <li>
-                                    <img src="/images/checkout/entrega-rapida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <!-- Texto do frete com FULL e FLEX e o aviso do estoque por estado (pedido 2026-10-24). -->
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt" aria-hidden="true"></i>FLEX</span> para a sua casa!<small class="aviso-frete">(Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado)</small></span>
+                                    <span class="selo-icone carrinho"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-regiao">Expresso Turbo para todas as regiões do Brasil</span></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
-                                </li>
-                                <li>
-                                    <img src="/images/checkout/satisfacao-garantida-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
-                                </li>
-                                <li>
-                                    <img src="/images/checkout/pagamento-100-seguro-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
-                                </li>
-                                <li>
-                                    <img src="/images/checkout/avaliacoes-positivas-checkout-v4.webp" alt="" width="40" height="40" loading="lazy">
-                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
 
@@ -1731,9 +1719,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .fretefundo .selo-img { width: 38px; height: 38px; }
 .pd2 .compra .fretefundo .selo-icone { width: 38px; height: 30px; border-radius: 6px; background: #0d1b3e; }
 .pd2 .compra .fretefundo .selo-icone i { color: #fff; font-size: 17px; }
-.pd2 .compra .fretefundo .escudo { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
-.pd2 .compra .fretefundo .escudo i { color: #0aac48; font-size: 16px; }
+.pd2 .compra .fretefundo :is(.escudo, .carrinho) { width: 32px; height: 32px; margin-left: 3px; border: 1.5px solid #0aac48; border-radius: 50%; background: #fff; }
+.pd2 .compra .fretefundo :is(.escudo, .carrinho) i { color: #0aac48; font-size: 16px; }
 .pd2 .compra .fretefundo .escudo .fa-check { color: #fff; font-size: 7px; }
+.pd2 .compra .fretefundo .frete-regiao { color: #0aac48; font-size: 13px; }
+.dark .pd2 .compra .fretefundo .frete-regiao { color: #4ade80; }
 .pd2 .compra .selos-compra { list-style: none; margin: 0 0 10px; padding: 4px 14px; border: 1px solid #ebebeb; border-radius: 8px; background: #f9f9f9; }
 .pd2 .compra .selos-compra li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 12px 0; font-size: 14px; line-height: 1.5; color: #545454; }
 .pd2 .compra .selos-compra li + li { border-top: 1px solid #e6e6e6; }

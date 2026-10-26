@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Services;
 
+use App\Modules\Catalog\Models\AnuncioClaudePedido;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Support\GatilhosAnuncio;
@@ -81,6 +82,8 @@ class AnuncioConteudoService
     /** Prévia do botão do admin guardada para não pagar o Gemini de novo ao salvar. */
     private const PREVIA_HORAS = 6;
 
+    private const SISTEMA = 'Você é redator de e-commerce brasileiro. Responde SOMENTE com um JSON válido, sem markdown e sem comentários.';
+
     public function __construct(private readonly GeminiClient $gemini) {}
 
     /** Muda quando o nome, a descrição ou as fotos mudam. */
@@ -102,22 +105,31 @@ class AnuncioConteudoService
         return ! $product->adContent || $product->adContent->origem_hash !== $this->hash($product);
     }
 
-    /** Conteúdo do Gemini gerado antes do CTA existir (2026-10-20). */
+    /** Conteúdo de IA gerado antes do CTA existir (2026-10-20). */
     public function faltaCta(?object $conteudo): bool
     {
-        return $conteudo !== null && $conteudo->fonte === ProductAdContent::FONTE_GEMINI && empty($conteudo->cta);
+        return $conteudo !== null
+            && in_array($conteudo->fonte, [ProductAdContent::FONTE_GEMINI, ProductAdContent::FONTE_CLAUDE], true)
+            && empty($conteudo->cta);
     }
 
     /**
      * Gera só o CTA de um conteúdo que já existe (chamada leve, sem fotos).
-     * $lancarSeIndisponivel como em gerar(); outros erros só ficam no log.
+     * $lancarSeIndisponivel como em gerar(); outros erros vão para o Claude.
      */
     public function completarCta(Product $product, bool $lancarSeIndisponivel = false): ?ProductAdContent
     {
         $product->loadMissing('adContent');
         $conteudo = $product->adContent;
 
-        if (! $this->faltaCta($conteudo) || ! $this->gemini->isConfigured()) {
+        // Com o CTA já na fila do Claude, não gasta outra chamada do Gemini.
+        if (! $this->faltaCta($conteudo) || AnuncioClaudePedido::emAberto($product->id, AnuncioClaudePedido::TIPO_CTA)) {
+            return $conteudo;
+        }
+
+        if (! $this->gemini->isConfigured()) {
+            $this->pedirAoClaude($product, AnuncioClaudePedido::TIPO_CTA);
+
             return $conteudo;
         }
 
@@ -128,10 +140,12 @@ class AnuncioConteudoService
                 throw $exception;
             }
             Log::warning('anuncio.cta_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+            $this->pedirAoClaude($product, AnuncioClaudePedido::TIPO_CTA);
 
             return $conteudo;
         } catch (Throwable $exception) {
             Log::warning('anuncio.cta_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+            $this->pedirAoClaude($product, AnuncioClaudePedido::TIPO_CTA);
 
             return $conteudo;
         }
@@ -150,31 +164,10 @@ class AnuncioConteudoService
      */
     public function ctaViaGemini(string $loja, string $nome, string $descricao, array $duvidas): array
     {
-        $listaDuvidas = collect($duvidas)
-            ->filter(fn ($duvida) => is_array($duvida) && filled($duvida[0] ?? null))
-            ->map(fn ($duvida) => '- '.$duvida[0].' '.($duvida[1] ?? ''))
-            ->implode("\n") ?: '(nenhuma)';
-        $base = trim($descricao) !== '' ? "Descrição cadastrada:\n{$descricao}" : 'Não há descrição cadastrada: use só o nome.';
-
-        $prompt = <<<TXT
-        Escreva a chamada final para a compra (CTA) da página deste produto da loja {$loja}. Ela aparece logo depois das dúvidas comuns abaixo, quando o cliente já entendeu o produto e só falta decidir.
-
-        Produto: {$nome}
-        {$base}
-
-        Dúvidas comuns já respondidas na página:
-        {$listaDuvidas}
-
-        {$this->regrasCta($loja)}
-
-        Formato (JSON):
-        {{$this->formatoCta()}}
-        TXT;
-
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
-            [['role' => 'user', 'parts' => [['text' => $prompt]]]],
-            'Você é redator de e-commerce brasileiro. Responde SOMENTE com um JSON válido, sem markdown e sem comentários.',
+            [['role' => 'user', 'parts' => [['text' => $this->promptCta($loja, $nome, $descricao, $duvidas)]]]],
+            self::SISTEMA,
             // Folga para o raciocínio do modelo: com 1500 a resposta vinha cortada.
             4000,
             GeminiUsageLog::PURPOSE_AD_CONTENT,
@@ -188,6 +181,31 @@ class AnuncioConteudoService
         }
 
         return $cta;
+    }
+
+    /** @param  array<int, array{0: string, 1: string}>  $duvidas */
+    private function promptCta(string $loja, string $nome, string $descricao, array $duvidas): string
+    {
+        $listaDuvidas = collect($duvidas)
+            ->filter(fn ($duvida) => is_array($duvida) && filled($duvida[0] ?? null))
+            ->map(fn ($duvida) => '- '.$duvida[0].' '.($duvida[1] ?? ''))
+            ->implode("\n") ?: '(nenhuma)';
+        $base = trim($descricao) !== '' ? "Descrição cadastrada:\n{$descricao}" : 'Não há descrição cadastrada: use só o nome.';
+
+        return <<<TXT
+        Escreva a chamada final para a compra (CTA) da página deste produto da loja {$loja}. Ela aparece logo depois das dúvidas comuns abaixo, quando o cliente já entendeu o produto e só falta decidir.
+
+        Produto: {$nome}
+        {$base}
+
+        Dúvidas comuns já respondidas na página:
+        {$listaDuvidas}
+
+        {$this->regrasCta($loja)}
+
+        Formato (JSON):
+        {{$this->formatoCta()}}
+        TXT;
     }
 
     private function regrasCta(string $loja): string
@@ -290,9 +308,15 @@ class AnuncioConteudoService
             $erro = $temBase ? 'Gemini não configurado.' : 'Produto sem descrição e sem fotos.';
         }
 
+        // Gemini sem resposta (2026-10-25): a regra automática segura a
+        // página e o Claude reescreve em alguns minutos (anuncio-claude:*).
         if ($dados === null) {
             $dados = $this->automatico($product);
             $fonte = ProductAdContent::FONTE_AUTOMATICO;
+
+            if ($temBase && $this->pedirAoClaude($product, AnuncioClaudePedido::TIPO_CONTEUDO)) {
+                $erro = Str::limit($erro.' Claude na fila.', 1000);
+            }
         }
 
         $atributos = [...$dados, 'fonte' => $fonte, 'origem_hash' => $hash, 'erro' => $erro, 'gerado_em' => now()];
@@ -326,22 +350,207 @@ class AnuncioConteudoService
             throw new RuntimeException('Cadastre pelo menos uma foto antes de gerar a descrição.');
         }
 
-        if (! $this->gemini->isConfigured()) {
-            throw new RuntimeException('Gemini não configurado.');
+        // Gemini sem resposta (2026-10-25): o Claude escreve e o admin
+        // consulta statusDescricaoClaude() até ficar pronto.
+        try {
+            if (! $this->gemini->isConfigured()) {
+                throw new RuntimeException('Gemini não configurado.');
+            }
+
+            $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true, ficha: $this->fichaTecnica($product));
+
+            if (($dados['descricao'] ?? '') === '') {
+                throw new RuntimeException('O Gemini não devolveu a descrição.');
+            }
+        } catch (Throwable $exception) {
+            Log::warning('anuncio.descricao_gemini_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+            $pedido = $this->pedirAoClaude($product, AnuncioClaudePedido::TIPO_DESCRICAO);
+
+            if (! $pedido) {
+                throw $exception;
+            }
+
+            return ['claude' => $pedido->id];
         }
 
-        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true, ficha: $this->fichaTecnica($product));
+        return $this->guardarPrevia($product, $dados);
+    }
+
+    /**
+     * Separa a descrição do conteúdo e guarda o conteúdo para quando a
+     * descrição for salva igual (gerar() usa a prévia).
+     *
+     * @param  array<string, mixed>  $dados
+     * @return array{descricao: string, conteudo: array<string, mixed>}
+     */
+    private function guardarPrevia(Product $product, array $dados): array
+    {
+        $product->loadMissing('images');
         $descricao = (string) ($dados['descricao'] ?? '');
         unset($dados['descricao']);
-
-        if ($descricao === '') {
-            throw new RuntimeException('O Gemini não devolveu a descrição. Tente de novo.');
-        }
 
         $hashFuturo = hash('sha256', implode('|', [$product->name, $descricao, $product->images->pluck('id')->implode(',')]));
         Cache::put($this->chavePrevia($hashFuturo), $dados, now()->addHours(self::PREVIA_HORAS));
 
         return ['descricao' => $descricao, 'conteudo' => $dados];
+    }
+
+    /**
+     * Situação do pedido do botão "Gerar descrição com IA pelas fotos" que
+     * foi para o Claude: pronto devolve descrição e conteúdo como o Gemini.
+     *
+     * @return array<string, mixed>
+     */
+    public function statusDescricaoClaude(Product $product, int $pedidoId): array
+    {
+        $pedido = AnuncioClaudePedido::query()
+            ->whereKey($pedidoId)
+            ->where('product_id', $product->id)
+            ->where('tipo', AnuncioClaudePedido::TIPO_DESCRICAO)
+            ->firstOrFail();
+
+        return match ($pedido->status) {
+            AnuncioClaudePedido::STATUS_PRONTO => ['status' => 'pronto', ...$this->guardarPrevia($product, (array) $pedido->resposta)],
+            AnuncioClaudePedido::STATUS_FALHOU => ['status' => 'falhou', 'message' => 'O Claude não conseguiu escrever: '.Str::limit((string) $pedido->erro, 200)],
+            default => ['status' => $pedido->status],
+        };
+    }
+
+    /**
+     * Põe o texto na fila do Claude com o mesmo prompt e as mesmas fotos que
+     * iriam ao Gemini. Já existe um igual em aberto: devolve ele. Devolve
+     * null quando não há base (sem descrição e sem foto legível).
+     */
+    public function pedirAoClaude(Product $product, string $tipo): ?AnuncioClaudePedido
+    {
+        $product->loadMissing(['images', 'adContent']);
+        $hash = $this->hash($product);
+        $aberto = AnuncioClaudePedido::emAberto($product->id, $tipo);
+
+        if ($aberto && $aberto->origem_hash === $hash) {
+            return $aberto;
+        }
+
+        // O produto mudou desde o pedido: o antigo não serve mais.
+        $aberto?->update(['status' => AnuncioClaudePedido::STATUS_FALHOU, 'erro' => 'Produto mudou; substituído por um pedido novo.', 'concluido_em' => now()]);
+
+        $imagens = [];
+        $total = 0;
+
+        if ($tipo === AnuncioClaudePedido::TIPO_CTA) {
+            if (! $product->adContent) {
+                return null;
+            }
+            $prompt = $this->promptCta('KazaKora', $product->name, (string) $product->description, (array) $product->adContent->duvidas);
+        } else {
+            $imagens = $this->caminhosDasImagens($product);
+            $total = min(self::MAX_IMAGENS, $product->images->count());
+            $comDescricao = $tipo === AnuncioClaudePedido::TIPO_DESCRICAO;
+            $descricao = $comDescricao ? '' : (string) $product->description;
+
+            if ($imagens === [] && trim($descricao) === '') {
+                return null;
+            }
+            $prompt = $this->prompt('KazaKora', $product->name, $descricao, $total, $comDescricao, $this->fichaTecnica($product));
+        }
+
+        try {
+            return AnuncioClaudePedido::query()->create([
+                'product_id' => $product->id,
+                'tipo' => $tipo,
+                'origem_hash' => $hash,
+                'sistema' => self::SISTEMA,
+                'prompt' => $prompt,
+                'imagens' => $imagens,
+                'total_imagens' => $total,
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('anuncio.claude_fila_falhou', ['product_id' => $product->id, 'tipo' => $tipo, 'erro' => $exception->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Resposta do Claude (texto com o JSON): passa pelas mesmas conferências
+     * do Gemini e grava como o Gemini gravaria. Lança exceção se não servir.
+     */
+    public function aplicarRespostaClaude(AnuncioClaudePedido $pedido, string $texto): void
+    {
+        $product = Product::query()->with(['images', 'adContent'])->find($pedido->product_id);
+
+        if (! $product) {
+            throw new RuntimeException('Produto não existe mais.');
+        }
+
+        $json = $this->extrairJson($texto);
+        $aplicado = true;
+
+        if ($pedido->tipo === AnuncioClaudePedido::TIPO_CTA) {
+            $cta = $this->validarCta($json['cta'] ?? $json) ?? throw new RuntimeException('O Claude não devolveu um CTA válido.');
+            $resposta = ['cta' => $cta];
+
+            if ($this->faltaCta($product->adContent)) {
+                $product->adContent->update(['cta' => $cta]);
+            } else {
+                $aplicado = false;
+            }
+        } else {
+            $resposta = $this->validar($json, (int) $pedido->total_imagens);
+
+            if ($pedido->tipo === AnuncioClaudePedido::TIPO_DESCRICAO) {
+                $resposta['descricao'] = $this->descricaoLimpa($json['descricao'] ?? null);
+
+                if ($resposta['descricao'] === '') {
+                    throw new RuntimeException('O Claude não devolveu a descrição.');
+                }
+            } else {
+                $atual = $product->adContent;
+                // Produto mudou depois do pedido, ou outra IA já escreveu algo mais novo.
+                $aplicado = $pedido->origem_hash === $this->hash($product)
+                    && ! ($atual && $atual->porIa() && $atual->gerado_em && $atual->gerado_em->gt($pedido->created_at));
+
+                if ($aplicado) {
+                    $conteudo = ProductAdContent::query()->updateOrCreate(['product_id' => $product->id], [
+                        ...$resposta,
+                        'fonte' => ProductAdContent::FONTE_CLAUDE,
+                        'origem_hash' => $pedido->origem_hash,
+                        'erro' => null,
+                        'gerado_em' => now(),
+                    ]);
+                    $product->setRelation('adContent', $conteudo);
+                }
+            }
+        }
+
+        $pedido->update([
+            'status' => AnuncioClaudePedido::STATUS_PRONTO,
+            'resposta' => $resposta,
+            'erro' => $aplicado ? null : 'Não aplicado: o produto mudou ou já tinha conteúdo mais novo.',
+            'concluido_em' => now(),
+        ]);
+    }
+
+    /**
+     * Fotos que iriam ao Gemini (mesmo filtro de tamanho), como caminho no
+     * disco public, para o worker do Claude baixar.
+     *
+     * @return array<int, array{indice: int, caminho: string}>
+     */
+    private function caminhosDasImagens(Product $product): array
+    {
+        $caminhos = [];
+
+        foreach ($product->images->take(self::MAX_IMAGENS)->values() as $indice => $imagem) {
+            $caminho = (string) ($imagem->thumb_path ?: $imagem->path);
+            $tamanho = rescue(fn () => Storage::disk('public')->size($caminho), null, report: false);
+
+            if ($tamanho && $tamanho <= self::MAX_BYTES_IMAGEM) {
+                $caminhos[] = ['indice' => $indice, 'caminho' => $caminho];
+            }
+        }
+
+        return $caminhos;
     }
 
     private function chavePrevia(string $hash): string
@@ -435,7 +644,7 @@ class AnuncioConteudoService
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
             [['role' => 'user', 'parts' => $partes]],
-            'Você é redator de e-commerce brasileiro. Responde SOMENTE com um JSON válido, sem markdown e sem comentários.',
+            self::SISTEMA,
             6000,
             GeminiUsageLog::PURPOSE_AD_CONTENT,
         );

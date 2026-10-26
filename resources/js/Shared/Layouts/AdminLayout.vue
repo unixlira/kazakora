@@ -209,7 +209,8 @@ const alternarSubmenu = (item) => {
 };
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
 // Alerta vermelho no título da seção, aberta ou fechada (Atendimento com pergunta esperando uma pessoa).
-const alertaDaSecao = (section) => section.items.reduce((total, item) => total + (item.alertaFixo ? sidebarBadge(item) : 0), 0);
+// alertaNoTitulo (2026-10-26): WhatsApp, E-mails do site e Chamados também acendem; somem ao abrir o item.
+const alertaDaSecao = (section) => section.items.reduce((total, item) => total + (item.alertaFixo || item.alertaNoTitulo ? sidebarBadge(item) : 0), 0);
 
 const logout = () => router.post('/sair');
 
@@ -339,7 +340,7 @@ watch(
                                 : 'text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
                             :aria-expanded="secaoExpandida(section.heading)" @click="alternarSecao(section.heading)">
                             <span class="flex-1 truncate">{{ section.heading }}</span>
-                            <span v-if="alertaDaSecao(section) > 0" class="relative flex h-2.5 w-2.5" :title="`${alertaDaSecao(section)} pergunta(s) esperando alguém da equipe`">
+                            <span v-if="alertaDaSecao(section) > 0" class="relative flex h-2.5 w-2.5" :title="`${alertaDaSecao(section)} pendência(s) esperando alguém da equipe`">
                                 <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-75"></span>
                                 <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-error"></span>
                             </span>

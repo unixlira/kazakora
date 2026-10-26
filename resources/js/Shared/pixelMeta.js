@@ -1,9 +1,12 @@
-// Pixel da Meta (pedido 2026-10-16). Cookie de publicidade de terceiro: só
-// carrega DEPOIS do OK do aviso de cookies (docs/privacidade-e-cookies.md).
+// Pixel da Meta (pedido 2026-10-16). Desde 2026-10-25 carrega para todo
+// visitante, sem esperar aceite: com o aceite só no "Finalizar pedido" (sem
+// aviso flutuante desde 24/10), o Pixel não via ninguém antes do checkout.
+// Decisão do Lira; a API de Conversões (servidor) continua só com aceite.
+// Detalhe em docs/privacidade-e-cookies.md.
 // Quem decide o que disparar em cada página é `rastrearPagina`, chamada pelo
 // app.js a cada navegação; as páginas não precisam saber do pixel.
 let iniciado = false;
-// Pixel liberado na página atual (OK de cookies + ID). Os eventos de clique
+// Pixel liberado na página atual (loja com ID configurado). Os eventos de clique
 // (AddToCart) e do modal de pagamento (Purchase) só disparam com ele.
 let liberado = false;
 // Última página rastreada: POST que volta para a mesma página (carrinho pelo
@@ -53,7 +56,7 @@ function itens(lista) {
 export function rastrearPagina(page) {
     const cookies = page?.props?.cookies;
     liberado = false;
-    if (!cookies?.aceito || !cookies.pixelMeta) return;
+    if (!cookies?.pixelMeta) return;
     if (page.url.startsWith('/admin')) return;
     carregar(cookies.pixelMeta);
     liberado = true;
@@ -94,7 +97,7 @@ export function novoEventId() {
 }
 
 // "Comprar" do card e da página do produto. O servidor manda o AddToCart com
-// o mesmo eventId (CartController), só com o OK de cookies, como aqui.
+// o mesmo eventId (CartController), mas só com o OK de cookies; sem OK, sai só o do navegador.
 export function rastrearAddToCart({ id, preco, quantidade = 1 }, eventId) {
     if (!liberado || !window.fbq || id == null) return;
     const qtd = Math.max(1, Number(quantidade) || 1);

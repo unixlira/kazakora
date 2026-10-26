@@ -3,9 +3,9 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\AnuncioClaudePedido;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Catalog\Support\DuplicateProductGuard;
 use App\Modules\Catalog\Support\LucroProduto;
@@ -473,9 +473,11 @@ class ProductController extends Controller
     {
         $conteudo = app(AnuncioConteudoService::class)->gerar($product, forcar: true);
 
-        return back()->with('success', $conteudo->fonte === ProductAdContent::FONTE_GEMINI
-            ? 'Conteúdo do anúncio gerado com IA.'
-            : 'A IA não respondeu agora; o conteúdo foi montado pela regra automática a partir da descrição.');
+        return back()->with('success', match (true) {
+            $conteudo->porIa() => 'Conteúdo do anúncio gerado com IA.',
+            AnuncioClaudePedido::emAberto($product->id, AnuncioClaudePedido::TIPO_CONTEUDO) !== null => 'O Gemini não respondeu: o Claude está escrevendo o conteúdo e ele entra aqui em alguns minutos. Por enquanto ficou o da regra automática.',
+            default => 'A IA não respondeu agora; o conteúdo foi montado pela regra automática a partir da descrição.',
+        });
     }
 
     /**
@@ -485,7 +487,12 @@ class ProductController extends Controller
     public function descricaoPelasFotos(Product $product): JsonResponse
     {
         try {
-            return response()->json(app(AnuncioConteudoService::class)->descricaoPelasFotos($product));
+            $dados = app(AnuncioConteudoService::class)->descricaoPelasFotos($product);
+
+            // Gemini sem resposta: foi para o Claude, o admin consulta até ficar pronto.
+            return isset($dados['claude'])
+                ? response()->json(['claude' => $dados['claude'], 'message' => 'O Gemini não respondeu. O Claude está escrevendo a descrição; leva alguns minutos.'], 202)
+                : response()->json($dados);
         } catch (GeminiUnavailableException) {
             return response()->json(['message' => 'A IA está sem cota ou ocupada agora. Tente de novo em 1 minuto.'], 503);
         } catch (\Throwable $exception) {
@@ -493,6 +500,12 @@ class ProductController extends Controller
 
             return response()->json(['message' => Str::limit($exception->getMessage(), 300)], 422);
         }
+    }
+
+    /** Consulta do pedido do botão acima que foi para o Claude (2026-10-25). */
+    public function descricaoPelasFotosClaude(Product $product, int $pedido): JsonResponse
+    {
+        return response()->json(app(AnuncioConteudoService::class)->statusDescricaoClaude($product, $pedido));
     }
 
     private function uniqueSlug(string $name, ?int $ignoreId = null): string

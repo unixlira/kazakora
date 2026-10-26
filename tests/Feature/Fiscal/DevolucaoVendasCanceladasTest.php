@@ -58,6 +58,7 @@ class DevolucaoVendasCanceladasTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         Bus::fake([GenerateInvoiceJob::class]);
+        config(['app.url' => 'https://kazakora.com']);
     }
 
     public function test_devolucao_leva_o_frete_e_o_desconto_da_nota_de_venda(): void
@@ -154,6 +155,17 @@ class DevolucaoVendasCanceladasTest extends TestCase
         // Segunda rodada não emite de novo.
         $this->artisan('devolucoes:vendas-canceladas', ['--automatico' => true])->assertSuccessful();
         $this->assertSame(1, Order::query()->where('origin', Order::ORIGIN_SALES_RETURN_INVOICE)->count());
+    }
+
+    public function test_automatico_no_homolog_nao_emite(): void
+    {
+        config(['app.url' => 'https://kazakora.devlira.com.br']);
+        $this->venda();
+
+        $this->artisan('devolucoes:vendas-canceladas', ['--automatico' => true])->assertSuccessful();
+
+        $this->assertSame(0, Order::query()->where('origin', Order::ORIGIN_SALES_RETURN_INVOICE)->count());
+        Bus::assertNotDispatched(GenerateInvoiceJob::class);
     }
 
     public function test_estorno_coberto_pelo_ml_nao_emite(): void

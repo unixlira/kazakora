@@ -42,6 +42,13 @@ class CancelarNotasDePedidosCancelados extends Command
     public function handle(InvoiceService $invoices): int
     {
         $simular = (bool) $this->option('simular');
+
+        if (! $simular && ! self::servidorDeProducao()) {
+            $this->warn('Fora do servidor de produção (APP_URL não é '.config('nfe.automatico_host').'): nada é cancelado. Use --simular.');
+
+            return self::SUCCESS;
+        }
+
         $canceladas = [];
         $falhas = [];
 
@@ -78,6 +85,12 @@ class CancelarNotasDePedidosCancelados extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /** Só o servidor de produção (APP_URL kazakora.com) age sozinho; ver config nfe.automatico_host. */
+    public static function servidorDeProducao(): bool
+    {
+        return strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST)) === strtolower((string) config('nfe.automatico_host'));
     }
 
     /** @return Collection<int, Invoice> */

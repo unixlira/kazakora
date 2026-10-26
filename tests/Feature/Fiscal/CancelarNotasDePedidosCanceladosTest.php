@@ -30,6 +30,7 @@ class CancelarNotasDePedidosCanceladosTest extends TestCase
     {
         parent::setUp();
         Storage::fake('local');
+        config(['app.url' => 'https://kazakora.com']);
 
         $certificates = Mockery::mock(NFeCertificateService::class);
         $certificates->shouldReceive('load')->andReturn(Mockery::mock(Certificate::class));
@@ -120,5 +121,16 @@ class CancelarNotasDePedidosCanceladosTest extends TestCase
 
         $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
         $this->webservice->shouldHaveReceived('cancelarComEvento')->once();
+    }
+
+    public function test_homolog_nao_cancela_nada(): void
+    {
+        config(['app.url' => 'https://kazakora.devlira.com.br']);
+        $nota = $this->nota();
+
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
     }
 }

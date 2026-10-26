@@ -173,4 +173,24 @@ class DevolucoesTest extends TestCase
         $this->assertSame(MarketplaceReturn::CONFERIDA, $caso->situacao);
         $this->assertSame('mau_uso', $caso->verdict);
     }
+
+    /** Devolução nova com prazo folgado não tem alerta, mas acende a bolinha do menu (2026-10-26). */
+    public function test_new_return_without_alert_lights_the_menu_badge(): void
+    {
+        MarketplaceReturn::create([
+            'channel' => 'shopee', 'external_id' => '107', 'kind' => 'devolucao', 'situacao' => MarketplaceReturn::AGUARDANDO_RESPOSTA,
+            'respond_due_at' => now()->addDays(3), 'opened_at' => now(),
+        ]);
+        MarketplaceReturn::create([
+            'channel' => 'shopee', 'external_id' => '108', 'kind' => 'devolucao', 'situacao' => MarketplaceReturn::AGUARDANDO_RESPOSTA,
+            'respond_due_at' => now()->addHours(5), 'opened_at' => now()->subDays(2),
+        ]);
+        MarketplaceReturn::create([
+            'channel' => 'shopee', 'external_id' => '109', 'kind' => 'devolucao', 'situacao' => MarketplaceReturn::CONFERIDA,
+            'verdict' => 'ok', 'received_at' => now(), 'opened_at' => now()->subDays(9),
+        ]);
+
+        $this->actingAs($this->admin)->get('/admin/devolucoes')->assertOk()
+            ->assertInertia(fn ($page) => $page->where('sidebarBadges.devolucoes', 1)->where('sidebarBadges.devolucoesNovas', 1));
+    }
 }

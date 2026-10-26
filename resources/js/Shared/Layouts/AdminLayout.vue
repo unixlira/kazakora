@@ -26,17 +26,22 @@ try {
 } catch {
     badgesVistos.value = {};
 }
-const contagemBruta = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
+// badgeKey pode ser uma lista (Devoluções: com alerta + novas): cada chave tem o seu visto.
+const chavesDoBadge = (item) => (!item.badgeKey ? [] : Array.isArray(item.badgeKey) ? item.badgeKey : [item.badgeKey]);
+const contagemDaChave = (chave) => page.props.sidebarBadges?.[chave] ?? 0;
+const contagemBruta = (item) => chavesDoBadge(item).reduce((total, chave) => total + contagemDaChave(chave), 0);
 const sidebarBadge = (item) => {
     const total = contagemBruta(item);
     // Alerta fixo (Perguntas MK Place, 2026-10-20): só some quando a pendência acaba.
     if (item.alertaFixo) return total;
-    const visto = badgesVistos.value[item.badgeKey] ?? 0;
-    return total > visto ? total : 0;
+    const subiu = chavesDoBadge(item).some((chave) => contagemDaChave(chave) > (badgesVistos.value[chave] ?? 0));
+    return subiu ? total : 0;
 };
 const dispensarBadge = (item) => {
     if (!item.badgeKey || item.alertaFixo) return;
-    badgesVistos.value = { ...badgesVistos.value, [item.badgeKey]: contagemBruta(item) };
+    const vistos = { ...badgesVistos.value };
+    chavesDoBadge(item).forEach((chave) => { vistos[chave] = contagemDaChave(chave); });
+    badgesVistos.value = vistos;
     try {
         localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(badgesVistos.value));
     } catch { /* storage indisponível: vale só nesta sessão */ }

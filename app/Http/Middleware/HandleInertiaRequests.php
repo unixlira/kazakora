@@ -119,6 +119,8 @@ class HandleInertiaRequests extends Middleware
                 ? [
                     'flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas(),
                     'devolucoes' => \App\Modules\Admin\Http\Controllers\DevolucoesController::contagemDeAlertas(),
+                    // Devoluções em aberto sem alerta (a que acabou de chegar, 2026-10-26).
+                    'devolucoesNovas' => \App\Modules\Admin\Http\Controllers\DevolucoesController::contagemDeNovas(),
                     // Conversas com mensagem não lida (WhatsApp > Conversas).
                     // Número de NF-e pulado por duplicidade na SEFAZ ainda sem
                     // conferência (Notas fiscais > Fechamento do mês).

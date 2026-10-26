@@ -251,4 +251,58 @@ class CookiesTest extends TestCase
 
         $this->assertNull($antiga->fresh()->cookies);
     }
+
+    public function test_ok_na_pagina_ja_gravada_completa_a_visita_sem_duplicar(): void
+    {
+        config(['app.url' => 'https://kazakora.com']);
+        $this->withHeader('User-Agent', self::NAVEGADOR)->get('https://kazakora.com/politica-de-entrega?utm_source=meta&fbclid=IwAR0abcdefghij');
+        $visitante = SiteVisit::sole()->visitor_id;
+
+        // A faixa aceita sozinha em 3 s (2026-10-25): a página não vira uma segunda visita.
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withCookie(Cookies::COOKIE_VISITANTE, $visitante)
+            ->from('https://kazakora.com/politica-de-entrega?utm_source=meta&fbclid=IwAR0abcdefghij')
+            ->post('https://kazakora.com/cookies/aceitar');
+
+        $visita = SiteVisit::sole();
+        $this->assertTrue($visita->consentiu);
+        $this->assertSame('meta', $visita->utm_source);
+        $this->assertSame('IwAR0abcdefghij', $visita->click_id);
+        $this->assertSame(self::NAVEGADOR, $visita->user_agent);
+    }
+
+    public function test_robo_da_rede_da_meta_nao_conta_visita(): void
+    {
+        config(['app.url' => 'https://kazakora.com']);
+
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withServerVariables(['REMOTE_ADDR' => '2a03:2880:f810:31::1'])
+            ->get('https://kazakora.com/politica-de-entrega');
+        $this->withHeader('User-Agent', 'Mozilla/5.0 (compatible; meta-externalads/1.1)')->get('https://kazakora.com/politica-de-entrega');
+
+        $this->assertSame(0, SiteVisit::count());
+    }
+
+    public function test_clique_do_anuncio_fica_na_sessao_e_vira_fbc_no_aceite(): void
+    {
+        config(['app.url' => 'https://kazakora.com']);
+
+        $this->withHeader('User-Agent', self::NAVEGADOR)->get('https://kazakora.com/politica-de-entrega?fbclid=IwAR0abcdefghij')
+            ->assertSessionHas('meta_fbclid.valor', 'IwAR0abcdefghij');
+
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withSession(['meta_fbclid' => ['valor' => 'IwAR0abcdefghij', 'em' => 1761440000000]])
+            ->from('https://seguro.kazakora.com/pagamento')
+            ->post('https://seguro.kazakora.com/cookies/aceitar')
+            ->assertCookie('_fbc', 'fb.1.1761440000000.IwAR0abcdefghij', false);
+    }
+
+    public function test_aceite_nao_troca_o_fbc_que_o_pixel_ja_criou(): void
+    {
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withUnencryptedCookie('_fbc', 'fb.1.1.do-pixel')
+            ->withSession(['meta_fbclid' => ['valor' => 'IwAR0abcdefghij', 'em' => 1761440000000]])
+            ->post('/cookies/aceitar')
+            ->assertCookieMissing('_fbc');
+    }
 }

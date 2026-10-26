@@ -26,13 +26,22 @@ function baixarScript() {
     document.head.appendChild(t);
 }
 
-function carregar(id) {
+// `imediato`: o OK chegou com a página já aberta (a faixa aceita sozinha em
+// 3 s, 2026-10-25). Aí o script baixa na hora: somar mais 3 s fazia quem
+// clica em Comprar logo sair da página com PageView, ViewContent e
+// AddToCart ainda na fila, e a Meta não recebia nada.
+function carregar(id, imediato = false) {
     if (iniciado) return;
     iniciado = true;
     /* eslint-disable */
     !function(f,n){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[]}(window);
     /* eslint-enable */
     window.fbq('init', id);
+
+    if (imediato) {
+        baixarScript();
+        return;
+    }
 
     INTERACOES.forEach((ev) => window.addEventListener(ev, baixarScript, { once: true, passive: true }));
     const depoisDoLoad = () => setTimeout(baixarScript, ESPERA_MS);
@@ -50,12 +59,12 @@ function itens(lista) {
     }));
 }
 
-export function rastrearPagina(page) {
+export function rastrearPagina(page, { imediato = false } = {}) {
     const cookies = page?.props?.cookies;
     liberado = false;
     if (!cookies?.aceito || !cookies.pixelMeta) return;
     if (page.url.startsWith('/admin')) return;
-    carregar(cookies.pixelMeta);
+    carregar(cookies.pixelMeta, imediato);
     liberado = true;
     if (page.url === ultimaUrl) return;
     ultimaUrl = page.url;

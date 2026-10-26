@@ -545,6 +545,10 @@ class SiteVisitLogController extends Controller
      */
     private function tirarEquipeERobos(Builder $query, Builder $periodo): void
     {
+        // Robô da Meta gravado antes de TrackSiteVisit::REDES_DA_META (25/10):
+        // cada visita vem de um IPv6 diferente, a regra por visitante não pega.
+        $query->where(fn (Builder $q) => $q->whereNull('site_visits.ip')->orWhere('site_visits.ip', 'not like', '2a03:2880:%'));
+
         $porVisitante = SiteVisit::visitantesPorDia($periodo, $this->equipe());
         $ficam = SiteVisit::soDeFora($porVisitante)
             ->map(fn ($l) => $l->dia.'|'.$l->visitante)

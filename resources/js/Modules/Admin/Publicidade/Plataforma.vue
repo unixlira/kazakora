@@ -22,6 +22,8 @@ const props = defineProps({
     // Lira 2026-10-27: sem gasto gravado no painel, o resumo vem da Meta (prop adiada).
     daMeta: { type: Boolean, default: false },
     resumoMeta: { type: Object, default: null },
+    // Lira 2026-10-27: campanhas da Meta já excluídas, com os números de toda a vida delas.
+    historico: { type: Array, default: () => [] },
 });
 
 const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
@@ -30,6 +32,24 @@ const data = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('pt-BR');
 const roas = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(2).replace('.', ',')}x`);
 
 const linhas = computed(() => (props.daMeta ? props.resumoMeta?.periodos ?? [] : props.periodos));
+const STATUS_FINAL = { PAUSED: 'Pausada', ARCHIVED: 'Arquivada', ACTIVE: 'Ativa' };
+const porcento = (v) => `${(v ?? 0).toFixed(2).replace('.', ',')}%`;
+const somaHistorico = (campo) => props.historico.reduce((t, c) => t + (c[campo] ?? 0), 0);
+const totalHistorico = computed(() => {
+    const gasto = somaHistorico('gasto');
+    const vendas = somaHistorico('vendas');
+    return {
+        gasto,
+        impressoes: somaHistorico('impressoes'),
+        cliques_link: somaHistorico('cliques_link'),
+        carrinho: somaHistorico('carrinho'),
+        checkout: somaHistorico('checkout'),
+        compras: somaHistorico('compras'),
+        vendas,
+        roas: gasto > 0 ? vendas / gasto : null,
+    };
+});
+
 const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, roas: null });
 </script>
 
@@ -174,5 +194,84 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
                 </div>
             </section>
         </template>
+
+        <!-- Lira 2026-10-27: histórico das campanhas excluídas, da nossa base. -->
+        <section
+            v-if="plataforma.canal === 'meta_ads' && historico.length"
+            class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm"
+            aria-labelledby="historico-titulo"
+        >
+            <div class="border-b border-[var(--surface-border)] px-4 py-3">
+                <h2 id="historico-titulo" class="text-base font-semibold">Histórico de campanhas excluídas</h2>
+                <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {{ historico.length }} campanhas. Números de toda a vida de cada uma, guardados antes da exclusão.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            <th scope="col" class="whitespace-nowrap px-3 py-2 font-semibold">Início</th>
+                            <th scope="col" class="px-3 py-2 font-semibold">Campanha</th>
+                            <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Orçamento/dia</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Gasto</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Impressões</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Alcance</th>
+                            <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Cliques no link</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">CTR</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Carrinho</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Checkout</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Compras</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Vendas</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">ROAS</th>
+                            <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Conjuntos / anúncios</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="c in historico" :key="c.id" class="border-t border-[var(--surface-border)] align-top">
+                            <td class="whitespace-nowrap px-3 py-2 tabular-nums">{{ c.inicio ? data(c.inicio) : '—' }}</td>
+                            <td class="min-w-[16rem] px-3 py-2">
+                                <span class="font-semibold">{{ c.nome }}</span>
+                                <span class="block text-xs text-slate-500 dark:text-slate-400">
+                                    {{ STATUS_FINAL[c.status_final] ?? c.status_final }} antes de excluir<template v-if="c.fim"> · terminou em {{ data(c.fim) }}</template>
+                                    · excluída em {{ data(c.excluida_em) }}
+                                </span>
+                            </td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                                <template v-if="c.orcamento_nivel === 'conjunto'">nos conjuntos</template>
+                                <template v-else>{{ dinheiro(c.orcamento_diario) }}</template>
+                            </td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums">{{ dinheiro(c.gasto) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.impressoes) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.alcance) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.cliques_link) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ porcento(c.ctr_link) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.carrinho) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.checkout) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.compras) }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(c.vendas) }}</td>
+                            <td class="px-3 py-2 text-right font-semibold tabular-nums">{{ c.gasto > 0 ? roas(c.roas) : '—' }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ c.conjuntos }} / {{ c.anuncios }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-[var(--surface-border)] font-semibold">
+                            <td class="px-3 py-2" colspan="3">Total</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(totalHistorico.gasto) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.impressoes) }}</td>
+                            <td class="px-3 py-2"></td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.cliques_link) }}</td>
+                            <td class="px-3 py-2"></td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.carrinho) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.checkout) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.compras) }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(totalHistorico.vendas) }}</td>
+                            <td class="px-3 py-2 text-right tabular-nums">{{ roas(totalHistorico.roas) }}</td>
+                            <td class="px-3 py-2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
     </AdminLayout>
 </template>

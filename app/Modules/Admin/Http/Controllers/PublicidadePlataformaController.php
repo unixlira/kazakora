@@ -49,8 +49,16 @@ class PublicidadePlataformaController extends Controller
             ? ['diagnostico' => Inertia::defer(fn () => $this->diagnosticoMeta()), 'temDiagnostico' => true]
             : ['temDiagnostico' => false];
 
+        // Lira 2026-10-27: sem gasto diário gravado, os números do mês vêm
+        // direto da Meta (nível conta, inclui campanha excluída), adiados
+        // para não travar a tela.
+        if ($metaConectada && $ultimaSincronizacao === null) {
+            $extras['resumoMeta'] = Inertia::defer(fn () => $this->resumoMeta($inicioMes, $hoje, $inicioAnterior, $fimAnterior));
+        }
+
         return Inertia::render('Admin/Publicidade/Plataforma', $extras + [
             'plataforma' => PlataformaDeAnuncio::dados($canal),
+            'daMeta' => $metaConectada && $ultimaSincronizacao === null,
             // Lira 2026-10-27: a Meta está conectada pela API (MetaAdsService)
             // mesmo sem gasto diário gravado em channel_ad_spends; antes a
             // tela dizia "Não conectada" por falta dessas linhas.
@@ -86,6 +94,22 @@ class PublicidadePlataformaController extends Controller
     }
 
     private const PERIODO_DIAGNOSTICO = 'last_7d';
+
+    /** @return array{periodos: list<array<string, mixed>>, erro: ?string} */
+    private function resumoMeta(Carbon $inicioMes, Carbon $hoje, Carbon $inicioAnterior, Carbon $fimAnterior): array
+    {
+        $meta = app(MetaAdsService::class);
+
+        try {
+            return ['erro' => null, 'periodos' => [
+                ['titulo' => 'Mês atual', 'desde' => $inicioMes->toDateString(), 'ate' => $hoje->toDateString(), 'totais' => $meta->totaisDaConta('this_month')],
+                ['titulo' => 'Mês anterior', 'desde' => $inicioAnterior->toDateString(), 'ate' => $fimAnterior->toDateString(), 'totais' => $meta->totaisDaConta('last_month')],
+                ['titulo' => 'Desde o início', 'desde' => null, 'ate' => $hoje->toDateString(), 'totais' => $meta->totaisDaConta('maximum')],
+            ]];
+        } catch (MetaAdsException $erro) {
+            return ['erro' => $erro->getMessage(), 'periodos' => []];
+        }
+    }
 
     /**
      * @return array{gasto: float, impressoes: int, cliques: int, pedidos: int, vendas: float, roas: float|null}

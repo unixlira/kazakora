@@ -5,6 +5,8 @@ namespace Tests\Feature\Admin;
 use App\Models\User;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -53,6 +55,50 @@ class PublicidadePlataformaTest extends TestCase
                 ->where('conectado', true)
                 ->where('ultimaSincronizacao', null)
                 ->where('temDiagnostico', true));
+    }
+
+    public function test_meta_ads_sem_gasto_gravado_le_gasto_e_resultados_da_meta(): void
+    {
+        config([
+            'services.meta_ads.access_token' => 'token-teste',
+            'services.meta_ads.ad_account_id' => 'act_123',
+            'services.meta_ads.page_id' => '456',
+            'inertia.testing.ensure_pages_exist' => false,
+        ]);
+        Http::fake(function (Request $request) {
+            if (! str_contains($request->url(), 'act_123/insights') || ! str_contains($request->url(), 'level=account')) {
+                return Http::response(['data' => []]);
+            }
+            $porPeriodo = [
+                'this_month' => ['spend' => '743.73', 'impressions' => '14497', 'clicks' => '722',
+                    'actions' => [['action_type' => 'omni_purchase', 'value' => '2']],
+                    'action_values' => [['action_type' => 'omni_purchase', 'value' => '330.52']]],
+                'last_month' => null,
+                'maximum' => ['spend' => '1302.82', 'impressions' => '24740', 'clicks' => '1787',
+                    'actions' => [['action_type' => 'omni_purchase', 'value' => '3']],
+                    'action_values' => [['action_type' => 'omni_purchase', 'value' => '476.24']]],
+            ];
+            $linha = $porPeriodo[$request['date_preset']] ?? null;
+
+            return Http::response(['data' => $linha ? [$linha] : []]);
+        });
+
+        $this->actingAs($this->admin())->get('/admin/publicidade/meta-ads')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/Publicidade/Plataforma', false)
+                ->where('daMeta', true)
+                ->missing('resumoMeta')
+                ->loadDeferredProps(fn ($recarga) => $recarga
+                    ->where('resumoMeta.erro', null)
+                    ->where('resumoMeta.periodos.0.titulo', 'Mês atual')
+                    ->where('resumoMeta.periodos.0.totais.gasto', 743.73)
+                    ->where('resumoMeta.periodos.0.totais.pedidos', 2)
+                    ->where('resumoMeta.periodos.0.totais.vendas', 330.52)
+                    ->where('resumoMeta.periodos.1.totais.gasto', 0)
+                    ->where('resumoMeta.periodos.2.titulo', 'Desde o início')
+                    ->where('resumoMeta.periodos.2.totais.gasto', 1302.82)
+                    ->where('resumoMeta.periodos.2.totais.cliques', 1787)));
     }
 
     public function test_google_ads_sem_integracao_mostra_nao_conectada(): void

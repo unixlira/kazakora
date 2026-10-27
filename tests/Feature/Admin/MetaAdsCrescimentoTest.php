@@ -39,6 +39,7 @@ class MetaAdsCrescimentoTest extends TestCase
         $this->campanha('100', 'Caixa 85', 'ACTIVE', '2026-10-05 10:00:00');
         $this->campanha('200', 'Bike', 'ACTIVE', '2026-10-20 10:00:00');
         $this->campanha('300', 'Árvore', 'DELETED', '2026-10-25 10:00:00');
+        $this->campanha('400', 'Setembro', 'DELETED', '2026-09-01 10:00:00');
 
         // Caixa 85 gasta mais e vende cada dia mais (dois anúncios somam no dia).
         foreach ([1, 2, 3, 4] as $i) {
@@ -51,7 +52,9 @@ class MetaAdsCrescimentoTest extends TestCase
         foreach ([1 => 90, 2 => 60, 3 => 30, 4 => 0] as $d => $v) {
             $this->dia('200', 'b1', "2026-10-0{$d}", 3, 0, $v);
         }
-        $this->dia('300', 'c1', '2026-10-02', 99, 9, 999);
+        // Excluída com dado no mês ganha botão; a sem dado no mês, não.
+        $this->dia('300', 'c1', '2026-10-02', 9, 1, 99);
+        $this->dia('400', 'd1', '2026-09-20', 99, 9, 999);
 
         $r = app(MetaAdsCrescimento::class)->montar(Carbon::parse('2026-10-05 15:00', 'America/Sao_Paulo'));
 
@@ -59,16 +62,16 @@ class MetaAdsCrescimentoTest extends TestCase
         $this->assertSame('2026-10-01', $r['dias'][0]);
         $this->assertSame('2026-10-31', $r['dias'][30]);
         $this->assertSame('100', $r['principal']);
-        // Só as ativas, a mais nova primeiro.
-        $this->assertSame(['200', '100'], array_column($r['campanhas'], 'meta_id'));
+        // A mais nova primeiro.
+        $this->assertSame(['300', '200', '100'], array_column($r['campanhas'], 'meta_id'));
 
-        $caixa = $r['campanhas'][1];
+        $caixa = $r['campanhas'][2];
         $this->assertSame([50.0, 100.0, 150.0, 200.0, 0.0, null], array_slice($caixa['serie']['vendas'], 0, 6));
         $this->assertSame(61.0, $caixa['totais']['gasto']);
         $this->assertSame('subindo', $caixa['tendencia']['direcao']);
         $this->assertSame(50.0, $caixa['tendencia']['inclinacao']);
 
-        $this->assertSame('caindo', $r['campanhas'][0]['tendencia']['direcao']);
+        $this->assertSame('caindo', $r['campanhas'][1]['tendencia']['direcao']);
     }
 
     public function test_comeco_do_mes_e_cedo_para_dizer(): void

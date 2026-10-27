@@ -135,6 +135,31 @@ class PublicidadePlataformaTest extends TestCase
                 ->where('periodos.1.totais.gasto', 0));
     }
 
+    public function test_meta_ads_mostra_historico_das_campanhas_excluidas(): void
+    {
+        $this->actingAs($this->admin())->get('/admin/publicidade/meta-ads')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('historico', 13)
+                ->where('historico.0.nome', 'Parafusadeira 18V Leve | Mulheres | Vendas')
+                ->where('historico.0.inicio', '2026-10-25')
+                ->where('historico.0.gasto', 35.64)
+                ->where('historico.12.nome', '[VENDAS] Umidificador e Difusor de Aromas Chama de Carvão')
+                ->where('historico.12.compras', 1)
+                ->where('historico.12.vendas', 145.72));
+
+        $this->assertEqualsWithDelta(1302.33, (float) \DB::table('meta_ads_campanhas_historico')->sum('gasto'), 0.001);
+        $this->assertEqualsWithDelta(476.24, (float) \DB::table('meta_ads_campanhas_historico')->sum('vendas'), 0.001);
+        $this->assertSame(3, (int) \DB::table('meta_ads_campanhas_historico')->sum('compras'));
+    }
+
+    public function test_google_ads_nao_recebe_historico_da_meta(): void
+    {
+        $this->actingAs($this->admin())->get('/admin/publicidade/google-ads')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->missing('historico'));
+    }
+
     public function test_cliente_nao_acessa(): void
     {
         $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);

@@ -5,8 +5,10 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Modules\Marketplace\Models\MetaAdsCampanhaHistorico;
 use App\Services\Meta\MetaAdsException;
 use App\Services\Meta\MetaAdsService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -54,6 +56,21 @@ class PublicidadePlataformaController extends Controller
         // para não travar a tela.
         if ($metaConectada && $ultimaSincronizacao === null) {
             $extras['resumoMeta'] = Inertia::defer(fn () => $this->resumoMeta($inicioMes, $hoje, $inicioAnterior, $fimAnterior));
+        }
+
+        // Lira 2026-10-27: histórico das campanhas excluídas, da nossa base,
+        // mais nova primeiro.
+        if ($canal === PlataformaDeAnuncio::META) {
+            $extras['historico'] = MetaAdsCampanhaHistorico::query()
+                ->orderByDesc('inicio')
+                ->orderByDesc('gasto')
+                ->get()
+                ->map(fn (MetaAdsCampanhaHistorico $c) => Arr::only($c->toArray(), [
+                    'id', 'meta_id', 'nome', 'status_final', 'objetivo', 'orcamento_nivel', 'orcamento_diario',
+                    'inicio', 'fim', 'excluida_em', 'gasto', 'impressoes', 'alcance', 'cliques_link', 'ctr_link',
+                    'carrinho', 'checkout', 'compras', 'vendas', 'roas', 'conjuntos', 'anuncios',
+                ]))
+                ->all();
         }
 
         return Inertia::render('Admin/Publicidade/Plataforma', $extras + [

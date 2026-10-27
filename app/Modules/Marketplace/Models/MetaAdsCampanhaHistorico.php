@@ -34,6 +34,8 @@ class MetaAdsCampanhaHistorico extends Model
             'compras' => 'integer',
             'conjuntos' => 'integer',
             'anuncios' => 'integer',
+            // Conjuntos e anúncios com as métricas de cada um (2026-10-27).
+            'estrutura' => 'array',
         ];
     }
 }

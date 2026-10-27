@@ -35,20 +35,12 @@ const linhas = computed(() => (props.daMeta ? props.resumoMeta?.periodos ?? [] :
 const STATUS_FINAL = { PAUSED: 'Pausada', ARCHIVED: 'Arquivada', ACTIVE: 'Ativa' };
 const porcento = (v) => `${(v ?? 0).toFixed(2).replace('.', ',')}%`;
 const somaHistorico = (campo) => props.historico.reduce((t, c) => t + (c[campo] ?? 0), 0);
-const totalHistorico = computed(() => {
-    const gasto = somaHistorico('gasto');
-    const vendas = somaHistorico('vendas');
-    return {
-        gasto,
-        impressoes: somaHistorico('impressoes'),
-        cliques_link: somaHistorico('cliques_link'),
-        carrinho: somaHistorico('carrinho'),
-        checkout: somaHistorico('checkout'),
-        compras: somaHistorico('compras'),
-        vendas,
-        roas: gasto > 0 ? vendas / gasto : null,
-    };
-});
+const totalHistorico = computed(() => ({
+    gasto: somaHistorico('gasto'),
+    impressoes: somaHistorico('impressoes'),
+    cliques_link: somaHistorico('cliques_link'),
+    compras: somaHistorico('compras'),
+}));
 
 const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, roas: null });
 </script>
@@ -212,6 +204,7 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
                     <thead>
                         <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             <th scope="col" class="whitespace-nowrap px-3 py-2 font-semibold">Início</th>
+                            <th scope="col" class="whitespace-nowrap px-3 py-2 font-semibold">Fim</th>
                             <th scope="col" class="px-3 py-2 font-semibold">Campanha</th>
                             <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Orçamento/dia</th>
                             <th scope="col" class="px-3 py-2 text-right font-semibold">Gasto</th>
@@ -219,21 +212,18 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
                             <th scope="col" class="px-3 py-2 text-right font-semibold">Alcance</th>
                             <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Cliques no link</th>
                             <th scope="col" class="px-3 py-2 text-right font-semibold">CTR</th>
-                            <th scope="col" class="px-3 py-2 text-right font-semibold">Carrinho</th>
-                            <th scope="col" class="px-3 py-2 text-right font-semibold">Checkout</th>
                             <th scope="col" class="px-3 py-2 text-right font-semibold">Compras</th>
-                            <th scope="col" class="px-3 py-2 text-right font-semibold">Vendas</th>
-                            <th scope="col" class="px-3 py-2 text-right font-semibold">ROAS</th>
-                            <th scope="col" class="whitespace-nowrap px-3 py-2 text-right font-semibold">Conjuntos / anúncios</th>
+                            <th scope="col" class="px-3 py-2"><span class="sr-only">Visualizar</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="c in historico" :key="c.id" class="border-t border-[var(--surface-border)] align-top">
                             <td class="whitespace-nowrap px-3 py-2 tabular-nums">{{ c.inicio ? data(c.inicio) : '—' }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 tabular-nums">{{ c.fim ? data(c.fim) : '—' }}</td>
                             <td class="min-w-[16rem] px-3 py-2">
                                 <span class="font-semibold">{{ c.nome }}</span>
                                 <span class="block text-xs text-slate-500 dark:text-slate-400">
-                                    {{ STATUS_FINAL[c.status_final] ?? c.status_final }} antes de excluir<template v-if="c.fim"> · terminou em {{ data(c.fim) }}</template>
+                                    {{ STATUS_FINAL[c.status_final] ?? c.status_final }} antes de excluir
                                     · excluída em {{ data(c.excluida_em) }}
                                 </span>
                             </td>
@@ -246,27 +236,24 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.alcance) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.cliques_link) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ porcento(c.ctr_link) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.carrinho) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.checkout) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(c.compras) }}</td>
-                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(c.vendas) }}</td>
-                            <td class="px-3 py-2 text-right font-semibold tabular-nums">{{ c.gasto > 0 ? roas(c.roas) : '—' }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ c.conjuntos }} / {{ c.anuncios }}</td>
+                            <td class="px-3 py-2 text-right">
+                                <Link :href="`/admin/publicidade/meta-ads/historico/${c.id}`"
+                                    class="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">
+                                    <i class="fas fa-eye text-[10px]" aria-hidden="true"></i> Visualizar
+                                </Link>
+                            </td>
                         </tr>
                     </tbody>
                     <tfoot>
                         <tr class="border-t-2 border-[var(--surface-border)] font-semibold">
-                            <td class="px-3 py-2" colspan="3">Total</td>
+                            <td class="px-3 py-2" colspan="4">Total</td>
                             <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(totalHistorico.gasto) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.impressoes) }}</td>
                             <td class="px-3 py-2"></td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.cliques_link) }}</td>
                             <td class="px-3 py-2"></td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.carrinho) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.checkout) }}</td>
                             <td class="px-3 py-2 text-right tabular-nums">{{ numero(totalHistorico.compras) }}</td>
-                            <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ dinheiro(totalHistorico.vendas) }}</td>
-                            <td class="px-3 py-2 text-right tabular-nums">{{ roas(totalHistorico.roas) }}</td>
                             <td class="px-3 py-2"></td>
                         </tr>
                     </tfoot>

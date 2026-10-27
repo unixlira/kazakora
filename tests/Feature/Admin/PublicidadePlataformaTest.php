@@ -153,6 +153,24 @@ class PublicidadePlataformaTest extends TestCase
         $this->assertSame(3, (int) \DB::table('meta_ads_campanhas_historico')->sum('compras'));
     }
 
+    public function test_visualizar_campanha_excluida_mostra_conjuntos_e_anuncios(): void
+    {
+        $id = \DB::table('meta_ads_campanhas_historico')->where('meta_id', '120247094956630271')->value('id');
+
+        $this->actingAs($this->admin())->get("/admin/publicidade/meta-ads/historico/{$id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/Publicidade/HistoricoCampanhaMeta', false)
+                ->where('campanha.nome', '[VENDAS] Umidificador e Difusor de Aromas Chama de Carvão')
+                ->has('conjuntos', 4));
+
+        // Cada campanha tem gravados os conjuntos e anúncios que a tabela conta.
+        foreach (\App\Modules\Marketplace\Models\MetaAdsCampanhaHistorico::all() as $c) {
+            $this->assertCount($c->conjuntos, $c->estrutura, $c->nome);
+            $this->assertSame($c->anuncios, array_sum(array_map(fn ($j) => count($j['anuncios']), $c->estrutura)), $c->nome);
+        }
+    }
+
     public function test_google_ads_nao_recebe_historico_da_meta(): void
     {
         $this->actingAs($this->admin())->get('/admin/publicidade/google-ads')

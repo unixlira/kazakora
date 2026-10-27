@@ -38,6 +38,23 @@ class PublicidadePlataformaTest extends TestCase
                 ->where('periodos.0.totais.roas', null));
     }
 
+    public function test_meta_ads_com_api_configurada_mostra_conectada_sem_gasto_gravado(): void
+    {
+        config([
+            'services.meta_ads.access_token' => 'token-teste',
+            'services.meta_ads.ad_account_id' => 'act_123',
+            'services.meta_ads.page_id' => '456',
+        ]);
+
+        $this->actingAs($this->admin())->get('/admin/publicidade/meta-ads')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/Publicidade/Plataforma', false)
+                ->where('conectado', true)
+                ->where('ultimaSincronizacao', null)
+                ->where('temDiagnostico', true));
+    }
+
     public function test_google_ads_sem_integracao_mostra_nao_conectada(): void
     {
         $this->actingAs($this->admin())->get('/admin/publicidade/google-ads')

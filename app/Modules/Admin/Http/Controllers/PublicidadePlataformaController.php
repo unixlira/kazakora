@@ -44,13 +44,17 @@ class PublicidadePlataformaController extends Controller
 
         // Meta: versão compacta do "O que fazer agora" (2026-10-21), últimos
         // 7 dias, lida ao vivo da Meta (prop adiada para não travar a tela).
-        $extras = $canal === PlataformaDeAnuncio::META && app(MetaAdsService::class)->configurado()
+        $metaConectada = $canal === PlataformaDeAnuncio::META && app(MetaAdsService::class)->configurado();
+        $extras = $metaConectada
             ? ['diagnostico' => Inertia::defer(fn () => $this->diagnosticoMeta()), 'temDiagnostico' => true]
             : ['temDiagnostico' => false];
 
         return Inertia::render('Admin/Publicidade/Plataforma', $extras + [
             'plataforma' => PlataformaDeAnuncio::dados($canal),
-            'conectado' => $ultimaSincronizacao !== null,
+            // Lira 2026-10-27: a Meta está conectada pela API (MetaAdsService)
+            // mesmo sem gasto diário gravado em channel_ad_spends; antes a
+            // tela dizia "Não conectada" por falta dessas linhas.
+            'conectado' => $metaConectada || $ultimaSincronizacao !== null,
             'ultimaSincronizacao' => $ultimaSincronizacao ? Carbon::parse($ultimaSincronizacao)->toDateString() : null,
             'periodos' => [
                 [

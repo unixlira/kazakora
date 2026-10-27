@@ -151,7 +151,9 @@ class CartManager
             ->with('quantityDiscounts', 'images')
             ->get()
             ->map(fn (Product $product) => [
-                'product' => $product,
+                // Custo e lucro mínimo são dados internos: o carrinho e o
+                // checkout mandam o produto no JSON público da página.
+                'product' => $product->makeHidden(['cost_price', 'min_profit']),
                 'quantity' => $quantity = min($raw[$product->id], $product->stock),
                 'subtotal' => round($product->unitPriceForQuantity($quantity) * $quantity, 2),
             ]);

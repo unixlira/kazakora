@@ -19,6 +19,9 @@ const props = defineProps({
     // Meta (2026-10-21): "O que fazer agora" curto, últimos 7 dias (prop adiada).
     diagnostico: { type: Object, default: null },
     temDiagnostico: { type: Boolean, default: false },
+    // Lira 2026-10-27: sem gasto gravado no painel, o resumo vem da Meta (prop adiada).
+    daMeta: { type: Boolean, default: false },
+    resumoMeta: { type: Object, default: null },
 });
 
 const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
@@ -26,7 +29,8 @@ const numero = (v) => new Intl.NumberFormat('pt-BR').format(v ?? 0);
 const data = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('pt-BR');
 const roas = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(2).replace('.', ',')}x`);
 
-const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0, roas: null });
+const linhas = computed(() => (props.daMeta ? props.resumoMeta?.periodos ?? [] : props.periodos));
+const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, roas: null });
 </script>
 
 <template>
@@ -109,18 +113,27 @@ const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0,
             </div>
         </section>
 
-        <!-- Lira 2026-10-27: conectada pela API, mas sem gasto diário gravado
-             no painel. Não mostra zero no lugar do gasto que existiu. -->
-        <p
-            v-else-if="!ultimaSincronizacao"
-            class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-600 shadow-sm dark:text-slate-300"
-        >
-            Integração conectada. O resumo acima vem direto da {{ plataforma.nome }}; o gasto por mês ainda não é gravado no painel.
-        </p>
+        <!-- Lira 2026-10-27: conectada pela API, sem gasto diário gravado no
+             painel: o gasto e os resultados vêm direto da Meta. -->
+        <Deferred v-else-if="daMeta" data="resumoMeta">
+            <template #fallback>
+                <div class="mb-6 flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500" role="status" aria-live="polite">
+                    <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Lendo gasto e resultados na Meta…
+                </div>
+            </template>
+            <p
+                v-if="resumoMeta?.erro"
+                class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-600 shadow-sm dark:text-slate-300"
+                role="alert"
+            >
+                Não deu para ler o gasto na Meta agora: {{ resumoMeta.erro }}
+            </p>
+        </Deferred>
 
-        <template v-else>
+        <template v-if="conectado && linhas.length">
             <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
-                Último dia sincronizado: {{ data(ultimaSincronizacao) }}.
+                <template v-if="daMeta">Números lidos agora na conta da Meta, incluindo campanhas pausadas e excluídas.</template>
+                <template v-else>Último dia sincronizado: {{ data(ultimaSincronizacao) }}.</template>
             </p>
 
             <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -144,10 +157,10 @@ const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0,
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="p in periodos" :key="p.titulo" class="border-t border-[var(--surface-border)]">
+                            <tr v-for="p in linhas" :key="p.titulo" class="border-t border-[var(--surface-border)]">
                                 <td class="px-4 py-2">
                                     <span class="font-semibold">{{ p.titulo }}</span>
-                                    <span class="block text-xs text-slate-500 dark:text-slate-400">{{ data(p.desde) }} a {{ data(p.ate) }}</span>
+                                    <span class="block text-xs text-slate-500 dark:text-slate-400">{{ p.desde ? `${data(p.desde)} a ${data(p.ate)}` : `até ${data(p.ate)}` }}</span>
                                 </td>
                                 <td class="px-4 py-2 text-right font-semibold tabular-nums">{{ dinheiro(p.totais.gasto) }}</td>
                                 <td class="px-4 py-2 text-right tabular-nums">{{ numero(p.totais.impressoes) }}</td>

@@ -954,6 +954,35 @@ class MetaAdsService
         return $resultado;
     }
 
+    /**
+     * Gasto e resultados da conta inteira num período (Lira 2026-10-27: a
+     * tela Gasto e resultados ficava vazia sem channel_ad_spends). O nível
+     * account soma tudo, inclusive campanhas já excluídas. Só leitura.
+     *
+     * @return array{gasto: float, impressoes: int, cliques: int, pedidos: int, vendas: float, roas: float|null}
+     *
+     * @throws MetaAdsException
+     */
+    public function totaisDaConta(string $datePreset): array
+    {
+        $linha = Cache::remember('meta-ads:totais-conta:'.md5($this->conta().'|'.$datePreset), now()->addMinutes(5),
+            fn () => $this->get($this->conta().'/insights', [
+                'level' => 'account',
+                'date_preset' => $datePreset,
+                'fields' => 'spend,impressions,clicks,actions,action_values',
+            ])['data'][0] ?? []);
+        $m = $this->metricas($linha);
+
+        return [
+            'gasto' => $m['gasto'],
+            'impressoes' => $m['impressoes'],
+            'cliques' => $m['cliques'],
+            'pedidos' => $m['compras'],
+            'vendas' => $m['vendas'],
+            'roas' => $m['roas'],
+        ];
+    }
+
     /** Períodos da tela (date_preset da Meta => rótulo). */
     public const PERIODOS = [
         'today' => 'Hoje',

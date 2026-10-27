@@ -49,15 +49,30 @@ const carregado = ref(false);
 let script = null;
 let observador = null;
 let desistir = null;
+let medidor = null;
+
+// Tamanho que o selo oficial desenhou de verdade. O Reclame AQUI passou a
+// desenhar "Estamos há mais de 1 mês" + logo em ~156x76, maior que os 142x52
+// do modelo, e o logo saía cortado no rodapé (revisão 2026-10-26). A escala
+// segue o tamanho medido; até carregar vale o do modelo (imagem reserva).
+const natural = ref({ w: LARGURA, h: ALTURA });
 
 const estiloCaixa = computed(() => {
     const h = props.altura != null ? String(props.altura) : 'var(--ra-altura, 52)';
     return {
         height: `calc(${h} * 1px)`,
-        width: `calc(${h} * ${LARGURA / ALTURA} * 1px)`,
-        '--ra-escala': `calc(${h} / ${ALTURA})`,
+        width: `calc(${h} * ${natural.value.w / natural.value.h} * 1px)`,
+        '--ra-escala': `calc(${h} / ${natural.value.h})`,
     };
 });
+
+function medir() {
+    const raiz = alvo.value?.querySelector('[id="ra-widget-verified"]');
+    if (!raiz) return;
+    const w = Math.max(LARGURA, raiz.offsetWidth);
+    const h = Math.max(1, raiz.offsetHeight);
+    if (w !== natural.value.w || h !== natural.value.h) natural.value = { w, h };
+}
 
 function ajustarLink() {
     const a = alvo.value?.querySelector('a.ra-widget-verified-wrapper');
@@ -65,6 +80,21 @@ function ajustarLink() {
     if (a.getAttribute('href') !== link.value) a.setAttribute('href', link.value);
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener');
+    // O widget desenha numa área fixa de 156x76 com folga de 12px 14px
+    // (!important no CSS dele, com #id); só estilo inline com !important vence.
+    // Área no tamanho do conteúdo e folga pequena: o selo cabe na caixa inteiro.
+    const raiz = a.closest('[id="ra-widget-verified"]');
+    const conteudo = a.querySelector('.ra-widget-verified-content');
+    [raiz, a].forEach((el) => {
+        el?.style.setProperty('width', 'auto', 'important');
+        el?.style.setProperty('height', 'auto', 'important');
+    });
+    conteudo?.style.setProperty('padding', '2px 4px', 'important');
+    if (raiz && !medidor && 'ResizeObserver' in window) {
+        medidor = new ResizeObserver(medir);
+        medidor.observe(raiz);
+    }
+    medir();
     carregado.value = true;
     return true;
 }
@@ -132,6 +162,8 @@ onBeforeUnmount(() => {
     clearTimeout(adiarScript);
     observador?.disconnect();
     observador = null;
+    medidor?.disconnect();
+    medidor = null;
     clearTimeout(desistir);
     script?.remove();
     script = null;
@@ -153,7 +185,7 @@ onBeforeUnmount(() => {
                 class="h-[90%] w-auto">
         </a>
         <div v-if="!semLink" class="selo-ra-escala absolute left-0 top-0" :class="{ invisible: !carregado }"
-            :style="{ width: `${LARGURA}px`, height: `${ALTURA}px` }">
+            :style="{ width: `${natural.w}px`, height: `${natural.h}px` }">
             <div :id="alvoId" ref="alvo"></div>
         </div>
     </div>

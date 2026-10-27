@@ -34,6 +34,8 @@
                 // Tags do produto (só do site): meta keywords e keywords do JSON-LD.
                 $tagsSeo = collect($seoProduto['tags'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
+                // Prévia do link no WhatsApp: foto leve (pedido 2026-10-27, ver ImagemDeCompartilhamento).
+                $imagemOg = $seoProduto ? \App\Modules\Catalog\Support\ImagemDeCompartilhamento::escolher($seoProduto['images'] ?? []) : null;
             @endphp
             <link rel="canonical" href="{{ $canonical }}">
             <meta name="description" content="{{ $descricao }}">
@@ -47,8 +49,16 @@
             @if ($seoProduto)
                 <meta property="og:title" content="{{ filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name'] }}">
                 <meta property="og:description" content="{{ $descricao }}">
-                @if ($imagens)
-                    <meta property="og:image" content="{{ url($imagens[0]) }}">
+                @if ($imagemOg)
+                    <meta property="og:image" content="{{ $imagemOg }}">
+                    <meta property="og:image:alt" content="{{ filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name'] }}">
+                    <meta name="twitter:card" content="summary_large_image">
+                @else
+                    {{-- Produto sem foto: a prévia leva a logo da loja em vez de sair sem imagem. --}}
+                    <meta property="og:image" content="{{ url('/images/marca/og-kazakora.png') }}">
+                    <meta property="og:image:type" content="image/png">
+                    <meta property="og:image:width" content="1200">
+                    <meta property="og:image:height" content="630">
                     <meta name="twitter:card" content="summary_large_image">
                 @endif
                 <script type="application/ld+json">{!! json_encode(array_filter([

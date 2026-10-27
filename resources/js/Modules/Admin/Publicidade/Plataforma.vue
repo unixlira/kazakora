@@ -109,6 +109,15 @@ const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0,
             </div>
         </section>
 
+        <!-- Lira 2026-10-27: conectada pela API, mas sem gasto diário gravado
+             no painel. Não mostra zero no lugar do gasto que existiu. -->
+        <p
+            v-else-if="!ultimaSincronizacao"
+            class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-600 shadow-sm dark:text-slate-300"
+        >
+            Integração conectada. O resumo acima vem direto da {{ plataforma.nome }}; o gasto por mês ainda não é gravado no painel.
+        </p>
+
         <template v-else>
             <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
                 Último dia sincronizado: {{ data(ultimaSincronizacao) }}.

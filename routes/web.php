@@ -754,6 +754,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('publicidade/campanhas', [\App\Modules\Admin\Http\Controllers\PublicidadeCampanhasController::class, 'index'])->name('publicidade.campanhas');
         // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo, só leitura.
         Route::get('publicidade/shopee', [\App\Modules\Admin\Http\Controllers\PublicidadeShopeeController::class, 'index'])->name('publicidade.shopee');
+        // Metadados das campanhas da Meta (2026-10-27): lidos do nosso banco, só leitura.
+        Route::get('publicidade/meta-ads/metadados', [\App\Modules\Admin\Http\Controllers\MetaAdsDadosController::class, 'index'])->name('publicidade.meta-ads.metadados');
+        Route::get('publicidade/meta-ads/metadados/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsDadosController::class, 'campanha'])->whereNumber('metaId')->name('publicidade.meta-ads.metadados.campanha');
     });
     // Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
     // com vários conjuntos e anúncios e ela vai para a Meta pausada. Ver é

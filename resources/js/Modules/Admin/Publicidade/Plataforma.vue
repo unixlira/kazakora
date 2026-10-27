@@ -7,6 +7,7 @@
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import CrescimentoMeta from '@/Modules/Admin/MetaAds/CrescimentoMeta.vue';
 import DiagnosticoMeta from '@/Modules/Admin/MetaAds/DiagnosticoMeta.vue';
 import { Deferred, Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -24,6 +25,8 @@ const props = defineProps({
     resumoMeta: { type: Object, default: null },
     // Lira 2026-10-27: campanhas da Meta já excluídas, com os números de toda a vida delas.
     historico: { type: Array, default: () => [] },
+    // Lira 2026-10-27: card de crescimento do mês por campanha ativa (prop adiada).
+    crescimento: { type: Object, default: null },
 });
 
 const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
@@ -77,6 +80,15 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
             ROAS é a venda atribuída dividida pelo gasto. O lucro de verdade fica em
             <Link href="/admin/dashboard-financeiro" class="font-medium text-primary hover:underline">Resultado e margem</Link>.
         </p>
+
+        <Deferred v-if="plataforma.canal === 'meta_ads'" data="crescimento">
+            <template #fallback>
+                <div class="mb-5 flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500" role="status" aria-live="polite">
+                    <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Montando o crescimento do mês…
+                </div>
+            </template>
+            <CrescimentoMeta :crescimento="crescimento" />
+        </Deferred>
 
         <Deferred v-if="temDiagnostico" data="diagnostico">
             <template #fallback>

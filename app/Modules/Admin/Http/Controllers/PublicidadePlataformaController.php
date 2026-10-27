@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\MetaAdsCampanhaHistorico;
+use App\Services\Meta\MetaAdsCrescimento;
 use App\Services\Meta\MetaAdsException;
 use App\Services\Meta\MetaAdsService;
 use Illuminate\Support\Arr;
@@ -77,7 +78,9 @@ class PublicidadePlataformaController extends Controller
         // Lira 2026-10-27: histórico das campanhas excluídas, da nossa base,
         // mais nova primeiro.
         if ($canal === PlataformaDeAnuncio::META) {
-            $extras['historico'] = MetaAdsCampanhaHistorico::query()
+            // Lira 2026-10-27: card de crescimento do mês, por campanha ativa, da nossa base.
+            $extras['crescimento'] = Inertia::defer(fn () => app(MetaAdsCrescimento::class)->montar());
+            $extras['historico'] =MetaAdsCampanhaHistorico::query()
                 ->orderByDesc('inicio')
                 ->orderByDesc('gasto')
                 ->get()

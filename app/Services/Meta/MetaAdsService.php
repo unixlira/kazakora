@@ -983,6 +983,113 @@ class MetaAdsService
         ];
     }
 
+    /**
+     * Estrutura da conta para gravar no banco (metadados, Lira 2026-10-27):
+     * campanhas, conjuntos e anúncios em todos os status que a Meta lista
+     * (excluído ela não lista; quem grava marca como DELETED). Só leitura.
+     *
+     * @return array{campanhas: list<array<string, mixed>>, conjuntos: list<array<string, mixed>>, anuncios: list<array<string, mixed>>}
+     *
+     * @throws MetaAdsException
+     */
+    public function estruturaDaConta(): array
+    {
+        $listar = ['effective_status' => json_encode(self::STATUS_LISTAVEIS)];
+        $quando = fn (?string $data) => $data ? Carbon::parse($data)->setTimezone(self::FUSO) : null;
+
+        $campanhas = $this->getPaginado($this->conta().'/campaigns', $listar + [
+            'fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time,created_time',
+            'limit' => 100,
+        ]);
+        $conjuntos = $this->getPaginado($this->conta().'/adsets', $listar + [
+            'fields' => 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget,created_time',
+            'limit' => 200,
+        ]);
+        $anuncios = $this->getPaginado($this->conta().'/ads', $listar + [
+            'fields' => 'id,name,adset_id,campaign_id,effective_status,created_time,creative{thumbnail_url}',
+            'limit' => 200,
+        ]);
+
+        return [
+            'campanhas' => array_map(fn (array $c) => [
+                'meta_id' => (string) $c['id'],
+                'nome' => (string) $c['name'],
+                'status' => (string) ($c['effective_status'] ?? ''),
+                'objetivo' => (string) ($c['objective'] ?? ''),
+                'orcamento_diario' => $this->centavosEmReais($c['daily_budget'] ?? null),
+                'orcamento_total' => $this->centavosEmReais($c['lifetime_budget'] ?? null),
+                'inicio' => $quando($c['start_time'] ?? null)?->toDateString(),
+                'fim' => $quando($c['stop_time'] ?? null)?->toDateString(),
+                'criada_na_meta' => $quando($c['created_time'] ?? null),
+            ], $campanhas),
+            'conjuntos' => array_map(fn (array $s) => [
+                'meta_id' => (string) $s['id'],
+                'campanha_meta_id' => (string) $s['campaign_id'],
+                'nome' => (string) $s['name'],
+                'status' => (string) ($s['effective_status'] ?? ''),
+                'orcamento_diario' => $this->centavosEmReais($s['daily_budget'] ?? null),
+                'orcamento_total' => $this->centavosEmReais($s['lifetime_budget'] ?? null),
+                'criado_na_meta' => $quando($s['created_time'] ?? null),
+            ], $conjuntos),
+            'anuncios' => array_map(fn (array $a) => [
+                'meta_id' => (string) $a['id'],
+                'conjunto_meta_id' => (string) $a['adset_id'],
+                'campanha_meta_id' => (string) $a['campaign_id'],
+                'nome' => (string) $a['name'],
+                'status' => (string) ($a['effective_status'] ?? ''),
+                'miniatura' => $a['creative']['thumbnail_url'] ?? null,
+                'criado_na_meta' => $quando($a['created_time'] ?? null),
+            ], $anuncios),
+        ];
+    }
+
+    /**
+     * Performance de cada anúncio por dia (metadados, Lira 2026-10-27),
+     * inclusive dos excluídos (só o insights traz). Sem $de/$ate, desde o
+     * início da conta. Os nomes vêm junto para gravar o que a Meta não lista.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    public function desempenhoDiarioPorAnuncio(?Carbon $de = null, ?Carbon $ate = null): array
+    {
+        $periodo = $de && $ate
+            ? ['time_range' => json_encode(['since' => $de->toDateString(), 'until' => $ate->toDateString()])]
+            : ['date_preset' => 'maximum'];
+
+        $linhas = $this->getPaginado($this->conta().'/insights', $periodo + [
+            'level' => 'ad',
+            'time_increment' => 1,
+            'filtering' => json_encode([['field' => 'ad.effective_status', 'operator' => 'IN', 'value' => [...self::STATUS_LISTAVEIS, 'DELETED']]]),
+            'fields' => 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
+            'limit' => 500,
+        ]);
+
+        return array_map(function (array $linha) {
+            $m = $this->metricas($linha);
+
+            return [
+                'anuncio_meta_id' => (string) $linha['ad_id'],
+                'anuncio_nome' => (string) ($linha['ad_name'] ?? ''),
+                'conjunto_meta_id' => (string) $linha['adset_id'],
+                'conjunto_nome' => (string) ($linha['adset_name'] ?? ''),
+                'campanha_meta_id' => (string) $linha['campaign_id'],
+                'campanha_nome' => (string) ($linha['campaign_name'] ?? ''),
+                'data' => (string) $linha['date_start'],
+                'gasto' => $m['gasto'],
+                'impressoes' => $m['impressoes'],
+                'cliques' => $m['cliques'],
+                'cliques_link' => (int) ($m['cliques_link'] ?? 0),
+                'visualizacoes_pagina' => $m['visualizacoes_pagina'],
+                'carrinho' => $m['carrinho'],
+                'checkout' => $m['checkout'],
+                'compras' => $m['compras'],
+                'vendas' => $m['vendas'],
+            ];
+        }, $linhas);
+    }
+
     /** Períodos da tela (date_preset da Meta => rótulo). */
     public const PERIODOS = [
         'today' => 'Hoje',

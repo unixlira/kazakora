@@ -124,6 +124,10 @@ const columns = [
                     class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">
                     <i class="fas fa-chart-line text-xs" aria-hidden="true"></i> Gasto e resultados
                 </Link>
+                <Link href="/admin/publicidade/meta-ads/metadados"
+                    class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">
+                    <i class="fas fa-table text-xs" aria-hidden="true"></i> Metadados
+                </Link>
                 <button v-if="can('financeiro.create') && props.config.configurado" type="button" :disabled="sincronizando"
                     title="Traz da Meta nomes, orçamento, status, textos e links de destino mudados no Gerenciador"
                     class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"

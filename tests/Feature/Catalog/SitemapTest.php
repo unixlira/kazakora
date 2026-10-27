@@ -5,6 +5,7 @@ namespace Tests\Feature\Catalog;
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SitemapTest extends TestCase
@@ -134,5 +135,28 @@ class SitemapTest extends TestCase
         $this->get('https://kazakora.com/carrinho')->assertHeader('X-Robots-Tag', 'noindex, follow');
         $this->get('https://kazakora.com/?search=lanterna')->assertHeader('X-Robots-Tag', 'noindex, follow');
         $this->get('https://kazakora.com/?categoria=casa')->assertHeaderMissing('X-Robots-Tag');
+    }
+
+    public function test_link_do_produto_no_whatsapp_leva_foto_leve_ou_a_logo(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('products/leve.jpg', str_repeat('a', 50 * 1024));
+        Storage::disk('public')->put('products/pesada.png', str_repeat('a', 900 * 1024));
+        Storage::disk('public')->put('products/medias/pesada.webp', str_repeat('a', 40 * 1024));
+
+        $leve = Product::factory()->create(['slug' => 'foto-leve', 'is_active' => true]);
+        $leve->images()->create(['path' => 'products/leve.jpg', 'medium_path' => 'products/medias/leve.webp', 'position' => 0, 'is_primary' => true]);
+
+        $pesada = Product::factory()->create(['slug' => 'foto-pesada', 'is_active' => true]);
+        $pesada->images()->create(['path' => 'products/pesada.png', 'medium_path' => 'products/medias/pesada.webp', 'position' => 0, 'is_primary' => true]);
+
+        Product::factory()->create(['slug' => 'sem-foto', 'is_active' => true]);
+
+        $this->get('/produtos/foto-leve')->assertOk()
+            ->assertSee('<meta property="og:image" content="'.url('/storage/products/leve.jpg').'">', false);
+        $this->get('/produtos/foto-pesada')->assertOk()
+            ->assertSee('<meta property="og:image" content="'.url('/storage/products/medias/pesada.webp').'">', false);
+        $this->get('/produtos/sem-foto')->assertOk()
+            ->assertSee('<meta property="og:image" content="'.url('/images/marca/og-kazakora.png').'">', false);
     }
 }

@@ -30,6 +30,22 @@ class PublicidadePlataformaController extends Controller
         return $this->exibir(PlataformaDeAnuncio::META);
     }
 
+    /**
+     * Lira 2026-10-27: botão Visualizar do histórico. Campanha excluída com
+     * os conjuntos e o desempenho de cada anúncio, da foto de 27/10.
+     */
+    public function historicoMeta(MetaAdsCampanhaHistorico $historico): Response
+    {
+        return Inertia::render('Admin/Publicidade/HistoricoCampanhaMeta', [
+            'campanha' => Arr::only($historico->toArray(), [
+                'id', 'meta_id', 'nome', 'status_final', 'objetivo', 'orcamento_nivel', 'orcamento_diario',
+                'inicio', 'fim', 'excluida_em', 'gasto', 'impressoes', 'alcance', 'cliques_link', 'ctr_link',
+                'compras', 'conjuntos', 'anuncios',
+            ]),
+            'conjuntos' => $historico->estrutura ?? [],
+        ]);
+    }
+
     public function googleAds(): Response
     {
         return $this->exibir(PlataformaDeAnuncio::GOOGLE);

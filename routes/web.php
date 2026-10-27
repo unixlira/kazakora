@@ -747,6 +747,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('publicidade', [\App\Modules\Admin\Http\Controllers\PublicidadeController::class, 'index'])->name('publicidade.ver');
         // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
+        // Lira 2026-10-27: campanha excluída da Meta, com conjuntos e anúncios.
+        Route::get('publicidade/meta-ads/historico/{historico}', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'historicoMeta'])->whereNumber('historico')->name('publicidade.meta-ads.historico');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
         // Central de campanhas (2026-10-23): Meta e Google numa lista só, só leitura.
         Route::get('publicidade/campanhas', [\App\Modules\Admin\Http\Controllers\PublicidadeCampanhasController::class, 'index'])->name('publicidade.campanhas');

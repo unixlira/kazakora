@@ -60,8 +60,15 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
     : (Number(props.product.checkout_discount_amount ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
+// Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
+// Fileira do "PAGAMENTO SEGURO E RÁPIDO" na ordem da Mavo (tarefa 2656); Diners
+// entra porque o checkout aceita (CheckoutV2, detecção da bandeira).
+const PAYMENT_BRANDS = ['visa', 'mastercard', 'elo', 'amex', 'diners', 'hipercard', 'pix', 'boleto'];
+// Versão no endereço: o CDN guarda os SVG por dias; troque ao redesenhar uma bandeira (AMEX maior, 2026-10-24).
+const VERSAO_BANDEIRAS = '20261024';
 // Bandeiras do bloco de formas de pagamento (mesmas imagens do rodapé, pedido 2026-10-14).
 const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
+const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'American Express', diners: 'Diners Club', hipercard: 'Hipercard', pix: 'Pix', boleto: 'Boleto' };
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
@@ -887,7 +894,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </template>
                             <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
 
-                            <!-- Só o quadro do Frete acima do "Calcular o prazo", no lugar dos quatro selos (pedido do Lira 2026-10-26):
+                            <!-- "PAGAMENTO SEGURO E RÁPIDO" com os cartões logo abaixo do Comprar, igual ao homolog
+                                 (faltou na publicação do frete; Lira em 2026-10-26: "tá faltando os cartãozinho"). -->
+                            <div class="pagamento-seguro">
+                                <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
+                                <div class="bandeiras">
+                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg?v=${VERSAO_BANDEIRAS}`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
+                                </div>
+                            </div>
+
+                            <!-- Dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26):
                                  "Frete Grátis para todo o Brasil." e, em verde, "Expresso Turbo para todas as regiões do Brasil";
                                  caminhão verde inclinado (fa-truck-fast) no círculo, igual ao do homolog. -->
                             <ul class="fretefundo">
@@ -895,6 +911,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span class="selo-icone carrinho"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
                                     <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-regiao">Expresso Turbo para todas as regiões do Brasil</span></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
+                                </li>
+                                <li>
+                                    <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
+                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro<br>30 dias após o recebimento do produto</span>
                                 </li>
                             </ul>
 
@@ -1709,6 +1729,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
 .pd2 .compra .total { margin: 10px 0 0; text-align: center; }
+.pd2 .compra .pagamento-seguro { margin: 18px 0 10px; border: 1px solid #f6f6f8; border-radius: 6px; padding: 2px 2px 10px; background: #fff; }
+.pd2 .compra .ps-topo { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border-radius: 6px; background: #f6f6f8; color: #565656; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
+.pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
+.pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
 .pd2 .compra .checks { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
 /* Selos em caixinhas separadas, como "Frete Grátis" e "Devoluções Gratuitas" da Mavo:
    borda #f5f5f5, cantos de 6px, título 13px em negrito preto e texto 12px. */
@@ -1752,13 +1777,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo-desconto i { font-size: 12px; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
-.dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b { color: var(--ink); }
-.dark .pd2 .compra .nota, .dark .pd2 .compra .nota .media, .dark .pd2 .compra .subtitulo, .dark .pd2 .compra .valor-escolhido { color: var(--text); }
+.dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }
+.dark .pd2 .compra .nota, .dark .pd2 .compra .nota .media, .dark .pd2 .compra .subtitulo, .dark .pd2 .compra .valor-escolhido, .dark .pd2 .compra .ps-topo { color: var(--text); }
 .dark .pd2 .compra .divisor { border-top-color: var(--line); }
 .dark .pd2 .compra .opcao { background: var(--card); color: var(--ink); border-color: var(--line); }
 .dark .pd2 .compra .opcao.atual { background: var(--sunk); border-color: var(--ink); }
 .dark .pd2 .compra .estoque-barra { background: rgba(255, 255, 255, .15); }
 .dark .pd2 .compra .estoque-barra span { background: #e5e7eb; }
+.dark .pd2 .compra .pagamento-seguro { background: var(--card); border-color: var(--line); }
+.dark .pd2 .compra .ps-topo { background: var(--sunk); }
 .dark .pd2 .compra { border-color: var(--line); }
 .dark .pd2 .compra .fretefundo li, .dark .pd2 .compra .prazo-cep { background: var(--card); border-color: var(--line); color: var(--text); }
 .dark .pd2 .compra .fretefundo b, .dark .pd2 .compra .prazo-cep label { color: var(--ink); }

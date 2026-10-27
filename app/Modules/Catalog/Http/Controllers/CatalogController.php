@@ -17,7 +17,6 @@ use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
-use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
 use App\Modules\Operacional\Models\ShippingMethod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -502,10 +501,6 @@ class CatalogController extends Controller
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),
             'reviews' => $reviews,
-            // Carrossel de depoimentos na caixa de compra (pedido 2026-10-25): as mesmas
-            // avaliações reais do carrossel do checkout (nota 4 ou 5, com texto, do
-            // anúncio pai e variações, máximo 5). Sem avaliação, o carrossel não aparece.
-            'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos([$product->id]),
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')

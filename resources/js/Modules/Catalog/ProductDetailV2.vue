@@ -1013,16 +1013,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </div>
                                 </div>
 
-                                <!-- CTA depois das dúvidas (pedido 2026-10-20): texto do Gemini com
-                                     emojis e as garantias reais da loja para a última objeção. -->
-                                <div v-if="anuncio.cta?.titulo" class="cta-anuncio">
-                                    <h3>{{ anuncio.cta.titulo }}</h3>
-                                    <p>{{ anuncio.cta.texto }}</p>
-                                    <ul v-if="anuncio.cta.garantias?.length">
-                                        <li v-for="(garantia, index) in anuncio.cta.garantias" :key="index">{{ garantia }}</li>
-                                    </ul>
-                                    <!-- Sem botão no CTA (pedido do Lira 2026-10-25): repetia o "Comprar agora" do box de compra. -->
-                                </div>
+                                <!-- Sem o quadro CTA no fim da descrição (pedido do Lira 2026-10-26, print do
+                                     "Facilite seus reparos agora mesmo!"): em todos os produtos e nos próximos.
+                                     O texto continua gravado em product_ad_contents.cta; só a página não mostra. -->
                             </div>
 
                             <div v-else class="descricao">
@@ -1492,11 +1485,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
-.pd2 .cta-anuncio { margin-top: 28px; padding: 22px 20px; border-radius: 14px; background: var(--soft); border: 1px solid var(--line); text-align: center; }
-.pd2 .cta-anuncio h3 { font-size: 22px; font-weight: 700; margin: 0 0 10px; }
-.pd2 .cta-anuncio p { margin: 0 auto; max-width: 620px; color: var(--ink); font-size: 16px; }
-.pd2 .cta-anuncio ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
-.pd2 .cta-anuncio li { padding: 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 14px; font-weight: 500; }
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }

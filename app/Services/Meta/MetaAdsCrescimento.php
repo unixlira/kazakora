@@ -7,10 +7,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Card de crescimento da tela Meta ADS (pedido do Lira em 2026-10-27): do
- * dia 1º ao último dia do mês, o dia a dia de cada campanha ativa, lido do
- * nosso banco (meta_ads_dados_*, gravado pelo meta-ads:gravar-dados). Diz
- * se a campanha principal está subindo ou caindo e dá um botão por
- * campanha ativa, a mais nova primeiro (à esquerda).
+ * dia 1º ao último dia do mês, o dia a dia de cada campanha, lido do nosso
+ * banco (meta_ads_dados_*, gravado pelo meta-ads:gravar-dados). Diz se a
+ * campanha principal está subindo ou caindo e dá um botão por campanha (a
+ * ativa e a que teve dado no mês, mesmo já excluída), a mais nova primeiro
+ * (à esquerda).
  */
 class MetaAdsCrescimento
 {
@@ -33,15 +34,17 @@ class MetaAdsCrescimento
             $dias[] = $d->toDateString();
         }
 
-        $ativas = DB::table('meta_ads_dados_campanhas')->where('status', 'ACTIVE')->get();
-
         $linhas = DB::table('meta_ads_dados_desempenho')
-            ->whereIn('campanha_meta_id', $ativas->pluck('meta_id'))
             ->whereBetween('data', [$inicio->toDateString(), $hoje->toDateString()])
             ->groupBy('campanha_meta_id', 'data')
             ->selectRaw('campanha_meta_id, data, sum(gasto) gasto, sum(compras) compras, sum(vendas) vendas')
             ->get()
             ->groupBy('campanha_meta_id');
+
+        // Ativa agora ou com dado no mês (Lira 27/10: um botão por campanha).
+        $ativas = DB::table('meta_ads_dados_campanhas')
+            ->where(fn ($q) => $q->where('status', 'ACTIVE')->orWhereIn('meta_id', $linhas->keys()))
+            ->get();
 
         // Dia que ainda não chegou fica vazio (null), não zero.
         $ateHoje = array_flip(array_filter($dias, fn ($d) => $d <= $hoje->toDateString()));
@@ -58,7 +61,8 @@ class MetaAdsCrescimento
             return [
                 'meta_id' => $c->meta_id,
                 'nome' => $c->nome,
-                'criada_em' => $c->criada_na_meta ?? $c->inicio,
+                // Excluída que entrou pelo insights não tem data: vale o 1º dia com dado.
+                'criada_em' => (string) ($c->criada_na_meta ?? $c->inicio ?? $porDia->keys()->min()),
                 'serie' => $serie,
                 'totais' => collect(self::SERIES)->mapWithKeys(fn ($k) => [$k => round(array_sum(array_filter($serie[$k], fn ($v) => $v !== null)), 2)])->all(),
                 'tendencia' => $this->tendencia($serie[self::METRICA], $dias, $porDia->keys()->min()),
@@ -75,7 +79,8 @@ class MetaAdsCrescimento
             'metrica' => self::METRICA,
             'principal' => $principal['meta_id'] ?? null,
             // Ordem decrescente (Lira 27/10): a campanha mais nova à esquerda.
-            'campanhas' => $campanhas->sortByDesc(fn ($c) => (string) $c['criada_em'])->values()->all(),
+            // Empate: id maior na Meta é a criada depois.
+            'campanhas' => $campanhas->sort(fn ($a, $b) => [$b['criada_em'], $b['meta_id']] <=> [$a['criada_em'], $a['meta_id']])->values()->all(),
             'atualizado_em' => ($q = DB::table('meta_ads_dados_campanhas')->max('sincronizado_em'))
                 ? Carbon::parse($q)->setTimezone(self::FUSO)->toIso8601String() : null,
         ];

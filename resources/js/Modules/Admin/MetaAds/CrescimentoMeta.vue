@@ -1,7 +1,7 @@
 <script setup>
 // Card de crescimento (pedido do Lira 2026-10-27): do dia 1º ao último dia
 // do mês, se a campanha principal está subindo ou caindo e o nome dela. Um
-// botão por campanha ativa, a mais nova à esquerda; clicar troca o gráfico.
+// botão por campanha (ativa ou com dado no mês), a mais nova à esquerda; clicar troca o gráfico.
 // Dados do nosso banco (MetaAdsCrescimento), não chama a Meta.
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
 import { useTemaEscuro } from '@/Shared/graficos';
@@ -106,7 +106,7 @@ const opcoes = computed(() => ({
         </div>
 
         <p v-if="!campanhas.length" class="rounded-lg bg-slate-500/5 p-3 text-sm text-slate-600 dark:text-slate-300" role="status">
-            Nenhuma campanha ativa na Meta agora.
+            Nenhuma campanha ativa nem com dado neste mês.
         </p>
 
         <template v-else>

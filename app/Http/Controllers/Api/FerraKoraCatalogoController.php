@@ -101,6 +101,20 @@ class FerraKoraCatalogoController extends Controller
         return $this->semCache(response()->json([...$prazo, 'opcoes' => PrazoPorCep::opcoes($prazo, $entrega)]));
     }
 
+    /** Avaliações do produto, 12 por página (pedido 2026-10-28). */
+    public function avaliacoes(Request $request, string $id): JsonResponse
+    {
+        $pai = $this->catalogo->paiPublicado($id);
+
+        if ($pai === null) {
+            return response()->json(['message' => 'Produto não encontrado.'], 404);
+        }
+
+        $pagina = max(1, min(500, (int) $request->query('pagina', 1)));
+
+        return response()->json($this->catalogo->avaliacoes($pai, $pagina, 12))->header('Cache-Control', 'public, max-age=300');
+    }
+
     public function sincronizar(Request $request): JsonResponse
     {
         $esperado = (string) config('services.ferrakora.catalogo_token');

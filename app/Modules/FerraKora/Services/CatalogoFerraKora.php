@@ -3,9 +3,10 @@
 namespace App\Modules\FerraKora\Services;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductAdContent;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
-use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\DescontoPix;
 use App\Support\SiteAtual;
@@ -60,7 +61,86 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
             // Pix + cupom automático (BEMVINDO), que o checkout aplica sozinho (2026-10-24).
             'desconto_pix' => DescontoPix::percentualNaVitrine($pai),
+            // Nota e total das avaliações do KazaKora (pai + variações), as
+            // mesmas da página do produto na loja (pedido 2026-10-28). O card
+            // do FerraKora já lê average_rating.
+            'reviewsAnalytics' => $this->resumoAvaliacoes($pai),
         ];
+    }
+
+    /** @return array{average_rating: float|null, count: int} */
+    public function resumoAvaliacoes(Product $pai): array
+    {
+        $resumo = $this->avaliacoesDoGrupo($pai)->toBase()->selectRaw('count(*) as total, avg(rating) as media')->first();
+        $total = (int) ($resumo->total ?? 0);
+
+        return ['average_rating' => $total > 0 ? round((float) $resumo->media, 2) : null, 'count' => $total];
+    }
+
+    /**
+     * Avaliações do produto no site (pedido 2026-10-28: "colocar todas as
+     * avaliações que a gente tem na base do KazaKora nos produtos da
+     * FerraKora"). As mesmas da página do produto no KazaKora: pai +
+     * variações, com foto/vídeo primeiro e, em cada grupo, da mais recente
+     * para a mais antiga. Nome como a loja mostra (oculto, sorteado nas
+     * importadas); a resposta ao cliente e o canal de origem não saem.
+     *
+     * @return array<string, mixed>
+     */
+    public function avaliacoes(Product $pai, int $pagina, int $porPagina): array
+    {
+        $resumo = $this->resumoAvaliacoes($pai);
+        $notas = $this->avaliacoesDoGrupo($pai)->toBase()->selectRaw('rating, count(*) as total')->groupBy('rating')->pluck('total', 'rating');
+
+        $lista = $this->avaliacoesDoGrupo($pai)
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->latest()
+            ->orderByDesc('id')
+            ->forPage($pagina, $porPagina)
+            ->get()
+            ->map(fn (Review $avaliacao) => [
+                'id' => $avaliacao->id,
+                'nome' => $avaliacao->reviewer_display_name === 'Cliente KazaKora' ? 'Cliente FerraKora' : $avaliacao->reviewer_display_name,
+                'uf' => $avaliacao->uf ?: null,
+                'nota' => (int) $avaliacao->rating,
+                'texto' => (string) $avaliacao->comment,
+                'data' => $avaliacao->created_at?->toIso8601String(),
+                'midias' => $avaliacao->images->map(fn ($midia) => [
+                    'url' => $midia->image_url,
+                    'tipo' => preg_match('/\.(mp4|webm|mov)(\?|$)/i', (string) $midia->image_url) ? 'video' : 'imagem',
+                ])->values()->all(),
+            ])
+            ->all();
+
+        return [
+            ...$resumo,
+            'por_nota' => collect([5, 4, 3, 2, 1])->mapWithKeys(fn (int $nota) => [$nota => (int) ($notas[$nota] ?? 0)])->all(),
+            'pagina' => $pagina,
+            'por_pagina' => $porPagina,
+            'ultima_pagina' => max(1, (int) ceil($resumo['count'] / $porPagina)),
+            'avaliacoes' => $lista,
+        ];
+    }
+
+    /** @return Builder<Review> */
+    private function avaliacoesDoGrupo(Product $pai): Builder
+    {
+        return Review::query()->whereIn('product_id', Product::query()->where('id', $pai->id)->orWhere('parent_product_id', $pai->id)->select('id'));
+    }
+
+    /** Pai publicado no site pelo id da API ("kz-<id>"). null = não está no site. */
+    public function paiPublicado(string $id): ?Product
+    {
+        if (! Str::startsWith($id, self::PREFIXO_PRODUTO) || ! ctype_digit(Str::after($id, self::PREFIXO_PRODUTO))) {
+            return null;
+        }
+
+        return Product::query()
+            ->where('is_active', true)
+            ->whereIn('id', FerraKoraProduto::query()->where('ativo', true)->select('product_id'))
+            ->find((int) Str::after($id, self::PREFIXO_PRODUTO));
     }
 
     /** Produto do site com o conteúdo da página. null = não está no site. */

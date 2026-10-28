@@ -181,6 +181,9 @@ export const sidebarSections = [
         heading: 'Atendimento',
         items: [
             { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas', alertaNoTitulo: true },
+            // Direct e Messenger (2026-10-27): uma tela por rede, para saber de onde veio.
+            { label: 'Instagram', href: '/admin/instagram/conversas', icon: 'fab fa-instagram', marca: 'instagram', permission: 'pedidos.view', badgeKey: 'instagramNaoLidas', alertaNoTitulo: true },
+            { label: 'Facebook', href: '/admin/facebook/conversas', icon: 'fab fa-facebook-messenger', marca: 'meta', permission: 'pedidos.view', badgeKey: 'facebookNaoLidas', alertaNoTitulo: true },
             { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos', alertaNoTitulo: true },
             // Perguntas MK Place (2026-10-20): perguntas dos anúncios; a Manuela
             // atende e o contador mostra as que esperam uma pessoa. alertaFixo:

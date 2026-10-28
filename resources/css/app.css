@@ -173,6 +173,7 @@
 .admin-shell .icone-google { --cor-marca: #4285f4; }
 .admin-shell .icone-meta { --cor-marca: #0866ff; }
 .admin-shell .icone-whatsapp { --cor-marca: #25d366; }
+.admin-shell .icone-instagram { --cor-marca: #e1306c; }
 .admin-shell .icone-mercado-livre { --cor-marca: #ffe600; filter: drop-shadow(0 0 0.5px #2d3277) drop-shadow(0 0 0.5px #2d3277); }
 .admin-shell .icone-correios { --cor-marca: #ffd400; filter: drop-shadow(0 0 0.5px #00416b) drop-shadow(0 0 0.5px #00416b); }
 .dark .admin-shell :is(.icone-mercado-livre, .icone-correios) { filter: none; }

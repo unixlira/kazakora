@@ -214,6 +214,40 @@ class ShipmentService
     }
 
     /**
+     * BUG REAL 2026-10-28 (pedido #3600, envio 48369972249): na hora da
+     * importação o ML ainda não tinha posto a venda em pending/buffered, o
+     * scheduled_for ficou vazio e o pedido, agendado para 30/10, caiu em
+     * "Aguardando separação" no KoraSync em vez de "Aguardando liberação -
+     * ML". scheduled_for só era lido no confirmShipping(); agora, se o envio
+     * aparece agendado depois, a data entra aqui (webhook ou polling de 30
+     * min). Mesma regra de MercadoLivreDriver::extractScheduledFor().
+     *
+     * @param  array<string, mixed>  $raw
+     */
+    private function agendamentoTardio(array $raw): ?Carbon
+    {
+        if (($raw['status'] ?? null) !== 'pending' || ($raw['substatus'] ?? null) !== 'buffered') {
+            return null;
+        }
+
+        $data = $raw['shipping_option']['buffering']['date'] ?? null;
+
+        if (! $data && isset($raw['id'])) {
+            $data = rescue(fn () => $this->getLeadTime((string) $raw['id'])['buffering']['date'] ?? null, null, false);
+        }
+
+        if (! $data) {
+            return null;
+        }
+
+        $date = Carbon::parse($data);
+
+        return $date->isFuture()
+            ? $date
+            : Carbon::createFromFormat('Y-m-d H:i:s', substr((string) $data, 0, 10).' 00:00:00', config('app.timezone'));
+    }
+
+    /**
      * Guarda o que o canal diz do envio — status, substatus e as datas do
      * `status_history` — em vez de jogar fora depois de decidir o status
      * do pedido.
@@ -249,6 +283,7 @@ class ShipmentService
                 // Nunca apaga a promessa já lida: resposta sem o campo não
                 // quer dizer que a promessa sumiu.
                 'promised_delivery_on' => self::dataPrometida($raw) ?? $shipment->promised_delivery_on,
+                'scheduled_for' => $shipment->scheduled_for ?? $this->agendamentoTardio($raw),
             ])->save();
         } catch (\Throwable $exception) {
             Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.shipment.status_canal_nao_gravado', [

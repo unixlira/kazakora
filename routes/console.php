@@ -99,6 +99,8 @@ Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('shopee:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
 // Mensagens de comprador da Amazon (e-mail) e do TikTok Shop (API) — canal sem configuração é pulado.
 Schedule::command('atendimento:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
+// Direct do Instagram e Messenger do Facebook (2026-10-27) — rede sem permissão no token é pulada.
+Schedule::command('atendimento:meta-sync')->everyTwoMinutes()->withoutOverlapping(5);
 // Rede de segurança do webhook (2026-10-11, produção na VPS): venda de hoje
 // da Shopee e do Mercado Livre a cada 2 min, como já é no TikTok. Se o aviso
 // do canal se perder (painel apontando pro lugar errado, canal fora do ar),

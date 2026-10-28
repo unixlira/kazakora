@@ -138,6 +138,8 @@ class HandleInertiaRequests extends Middleware
                     // Item Perguntas MK Place do menu: perguntas pra você + chats não lidos
                     // (Shopee, Amazon e TikTok Shop).
                     'atendimentoMkplace' => $perguntasMkplace + $shopeeChatNaoLidas + array_sum(\App\Modules\Admin\Http\Controllers\MarketplaceChatController::naoLidasPorAba()),
+                    // Atendimento › Instagram e Facebook: conversas com mensagem não lida (2026-10-27).
+                    ...collect(\App\Modules\Admin\Http\Controllers\RedesSociaisChatController::naoLidasPorRede())->mapWithKeys(fn (int $n, string $rede) => [$rede.'NaoLidas' => $n])->all(),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

@@ -1000,6 +1000,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Abas Amazon e TikTok Shop de Perguntas MK Place (2026-10-25). Enviar só por ação do atendente.
         Route::post('chat-marketplace/{canal}/{conversa}/mensagens', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'enviar'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->middleware('throttle:30,1')->name('chat-marketplace.enviar');
         Route::post('chat-marketplace/{canal}/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\MarketplaceChatController::class, 'lida'])->whereIn('canal', ['amazon', 'tiktok_shop'])->whereNumber('conversa')->name('chat-marketplace.lida');
+        // Atendimento › Instagram e Facebook (2026-10-27): Direct e Messenger, cada rede na sua tela. Só leitura.
+        Route::get('{rede}/conversas', [\App\Modules\Admin\Http\Controllers\RedesSociaisChatController::class, 'index'])->whereIn('rede', ['instagram', 'facebook'])->name('redes-sociais.conversas');
+        Route::post('{rede}/conversas/{conversa}/lida', [\App\Modules\Admin\Http\Controllers\RedesSociaisChatController::class, 'lida'])->whereIn('rede', ['instagram', 'facebook'])->whereNumber('conversa')->name('redes-sociais.lida');
         // Perguntas MK Place (pedido 2026-10-20): Manuela atende, humano assume quando precisa.
         Route::get('perguntas-marketplace', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'index'])->name('perguntas-marketplace.index');
         Route::get('perguntas-marketplace/chegando', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'chegando'])->name('perguntas-marketplace.chegando');

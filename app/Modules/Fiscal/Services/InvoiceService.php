@@ -556,7 +556,7 @@ class InvoiceService
             Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
 
             $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
-            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml));
+            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml, $invoice->order));
             $invoice->update(['danfe_path' => $danfePath]);
 
             return $invoice->fresh();
@@ -656,7 +656,7 @@ class InvoiceService
             Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
 
             $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
-            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml));
+            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml, $invoice->order));
             $invoice->update(['danfe_path' => $danfePath]);
         } elseif (in_array($cStat, ['110', '301', '302'], true)) {
             $invoice->update(['status' => Invoice::STATUS_DENIED, 'motivo_rejeicao' => "{$cStat} - {$xMotivo}"]);

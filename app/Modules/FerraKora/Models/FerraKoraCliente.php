@@ -4,8 +4,11 @@ namespace App\Modules\FerraKora\Models;
 
 use App\Support\NomeCapitalizado;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Mail\FerraKoraBoasVindas;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -20,13 +23,13 @@ class FerraKoraCliente extends Model
 
     protected $table = 'ferrakora_clientes';
 
-    protected $fillable = ['name', 'email', 'cpf', 'phone', 'birth_date', 'avatar_path', 'password', 'senha_definida'];
+    protected $fillable = ['name', 'email', 'cpf', 'phone', 'birth_date', 'avatar_path', 'password', 'senha_definida', 'deve_trocar_senha'];
 
     protected $hidden = ['password'];
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'senha_definida' => 'boolean', 'birth_date' => 'date'];
+        return ['password' => 'hashed', 'senha_definida' => 'boolean', 'deve_trocar_senha' => 'boolean', 'birth_date' => 'date'];
     }
 
     public function pedidos(): HasMany
@@ -96,7 +99,9 @@ class FerraKoraCliente extends Model
     /**
      * Conta do comprador no checkout. Mesmo e-mail e mesmo CPF (ou conta sem
      * CPF) = mesma conta; e-mail ou CPF de outra conta = aviso. Conta nova
-     * nasce com senha sorteada: o cliente cria a dele em "Esqueci minha senha".
+     * nasce com senha temporária, que vai no e-mail de boas-vindas da FerraKora
+     * (pedido do Lira 2026-10-29, igual à KazaKora); no primeiro acesso o site
+     * pede uma senha pessoal (deve_trocar_senha).
      *
      * @param  array{name: string, email: string, cpf: string, phone: string}  $dados
      */
@@ -122,14 +127,22 @@ class FerraKoraCliente extends Model
             throw ValidationException::withMessages(['cliente.cpf' => 'Este CPF já tem cadastro com outro e-mail. Use o e-mail da sua conta.']);
         }
 
-        return static::query()->create([
+        $senhaTemporaria = Str::password(10, symbols: false);
+        $conta = static::query()->create([
             'name' => $dados['name'],
             'email' => $email,
             'cpf' => $cpf,
             'phone' => $dados['phone'],
-            'password' => Str::random(40),
-            'senha_definida' => false,
+            'password' => $senhaTemporaria,
+            'senha_definida' => true,
+            'deve_trocar_senha' => true,
         ]);
+
+        DB::afterCommit(function () use ($conta, $senhaTemporaria) {
+            rescue(fn () => Mail::to($conta->email)->send(new FerraKoraBoasVindas($conta, $senhaTemporaria)));
+        });
+
+        return $conta;
     }
 
     /** Formato que o site espera (sem CPF, telefone nem endereço). */
@@ -140,6 +153,8 @@ class FerraKoraCliente extends Model
             'name' => $this->name,
             'email' => $this->email,
             'created' => $this->created_at?->toIso8601String(),
+            // Entrou com a senha temporária do e-mail: o site pede a senha pessoal.
+            'deve_trocar_senha' => (bool) $this->deve_trocar_senha,
         ];
     }
 }

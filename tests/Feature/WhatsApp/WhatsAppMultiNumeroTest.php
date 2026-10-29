@@ -3,8 +3,11 @@
 namespace Tests\Feature\WhatsApp;
 
 use App\Models\User;
+use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\WhatsApp\Jobs\FaturarPedidoSemResposta;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
@@ -12,6 +15,7 @@ use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -262,5 +266,25 @@ class WhatsAppMultiNumeroTest extends TestCase
         $post = $this->graphPosts()[0][0];
         $this->assertStringEndsWith('/123/messages', $post->url());
         $this->assertSame('pedido_enviado_kaza', $post['template']['name']);
+    }
+    public function test_boas_vindas_da_ferrakora_sai_com_o_template_e_o_banner_dela(): void
+    {
+        config([
+            'services.whatsapp.templates.pedido_aprovado' => 'confirmacao_kaza',
+            'services.whatsapp.numeros.ferrakora.templates.pedido_aprovado' => 'confirmacao_pedido_ferrakora',
+        ]);
+        Bus::fake([GenerateInvoiceJob::class, FaturarPedidoSemResposta::class]);
+        $ferra = $this->pedido(['site_origem' => Order::SITE_FERRAKORA, 'status' => Order::STATUS_PAID]);
+        $kaza = $this->pedido(['status' => Order::STATUS_PAID]);
+
+        foreach ([$ferra, $kaza] as $order) {
+            (new SendOrderApprovedWhatsAppJob($order->id))->handle(app(WhatsAppCloudApiClient::class), app(WhatsAppSettings::class));
+        }
+
+        [$primeiro, $segundo] = $this->graphPosts();
+        $this->assertStringEndsWith('/456/messages', $primeiro[0]->url());
+        $this->assertSame('confirmacao_pedido_ferrakora', $primeiro[0]['template']['name']);
+        $this->assertStringEndsWith('/images/whatsapp/confirmacao-pedido-ferrakora.jpg', $primeiro[0]['template']['components'][0]['parameters'][0]['image']['link']);
+        $this->assertStringEndsWith('/images/whatsapp/confirmacao-pedido.jpg', $segundo[0]['template']['components'][0]['parameters'][0]['image']['link']);
     }
 }

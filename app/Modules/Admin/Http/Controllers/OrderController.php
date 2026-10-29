@@ -867,6 +867,7 @@ class OrderController extends Controller
                 ] : null,
                 'pre_postagens' => $order->correiosPrePostagens->map(fn ($item) => [
                     'id' => $item->id,
+                    'devolucao' => (bool) $item->devolucao,
                     'status' => $item->status,
                     'servico' => $item->service_label,
                     'codigo_servico' => $item->service_code,

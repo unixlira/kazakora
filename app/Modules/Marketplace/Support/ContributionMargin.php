@@ -88,6 +88,8 @@ class ContributionMargin
         $query = CorreiosPrePostagem::query()
             ->join('orders', 'orders.id', '=', 'correios_pre_postagens.order_id')
             ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
+            // Devolução (cliente → loja) não é frete de envio da venda.
+            ->where('correios_pre_postagens.devolucao', false)
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->when($desde, fn ($q) => $q->where('orders.created_at', '>=', $desde))
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
@@ -124,7 +126,8 @@ class ContributionMargin
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
             ->whereExists(fn ($q) => $q->from('correios_pre_postagens')
                 ->whereColumn('correios_pre_postagens.order_id', 'orders.id')
-                ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA))
+                ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
+                ->where('correios_pre_postagens.devolucao', false))
             ->tap(fn ($q) => self::semDevolucao($q))
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
             ->groupBy('canal')
@@ -275,6 +278,7 @@ class ContributionMargin
             ->groupBy('order_id');
         $correios = DB::table('correios_pre_postagens')
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+            ->where('devolucao', false)
             ->selectRaw('order_id, SUM(postage_price) as total')->groupBy('order_id');
 
         $linhas = DB::table('orders')

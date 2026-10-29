@@ -50,6 +50,7 @@ class CorreiosAutoShipping
     public function geradaPara(Order $order): ?CorreiosPrePostagem
     {
         return CorreiosPrePostagem::query()
+            ->deEnvio()
             ->where('order_id', $order->id)
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
             ->latest('id')
@@ -130,6 +131,7 @@ class CorreiosAutoShipping
         ];
 
         $registro = CorreiosPrePostagem::query()
+            ->deEnvio()
             ->where('order_id', $order->id)
             ->where('status', CorreiosPrePostagem::STATUS_ERRO)
             ->latest('id')

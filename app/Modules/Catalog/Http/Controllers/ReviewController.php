@@ -122,12 +122,19 @@ class ReviewController extends Controller
     }
 
     /**
-     * Dono do modal fechou sem avaliar (X, Esc ou clique fora): não abre mais
-     * neste login. A aparição já foi contada quando o modal abriu.
+     * "Não avaliar agora" (ou X, Esc, clique fora) no modal pós-login: registra
+     * a ação e esconde aquele produto por 15 dias (pedido do Lira 2026-10-29).
+     * Neste login o modal não abre mais.
      */
-    public function dispensar(Request $request): RedirectResponse
+    public function dispensar(Request $request, ModalAvaliacao $modal): RedirectResponse
     {
-        ModalAvaliacao::encerrar($request->session());
+        $dados = $request->validate(['produto_id' => ['nullable', 'integer']]);
+
+        if (! empty($dados['produto_id'])) {
+            $modal->naoAvaliarAgora($request->user(), (int) $dados['produto_id'], $request->session());
+        } else {
+            ModalAvaliacao::encerrar($request->session());
+        }
 
         return back();
     }

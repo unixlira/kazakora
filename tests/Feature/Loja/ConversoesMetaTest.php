@@ -228,6 +228,44 @@ class ConversoesMetaTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_pedido_da_ferrakora_com_pixel_proprio_vai_para_o_pixel_dela(): void
+    {
+        config([
+            'services.meta_capi.sites.ferrakora.pixel_id' => '1234567890123456',
+            'services.meta_capi.sites.ferrakora.enabled' => true,
+            'services.meta_capi.sites.ferrakora.access_token' => 'token-ferrakora',
+            'services.meta_capi.sites.ferrakora.test_event_code' => 'TESTFK1',
+        ]);
+        Queue::fake();
+        $order = $this->pedidoDaLoja(['site_origem' => Order::SITE_FERRAKORA, 'external_order_id' => 'FK-2']);
+        $order->payments()->create(['provider' => Payment::PROVIDER_MERCADOPAGO, 'method_type' => Payment::METHOD_PIX, 'amount' => 149.9, 'status' => Payment::STATUS_CAPTURED]);
+
+        app(OrderPaymentFinalizer::class)->finalize($order->fresh());
+        Queue::assertPushed(EnviarPurchaseMetaJob::class, fn (EnviarPurchaseMetaJob $job) => $job->orderId === $order->id);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['events_received' => 1])]);
+        (new EnviarPurchaseMetaJob($order->id))->handle(app(ConversoesMeta::class));
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (HttpRequest $r) => str_contains($r->url(), '/1234567890123456/events')
+            && str_contains($r->url(), 'access_token=token-ferrakora')
+            && $r['test_event_code'] === 'TESTFK1'
+            && $r['data'][0]['event_id'] === "purchase-{$order->id}");
+        $this->assertNotNull($order->fresh()->meta_purchase_enviado_em);
+    }
+
+    public function test_capi_da_ferrakora_desligado_nao_usa_o_pixel_da_kazakora(): void
+    {
+        config(['services.meta_capi.sites.ferrakora.pixel_id' => '1234567890123456', 'services.meta_capi.sites.ferrakora.enabled' => false]);
+        Http::fake();
+        $order = $this->pedidoDaLoja(['site_origem' => Order::SITE_FERRAKORA, 'status' => Order::STATUS_PAID]);
+
+        (new EnviarPurchaseMetaJob($order->id))->handle(app(ConversoesMeta::class));
+
+        Http::assertNothingSent();
+        $this->assertNull($order->fresh()->meta_purchase_enviado_em);
+    }
+
     public function test_purchase_sai_uma_vez_so_com_event_id_fixo_e_dados_do_pedido(): void
     {
         Http::fake(['graph.facebook.com/*' => Http::response(['events_received' => 1])]);

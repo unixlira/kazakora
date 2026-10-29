@@ -115,9 +115,10 @@ class OrderPaymentFinalizer
             rescue(fn () => $order->user?->notify(new \App\Notifications\Cliente\PedidoConfirmado($order)));
         }
 
-        // Purchase na API de Conversões da Meta (2026-10-18): só kazakora.com,
-        // uma vez por pedido (o job trava). Cobre Pix e boleto pagos depois.
-        if (ConversoesMeta::pedidoDaLoja($order)) {
+        // Purchase na API de Conversões da Meta (2026-10-18): kazakora.com e,
+        // desde 2026-10-28, FerraKora no pixel dela; uma vez por pedido (o job
+        // trava). Cobre Pix e boleto pagos depois.
+        if (ConversoesMeta::siteDoPedido($order) !== false) {
             EnviarPurchaseMetaJob::dispatch($order->id)->afterCommit();
         }
 

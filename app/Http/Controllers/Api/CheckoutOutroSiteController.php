@@ -17,6 +17,7 @@ use App\Rules\CpfValido;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
+use App\Services\Meta\ConversoesMeta;
 use App\Support\PaymentGateway;
 use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -38,7 +39,10 @@ use Illuminate\Support\Facades\Log;
  *               endereco{zip,street,number,complement,neighborhood,city,state},
  *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
  *              → pedido, token, pix{copia_e_cola,...} ou boleto{linha_digitavel, codigo_barras, url, vencimento}
- * GET  pedido/{id}?token=  situação do pagamento (o site consulta até pagar)
+ *               meta?{fbp, fbc, url}: cookies do Pixel da Meta e a página (FerraKora, 2026-10-28)
+ * GET  pedido/{id}?token=  situação do pagamento (o site consulta até pagar); pago e com
+ *                          pixel do site: meta_purchase{event_id, dados} para o Pixel do navegador
+ * GET  pixel-meta          {pixel_id} do site, ou null (sem pixel)
  * GET  cep/{cep}           rua, bairro, cidade e UF
  */
 abstract class CheckoutOutroSiteController extends Controller
@@ -110,6 +114,10 @@ abstract class CheckoutOutroSiteController extends Controller
             'pagamento.mp_card_token' => [$cartao ? 'required' : 'nullable', 'string'],
             'pagamento.mp_card_installments' => [$cartao ? 'required' : 'nullable', 'integer', 'min:1', 'max:12'],
             'pagamento.mp_payment_method_id' => [$cartao ? 'required' : 'nullable', 'string', 'max:50'],
+            'meta' => ['nullable', 'array'],
+            'meta.fbp' => ['nullable', 'string', 'max:600'],
+            'meta.fbc' => ['nullable', 'string', 'max:600'],
+            'meta.url' => ['nullable', 'string', 'max:500'],
         ], [
             'cliente.name.required' => 'Digite seu nome completo.',
             'cliente.name.min' => 'Digite seu nome completo (nome e sobrenome).',
@@ -165,6 +173,14 @@ abstract class CheckoutOutroSiteController extends Controller
         // Prova do aceite dos termos, da privacidade e dos cookies (2026-10-24):
         // a frase abaixo do botão de finalizar no site de origem.
         rescue(fn () => Cookies::registrarAceite($request, $this->checkout->site(), $order->user_id));
+        // Purchase do servidor no pixel do site (FerraKora, 2026-10-28): o
+        // aceite acima vale para ele; sem pixel configurado fica null.
+        rescue(function () use ($request, $order, $dados) {
+            $rastreio = app(ConversoesMeta::class)->rastreioDoOutroSite($request, $this->checkout->site(), (array) ($dados['meta'] ?? []));
+            if ($rastreio !== null) {
+                $order->forceFill(['meta_rastreio' => $rastreio])->saveQuietly();
+            }
+        });
         rescue(fn () => $this->depoisDoPedido($request, $order, $dados));
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
@@ -222,6 +238,13 @@ abstract class CheckoutOutroSiteController extends Controller
         return $this->semCache(response()->json(['pedidos' => $pedidos]));
     }
 
+    /** ID do Pixel da Meta do site (FerraKora, 2026-10-28); o site só carrega o pixel com ele. */
+    public function pixelMeta(): JsonResponse
+    {
+        return response()->json(['pixel_id' => ConversoesMeta::pixelDoSite($this->checkout->site())])
+            ->header('Cache-Control', 'public, max-age=300');
+    }
+
     public function cep(string $cep): JsonResponse
     {
         $endereco = app(CompletarEnderecoPeloCep::class)->completar(['zip' => $cep]);
@@ -257,7 +280,14 @@ abstract class CheckoutOutroSiteController extends Controller
 
     private function situacao(Order $order): array
     {
+        $pago = in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+
         return [
+            // Purchase do Pixel do navegador com o mesmo event_id do servidor (a Meta conta um só).
+            'meta_purchase' => $pago && ConversoesMeta::pixelDoSite($this->checkout->site()) !== null ? [
+                'event_id' => ConversoesMeta::eventIdDoPurchase($order),
+                'dados' => ConversoesMeta::dadosDoPurchase($order),
+            ] : null,
             'pedido' => [
                 'id' => $order->id,
                 'numero' => $order->numero,

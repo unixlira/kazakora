@@ -236,6 +236,8 @@ class CheckoutFerraKoraTest extends TestCase
 
         $this->assertSame($conta->id, Order::find($resposta->json('pedido.id'))->ferrakora_cliente_id);
         $this->assertTrue($conta->fresh()->senha_definida);
+        $this->assertFalse($conta->fresh()->deve_trocar_senha);
+        Mail::assertNotSent(\App\Modules\FerraKora\Mail\FerraKoraBoasVindas::class);
     }
 
     public function test_conta_da_kazakora_com_o_mesmo_email_nao_e_usada(): void
@@ -248,7 +250,9 @@ class CheckoutFerraKoraTest extends TestCase
         $order = Order::findOrFail($resposta->json('pedido.id'));
         $this->assertNull($order->user_id);
         $this->assertSame(0, $kazakora->addresses()->count());
-        $this->assertFalse($order->ferrakoraCliente->senha_definida);
+        // Conta nova da FerraKora com senha temporária no e-mail de boas-vindas (2026-10-29).
+        $this->assertTrue($order->ferrakoraCliente->deve_trocar_senha);
+        Mail::assertSent(\App\Modules\FerraKora\Mail\FerraKoraBoasVindas::class, fn ($mail) => $mail->hasTo('maria@exemplo.com'));
     }
 
     public function test_cartao_recusado_desfaz_tudo(): void
@@ -340,8 +344,8 @@ class CheckoutFerraKoraTest extends TestCase
         $this->getJson('/api/ferrakora/pedidos')->assertUnauthorized();
         $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])->assertStatus(405);
 
-        // A conta criada no checkout é a do FerraKora (senha criada pelo link do e-mail).
-        $order->ferrakoraCliente->forceFill(['password' => 'senhaDaMaria1', 'senha_definida' => true])->save();
+        // A conta criada no checkout é a do FerraKora (senha pessoal já criada).
+        $order->ferrakoraCliente->forceFill(['password' => 'senhaDaMaria1', 'senha_definida' => true, 'deve_trocar_senha' => false])->save();
         $token = $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaDaMaria1'])->assertOk()->json('token');
 
         $this->withToken($token)->getJson('/api/ferrakora/pedidos')

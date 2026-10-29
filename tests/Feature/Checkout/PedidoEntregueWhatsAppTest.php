@@ -121,6 +121,13 @@ class PedidoEntregueWhatsAppTest extends TestCase
         $this->assertSame($recebedor, $eventos[0]->context['evento']['recebedor']);
         $this->assertSame('-3,8310433', $eventos[0]->context['evento']['latitude']);
         $this->assertSame('AE000000000BR', $eventos[0]->context['codigo_objeto']);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('fulfillmentEvents.0.step', 'delivered')
+                ->where('fulfillmentEvents.0.context.evento.recebedor.documento', '12345678900')
+                ->where('fulfillmentEvents.0.context.evento.longitude', '-38,5763217'));
     }
 
     public function test_pedido_ja_concluido_ganha_a_entrega_no_historico_sem_aviso(): void

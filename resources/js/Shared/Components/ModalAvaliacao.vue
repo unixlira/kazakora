@@ -2,9 +2,10 @@
 // Modal "Avalie sua compra" depois do login (pedido 2026-10-23). O servidor
 // decide se e qual item mostrar (ModalAvaliacao.php, prop `avaliacaoModal`):
 // um por vez, o mais recente primeiro. A avaliação vai para o mesmo endpoint
-// da tela "Avalie suas compras". "Não avaliar agora" (e também X, Esc, clique
-// fora) avisa o servidor, que registra e fecha o modal neste login; no próximo
-// login ele abre de novo, até o cliente avaliar (pedido do Lira 2026-10-29).
+// da tela "Avalie suas compras". Avaliar ou "Não avaliar agora" (e também X,
+// Esc, clique fora) passa para o próximo produto, cada um com o seu modal,
+// até acabar a lista; o pulado volta no próximo login, até o cliente avaliar
+// (pedido do Lira 2026-10-29).
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -24,6 +25,7 @@ const comentario = ref('');
 const fotos = ref([]); // { id, file, url }
 const erro = ref('');
 const enviando = ref(false);
+const pulando = ref(false);
 const dialogo = ref(null);
 const botaoFechar = ref(null);
 const entradaGaleria = ref(null);
@@ -80,12 +82,27 @@ onBeforeUnmount(() => {
     if (aberto.value) travarRolagem(false);
 });
 
-const fechar = () => {
-    if (!aberto.value || enviando.value) return;
+const fecharModal = () => {
     aberto.value = false;
     travarRolagem(false);
     foiAberto?.focus?.();
-    router.post('/avaliar/dispensar', { produto_id: item.value?.produto_id ?? null }, { preserveScroll: true, preserveState: true, only: ['avaliacaoModal'] });
+};
+
+// Pula o produto: o servidor manda o próximo (o watch troca o formulário) ou
+// nada (o watch fecha). Se a resposta não trocar o item, fecha aqui.
+const fechar = () => {
+    if (!aberto.value || enviando.value || pulando.value) return;
+    const produtoId = item.value?.produto_id ?? null;
+    pulando.value = true;
+    router.post('/avaliar/dispensar', { produto_id: produtoId }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['avaliacaoModal'],
+        onFinish: () => {
+            pulando.value = false;
+            if (aberto.value && item.value?.produto_id === produtoId) fecharModal();
+        },
+    });
 };
 
 const focaveis = () => Array.from(dialogo.value?.querySelectorAll(
@@ -248,12 +265,12 @@ const dataEntrega = computed(() => item.value?.entregue_em
                     </div>
 
                     <div class="flex flex-col gap-2 border-t border-slate-200 bg-white px-5 py-3">
-                        <button type="submit" :disabled="enviando"
+                        <button type="submit" :disabled="enviando || pulando"
                             class="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#0B8F25] px-5 text-base font-bold text-white hover:brightness-95 disabled:opacity-60">
                             <i class="fas" :class="enviando ? 'fa-spinner fa-spin' : 'fa-paper-plane'" aria-hidden="true"></i>
                             {{ enviando ? 'Enviando…' : 'Enviar avaliação' }}
                         </button>
-                        <button type="button" :disabled="enviando" data-testid="aval-nao-avaliar"
+                        <button type="button" :disabled="enviando || pulando" data-testid="aval-nao-avaliar"
                             class="flex min-h-11 w-full items-center justify-center rounded-full px-5 text-sm font-semibold text-slate-700 underline-offset-2 hover:bg-slate-100 hover:underline disabled:opacity-60"
                             @click="fechar">
                             Não avaliar agora

@@ -49,7 +49,7 @@ class CatalogController extends Controller
         // Catálogo da busca/aba, sem departamento: base da contagem por
         // departamento da coluna de filtros (pedido 2026-10-15).
         $catalogo = Product::query()
-            ->where('is_active', true)
+            ->naKazaKora()
             ->comEstoque()
             // Variações continuam com página própria e compra própria, mas
             // não podem aparecer como cards soltos na vitrine: o cliente
@@ -172,7 +172,7 @@ class CatalogController extends Controller
         }
 
         $query = Product::query()
-            ->where('is_active', true)
+            ->naKazaKora()
             ->comEstoque()
             ->whereNull('parent_product_id');
         self::filtrarBusca($query, mb_substr($search, 0, 100));
@@ -243,7 +243,7 @@ class CatalogController extends Controller
 
         $todas = Product::query()
             ->forCard()
-            ->where('is_active', true)
+            ->naKazaKora()
             ->comEstoque()
             ->whereNull('parent_product_id')
             ->whereIn('id', $ids)
@@ -327,7 +327,7 @@ class CatalogController extends Controller
 
     public function show(Request $request, Product $product): Response
     {
-        abort_unless($product->is_active, 404);
+        abort_unless($product->naKazaKora(), 404);
 
         $product->load([
             'category:id,name,slug',
@@ -381,7 +381,7 @@ class CatalogController extends Controller
 
         $relatedProducts = Product::query()
             ->forCard()
-            ->where('is_active', true)
+            ->naKazaKora()
             ->comEstoque()
             ->whereNull('parent_product_id')
             ->where('id', '!=', $product->id)
@@ -396,7 +396,7 @@ class CatalogController extends Controller
             $relatedProducts = $relatedProducts->concat(
                 Product::query()
                     ->forCard()
-                    ->where('is_active', true)
+                    ->naKazaKora()
                     ->comEstoque()
                     ->whereNull('parent_product_id')
                     ->whereNotIn('id', $excludeIds)
@@ -419,7 +419,7 @@ class CatalogController extends Controller
         $variations = Product::query()
             ->whereIn('id', $product->variantGroupIds())
             ->where('id', '!=', $product->id)
-            ->where('is_active', true)
+            ->naKazaKora()
             ->with([
                 'images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1),
                 'quantityDiscounts',
@@ -569,7 +569,7 @@ class CatalogController extends Controller
 
         $modelos = Product::query()
             ->where('grupo_modelos', $product->grupo_modelos)
-            ->where('is_active', true)
+            ->naKazaKora()
             ->with(['images' => fn ($query) => $query->reorder()->orderByDesc('is_primary')->orderBy('position')->orderBy('id')])
             ->get(['id', 'name', 'slug', 'rotulo_modelo']);
 
@@ -599,7 +599,7 @@ class CatalogController extends Controller
 
     public function shipping(Product $product): Response
     {
-        abort_unless($product->is_active, 404);
+        abort_unless($product->naKazaKora(), 404);
 
         return Inertia::render('Catalog/ProductShipping', [
             'product' => $product->only('id', 'name', 'slug'),

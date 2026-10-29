@@ -42,7 +42,7 @@ class EscolherOfertasDoDia extends Command
             ->all();
 
         $candidatos = Product::query()
-            ->where('is_active', true)
+            ->naKazaKora()
             ->whereNull('parent_product_id')
             ->where('stock', '>', 0)
             ->where('cost_price', '>', 0)

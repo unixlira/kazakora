@@ -41,7 +41,7 @@ class SitemapController
             }
 
             Product::query()
-                ->where('is_active', true)
+                ->naKazaKora()
                 ->whereNull('parent_product_id')
                 ->whereNotNull('slug')
                 ->orderBy('id')

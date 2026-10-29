@@ -74,7 +74,7 @@ class FavoriteController extends Controller
         $products = Product::query()
             ->forCard()
             ->whereIn('id', $ids)
-            ->where('is_active', true)
+            ->naKazaKora()
             ->latest()
             ->paginate(12)
             ->withQueryString();

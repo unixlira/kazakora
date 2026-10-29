@@ -46,6 +46,7 @@ class Product extends Model
         'checkout_discount_amount',
         'stock',
         'is_active',
+        'so_ferrakora',
         'is_featured',
         'is_new_release',
         'seo_title',
@@ -70,6 +71,7 @@ class Product extends Model
             'discount_amount' => 'decimal:2',
             'stock' => 'integer',
             'is_active' => 'boolean',
+            'so_ferrakora' => 'boolean',
             'is_featured' => 'boolean',
             'is_new_release' => 'boolean',
             'video_duration_seconds' => 'integer',
@@ -343,6 +345,20 @@ class Product extends Model
      * (relatedReviewableIds em CatalogController::show) — sem ele uma
      * variação viraria silenciosamente um produto solto.
      */
+    /**
+     * Produto que aparece na loja kazakora.com: ativo e não marcado como só
+     * do FerraKora (pedido 2026-10-29).
+     */
+    public function scopeNaKazaKora(Builder $query): Builder
+    {
+        return $query->where('is_active', true)->where('so_ferrakora', false);
+    }
+
+    public function naKazaKora(): bool
+    {
+        return $this->is_active && ! $this->so_ferrakora;
+    }
+
     /**
      * Produto esgotado não aparece na loja (pedido 2026-10-13): vitrine,
      * busca, departamentos e relacionados. Pai de variações conta como

@@ -41,7 +41,7 @@ class CartController extends Controller
 
         $product = Product::query()->findOrFail($data['product_id']);
 
-        if (! $product->is_active || $product->stock < 1) {
+        if (! $product->naKazaKora() || $product->stock < 1) {
             return back()->withErrors(['product_id' => 'Produto indisponível.']);
         }
 
@@ -103,7 +103,7 @@ class CartController extends Controller
             'quantity' => ['required', 'integer', 'min:1'],
         ]);
 
-        $product = Product::query()->where('is_active', true)->findOrFail($data['product_id']);
+        $product = Product::query()->naKazaKora()->findOrFail($data['product_id']);
 
         if ($product->stock < 1) {
             return back()->withErrors(['cart' => 'Produto esgotado.']);

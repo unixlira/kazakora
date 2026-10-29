@@ -32,7 +32,7 @@ class ManuelaVisao
     {
         $vazio = ['descricao' => '', 'produto_id' => null, 'nome' => null, 'confianca' => 0.0];
 
-        $catalogo = Product::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+        $catalogo = Product::query()->naKazaKora()->orderBy('name')->get(['id', 'name'])
             ->map(fn (Product $p) => "{$p->id} | {$p->name}")->implode("\n");
 
         $pedido = "Catálogo da loja (id | nome):\n{$catalogo}\n\n"
@@ -68,7 +68,7 @@ TXT,
 
         $confianca = (float) ($json['confianca'] ?? 0);
         $produto = isset($json['produto_id']) && $confianca >= self::CONFIANCA_MINIMA
-            ? Product::query()->where('is_active', true)->find((int) $json['produto_id'])
+            ? Product::query()->naKazaKora()->find((int) $json['produto_id'])
             : null;
 
         return [

@@ -3,8 +3,8 @@
 // decide se e qual item mostrar (ModalAvaliacao.php, prop `avaliacaoModal`):
 // um por vez, o mais recente primeiro. A avaliação vai para o mesmo endpoint
 // da tela "Avalie suas compras". "Não avaliar agora" (e também X, Esc, clique
-// fora) avisa o servidor, que registra e só mostra o produto de novo depois de
-// 15 dias, no próximo login (pedido do Lira 2026-10-29).
+// fora) avisa o servidor, que registra e fecha o modal neste login; no próximo
+// login ele abre de novo, até o cliente avaliar (pedido do Lira 2026-10-29).
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 

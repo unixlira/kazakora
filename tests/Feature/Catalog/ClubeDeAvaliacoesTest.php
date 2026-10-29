@@ -70,18 +70,19 @@ class ClubeDeAvaliacoesTest extends TestCase
         $this->assertNotNull($cupom->motivoInvalido(100, null, 'visitante@x.com'));
     }
 
-    public function test_nome_oculto_nao_vai_para_a_pagina_do_produto(): void
+    public function test_avaliacao_sempre_publica_o_nome_de_quem_avaliou(): void
     {
-        $user = User::factory()->create(['name' => 'Maria Secreta']);
+        // Sem opção de ocultar o nome (pedido do Lira 2026-10-29): mesmo que o
+        // campo chegue, a avaliação sai com o nome.
+        $user = User::factory()->create(['name' => 'Maria Visivel']);
         $product = $this->entregue($user);
 
         $this->actingAs($user)->post("/produtos/{$product->id}/avaliacoes", ['rating' => 4, 'comment' => 'Bom', 'ocultar_nome' => true]);
-        $this->assertTrue(Review::sole()->ocultar_nome);
+        $this->assertFalse(Review::sole()->ocultar_nome);
 
         auth()->logout();
         $this->get("/produtos/{$product->slug}")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('reviews.0.reviewer_display_name', 'Cliente KazaKora'))
-            ->assertDontSee('Maria Secreta');
+            ->assertInertia(fn ($page) => $page->where('reviews.0.reviewer_display_name', fn ($nome) => str_contains((string) $nome, 'Maria')));
     }
 }

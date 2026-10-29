@@ -123,8 +123,8 @@ class ReviewController extends Controller
 
     /**
      * "Não avaliar agora" (ou X, Esc, clique fora) no modal pós-login: registra
-     * a ação e fecha o modal neste login; no próximo login ele abre de novo,
-     * até o cliente avaliar (pedido do Lira 2026-10-29).
+     * a ação e o modal passa para o próximo produto; o pulado volta no próximo
+     * login, até o cliente avaliar (pedido do Lira 2026-10-29).
      */
     public function dispensar(Request $request, ModalAvaliacao $modal): RedirectResponse
     {

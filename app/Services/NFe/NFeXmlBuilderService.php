@@ -480,10 +480,13 @@ class NFeXmlBuilderService
         $pedidosNaNota = $order->items->pluck('order_id')->filter()->unique()->sort()->values();
         // Pedido fiscal de devolução traz o texto pronto (número da nota de
         // origem, motivo) em fiscal_additional_info — quando vem, manda.
+        // Loja do pedido no texto (2026-10-28, pedido do Lira: nota da
+        // FerraKora chegava escrita KazaKora). O emitente (CNPJ) é o mesmo.
+        $loja = $order->site_origem === Order::SITE_FERRAKORA ? 'FerraKora' : 'KazaKora';
         $infAdic->infCpl = $order->fiscal_additional_info
             ?: ($pedidosNaNota->count() > 1
-                ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - KazaKora"
-                : "Pedido #{$order->id} - KazaKora");
+                ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - {$loja}"
+                : "Pedido #{$order->id} - {$loja}");
         $make->taginfAdic($infAdic);
 
         $xml = $make->getXML();

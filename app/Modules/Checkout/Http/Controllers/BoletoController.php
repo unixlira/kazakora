@@ -25,7 +25,7 @@ class BoletoController extends Controller
         }
 
         $order = $payment->order;
-        $nome = 'boleto-kazakora-'.($order?->numero ?? $payment->order_id).'.pdf';
+        $nome = (BoletoComMarca::ehFerraKora($payment) ? 'boleto-ferrakora-' : 'boleto-kazakora-').($order?->numero ?? $payment->order_id).'.pdf';
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',

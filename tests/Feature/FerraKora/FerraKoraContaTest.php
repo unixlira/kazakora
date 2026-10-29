@@ -4,6 +4,7 @@ namespace Tests\Feature\FerraKora;
 
 use App\Models\User;
 use App\Modules\BeautyKora\Models\BeautyKoraCliente;
+use App\Modules\FerraKora\Mail\FerraKoraBoasVindas;
 use App\Modules\FerraKora\Mail\FerraKoraNovaSenha;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Models\FerraKoraSessao;
@@ -152,13 +153,42 @@ class FerraKoraContaTest extends TestCase
         $this->postJson('/api/ferrakora/nova-senha', ['email' => 'maria@exemplo.com', 'token' => $query['token'], 'password' => 'novaSenha123'])->assertStatus(422);
     }
 
-    public function test_conta_criada_pelo_checkout_pede_esqueci_minha_senha(): void
+    public function test_conta_antiga_do_checkout_sem_senha_pede_esqueci_minha_senha(): void
     {
-        FerraKoraCliente::doCheckout(['name' => 'Maria', 'email' => 'Maria@Exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '11988887777']);
+        FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'password' => 'sorteada'.str_repeat('x', 30), 'senha_definida' => false]);
 
         $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'qualquer1'])
             ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'Esqueci minha senha'));
         $this->postJson('/api/ferrakora/cadastro', ['name' => 'Maria', 'email' => 'maria@exemplo.com', 'password' => 'segredo123'])
             ->assertStatus(422)->assertJsonValidationErrors('email');
+    }
+
+    /** Pedido do Lira 2026-10-29: boas-vindas da FerraKora com senha temporária e troca no primeiro acesso, igual à KazaKora. */
+    public function test_conta_do_checkout_recebe_boas_vindas_com_senha_temporaria_e_troca_no_primeiro_acesso(): void
+    {
+        Mail::fake();
+
+        FerraKoraCliente::doCheckout(['name' => 'Maria', 'email' => 'Maria@Exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '11988887777']);
+
+        $senha = null;
+        Mail::assertSent(FerraKoraBoasVindas::class, function (FerraKoraBoasVindas $mail) use (&$senha) {
+            $senha = $mail->senhaTemporaria;
+            $html = $mail->render();
+
+            return $mail->hasTo('maria@exemplo.com')
+                && $mail->hasSubject('Bem-vindo à FerraKora!')
+                && str_contains($html, $senha)
+                && str_contains($html, 'FerraKora | Grupo AlphaKora')
+                && str_contains($html, 'https://ferrakora.devlira.com.br/entrar')
+                && ! str_contains(mb_strtolower(html_entity_decode(strip_tags($html))), 'kazakora');
+        });
+
+        $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'errada000'])->assertStatus(422);
+        $token = $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => $senha])
+            ->assertOk()->assertJsonPath('user.deve_trocar_senha', true)->json('token');
+
+        $this->withToken($token)->putJson('/api/ferrakora/perfil/senha', ['password' => 'minhaSenha1', 'password_confirmation' => 'minhaSenha1'])->assertOk();
+        $this->withToken($token)->getJson('/api/ferrakora/eu')->assertOk()->assertJsonPath('user.deve_trocar_senha', false);
+        $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'minhaSenha1'])->assertOk();
     }
 }

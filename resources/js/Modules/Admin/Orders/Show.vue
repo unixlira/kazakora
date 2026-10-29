@@ -535,7 +535,21 @@ const cancelInvoice = () => {
                 <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h2 class="font-semibold">Envio</h2>
-                        <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" />
+                        <div class="flex flex-wrap items-center gap-2">
+                            <!-- Devolução pelos Correios (Lira 2026-10-29): abre o
+                                 formulário com a cliente como remetente e a
+                                 KazaKora como destinatário, já em PAC. -->
+                            <Can permission="operacional.create">
+                                <Link
+                                    :href="`/admin/correios/nova?devolucao=1&pedido=${order.id}`"
+                                    data-clique="Pedido: devolução PAC"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary"
+                                >
+                                    <i class="fas fa-rotate-left" aria-hidden="true"></i> Devolução PAC
+                                </Link>
+                            </Can>
+                            <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" />
+                        </div>
                     </div>
 
                     <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -632,7 +646,7 @@ const cancelInvoice = () => {
                                 <QrCodeSvg :value="pre.qr_payload" />
                             </div>
                             <dl class="grid min-w-0 flex-1 grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-                                <div><dt class="text-xs text-slate-400">Status</dt><dd><StatusBadge :status="pre.status" context="correios" /></dd></div>
+                                <div><dt class="text-xs text-slate-400">Status</dt><dd class="flex flex-wrap items-center gap-1.5"><StatusBadge :status="pre.status" context="correios" /><span v-if="pre.devolucao" class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"><i class="fas fa-rotate-left" aria-hidden="true"></i> Devolução</span></dd></div>
                                 <div><dt class="text-xs text-slate-400">Serviço</dt><dd>{{ pre.servico ?? '—' }}<span v-if="pre.codigo_servico" class="text-xs text-slate-400"> ({{ pre.codigo_servico }})</span></dd></div>
                                 <div><dt class="text-xs text-slate-400">Código do objeto</dt><dd class="font-mono">{{ pre.codigo_objeto ?? '—' }}</dd></div>
                                 <div><dt class="text-xs text-slate-400">ID da pré-postagem</dt><dd class="font-mono text-xs">{{ pre.id_correios ?? '—' }}</dd></div>

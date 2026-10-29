@@ -14,11 +14,14 @@ const props = defineProps({
     serviceLabel: { type: String, default: 'Correios' },
     weightGrams: { type: [Number, String], default: null },
     orderLabel: { type: String, default: null },
+    // Devolução (Lira 2026-10-29): remetente é a cliente (nome dela, CPF/CNPJ)
+    // e não vai DANFE da venda.
+    devolucao: { type: Boolean, default: false },
 });
 
 const logisticsCode = computed(() => props.codigoObjeto || props.correiosId || props.qrPayload || 'GERADO APÓS PRÉ-POSTAGEM');
 const recipientZip = computed(() => props.recipient?.zip || props.recipient?.addressZip || extractZip(props.recipient?.addressLines ?? []) || '—');
-const senderDisplayName = computed(() => 'KazaKora');
+const senderDisplayName = computed(() => (props.devolucao ? (props.sender?.name || 'Cliente') : 'KazaKora'));
 const senderLines = computed(() => props.sender?.addressLines ?? []);
 const invoiceAccessKey = computed(() => onlyDigits(props.invoice?.chaveAcesso || props.invoice?.chaveFormatada || ''));
 const invoiceDisplayCode = computed(() => props.invoice?.chaveFormatada || formatAccessKey(invoiceAccessKey.value) || 'NF-e não vinculada');
@@ -101,7 +104,7 @@ function compactLabel(value, maxLength) {
                     <div>
                         <p class="label-kicker sender-kicker font-black uppercase text-slate-700">Remetente</p>
                         <h3 class="sender-name mt-1 font-black uppercase leading-none">{{ senderDisplayName }}</h3>
-                        <p v-if="sender.document" class="sender-document mt-1 font-black leading-tight">CNPJ: {{ sender.document }}</p>
+                        <p v-if="sender.document" class="sender-document mt-1 font-black leading-tight">{{ devolucao ? 'CPF/CNPJ' : 'CNPJ' }}: {{ sender.document }}</p>
                     </div>
                     <div class="sender-address font-black leading-tight">
                         <p v-for="line in senderLines" :key="line">{{ line }}</p>
@@ -116,7 +119,9 @@ function compactLabel(value, maxLength) {
                         <p class="declared-content mt-0.5 font-black leading-tight">{{ declaredContent }}</p>
                     </div>
 
-                    <div class="barcode-panel min-h-0 flex-1">
+                    <p v-if="devolucao" class="fiscal-tag font-black uppercase text-slate-950">Devolução · sem DANFE da venda</p>
+
+                    <div v-if="!devolucao" class="barcode-panel min-h-0 flex-1">
                         <div class="mb-1 flex items-center justify-between gap-2">
                             <p class="label-kicker font-black uppercase text-slate-700">Código DANFE</p>
                             <p class="fiscal-tag font-black uppercase text-slate-950">DANFE / {{ invoiceNumberLabel }}</p>
@@ -132,7 +137,7 @@ function compactLabel(value, maxLength) {
                         </div>
                     </div>
 
-                    <div class="danfe-code-block text-center">
+                    <div v-if="!devolucao" class="danfe-code-block text-center">
                         <p class="danfe-code whitespace-nowrap font-mono font-black leading-tight">{{ invoiceDisplayCode }}</p>
                     </div>
                 </div>

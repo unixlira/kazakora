@@ -444,7 +444,12 @@ class Order extends Model
 
     public function latestCorreiosPrePostagem(): HasOne
     {
-        return $this->hasOne(CorreiosPrePostagem::class)->latestOfMany(['created_at', 'id']);
+        // Só a de envio: a de devolução (cliente → loja) não é o rastreio do
+        // pedido nem dispara e-mail/WhatsApp de enviado/entregue.
+        return $this->hasOne(CorreiosPrePostagem::class)->ofMany(
+            ['created_at' => 'max', 'id' => 'max'],
+            fn ($query) => $query->where('correios_pre_postagens.devolucao', false),
+        );
     }
 
     public function channelFee(): HasOne

@@ -89,12 +89,19 @@ class CorreiosController extends Controller
         ]);
     }
 
-    public function create(): Response
+    /**
+     * ?devolucao=1&pedido=<id> (botão "Devolução PAC" do pedido, Lira
+     * 2026-10-29): abre o formulário em modo DEVOLUÇÃO — a cliente do pedido
+     * é o remetente e a KazaKora o destinatário — já puxando o pedido.
+     */
+    public function create(Request $request): Response
     {
         return Inertia::render('Admin/Correios/Create', [
             'serviceOptions' => self::SERVICE_OPTIONS,
             'configured' => $this->service->isConfigured(),
             'sender' => $this->presentSender(Company::query()->first()),
+            'devolucao' => $request->boolean('devolucao'),
+            'pedidoInicial' => $request->string('pedido')->trim()->toString() ?: null,
         ]);
     }
 
@@ -185,6 +192,7 @@ class CorreiosController extends Controller
             'serviceOptions' => self::SERVICE_OPTIONS,
             'configured' => $this->service->isConfigured(),
             'sender' => $this->presentSender(Company::query()->first()),
+            'devolucao' => (bool) $correio->devolucao,
             'editing' => $this->presentEditItem($correio),
         ]);
     }
@@ -210,6 +218,7 @@ class CorreiosController extends Controller
     {
         return [
             'order_id' => ['nullable', 'integer', 'exists:orders,id'],
+            'devolucao' => ['nullable', 'boolean'],
             'origin' => ['nullable', 'string'],
             'external_order_id' => ['nullable', 'string'],
             'customer.name' => ['required', 'string', 'min:3', 'max:50'],
@@ -246,6 +255,9 @@ class CorreiosController extends Controller
 
         $record->fill([
             'order_id' => $validated['order_id'] ?? null,
+            // customer/address = a outra ponta: destinatário no envio,
+            // remetente na devolução.
+            'devolucao' => (bool) ($validated['devolucao'] ?? false),
             'origin' => $validated['origin'] ?? null,
             'external_order_id' => $validated['external_order_id'] ?? null,
             'customer_name' => $validated['customer']['name'],
@@ -412,6 +424,7 @@ class CorreiosController extends Controller
             'originLabel' => self::ORIGIN_LABELS[$item->origin] ?? ($item->origin ?: '—'),
             'externalOrderId' => $item->external_order_id,
             'orderId' => $item->order_id,
+            'devolucao' => (bool) $item->devolucao,
             'serviceLabel' => $item->service_label,
             'postagePrice' => $item->postage_price !== null ? (float) $item->postage_price : null,
             'status' => $item->status,
@@ -425,6 +438,23 @@ class CorreiosController extends Controller
      */
     private function presentDetail(CorreiosPrePostagem $item): array
     {
+        $cliente = [
+            'name' => $item->customer_name,
+            'document' => $item->customer_document,
+            'phone' => $item->customer_phone,
+            'email' => $item->customer_email,
+            'addressLines' => $this->addressLines(
+                $item->street,
+                $item->number,
+                $item->complement,
+                $item->neighborhood,
+                $item->city,
+                $item->state,
+                $item->zip,
+            ),
+        ];
+        $empresa = $this->presentSender(Company::query()->first());
+
         return [
             ...$this->presentListItem($item),
             'address' => implode(' — ', $this->addressLines(
@@ -436,23 +466,10 @@ class CorreiosController extends Controller
                 $item->state,
                 $item->zip,
             )),
-            'recipient' => [
-                'name' => $item->customer_name,
-                'document' => $item->customer_document,
-                'phone' => $item->customer_phone,
-                'email' => $item->customer_email,
-                'addressLines' => $this->addressLines(
-                    $item->street,
-                    $item->number,
-                    $item->complement,
-                    $item->neighborhood,
-                    $item->city,
-                    $item->state,
-                    $item->zip,
-                ),
-            ],
-            'sender' => $this->presentSender(Company::query()->first()),
-            'invoice' => $this->presentInvoiceFiscal($item->order?->invoice),
+            // Devolução: a cliente remete e a KazaKora recebe, sem a NF-e da venda.
+            'recipient' => $item->devolucao ? $empresa : $cliente,
+            'sender' => $item->devolucao ? $cliente : $empresa,
+            'invoice' => $this->presentInvoiceFiscal($item->devolucao ? null : $item->order?->invoice),
             'customerDocument' => $item->customer_document,
             'customerPhone' => $item->customer_phone,
             'weightGrams' => $item->weight_grams,
@@ -555,6 +572,7 @@ class CorreiosController extends Controller
         return [
             'id' => $item->id,
             'orderId' => $item->order_id,
+            'devolucao' => (bool) $item->devolucao,
             'origin' => $item->origin,
             'externalOrderId' => $item->external_order_id,
             'customer' => [

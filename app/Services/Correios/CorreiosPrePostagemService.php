@@ -61,6 +61,10 @@ class CorreiosPrePostagemService
      *   dimensions: [format, height, width, length, diameter] (cm)
      *   content_items: [[conteudo, quantidade, valor], ...]
      *   invoice (opcional): [numero, chave] — NF-e que acompanha o objeto
+     *   devolucao (opcional, bool): pré-postagem de DEVOLUÇÃO (pedido do Lira
+     *     2026-10-29) — customer/address viram o REMETENTE e a empresa o
+     *     destinatário. Continua a pré-postagem normal do contrato (sem
+     *     logística reversa) e sem a NF-e da venda.
      * @return array<string, mixed> resposta crua da API (PrePostagem)
      */
     public function create(array $input): array
@@ -71,9 +75,13 @@ class CorreiosPrePostagemService
             );
         }
 
+        $devolucao = (bool) ($input['devolucao'] ?? false);
+        $empresa = $this->buildRemetente();
+        $cliente = $this->buildDestinatario($input['customer'], $input['address']);
+
         $payload = [
-            'remetente' => $this->buildRemetente(),
-            'destinatario' => $this->buildDestinatario($input['customer'], $input['address']),
+            'remetente' => $devolucao ? $cliente : $empresa,
+            'destinatario' => $devolucao ? $empresa : $cliente,
             'codigoServico' => $input['service_code'],
             'pesoInformado' => (string) $input['weight_grams'],
             // Obrigatório no schema real (confirmado em
@@ -94,7 +102,7 @@ class CorreiosPrePostagemService
             // Campos do schema real (PrePostagem.numeroNotaFiscal/chaveNFe,
             // conferido em apihom.correios.com.br/prepostagem/v3/api-docs
             // em 2026-09-25): objeto que viaja com NF-e leva a chave dela.
-            ...(! empty($input['invoice']['chave']) ? [
+            ...(! $devolucao && ! empty($input['invoice']['chave']) ? [
                 'numeroNotaFiscal' => (string) ($input['invoice']['numero'] ?? ''),
                 'chaveNFe' => (string) $input['invoice']['chave'],
             ] : []),
@@ -110,6 +118,7 @@ class CorreiosPrePostagemService
         Log::channel('correios')->info('correios.prepostagem_request', [
             'status' => $response->status(),
             'codigoServico' => $payload['codigoServico'],
+            'devolucao' => $devolucao,
         ]);
 
         if ($response->failed()) {

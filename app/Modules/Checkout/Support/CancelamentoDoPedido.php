@@ -199,7 +199,7 @@ class CancelamentoDoPedido
         // antes de tirar a etiqueta da fila, senão o aviso some.
         $pacote = array_values(array_filter([
             $this->previaDaEtiqueta($order),
-            CorreiosPrePostagem::query()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists()
+            CorreiosPrePostagem::query()->deEnvio()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists()
                 ? 'A pré-postagem dos Correios já foi gerada: cancele no painel dos Correios.'
                 : null,
         ]));

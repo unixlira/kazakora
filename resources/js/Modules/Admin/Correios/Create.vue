@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import ShippingFiscalLabel from '@/Modules/Admin/Correios/Components/ShippingFiscalLabel.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 const props = defineProps({
     serviceOptions: { type: Array, required: true },
@@ -13,10 +13,18 @@ const props = defineProps({
     // uma tentativa que falhou pra corrigir e tentar de novo, ver
     // CorreiosController::edit().
     editing: { type: Object, default: null },
+    // Botão "Devolução PAC" do pedido (Lira 2026-10-29): a cliente do pedido
+    // vira o REMETENTE e a KazaKora o destinatário; PAC já escolhido e o
+    // pedido puxado sozinho (pedidoInicial).
+    devolucao: { type: Boolean, default: false },
+    pedidoInicial: { type: String, default: null },
 });
+
+const SERVICO_PAC = '03298';
 
 const form = useForm(props.editing ? {
     order_id: props.editing.orderId,
+    devolucao: Boolean(props.editing.devolucao),
     origin: props.editing.origin,
     external_order_id: props.editing.externalOrderId,
     customer: { ...props.editing.customer },
@@ -27,11 +35,14 @@ const form = useForm(props.editing ? {
     content_items: props.editing.contentItems.map((item) => ({ ...item })),
 } : {
     order_id: null,
+    devolucao: props.devolucao,
     origin: null,
     external_order_id: null,
     customer: { name: '', document: '', phone: '', email: '' },
     address: { zip: '', street: '', number: '', complement: '', neighborhood: '', city: '', state: '' },
-    service_code: props.serviceOptions[0]?.value ?? '',
+    service_code: props.devolucao && props.serviceOptions.some((option) => option.value === SERVICO_PAC)
+        ? SERVICO_PAC
+        : (props.serviceOptions[0]?.value ?? ''),
     weight_grams: '',
     dimensions: { format: '2', height: '', width: '', length: '', diameter: '' },
     content_items: [{ conteudo: '', quantidade: 1, valor: '' }],
@@ -41,7 +52,7 @@ const form = useForm(props.editing ? {
 // editável depois (dados podem precisar de ajuste antes de ir pros
 // Correios). Não usa Inertia pra essa busca: é só um preenchimento de
 // formulário já aberto, não uma navegação.
-const orderNumber = ref('');
+const orderNumber = ref(props.pedidoInicial ?? '');
 const searching = ref(false);
 const searchError = ref('');
 
@@ -99,6 +110,12 @@ const buscarPedido = async () => {
     }
 };
 
+onMounted(() => {
+    if (! props.editing && props.pedidoInicial) {
+        buscarPedido();
+    }
+});
+
 const addItem = () => {
     form.content_items.push({ conteudo: '', quantidade: 1, valor: '' });
 };
@@ -130,6 +147,16 @@ const recipientLabel = computed(() => ({
     addressLines: recipientAddressLines.value,
 }));
 
+// Na devolução a etiqueta inverte: a cliente remete e a KazaKora recebe
+// (CEP destinatário = CEP da empresa), sem a NF-e da venda.
+const labelRecipient = computed(() => (form.devolucao ? { ...props.sender, zip: null } : recipientLabel.value));
+const labelSender = computed(() => (form.devolucao ? {
+    name: form.customer.name || 'Selecione um pedido',
+    document: form.customer.document,
+    addressLines: recipientAddressLines.value,
+} : props.sender));
+const labelInvoice = computed(() => (form.devolucao ? null : invoice.value));
+
 const orderLabel = computed(() => form.external_order_id || (form.order_id ? `#${form.order_id}` : null));
 
 const selectedServiceLabel = computed(() => props.serviceOptions.find((option) => option.value === form.service_code)?.label ?? 'Correios');
@@ -152,12 +179,18 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="editing ? 'Corrigir e tentar de novo — Correios' : 'Gerar QR Code — Correios'" />
+    <Head :title="editing ? 'Corrigir e tentar de novo — Correios' : (form.devolucao ? 'Devolução PAC — Correios' : 'Gerar QR Code — Correios')" />
 
     <AdminLayout>
         <div class="mb-6">
-            <h1 class="mb-1 text-2xl font-bold">{{ editing ? 'Corrigir e tentar de novo' : 'Gerar QR Code de pré-postagem' }}</h1>
+            <h1 class="mb-1 text-2xl font-bold">{{ editing ? 'Corrigir e tentar de novo' : (form.devolucao ? 'Gerar pré-postagem de devolução' : 'Gerar QR Code de pré-postagem') }}</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Cria a pré-postagem direto na API dos Correios e gera o QR Code pra levar na agência.</p>
+        </div>
+
+        <div v-if="form.devolucao" class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+            <i class="fas fa-rotate-left mr-1.5" aria-hidden="true"></i>
+            <strong>Devolução:</strong> a cliente é o <strong>remetente</strong> (dados abaixo) e a KazaKora é o <strong>destinatário</strong>.
+            Não muda o pedido nem avisa a cliente de envio.
         </div>
 
         <div v-if="editing?.errorMessage" class="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300">
@@ -209,19 +242,20 @@ const submit = () => {
                 </div>
 
                 <ShippingFiscalLabel
-                    :recipient="recipientLabel"
-                    :sender="sender"
-                    :invoice="invoice"
+                    :recipient="labelRecipient"
+                    :sender="labelSender"
+                    :invoice="labelInvoice"
                     :content-items="form.content_items"
                     :service-label="selectedServiceLabel"
                     :weight-grams="form.weight_grams"
                     :order-label="orderLabel"
+                    :devolucao="form.devolucao"
                 />
             </div>
 
             <form class="space-y-6" @submit.prevent="submit">
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <h3 class="mb-4 text-base font-semibold">Destinatário</h3>
+                    <h3 class="mb-4 text-base font-semibold">{{ form.devolucao ? 'Remetente (cliente que devolve)' : 'Destinatário' }}</h3>
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div class="sm:col-span-2">
                             <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Nome completo</label>
@@ -248,7 +282,7 @@ const submit = () => {
                 </div>
 
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <h3 class="mb-4 text-base font-semibold">Endereço de entrega</h3>
+                    <h3 class="mb-4 text-base font-semibold">{{ form.devolucao ? 'Endereço da cliente (de onde sai a devolução)' : 'Endereço de entrega' }}</h3>
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-6">
                         <div class="sm:col-span-2">
                             <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">CEP</label>
@@ -392,7 +426,7 @@ const submit = () => {
                     <button type="submit" :disabled="form.processing"
                         class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
                         <i class="fas fa-qrcode mr-1.5"></i>
-                        {{ form.processing ? 'Gerando…' : (editing ? 'Tentar de novo' : 'Gerar QR Code') }}
+                        {{ form.processing ? 'Gerando…' : (editing ? 'Tentar de novo' : (form.devolucao ? 'Gerar pré-postagem de devolução' : 'Gerar QR Code')) }}
                     </button>
                 </div>
             </form>

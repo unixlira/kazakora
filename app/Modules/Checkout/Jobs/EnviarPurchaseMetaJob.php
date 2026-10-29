@@ -15,8 +15,9 @@ use Throwable;
  * Purchase do servidor quando o pagamento do pedido do site aprova (Pix,
  * boleto e cartão passam pelo OrderPaymentFinalizer). Pedido 2026-10-18.
  *
- * - Só kazakora.com (origin loja, sem site_origem): nunca marketplace,
- *   FerraKora ou Beauty Kora.
+ * - kazakora.com (origin loja, sem site_origem) no pixel da KazaKora e,
+ *   desde 2026-10-28, FerraKora no pixel próprio dela
+ *   (ConversoesMeta::siteDoPedido). Nunca marketplace nem Beauty Kora.
  * - Só com o OK de cookies dado no checkout (orders.meta_rastreio).
  * - Uma vez só por pedido: quem vira orders.meta_purchase_enviado_em de
  *   nulo para preenchido manda; se a Meta falhar, a marca volta a nulo e a
@@ -44,7 +45,12 @@ class EnviarPurchaseMetaJob implements ShouldQueue
     {
         $order = Order::query()->with(['items', 'user'])->find($this->orderId);
 
-        if (! $order || ! ConversoesMeta::pedidoDaLoja($order) || $order->status !== Order::STATUS_PAID) {
+        if (! $order || $order->status !== Order::STATUS_PAID) {
+            return;
+        }
+
+        $site = ConversoesMeta::siteDoPedido($order);
+        if ($site === false) {
             return;
         }
 
@@ -54,9 +60,9 @@ class EnviarPurchaseMetaJob implements ShouldQueue
             return;
         }
 
-        if (! $conversoes->ativo()) {
+        if (! $conversoes->ativo($site)) {
             // Sem marcar: ligando a API depois, pedido novo sai normalmente.
-            $conversoes->enviar(['event_name' => 'Purchase', 'event_id' => ConversoesMeta::eventIdDoPurchase($order)]);
+            $conversoes->enviar(['event_name' => 'Purchase', 'event_id' => ConversoesMeta::eventIdDoPurchase($order)], $site);
 
             return;
         }
@@ -69,7 +75,7 @@ class EnviarPurchaseMetaJob implements ShouldQueue
         }
 
         try {
-            $conversoes->enviar($conversoes->eventoPurchase($order));
+            $conversoes->enviar($conversoes->eventoPurchase($order), $site);
         } catch (Throwable $e) {
             Order::query()->whereKey($order->id)->update(['meta_purchase_enviado_em' => null]);
 

@@ -28,11 +28,46 @@ use Throwable;
  */
 class ConversoesMeta
 {
-    public function ativo(): bool
+    /** $site null = kazakora.com; 'ferrakora' = pixel próprio do site (2026-10-28). */
+    public function ativo(?string $site = null): bool
     {
-        return (bool) config('services.meta_capi.enabled')
-            && filled(config('services.meta_capi.access_token'))
-            && PixelMeta::id() !== null;
+        $destino = self::destino($site);
+
+        return $destino['enabled'] && filled($destino['access_token']) && filled($destino['pixel_id']);
+    }
+
+    /**
+     * Pixel, chave, teste e liga/desliga de quem recebe o evento.
+     *
+     * @return array{enabled: bool, access_token: ?string, pixel_id: ?string, test_event_code: ?string}
+     */
+    public static function destino(?string $site = null): array
+    {
+        if ($site === null) {
+            return [
+                'enabled' => (bool) config('services.meta_capi.enabled'),
+                'access_token' => config('services.meta_capi.access_token'),
+                'pixel_id' => PixelMeta::id(),
+                'test_event_code' => config('services.meta_capi.test_event_code'),
+            ];
+        }
+
+        $config = (array) config("services.meta_capi.sites.{$site}", []);
+
+        return [
+            'enabled' => (bool) ($config['enabled'] ?? false),
+            'access_token' => $config['access_token'] ?? null,
+            'pixel_id' => self::pixelDoSite($site),
+            'test_event_code' => $config['test_event_code'] ?? null,
+        ];
+    }
+
+    /** ID do pixel de um outro site (FerraKora); null = o site não tem pixel. */
+    public static function pixelDoSite(string $site): ?string
+    {
+        $id = preg_replace('/\D/', '', (string) config("services.meta_capi.sites.{$site}.pixel_id"));
+
+        return $id !== '' ? $id : null;
     }
 
     /** O cliente deu OK nos cookies (na versão atual do aviso)? */
@@ -48,11 +83,14 @@ class ConversoesMeta
      *
      * @param  array<string, mixed>  $evento
      */
-    public function enviar(array $evento): bool
+    public function enviar(array $evento, ?string $site = null): bool
     {
-        if (! $this->ativo()) {
+        $destino = self::destino($site);
+
+        if (! $this->ativo($site)) {
             Log::info('meta_capi.pulado', [
-                'motivo' => ! config('services.meta_capi.enabled') ? 'desligado' : (blank(config('services.meta_capi.access_token')) ? 'sem_token' : 'sem_pixel'),
+                'motivo' => ! $destino['enabled'] ? 'desligado' : (blank($destino['access_token']) ? 'sem_token' : 'sem_pixel'),
+                'site' => $site,
                 'event_name' => $evento['event_name'] ?? null,
                 'event_id' => $evento['event_id'] ?? null,
             ]);
@@ -61,18 +99,19 @@ class ConversoesMeta
         }
 
         $corpo = ['data' => [$evento]];
-        if (filled($codigo = config('services.meta_capi.test_event_code'))) {
+        if (filled($codigo = $destino['test_event_code'])) {
             $corpo['test_event_code'] = $codigo;
         }
 
-        $url = rtrim((string) config('services.meta_ads.graph_url', 'https://graph.facebook.com/v23.0'), '/').'/'.PixelMeta::id().'/events';
+        $url = rtrim((string) config('services.meta_ads.graph_url', 'https://graph.facebook.com/v23.0'), '/').'/'.$destino['pixel_id'].'/events';
 
         $resposta = Http::asJson()->acceptJson()->timeout(15)
-            ->withQueryParameters(['access_token' => (string) config('services.meta_capi.access_token')])
+            ->withQueryParameters(['access_token' => (string) $destino['access_token']])
             ->post($url, $corpo);
 
         if ($resposta->failed()) {
             Log::warning('meta_capi.erro', [
+                'site' => $site,
                 'event_name' => $evento['event_name'] ?? null,
                 'event_id' => $evento['event_id'] ?? null,
                 'status' => $resposta->status(),
@@ -82,6 +121,7 @@ class ConversoesMeta
         }
 
         Log::info('meta_capi.enviado', [
+            'site' => $site,
             'event_name' => $evento['event_name'] ?? null,
             'event_id' => $evento['event_id'] ?? null,
             'recebidos' => $resposta->json('events_received'),
@@ -177,6 +217,55 @@ class ConversoesMeta
     public static function pedidoDaLoja(Order $order): bool
     {
         return $order->origin === Order::ORIGIN_STORE && $order->site_origem === null;
+    }
+
+    /**
+     * Para onde vai o Purchase do pedido: false = nenhum (marketplace, Beauty
+     * Kora, site sem pixel); null = pixel da KazaKora; 'ferrakora' = o do site.
+     */
+    public static function siteDoPedido(Order $order): string|null|false
+    {
+        if (self::pedidoDaLoja($order)) {
+            return null;
+        }
+
+        return $order->site_origem === Order::SITE_FERRAKORA && self::pixelDoSite(Order::SITE_FERRAKORA) !== null
+            ? Order::SITE_FERRAKORA
+            : false;
+    }
+
+    /**
+     * Rastreio do pedido de outro site (FerraKora). O aceite dos cookies é a
+     * frase do Finalizar pedido (Cookies::registrarAceite), então todo pedido
+     * criado ali já tem o OK. _fbp/_fbc e a página vêm do próprio site no
+     * corpo do pedido: os cookies são do domínio dele, não chegam aqui.
+     *
+     * @param  array{fbp?: ?string, fbc?: ?string, url?: ?string}  $doSite
+     * @return array<string, mixed>|null
+     */
+    public function rastreioDoOutroSite(Request $request, string $site, array $doSite): ?array
+    {
+        if (self::pixelDoSite($site) === null) {
+            return null;
+        }
+
+        $base = rtrim((string) config("services.meta_capi.sites.{$site}.site_url"), '/');
+        $url = (string) ($doSite['url'] ?? '');
+
+        return [
+            'ip' => $request->ip(),
+            'ua' => Str::limit((string) $request->userAgent(), 500, '') ?: null,
+            'url' => $base !== '' && str_starts_with($url, $base.'/') ? Str::limit($url, 500, '') : ($base !== '' ? $base.'/' : null),
+            'fbp' => self::cookieDaMeta($doSite['fbp'] ?? null),
+            'fbc' => self::cookieDaMeta($doSite['fbc'] ?? null),
+            'consentiu' => Cookies::VERSAO,
+        ];
+    }
+
+    /** _fbp/_fbc no formato da Meta (fb.1.<tempo>.<valor>); outra coisa vira null. */
+    public static function cookieDaMeta(mixed $valor): ?string
+    {
+        return is_string($valor) && preg_match('/^fb\.[0-9]\.[0-9]{10,13}\.[A-Za-z0-9._-]{1,500}$/', $valor) ? $valor : null;
     }
 
     public function eventoPurchase(Order $order): array

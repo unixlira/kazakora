@@ -145,6 +145,53 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
     }
 
+    public function test_pixel_da_meta_guarda_o_rastreio_e_entrega_o_purchase_ao_site(): void
+    {
+        $this->getJson('/api/ferrakora/pixel-meta')->assertOk()->assertJsonPath('pixel_id', null);
+        config(['services.meta_capi.sites.ferrakora.pixel_id' => '1234567890123456']);
+        $this->getJson('/api/ferrakora/pixel-meta')->assertOk()->assertJsonPath('pixel_id', '1234567890123456');
+
+        $this->mercadoPago(function ($mock) {
+            $mock->shouldReceive('createPixPayment')->once()
+                ->andReturn(['id' => 556, 'status' => 'pending', 'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']]]);
+            $mock->shouldReceive('retrievePayment')->with('556')->andReturn(['status' => 'approved']);
+        });
+
+        $resposta = $this->withServerVariables(['REMOTE_ADDR' => '200.100.50.25'])
+            ->withHeader('User-Agent', 'Mozilla/5.0 Teste')
+            ->postJson('/api/ferrakora/checkout/pedido', $this->pedido(['meta' => [
+                'fbp' => 'fb.1.1761700000000.123456789',
+                'fbc' => 'lixo',
+                'url' => 'https://ferrakora.com/seguro-pagamento',
+            ]]))
+            ->assertCreated()
+            ->assertJsonPath('meta_purchase', null);
+
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $rastreio = $order->meta_rastreio;
+        $this->assertSame('200.100.50.25', $rastreio['ip']);
+        $this->assertSame('fb.1.1761700000000.123456789', $rastreio['fbp']);
+        $this->assertNull($rastreio['fbc'], 'valor fora do formato da Meta é descartado');
+        $this->assertSame('https://ferrakora.com/seguro-pagamento', $rastreio['url']);
+
+        $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))
+            ->assertOk()
+            ->assertJsonPath('pedido.pago', true)
+            ->assertJsonPath('meta_purchase.event_id', "purchase-{$order->id}")
+            ->assertJsonPath('meta_purchase.dados.value', 190)
+            ->assertJsonPath('meta_purchase.dados.currency', 'BRL');
+    }
+
+    public function test_sem_pixel_configurado_o_pedido_nao_guarda_rastreio(): void
+    {
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()
+            ->andReturn(['id' => 557, 'status' => 'pending', 'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']]]));
+
+        $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido(['meta' => ['fbp' => 'fb.1.1761700000000.1']]))->assertCreated();
+
+        $this->assertNull(Order::findOrFail($resposta->json('pedido.id'))->meta_rastreio);
+    }
+
     public function test_vitrine_e_resumo_nao_gastam_o_limite_do_pedido(): void
     {
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 10, 'status' => 'pending']));

@@ -50,6 +50,58 @@ const FULFILLMENT_STEP_LABELS = {
     shipping_confirmed: 'Frete confirmado',
     label_generated: 'Etiqueta gerada',
     label_printed: 'Etiqueta impressa',
+    delivered: 'Entregue',
+};
+
+// Entrega dos Correios (2026-10-29): cada dado do recebimento que o SRO
+// mandou, sem cortar nada. O que não veio aparece como "não informado".
+const NAO_INFORMADO = 'não informado pelos Correios';
+const dataHoraCorreios = (v) => {
+    const m = typeof v === 'string' && v.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
+    return m ? `${m[3]}/${m[2]}/${m[1]} às ${m[4]}:${m[5]}${m[6] ? `:${m[6]}` : ''}` : v;
+};
+const enderecoCorreios = (u) => {
+    if (!u) return null;
+    const e = u.endereco ?? {};
+    const rua = [e.logradouro, e.numero].filter(Boolean).join(', ');
+    const local = [rua, e.bairro, [e.cidade, e.uf].filter(Boolean).join('/'), e.cep && `CEP ${e.cep}`].filter(Boolean).join(' · ');
+    return [u.nome ?? u.tipo, u.codSro && `(${u.codSro})`, local && `: ${local}`].filter(Boolean).join(' ');
+};
+const imagensCorreios = (valor, chave = '') => {
+    if (typeof valor === 'string') {
+        const ehImagem = valor.startsWith('data:image/') || (/^https?:\/\//.test(valor) && /(assinatura|imagem|foto|comprovante)/i.test(chave));
+        return ehImagem ? [{ chave, src: valor }] : [];
+    }
+    if (valor && typeof valor === 'object') {
+        return Object.entries(valor).flatMap(([k, v]) => imagensCorreios(v, chave ? `${chave}.${k}` : k));
+    }
+    return [];
+};
+const entregaCorreios = (event) => {
+    const ev = event.step === 'delivered' ? event.context?.evento : null;
+    if (!ev) return null;
+    const r = ev.recebedor ?? {};
+    const lat = ev.latitude ? String(ev.latitude).replace(',', '.') : null;
+    const lng = ev.longitude ? String(ev.longitude).replace(',', '.') : null;
+    const extras = Object.entries(r).filter(([k]) => !['nome', 'documento', 'comentario', 'celular', 'email'].includes(k));
+    return {
+        linhas: [
+            ['Data e hora da entrega', dataHoraCorreios(ev.dtHrCriado) ?? NAO_INFORMADO],
+            ['Situação', [ev.codigo, ev.descricao].filter(Boolean).join(' · ') || NAO_INFORMADO],
+            ['Quem recebeu', r.nome || NAO_INFORMADO],
+            ['Documento de quem recebeu', r.documento || NAO_INFORMADO],
+            ['Observação do recebimento', r.comentario || ev.comentario || NAO_INFORMADO],
+            ['Celular de quem recebeu', r.celular || NAO_INFORMADO],
+            ['E-mail de quem recebeu', r.email || NAO_INFORMADO],
+            ...extras.map(([k, v]) => [`Recebedor: ${k}`, typeof v === 'object' ? JSON.stringify(v) : String(v)]),
+            ['Unidade que entregou', enderecoCorreios(ev.unidade) || NAO_INFORMADO],
+            ['Detalhe dos Correios', ev.detalhe || null],
+            ['Código do objeto', event.context?.codigo_objeto || null],
+        ].filter(([, v]) => v != null && v !== ''),
+        mapa: lat && lng ? { texto: `${lat}, ${lng}`, url: `https://www.google.com/maps?q=${lat},${lng}` } : null,
+        imagens: imagensCorreios(ev),
+        bruto: JSON.stringify(ev, null, 2),
+    };
 };
 
 const formatPrice = (value) =>
@@ -758,6 +810,28 @@ const cancelInvoice = () => {
                                 <StatusBadge :status="event.status" context="fulfillment" />
                                 <span class="ml-2 font-medium">{{ FULFILLMENT_STEP_LABELS[event.step] ?? event.step }}</span>
                                 <p v-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
+                                <div v-if="entregaCorreios(event)" class="mt-2 rounded-lg border border-[var(--surface-border)] p-3 text-xs">
+                                    <dl class="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                                        <template v-for="[rotulo, valor] in entregaCorreios(event).linhas" :key="rotulo">
+                                            <dt class="text-slate-400">{{ rotulo }}</dt>
+                                            <dd class="break-words" :class="valor === NAO_INFORMADO ? 'text-slate-400' : 'font-medium'">{{ valor }}</dd>
+                                        </template>
+                                        <dt class="text-slate-400">Local da entrega (GPS)</dt>
+                                        <dd>
+                                            <a v-if="entregaCorreios(event).mapa" :href="entregaCorreios(event).mapa.url" target="_blank" rel="noopener" class="font-medium text-primary hover:underline">{{ entregaCorreios(event).mapa.texto }}</a>
+                                            <span v-else class="text-slate-400">{{ NAO_INFORMADO }}</span>
+                                        </dd>
+                                        <dt class="text-slate-400">Assinatura</dt>
+                                        <dd>
+                                            <span v-if="!entregaCorreios(event).imagens.length" class="text-slate-400">{{ NAO_INFORMADO }}</span>
+                                            <img v-for="img in entregaCorreios(event).imagens" :key="img.chave" :src="img.src" :alt="`Imagem dos Correios: ${img.chave}`" class="mt-1 max-h-40 rounded border border-[var(--surface-border)] bg-white">
+                                        </dd>
+                                    </dl>
+                                    <details class="mt-2">
+                                        <summary class="cursor-pointer text-slate-500">Tudo o que os Correios mandaram</summary>
+                                        <pre class="mt-1 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-50 p-2 text-[11px] dark:bg-slate-900">{{ entregaCorreios(event).bruto }}</pre>
+                                    </details>
+                                </div>
                             </div>
                             <span class="whitespace-nowrap text-right text-xs text-slate-400">
                                 {{ formatDateTime(event.created_at) }}

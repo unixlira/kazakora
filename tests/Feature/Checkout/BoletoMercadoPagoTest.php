@@ -385,6 +385,36 @@ class BoletoMercadoPagoTest extends TestCase
         ], BoletoComMarca::dadosDaEmpresa());
     }
 
+    public function test_boleto_da_ferrakora_sai_com_o_logo_e_o_nome_da_ferrakora(): void
+    {
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response($this->pdfDoMercadoPago(), 200, ['Content-Type' => 'application/pdf'])]);
+        $payment = $this->boletoDoPedido(Order::SITE_FERRAKORA);
+
+        $this->assertTrue(BoletoComMarca::ehFerraKora($payment));
+        $this->get(BoletoComMarca::url($payment))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertHeader('Content-Disposition', 'inline; filename="boleto-ferrakora-'.$payment->order_id.'.pdf"');
+
+        Storage::disk('local')->assertExists("boletos/v5-ferrakora/{$payment->id}.pdf");
+        Storage::disk('local')->assertMissing("boletos/v4/{$payment->id}.pdf");
+        $this->assertSame([
+            '© '.now('America/Sao_Paulo')->format('Y').' FerraKora | Grupo AlphaKora',
+            'CNPJ: 65.604.590/0001-07',
+            'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
+        ], BoletoComMarca::dadosDaEmpresa(true));
+    }
+
+    public function test_boleto_da_beauty_kora_continua_com_o_topo_da_kazakora(): void
+    {
+        foreach ([Order::SITE_BEAUTYKORA, null] as $site) {
+            $payment = $this->boletoDoPedido($site);
+            $this->assertFalse(BoletoComMarca::ehFerraKora($payment));
+            $payment->forceDelete();
+        }
+    }
+
     public function test_link_do_boleto_sem_assinatura_e_recusado(): void
     {
         $payment = $this->boletoDoPedido();

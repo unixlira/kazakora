@@ -112,4 +112,23 @@ class CartaoParceladoMercadoPagoTest extends TestCase
 
         $this->assertSame(0, Order::count());
     }
+
+    public function test_cartao_a_vista_vai_em_uma_parcela(): void
+    {
+        $enviado = null;
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) use (&$enviado) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createOrder')->once()->andReturnUsing(function (array $payload) use (&$enviado) {
+                $enviado = $payload;
+
+                return ['id' => 'ORD3', 'transactions' => ['payments' => [['id' => 'PAY3', 'status' => 'processed', 'status_detail' => 'accredited']]]];
+            });
+        });
+
+        $this->actingAs($this->user)->post('/finalizacao/pagamento', $this->cartao(['mp_card_installments' => 1]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, $enviado['transactions']['payments'][0]['payment_method']['installments']);
+        $this->assertSame(number_format((float) Order::firstOrFail()->total, 2, '.', ''), $enviado['total_amount']);
+    }
 }

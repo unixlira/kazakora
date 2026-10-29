@@ -369,7 +369,7 @@ class BoletoMercadoPagoTest extends TestCase
         // Página do Mercado Pago importada + o logo (imagem PNG com transparência).
         $this->assertStringContainsString('/XObject', $pdf);
         $this->assertStringContainsString('/SMask', $pdf);
-        Storage::disk('local')->assertExists("boletos/v4/{$payment->id}.pdf");
+        Storage::disk('local')->assertExists("boletos/v5/{$payment->id}.pdf");
 
         // Segunda vez sai do arquivo guardado, sem baixar de novo.
         $this->get($url)->assertOk();
@@ -413,5 +413,48 @@ class BoletoMercadoPagoTest extends TestCase
             $this->get(BoletoComMarca::url($payment))->assertOk()->assertHeader('Content-Type', 'application/pdf');
             $payment->forceDelete();
         }
+    }
+
+    public function test_cada_loja_tem_o_seu_logo_e_nome_no_mesmo_topo(): void
+    {
+        $esperado = [
+            null => ['KazaKora', 'images/marca/logo-kazakora-fiel.png'],
+            Order::SITE_FERRAKORA => ['FerraKora', 'images/marca/ferrakora-boleto.png'],
+            Order::SITE_BEAUTYKORA => ['Beauty Kora', 'images/marca/beautykora-boleto.png'],
+        ];
+
+        foreach ($esperado as $site => [$nome, $logo]) {
+            $payment = $this->boletoDoPedido($site ?: null);
+            $marca = BoletoComMarca::marca($payment);
+
+            $this->assertSame($nome, $marca['nome']);
+            $this->assertSame($logo, $marca['logo']);
+            $this->assertFileExists(public_path($logo));
+            $this->assertStringStartsWith('© '.now('America/Sao_Paulo')->format('Y').' '.$nome.' | Grupo AlphaKora', BoletoComMarca::dadosDaEmpresa($nome)[0]);
+            $payment->forceDelete();
+        }
+    }
+
+    public function test_pdf_da_ferrakora_sai_com_o_titulo_da_ferrakora(): void
+    {
+        Storage::fake('local');
+        Http::fake(['www.mercadopago.com.br/*' => Http::response($this->pdfDoMercadoPago(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $pagamentoKz = $this->boletoDoPedido();
+        $kz = $this->get(BoletoComMarca::url($pagamentoKz))->assertOk()->getContent();
+        $pagamentoKz->forceDelete();
+        $fk = $this->get(BoletoComMarca::url($this->boletoDoPedido(Order::SITE_FERRAKORA)))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Boleto KazaKora', $this->titulo($kz));
+        $this->assertStringContainsString('Boleto FerraKora', $this->titulo($fk));
+    }
+
+    /** Título gravado pelo FPDF em UTF-16BE (SetTitle com isUTF8). */
+    private function titulo(string $pdf): string
+    {
+        preg_match('/\/Title \((.*?)\)\s*\n/s', $pdf, $m);
+        $bruto = stripcslashes($m[1] ?? '');
+
+        return str_starts_with($bruto, "\xFE\xFF") ? mb_convert_encoding(substr($bruto, 2), 'UTF-8', 'UTF-16BE') : $bruto;
     }
 }

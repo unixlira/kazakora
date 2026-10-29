@@ -95,7 +95,10 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
         $nomeCompleto = trim((string) ($order->shipping_name ?: $order->user?->name)) ?: 'cliente';
         $nome = Str::of($nomeCompleto)->explode(' ')->first();
         $email = $order->shipping_email ?: $order->user?->email ?: 'não informado';
-        $imagem = WhatsAppNumeros::template($loja, 'pedido_aprovado_imagem') ?: asset('images/whatsapp/confirmacao-pedido.jpg');
+        // FerraKora tem banner próprio (logo dela e selo Norton, 2026-10-28).
+        $imagem = WhatsAppNumeros::template($loja, 'pedido_aprovado_imagem') ?: asset($loja === WhatsAppNumeros::FERRAKORA
+            ? 'images/whatsapp/confirmacao-pedido-ferrakora.jpg'
+            : 'images/whatsapp/confirmacao-pedido.jpg');
 
         try {
             $response = $client->paraLoja($loja)->sendTemplate(

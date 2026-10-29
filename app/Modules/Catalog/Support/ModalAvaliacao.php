@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Regras (revistas pelo Lira em 2026-10-29): pedido do kazakora.com (origin
  * loja, sem site_origem) ENTREGUE, produto ainda sem avaliação do cliente. Um
- * item por vez, o mais recente primeiro. "Não avaliar agora" (ou fechar no
- * X, Esc, clique fora) fica registrado e fecha o modal só naquele login: no
- * login seguinte ele abre de novo, toda vez, até o cliente avaliar (sem
- * espera de dias, sem janela e sem teto de aparições). A avaliação em si é
+ * item por vez, o mais recente primeiro. Avaliar ou "Não avaliar agora" (ou
+ * fechar no X, Esc, clique fora) passa para o próximo produto, até acabar a
+ * lista (pedido do Lira 2026-10-29). O produto pulado fica registrado e não
+ * volta naquele login: no login seguinte ele abre de novo, toda vez, até o
+ * cliente avaliar (sem espera de dias, sem janela e sem teto de aparições). A avaliação em si é
  * gravada pelo mesmo ReviewController::store da tela "Avalie suas compras".
  */
 class ModalAvaliacao
@@ -35,10 +36,13 @@ class ModalAvaliacao
     /** Sessão: produtos que já contaram como "apareceu" neste login. */
     private const MOSTRADOS = 'avaliacao_modal.mostrados';
 
+    /** Sessão: produtos pulados ("Não avaliar agora") neste login. */
+    private const PULADOS = 'avaliacao_modal.pulados';
+
     public static function ativar(Session $session): void
     {
         $session->put(self::ATIVO, true);
-        $session->forget(self::MOSTRADOS);
+        $session->forget([self::MOSTRADOS, self::PULADOS]);
     }
 
     public static function encerrar(Session $session): void
@@ -63,7 +67,8 @@ class ModalAvaliacao
             return null;
         }
 
-        $item = $this->itensPendentes($user)->first();
+        $pulados = (array) $session->get(self::PULADOS, []);
+        $item = $this->itensPendentes($user)->first(fn ($item) => ! in_array((int) $item->product_id, $pulados, true));
 
         if (! $item) {
             self::encerrar($session);
@@ -88,17 +93,20 @@ class ModalAvaliacao
     }
 
     /**
-     * "Não avaliar agora": registra a ação e fecha o modal neste login; no
-     * próximo login ele volta. Só grava para produto que está mesmo pendente
-     * para o cliente (nada de gravar lembrete de produto qualquer).
+     * "Não avaliar agora": registra a ação e pula o produto neste login (o
+     * modal segue para o próximo); no próximo login ele volta. Só grava para
+     * produto que está mesmo pendente para o cliente (nada de gravar lembrete
+     * de produto qualquer); produto alheio encerra o modal do login.
      */
     public function naoAvaliarAgora(User $user, int $productId, Session $session): bool
     {
-        self::encerrar($session);
-
         if (! $this->itensPendentes($user)->contains('product_id', $productId)) {
+            self::encerrar($session);
+
             return false;
         }
+
+        $session->put(self::PULADOS, array_values(array_unique([...(array) $session->get(self::PULADOS, []), $productId])));
 
         $chave = ['user_id' => $user->id, 'product_id' => $productId];
         $this->garantirLembrete($chave);

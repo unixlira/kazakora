@@ -175,22 +175,35 @@ class ModalAvaliacaoTest extends TestCase
         $this->assertNull($this->modal());
     }
 
-    public function test_nao_avaliar_agora_fecha_e_no_proximo_login_volta_o_mais_recente(): void
+    public function test_nao_avaliar_agora_passa_para_o_proximo_e_no_proximo_login_volta_o_mais_recente(): void
     {
         $user = $this->cliente();
         $a = Product::factory()->create(['is_active' => true]);
         $b = Product::factory()->create(['is_active' => true]);
+        $c = Product::factory()->create(['is_active' => true]);
         $this->pedido($user, $a, diasAtras: 1);
         $this->pedido($user, $b, diasAtras: 3);
+        $this->pedido($user, $c, diasAtras: 5);
 
         $this->entrar($user);
         $this->assertSame($a->id, $this->modal()['produto_id']);
         $this->post('/avaliar/dispensar', ['produto_id' => $a->id]);
+        // Fechar um mostra o próximo, até acabar a lista.
+        $this->assertSame($b->id, $this->modal()['produto_id']);
+        $this->post("/produtos/{$b->id}/avaliacoes", ['rating' => 5])->assertSessionHasNoErrors();
+        $this->assertSame($c->id, $this->modal()['produto_id']);
+        $this->post('/avaliar/dispensar', ['produto_id' => $c->id]);
         $this->assertNull($this->modal());
 
+        $this->assertSame(1, (int) DB::table('avaliacao_lembretes')->where('user_id', $user->id)->where('product_id', $a->id)->value('vezes_nao_avaliar'));
+        $this->assertSame(1, (int) DB::table('avaliacao_lembretes')->where('user_id', $user->id)->where('product_id', $c->id)->value('vezes_nao_avaliar'));
+
+        // Login seguinte: os pulados voltam, o mais recente primeiro; o avaliado não.
         $this->post('/sair');
         $this->entrar($user);
         $this->assertSame($a->id, $this->modal()['produto_id']);
+        $this->post('/avaliar/dispensar', ['produto_id' => $a->id]);
+        $this->assertSame($c->id, $this->modal()['produto_id']);
     }
 
     public function test_avaliar_mostra_o_proximo_item_e_depois_nada(): void

@@ -25,7 +25,7 @@ class CorreiosRastroService
     }
 
     /**
-     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, recebedor: ?string, previsao: ?Carbon, ultimo: ?string}
+     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, recebedor: ?string, entrega: ?array, previsao: ?Carbon, ultimo: ?string}
      */
     public function consultar(string $codigo): array
     {
@@ -54,6 +54,10 @@ class CorreiosRastroService
             // O SRO do nosso contrato não traz o nome de quem recebeu (conferido
             // em 17/10/2026); fica pronto caso passe a vir.
             'recebedor' => filled($entrega['recebedor']['nome'] ?? null) ? trim($entrega['recebedor']['nome']) : null,
+            // O evento de entrega inteiro, como veio (recebedor, documento,
+            // unidade, coordenadas): vai para o histórico do pedido sem cortar
+            // nada (pedido do Lira, 29/10/2026).
+            'entrega' => $entrega,
             'previsao' => filled($objeto['dtPrevista'] ?? null) ? Carbon::parse($objeto['dtPrevista'], 'America/Sao_Paulo') : null,
             'ultimo' => $eventos[0]['descricao'] ?? null,
         ];

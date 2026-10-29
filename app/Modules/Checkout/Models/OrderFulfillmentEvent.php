@@ -32,6 +32,9 @@ class OrderFulfillmentEvent extends Model
     /** Entregue em mãos ao entregador do Flex — a hora que a caixa saiu daqui. */
     public const STEP_HANDED_TO_CARRIER = 'handed_to_carrier';
 
+    /** Entregue pelos Correios: o evento de entrega inteiro do SRO fica no context. */
+    public const STEP_DELIVERED = 'delivered';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

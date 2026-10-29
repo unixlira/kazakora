@@ -5,6 +5,7 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
@@ -103,6 +104,38 @@ class PedidoEntregueWhatsAppTest extends TestCase
         $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
 
         $this->assertSame('Jose Porteiro, em '.now()->format('d/m').' às 09:05', $this->enviados()[0][0]['template']['components'][1]['parameters'][2]['text']);
+    }
+
+    public function test_entrega_vai_inteira_para_o_historico_do_pedido(): void
+    {
+        $order = $this->comObjeto($this->pedido());
+        $recebedor = ['nome' => 'JOSE PORTEIRO', 'documento' => '12345678900', 'comentario' => 'Porteiro', 'celular' => '85999990000', 'email' => 'j@x.com'];
+        $this->rastro(['dtHrCriado' => now()->setTime(15, 4, 36)->format('Y-m-d\TH:i:s'), 'latitude' => '-3,8310433', 'longitude' => '-38,5763217', 'recebedor' => $recebedor]);
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        $eventos = OrderFulfillmentEvent::query()->where('order_id', $order->id)->where('step', OrderFulfillmentEvent::STEP_DELIVERED)->get();
+        $this->assertCount(1, $eventos);
+        $this->assertSame('Entregue pelos Correios em '.now()->format('d/m/Y').' 15:04. Quem recebeu: JOSE PORTEIRO.', $eventos[0]->message);
+        $this->assertSame($recebedor, $eventos[0]->context['evento']['recebedor']);
+        $this->assertSame('-3,8310433', $eventos[0]->context['evento']['latitude']);
+        $this->assertSame('AE000000000BR', $eventos[0]->context['codigo_objeto']);
+    }
+
+    public function test_pedido_ja_concluido_ganha_a_entrega_no_historico_sem_aviso(): void
+    {
+        $order = $this->comObjeto($this->pedido(['status' => Order::STATUS_COMPLETED]));
+        $this->rastro(['dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s')]);
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        $this->assertSame(1, OrderFulfillmentEvent::query()->where('order_id', $order->id)->where('step', OrderFulfillmentEvent::STEP_DELIVERED)->count());
+        $this->assertCount(0, $this->enviados());
+        $this->assertNull($order->fresh()->whatsapp_entregue_em);
+        // Com a etapa gravada, o pedido concluído sai da consulta.
+        $this->assertCount(1, Http::recorded(fn (HttpRequest $r) => str_contains($r->url(), 'api.correios.com.br')));
     }
 
     public function test_entrega_antiga_conclui_sem_avisar_e_marketplace_nao_recebe(): void

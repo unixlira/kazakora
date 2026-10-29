@@ -11,8 +11,8 @@ use Tests\TestCase;
 /**
  * Pedido do Lira 2026-10-16: pedido do site kazakora.com sai com a MESMA
  * etiqueta dos pedidos da Amazon, só trocando o logo da Amazon pelo da
- * KazaKora. FerraKora e Beauty Kora (origin "loja" com site_origem) e os
- * demais canais continuam sem logo.
+ * KazaKora. Desde 2026-10-28 o pedido da FerraKora leva o logo e o nome
+ * dela no remetente. Beauty Kora e os demais canais continuam sem logo.
  */
 class CorreiosLabelLogoTest extends TestCase
 {
@@ -68,9 +68,16 @@ class CorreiosLabelLogoTest extends TestCase
         $this->assertSame(1, $this->imagens($this->etiqueta(Order::ORIGIN_AMAZON)));
     }
 
+    public function test_ferrakora_order_gets_the_ferrakora_logo(): void
+    {
+        $this->assertFileExists(resource_path('etiquetas/ferrakora.png'));
+
+        $this->assertSame(1, $this->imagens($this->etiqueta(Order::ORIGIN_STORE, Order::SITE_FERRAKORA)));
+    }
+
     public function test_other_sites_and_channels_get_no_logo(): void
     {
-        $this->assertSame(0, $this->imagens($this->etiqueta(Order::ORIGIN_STORE, Order::SITE_FERRAKORA)));
+        $this->assertSame(0, $this->imagens($this->etiqueta(Order::ORIGIN_STORE, Order::SITE_BEAUTYKORA)));
         $this->assertSame(0, $this->imagens($this->etiqueta(Order::ORIGIN_MERCADO_LIVRE)));
     }
 }

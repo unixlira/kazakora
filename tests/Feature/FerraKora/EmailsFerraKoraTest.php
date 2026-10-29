@@ -6,6 +6,8 @@ use App\Modules\Checkout\Mail\BoletoAguardandoPagamento;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Mail\FerraKoraNovaSenha;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -43,6 +45,11 @@ class EmailsFerraKoraTest extends TestCase
             $this->assertStringContainsString('https://ferrakora.devlira.com.br/meus-pedidos', $html);
             $this->assertStringNotContainsString(route('pedidos.meus'), $html);
             $this->assertTrue($mail->hasFrom(config('mail.from.address'), 'FerraKora'));
+            // Rodapé com o WhatsApp e o nome da FerraKora (2026-10-28), "FerraKora | Grupo AlphaKora".
+            $this->assertStringContainsString(e('FerraKora | Grupo AlphaKora'), $html);
+            $this->assertStringContainsString('https://wa.me/5511927206026', $html);
+            $this->assertStringNotContainsString(config('loja.empresa.whatsapp_link'), $html);
+            $this->assertStringNotContainsString(config('loja.empresa.nome'), $html);
         }
 
         $this->assertStringEndsWith('- FerraKora', (new OrderConfirmation($order))->build()->subject);
@@ -58,6 +65,8 @@ class EmailsFerraKoraTest extends TestCase
         $this->assertStringContainsString(route('pedidos.meus'), $html);
         $this->assertStringNotContainsString('ferrakora', $html);
         $this->assertFalse($mail->hasFrom(config('mail.from.address'), 'FerraKora'));
+        $this->assertStringContainsString(config('loja.empresa.whatsapp_link'), $html);
+        $this->assertStringContainsString(e(config('loja.empresa.nome')), $html);
         $this->assertStringEndsWith('- KazaKora', (new OrderConfirmation($order))->build()->subject);
     }
 
@@ -74,5 +83,18 @@ class EmailsFerraKoraTest extends TestCase
         ] as $mail) {
             $this->assertStringContainsString('href="'.$link.'"', $mail->render());
         }
+    }
+
+    /** 2026-10-28: nova senha da conta FerraKora no layout da loja, com logo e rodapé da FerraKora. */
+    public function test_nova_senha_do_ferrakora_no_layout_com_a_marca(): void
+    {
+        $cliente = FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'phone' => '11999999999', 'password' => 'senha12345']);
+        $html = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
+
+        $this->assertStringContainsString('/images/marca/ferrakora-email.png', $html);
+        $this->assertStringContainsString('alt="FerraKora"', $html);
+        $this->assertStringContainsString('https://wa.me/5511927206026', $html);
+        $this->assertStringContainsString('https://ferrakora.devlira.com.br/nova-senha?token=x', $html);
+        $this->assertStringNotContainsString('alt="KazaKora"', $html);
     }
 }

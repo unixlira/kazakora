@@ -249,6 +249,9 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
 
+    // Pixel da Meta do FerraKora (2026-10-28): o site pergunta o ID ao abrir.
+    Route::get('pixel-meta', [FerraKoraCheckoutController::class, 'pixelMeta'])->middleware('throttle:120,1,fk-pixel-meta')->name('pixel-meta');
+
     // Conta do cliente (2026-10-14; separada da KazaKora desde 2026-10-15,
     // tabela ferrakora_clientes) e Meus pedidos só para quem entrou.
     Route::post('cadastro', [FerraKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,fk-conta-cadastro')->name('cadastro');

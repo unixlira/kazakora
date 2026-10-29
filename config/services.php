@@ -661,6 +661,22 @@ return [
         'enabled' => filter_var(env('META_CAPI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'access_token' => env('META_CAPI_ACCESS_TOKEN') ?: env('META_ADS_ACCESS_TOKEN'),
         'test_event_code' => env('META_CAPI_TEST_EVENT_CODE'),
+
+        // Pixel próprio de cada outro site (FerraKora, pedido do Lira
+        // 2026-10-28): ID que o site carrega (GET /api/ferrakora/pixel-meta)
+        // e Purchase do servidor com a chave gerada no Gerenciador de Eventos
+        // desse pixel. Sem ID = sem pixel; sem chave ou desligado = só o do
+        // navegador. Ligado à parte do da loja: o homolog pode testar o
+        // FerraKora com test_event_code sem mexer no da KazaKora.
+        'sites' => [
+            'ferrakora' => [
+                'pixel_id' => env('FERRAKORA_META_PIXEL_ID'),
+                'enabled' => filter_var(env('FERRAKORA_META_CAPI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+                'access_token' => env('FERRAKORA_META_CAPI_ACCESS_TOKEN'),
+                'test_event_code' => env('FERRAKORA_META_CAPI_TEST_EVENT_CODE'),
+                'site_url' => env('FERRAKORA_SITE_URL', 'https://ferrakora.com'),
+            ],
+        ],
     ],
 
     // Relatórios de pagamento da Amazon enviados pelo agente (2026-10-12).

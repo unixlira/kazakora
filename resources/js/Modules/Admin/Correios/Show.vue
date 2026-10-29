@@ -36,7 +36,9 @@ const cancelar = () => {
                 <div class="flex flex-wrap items-center gap-3">
                     <h1 class="text-2xl font-bold">Pré-postagem — {{ item.customerName }}</h1>
                     <StatusBadge :status="item.status" context="correios" />
+                    <span v-if="item.devolucao" class="ml-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"><i class="fas fa-rotate-left" aria-hidden="true"></i> Devolução</span>
                 </div>
+                <p v-if="item.devolucao" class="mt-1 text-sm text-slate-500">Devolução: a cliente é o remetente e a KazaKora o destinatário.</p>
             </div>
             <button v-if="item.status === 'gerada'" type="button"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
@@ -79,11 +81,13 @@ const cancelar = () => {
                 :weight-grams="item.weightGrams"
                 :content-items="item.contentItems"
                 :order-label="orderLabel"
+                :devolucao="item.devolucao"
             />
         </div>
 
         <p class="mx-auto mt-4 max-w-md text-center text-xs text-slate-400 print:hidden">
-            Etiqueta 10×15 em retrato, igual à que sai sozinha na impressora: QR/código/CEP, destinatário, remetente, declaração do produto e DANFE.
+            <template v-if="item.devolucao">Etiqueta 10×15 de devolução: QR/código/CEP da KazaKora, destinatário KazaKora, remetente a cliente e declaração do produto (sem DANFE).</template>
+            <template v-else>Etiqueta 10×15 em retrato, igual à que sai sozinha na impressora: QR/código/CEP, destinatário, remetente, declaração do produto e DANFE.</template>
         </p>
     </AdminLayout>
 </template>

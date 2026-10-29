@@ -29,6 +29,7 @@ class ConfirmPendingAmazonShipments extends Command
         }
 
         $pedidos = CorreiosPrePostagem::query()
+            ->deEnvio()
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
             ->whereNull('amazon_confirmado_em')
             ->whereNotNull('codigo_objeto')

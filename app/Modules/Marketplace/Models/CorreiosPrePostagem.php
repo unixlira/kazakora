@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Models;
 
 use App\Modules\Checkout\Models\Order;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -52,6 +53,7 @@ class CorreiosPrePostagem extends Model
         'error_message',
         'bling_informado_em',
         'amazon_confirmado_em',
+        'devolucao',
     ];
 
     protected function casts(): array
@@ -61,7 +63,18 @@ class CorreiosPrePostagem extends Model
             'raw_response' => 'array',
             'bling_informado_em' => 'datetime',
             'amazon_confirmado_em' => 'datetime',
+            'devolucao' => 'boolean',
         ];
+    }
+
+    /**
+     * Só as de ENVIO do pedido (loja → cliente). A de devolução (cliente →
+     * loja, pedido do Lira 2026-10-29) não é etiqueta, rastreio, frete pago
+     * nem "pedido enviado".
+     */
+    public function scopeDeEnvio(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('devolucao'), false);
     }
 
     public function order(): BelongsTo

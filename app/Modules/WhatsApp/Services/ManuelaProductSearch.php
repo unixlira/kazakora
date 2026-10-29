@@ -46,7 +46,7 @@ class ManuelaProductSearch
 
         $products = Product::query()
             ->with('parent:id,slug,is_active')
-            ->where('is_active', true)
+            ->naKazaKora()
             ->get(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount', 'stock'])
             ->map(fn (Product $product) => [
                 'origem' => self::ORIGIN_STORE,
@@ -75,7 +75,7 @@ class ManuelaProductSearch
     public function details(string $origin, string $id): ?array
     {
         if ($origin === self::ORIGIN_STORE) {
-            $product = Product::query()->with('parent:id,slug,description')->where('is_active', true)->find($id);
+            $product = Product::query()->with('parent:id,slug,description')->naKazaKora()->find($id);
 
             if (! $product) {
                 return null;

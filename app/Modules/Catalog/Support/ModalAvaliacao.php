@@ -14,15 +14,14 @@ use Illuminate\Support\Facades\DB;
  *
  * Regras (revistas pelo Lira em 2026-10-29): pedido do kazakora.com (origin
  * loja, sem site_origem) ENTREGUE, produto ainda sem avaliação do cliente. Um
- * item por vez, o mais recente primeiro, uma vez por login. "Não avaliar
- * agora" (ou fechar no X, Esc, clique fora) fica registrado e esconde aquele
- * produto por 15 dias; depois disso volta no próximo login, sempre, até o
- * cliente avaliar (sem janela de dias e sem teto de aparições). A avaliação em
- * si é gravada pelo mesmo ReviewController::store da tela "Avalie suas compras".
+ * item por vez, o mais recente primeiro. "Não avaliar agora" (ou fechar no
+ * X, Esc, clique fora) fica registrado e fecha o modal só naquele login: no
+ * login seguinte ele abre de novo, toda vez, até o cliente avaliar (sem
+ * espera de dias, sem janela e sem teto de aparições). A avaliação em si é
+ * gravada pelo mesmo ReviewController::store da tela "Avalie suas compras".
  */
 class ModalAvaliacao
 {
-    public const DIAS_ADIAMENTO = 15;
 
     public const MAX_FOTOS = 4;
 
@@ -89,8 +88,8 @@ class ModalAvaliacao
     }
 
     /**
-     * "Não avaliar agora": registra a ação, esconde o produto por 15 dias e
-     * fecha o modal neste login. Só vale para produto que está mesmo pendente
+     * "Não avaliar agora": registra a ação e fecha o modal neste login; no
+     * próximo login ele volta. Só grava para produto que está mesmo pendente
      * para o cliente (nada de gravar lembrete de produto qualquer).
      */
     public function naoAvaliarAgora(User $user, int $productId, Session $session): bool
@@ -107,40 +106,20 @@ class ModalAvaliacao
         DB::table('avaliacao_lembretes')->where($chave)->update([
             'vezes_nao_avaliar' => DB::raw('vezes_nao_avaliar + 1'),
             'nao_avaliar_em' => now(),
-            'adiado_ate' => now()->addDays(self::DIAS_ADIAMENTO),
             'updated_at' => now(),
         ]);
 
         return true;
     }
 
-    /** Lembretes cujo "Não avaliar agora" já passou dos 15 dias. */
-    public function adiamentosVencidos()
-    {
-        return DB::table('avaliacao_lembretes')->whereNotNull('adiado_ate')->where('adiado_ate', '<=', now());
-    }
-
-    /** Rotina avaliacoes:reabrir-lembretes: devolve ao modal os adiamentos vencidos. */
-    public function reabrirVencidos(): int
-    {
-        return $this->adiamentosVencidos()->update([
-            'adiado_ate' => null,
-            'reaberto_em' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
-    /** Itens entregues, sem avaliação e fora de um adiamento de 15 dias, mais recente primeiro. */
+    /** Itens entregues e sem avaliação do cliente, mais recente primeiro. */
     private function itensPendentes(User $user)
     {
         $avaliados = Review::query()->where('user_id', $user->id)->pluck('product_id');
-        $adiados = DB::table('avaliacao_lembretes')->where('user_id', $user->id)
-            ->where('adiado_ate', '>', now())->pluck('product_id');
 
         return OrderItem::query()
             ->whereNotNull('product_id')
             ->whereNotIn('product_id', $avaliados)
-            ->whereNotIn('product_id', $adiados)
             ->whereHas('order', function ($query) use ($user) {
                 $query->where('user_id', $user->id)
                     ->where('status', Order::STATUS_COMPLETED);

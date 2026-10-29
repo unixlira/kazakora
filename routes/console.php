@@ -20,6 +20,9 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue
 // e manda o WhatsApp "saiu para entrega" e "foi entregue" (AcompanharRastreioLoja).
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
+// Modal "Avalie sua compra" (pedido do Lira 2026-10-29): 15 dias depois do
+// "Não avaliar agora" o produto volta ao modal no próximo login, até avaliar.
+Schedule::command('avaliacoes:reabrir-lembretes')->dailyAt('03:45')->withoutOverlapping(30);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // Carrinho abandonado (lead_checkout): 3 meses desde a última interação (decisão do Lira 2026-10-24).

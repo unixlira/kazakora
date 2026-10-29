@@ -186,7 +186,7 @@ Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store']
     ->middleware(['auth', 'throttle:20,1'])
     ->name('avaliacoes.armazenar');
 
-// Modal "Avalie sua compra" depois do login: fechar sem avaliar (2026-10-23).
+// Modal "Avalie sua compra" depois do login: "Não avaliar agora" adia 15 dias (2026-10-29).
 Route::post('/avaliar/dispensar', [ReviewController::class, 'dispensar'])
     ->middleware('auth')
     ->name('avaliacoes.dispensar');

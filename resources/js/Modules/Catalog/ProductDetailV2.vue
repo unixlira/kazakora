@@ -1442,7 +1442,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep { margin: 0 0 14px; background: #f8f9fb; border-radius: 14px; padding: 14px 12px; }
 .pd2 .prazo-cep label { display: block; font-size: 16px; font-weight: 500; color: #111; margin-bottom: 10px; text-align: center; }
 .pd2 .prazo-cep .linha { display: flex; gap: 10px; }
-.pd2 .prazo-cep input { flex: 1; min-width: 0; height: 46px; border: 1px solid #cdd5e1; border-radius: 16px; padding: 0 14px; font: inherit; font-size: 16px; background: #e8f0fe; color: #111; }
+.pd2 .prazo-cep input { flex: 1; min-width: 0; height: 46px; border: 1px solid #cdd5e1; border-radius: 16px; padding: 0 14px; font: inherit; font-size: 16px; background: #e8f0fe; color: #000; }
+/* Fonte preta no campo do CEP, inclusive o "00000-000", que ficava transparente (pedido do Lira 2026-10-28). */
+html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: #000; opacity: 1; }
 .pd2 .prazo-cep button { height: 46px; padding: 0 26px; border: 0; border-radius: 16px; background: #13bce6; color: #fff; font: 600 19px Poppins, sans-serif; cursor: pointer; }
 .pd2 .prazo-cep button:disabled { opacity: .6; }
 .pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }

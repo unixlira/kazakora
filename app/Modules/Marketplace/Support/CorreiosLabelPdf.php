@@ -34,10 +34,14 @@ class CorreiosLabelPdf
      * KazaKora (pedido do Lira 2026-10-16: pedido do site sai com a MESMA
      * etiqueta da Amazon, só trocando o logo) 505x84 px → 28 x 4,7 mm:
      * o logo é mais comprido, então ganha largura pra ter altura parecida.
+     * FerraKora (pedido do Lira 2026-10-28: pedido da FerraKora saía com o
+     * nome KazaKora e sem o logo dela) 420x135 px → 28 x 9 mm: o logo
+     * oficial é 3D, então vai em cinza sobre preto, como no topo do site.
      */
     private const LOGOS = [
         'amazon' => ['arquivo' => 'etiquetas/amazon.png', 'largura' => 18.0],
         'kazakora' => ['arquivo' => 'etiquetas/kazakora.png', 'largura' => 28.0],
+        'ferrakora' => ['arquivo' => 'etiquetas/ferrakora.png', 'largura' => 28.0],
     ];
 
     public function render(CorreiosPrePostagem $pp): string
@@ -109,7 +113,7 @@ class CorreiosLabelPdf
         $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Remetente', 'L');
         $pdf->SetFont('Helvetica', 'B', 9);
         $pdf->SetXY(self::MARGEM, $y + 5);
-        $pdf->Cell($util, 4, $this->t('KazaKora'.($empresa?->cnpj ? ' · CNPJ '.$empresa->cnpj : '')), 0, 1);
+        $pdf->Cell($util, 4, $this->t($this->lojaRemetente($pp).($empresa?->cnpj ? ' · CNPJ '.$empresa->cnpj : '')), 0, 1);
         $pdf->SetFont('Helvetica', '', 7.5);
         foreach ($this->enderecoEmpresa($empresa) as $linha) {
             $pdf->SetX(self::MARGEM);
@@ -206,9 +210,13 @@ class CorreiosLabelPdf
         }
     }
 
-    /** Rodapé: "Amazon 701-..." / "KazaKora" (site) / "Mercado livre ...". */
+    /** Rodapé: "Amazon 701-..." / "KazaKora" ou "FerraKora" (site) / "Mercado livre ...". */
     private function nomeDoCanal(CorreiosPrePostagem $pp): string
     {
+        if ($this->ehFerraKora($pp)) {
+            return 'FerraKora';
+        }
+
         if ($this->logoDoCanal($pp) === self::LOGOS['kazakora']) {
             return 'KazaKora';
         }
@@ -216,11 +224,22 @@ class CorreiosLabelPdf
         return $pp->origin ? ucfirst(str_replace('_', ' ', $pp->origin)) : '';
     }
 
+    /** Nome da loja no remetente: pedido da FerraKora sai como FerraKora (mesmo CNPJ). */
+    private function lojaRemetente(CorreiosPrePostagem $pp): string
+    {
+        return $this->ehFerraKora($pp) ? 'FerraKora' : 'KazaKora';
+    }
+
+    private function ehFerraKora(CorreiosPrePostagem $pp): bool
+    {
+        return ($pp->origin ?: $pp->order?->origin) === Order::ORIGIN_STORE
+            && $pp->order?->site_origem === Order::SITE_FERRAKORA;
+    }
+
     /**
      * Amazon → logo da Amazon. Site kazakora.com (origin "loja" SEM
-     * site_origem; FerraKora e Beauty Kora também chegam como "loja", mas
-     * com site_origem preenchido, e não levam o logo da KazaKora) → logo
-     * da KazaKora. Demais canais: sem logo, como antes.
+     * site_origem) → logo da KazaKora; FerraKora (site_origem "ferrakora")
+     * → logo da FerraKora. Beauty Kora e demais canais: sem logo, como antes.
      *
      * @return array{arquivo: string, largura: float}|null
      */
@@ -228,7 +247,11 @@ class CorreiosLabelPdf
     {
         $chave = match ($pp->origin ?: $pp->order?->origin) {
             Order::ORIGIN_AMAZON => 'amazon',
-            Order::ORIGIN_STORE => blank($pp->order?->site_origem) ? 'kazakora' : null,
+            Order::ORIGIN_STORE => match (true) {
+                blank($pp->order?->site_origem) => 'kazakora',
+                $this->ehFerraKora($pp) => 'ferrakora',
+                default => null,
+            },
             default => null,
         };
 

@@ -45,7 +45,8 @@ class EmailsFerraKoraTest extends TestCase
             $this->assertStringContainsString('https://ferrakora.devlira.com.br/meus-pedidos', $html);
             $this->assertStringNotContainsString(route('pedidos.meus'), $html);
             $this->assertTrue($mail->hasFrom(config('mail.from.address'), 'FerraKora'));
-            // Rodapé com o WhatsApp e o nome da FerraKora (2026-10-28).
+            // Rodapé com o WhatsApp e o nome da FerraKora (2026-10-28), "FerraKora | Grupo AlphaKora".
+            $this->assertStringContainsString(e('FerraKora | Grupo AlphaKora'), $html);
             $this->assertStringContainsString('https://wa.me/5511927206026', $html);
             $this->assertStringNotContainsString(config('loja.empresa.whatsapp_link'), $html);
             $this->assertStringNotContainsString(config('loja.empresa.nome'), $html);

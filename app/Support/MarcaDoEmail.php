@@ -44,7 +44,7 @@ class MarcaDoEmail
             'site' => $site,
             'meus_pedidos' => $site.'/meus-pedidos',
             'pedido' => $site.'/meus-pedidos',
-            'rodape' => 'FerraKora',
+            'rodape' => 'FerraKora | Grupo AlphaKora',
             'whatsapp_link' => 'https://wa.me/5511927206026',
         ];
     }

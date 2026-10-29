@@ -284,7 +284,7 @@ class WhatsAppMultiNumeroTest extends TestCase
         [$primeiro, $segundo] = $this->graphPosts();
         $this->assertStringEndsWith('/456/messages', $primeiro[0]->url());
         $this->assertSame('confirmacao_pedido_ferrakora', $primeiro[0]['template']['name']);
-        $this->assertStringEndsWith('/images/whatsapp/confirmacao-pedido-ferrakora.jpg', $primeiro[0]['template']['components'][0]['parameters'][0]['image']['link']);
+        $this->assertStringEndsWith('/images/whatsapp/confirmacao-pedido-ferrakora-ra.jpg', $primeiro[0]['template']['components'][0]['parameters'][0]['image']['link']);
         $this->assertStringEndsWith('/images/whatsapp/confirmacao-pedido.jpg', $segundo[0]['template']['components'][0]['parameters'][0]['image']['link']);
     }
 }

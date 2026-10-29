@@ -27,6 +27,8 @@ class AlertasAdmin
 
     public const FRETE_TABELA = 'frete_tabela';
 
+    public const CONTEUDO_FK = 'conteudo_fk';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -36,6 +38,10 @@ class AlertasAdmin
         self::FRETE_TABELA => [
             'nome' => 'Falha na atualização da tabela de frete (Correios)',
             'descricao' => 'A atualização mensal do frete por localidade não conseguiu falar com os Correios (credencial, API fora do ar ou cotações recusadas). Some sozinho quando a tabela termina de atualizar.',
+        ],
+        self::CONTEUDO_FK => [
+            'nome' => 'Falha no conteúdo automático da FerraKora',
+            'descricao' => 'A rotina que gera e publica os 20 conteúdos diários da FerraKora no Instagram, TikTok e Facebook falhou. Some quando alguém resolve.',
         ],
     ];
 

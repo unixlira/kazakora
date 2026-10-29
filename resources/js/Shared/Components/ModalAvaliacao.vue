@@ -21,7 +21,6 @@ const aberto = ref(false);
 const nota = ref(0);
 const passando = ref(0);
 const comentario = ref('');
-const ocultarNome = ref(false);
 const fotos = ref([]); // { id, file, url }
 const erro = ref('');
 const enviando = ref(false);
@@ -43,7 +42,6 @@ const reiniciar = () => {
     nota.value = 0;
     passando.value = 0;
     comentario.value = '';
-    ocultarNome.value = false;
     erro.value = '';
     enviando.value = false;
     limparFotos();
@@ -150,7 +148,7 @@ const enviar = () => {
     }
     erro.value = '';
     enviando.value = true;
-    const dados = { rating: nota.value, comment: comentario.value.trim() || null, ocultar_nome: ocultarNome.value };
+    const dados = { rating: nota.value, comment: comentario.value.trim() || null };
     if (fotos.value.length) dados.fotos = fotos.value.map((f) => f.file);
 
     router.post(`/produtos/${item.value.produto_id}/avaliacoes`, dados, {
@@ -245,11 +243,6 @@ const dataEntrega = computed(() => item.value?.entregue_em
                                 </li>
                             </ul>
                         </div>
-
-                        <label class="mt-4 flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-                            <input v-model="ocultarNome" type="checkbox" class="h-5 w-5 rounded border-slate-400 accent-[#F27A2A]">
-                            <span>Ocultar meu nome na avaliação</span>
-                        </label>
 
                         <p v-if="erro" class="mt-2 text-sm font-medium text-red-700" role="alert">{{ erro }}</p>
                     </div>

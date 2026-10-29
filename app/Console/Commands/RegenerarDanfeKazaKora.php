@@ -56,7 +56,7 @@ class RegenerarDanfeKazaKora extends Command
                 }
 
                 try {
-                    $pdf = $danfe->generate($disco->get($invoice->xml_path));
+                    $pdf = $danfe->generate($disco->get($invoice->xml_path), $invoice->order);
                 } catch (Throwable $exception) {
                     $falhas[] = "nota {$invoice->numero} (pedido {$invoice->order_id}): {$exception->getMessage()}";
 

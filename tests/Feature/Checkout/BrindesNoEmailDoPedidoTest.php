@@ -89,7 +89,7 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $mail->assertSeeInHtml('Sono &amp; Saúde', false);
     }
 
-    public function test_resumo_lista_nota_fiscal_e_livros_como_itens_de_valor_zero(): void
+    public function test_resumo_lista_livros_como_itens_de_valor_zero_e_nota_fora_da_lista(): void
     {
         $order = $this->pedido();
         Storage::disk('local')->put('danfe/1.pdf', '%PDF-1.4 fake');
@@ -104,9 +104,11 @@ class BrindesNoEmailDoPedidoTest extends TestCase
         $html = (new OrderConfirmation($order->fresh()))->render();
 
         $this->assertStringContainsString($this->produto->name, $html);
-        $this->assertStringContainsString('Nota Fiscal (PDF em anexo)', $html);
+        // 2026-10-28: a nota não é produto; só o quadro do anexo fala dela.
+        $this->assertStringNotContainsString('Nota Fiscal (PDF em anexo)', $html);
+        $this->assertStringContainsString('A Nota Fiscal do seu pedido está em anexo', $html);
         $this->assertStringContainsString('Sono &amp; Saúde (livro digital em PDF)', $html);
-        $this->assertSame(4, substr_count($html, 'R$ 0,00'));
+        $this->assertSame(3, substr_count($html, 'R$ 0,00'));
     }
 
     public function test_sem_miniatura_dos_livros_nem_frase_de_gratis(): void

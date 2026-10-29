@@ -62,7 +62,7 @@ class RegenerarDanfeKazaKoraTest extends TestCase
         Storage::fake('local');
 
         $this->mock(NFeDanfeService::class)
-            ->shouldReceive('generate')->with('<nfeProc>'.str_repeat('3', 44).'</nfeProc>')->andReturn('%PDF-kazakora');
+            ->shouldReceive('generate')->with('<nfeProc>'.str_repeat('3', 44).'</nfeProc>', \Mockery::any())->andReturn('%PDF-kazakora');
 
         $serie3 = $this->nota(3, str_repeat('3', 44));
         $serie2 = $this->nota(2, str_repeat('2', 44));

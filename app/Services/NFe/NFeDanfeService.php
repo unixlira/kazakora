@@ -2,6 +2,7 @@
 
 namespace App\Services\NFe;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Company;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,11 +17,20 @@ class NFeDanfeService
     /** Logo colorido (laranja e preto) usado quando a empresa não tem logo cadastrado. */
     private const LOGO_PADRAO = 'images/marca/logo-nav.png';
 
-    public function generate(string $xml): string
+    /**
+     * Pedido do site FerraKora sai com o logo dela (2026-10-28, pedido do
+     * Lira: a nota da FerraKora chegava com a KazaKora). Logo claro sobre
+     * fundo preto, como no topo dos e-mails dela. O emitente é o mesmo CNPJ.
+     */
+    private const LOGO_FERRAKORA = 'nfe/ferrakora.png';
+
+    public function generate(string $xml, ?Order $order = null): string
     {
         $danfe = new KazaKoraDanfe($xml);
 
-        $logo = $this->logo();
+        $logo = $order?->site_origem === Order::SITE_FERRAKORA
+            ? $this->logoFerraKora()
+            : $this->logo();
 
         if ($logo !== null) {
             $danfe->setMarca($logo);
@@ -40,5 +50,12 @@ class NFeDanfeService
         $padrao = public_path(self::LOGO_PADRAO);
 
         return is_file($padrao) ? file_get_contents($padrao) : null;
+    }
+
+    private function logoFerraKora(): ?string
+    {
+        $arquivo = resource_path(self::LOGO_FERRAKORA);
+
+        return is_file($arquivo) ? file_get_contents($arquivo) : $this->logo();
     }
 }

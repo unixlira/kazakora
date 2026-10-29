@@ -196,7 +196,7 @@ class RecoverMissingInvoiceXml extends Command
 
             try {
                 $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
-                Storage::disk('local')->put($danfePath, $danfeService->generate($nfeProc));
+                Storage::disk('local')->put($danfePath, $danfeService->generate($nfeProc, $invoice->order));
                 $atualizacao['danfe_path'] = $danfePath;
             } catch (Throwable $exception) {
                 // DANFE é subproduto: a nota e o XML já estão salvos, e é o

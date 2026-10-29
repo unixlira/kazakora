@@ -24,7 +24,7 @@ class MenuDaLoja
     public static function departamentos(): array
     {
         return Cache::remember('loja:departamentos', now()->addMinutes(10), function () {
-            $ativos = fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')->comEstoque();
+            $ativos = fn ($query) => $query->naKazaKora()->whereNull('parent_product_id')->comEstoque();
 
             return Category::query()
                 ->whereHas('products', $ativos)
@@ -52,7 +52,7 @@ class MenuDaLoja
     public static function maiorDesconto(): int
     {
         return Cache::remember('loja:maior-desconto', now()->addMinutes(10), function () {
-            $ativos = Product::query()->where('is_active', true)->whereNull('parent_product_id')->comEstoque()->where('price', '>', 0);
+            $ativos = Product::query()->naKazaKora()->whereNull('parent_product_id')->comEstoque()->where('price', '>', 0);
 
             $maior = (float) (clone $ativos)->max('discount_percentage');
 

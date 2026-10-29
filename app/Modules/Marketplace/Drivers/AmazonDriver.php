@@ -716,7 +716,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
             return null;
         }
 
-        $pontuados = Product::query()->where('is_active', true)->get(['id', 'name', 'sku', 'color'])
+        $pontuados = Product::query()->naKazaKora()->get(['id', 'name', 'sku', 'color'])
             ->map(function (Product $candidato) use ($nome) {
                 similar_text(mb_strtolower($nome), mb_strtolower($candidato->name), $percentual);
 

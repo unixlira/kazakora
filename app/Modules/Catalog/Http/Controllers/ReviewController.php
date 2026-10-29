@@ -79,7 +79,6 @@ class ReviewController extends Controller
         $validated = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:1000'],
-            'ocultar_nome' => ['sometimes', 'boolean'],
             // Fotos (modal pós-login, 2026-10-23): galeria ou câmera do celular.
             'fotos' => ['sometimes', 'array', 'max:'.ModalAvaliacao::MAX_FOTOS],
             'fotos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'mimetypes:image/jpeg,image/png,image/webp', 'max:'.ModalAvaliacao::MAX_FOTO_KB],
@@ -94,6 +93,9 @@ class ReviewController extends Controller
 
         $fotos = $request->file('fotos', []);
         unset($validated['fotos']);
+        // Sem opção de ocultar o nome (pedido do Lira 2026-10-29): enviar ou
+        // editar a avaliação publica sempre com o nome de quem avaliou.
+        $validated['ocultar_nome'] = false;
         // UF do carrossel do checkout: estado de entrega do pedido avaliado.
         $validated['uf'] = $pedido->shipping_state ?: null;
 

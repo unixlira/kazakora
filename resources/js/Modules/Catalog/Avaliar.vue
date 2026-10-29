@@ -1,6 +1,6 @@
 <script setup>
 // "Avalie suas compras" (pedido 2026-10-20): produtos já entregues ao cliente,
-// cada um com estrelas, comentário e a opção de ocultar o nome, e o Clube de
+// cada um com estrelas e comentário (sempre com o nome do cliente), e o Clube de
 // Avaliações. Pontos, níveis e cupons vêm do servidor (ClubeDeAvaliacoes): o
 // cupom pessoal é gerado lá quando o cliente alcança um nível.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
@@ -47,7 +47,6 @@ const rascunho = (produto) => {
             nota: produto.avaliacao?.nota ?? 0,
             passando: 0,
             comentario: produto.avaliacao?.comentario ?? '',
-            ocultarNome: produto.avaliacao?.ocultar_nome ?? false,
             editando: !produto.avaliacao,
             enviando: false,
             erro: null,
@@ -67,7 +66,7 @@ const enviar = (produto) => {
     }
     r.erro = null;
     r.enviando = true;
-    router.post(`/produtos/${produto.id}/avaliacoes`, { rating: r.nota, comment: r.comentario || null, ocultar_nome: r.ocultarNome }, {
+    router.post(`/produtos/${produto.id}/avaliacoes`, { rating: r.nota, comment: r.comentario || null }, {
         preserveScroll: true,
         onSuccess: () => {
             r.editando = false;
@@ -221,13 +220,6 @@ const formatDate = (value) => value
                                     <textarea :id="`comentario-${produto.id}`" v-model="rascunho(produto).comentario" rows="3" maxlength="1000"
                                         class="mt-1 w-full rounded-xl border border-store-border bg-store-bg px-3 py-2 text-sm focus:border-[#F27A2A] focus:outline-none focus:ring-2 focus:ring-[#F27A2A]/30"
                                         placeholder="O que achou? Qualidade, tamanho, se chegou como na foto…"></textarea>
-                                    <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
-                                        <input v-model="rascunho(produto).ocultarNome" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-store-border accent-[#F27A2A]">
-                                        <span>
-                                            Ocultar meu nome na avaliação
-                                            <span class="block text-xs text-store-fg-muted">Aparece como: <strong>{{ rascunho(produto).ocultarNome || !nomeCliente ? 'Cliente KazaKora' : nomeCliente }}</strong></span>
-                                        </span>
-                                    </label>
                                     <p v-if="rascunho(produto).erro" class="mt-1 text-sm text-red-600" role="alert">{{ rascunho(produto).erro }}</p>
                                     <div class="mt-3 flex flex-wrap items-center gap-3">
                                         <button type="submit" :disabled="rascunho(produto).enviando"

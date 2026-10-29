@@ -4,11 +4,13 @@ namespace App\Modules\FerraKora\Mail;
 
 use App\Http\Controllers\Api\FerraKoraContaController;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
+use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
 
 /**
  * Link de nova senha do site FerraKora (2026-10-15). Com o nome e a cor do
  * FerraKora, sem nada da KazaKora; enviado na hora (o cliente está esperando).
+ * Desde 2026-10-28 no layout dos e-mails da loja, com logo e rodapé da FerraKora.
  */
 class FerraKoraNovaSenha extends Mailable
 {
@@ -24,6 +26,7 @@ class FerraKoraNovaSenha extends Mailable
             ->from((string) config('mail.from.address'), 'FerraKora')
             ->subject('Criar nova senha - FerraKora')
             ->view('emails.ferrakora.nova-senha', [
+                'marcaEmail' => MarcaDoEmail::ferrakora(),
                 'cliente' => $this->cliente,
                 'link' => $this->link,
                 'minutos' => FerraKoraContaController::MINUTOS_DO_LINK,

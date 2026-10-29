@@ -66,14 +66,14 @@
                         <td style="background-color: #0b0b0b; padding: 20px 24px; text-align: center; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.7; color: #ffffff;">
                             {{-- Ícone + frase curta apontando pra ele: o cliente entende que é
                                  pra clicar. No celular o ícone diminui e a frase encurta. --}}
-                            <a href="{{ $empresa['whatsapp_link'] }}" target="_blank" style="text-decoration: none; color: #ffffff; font-size: 14px; font-weight: 700; white-space: nowrap;">
+                            <a href="{{ $marcaEmail['whatsapp_link'] ?? $empresa['whatsapp_link'] }}" target="_blank" style="text-decoration: none; color: #ffffff; font-size: 14px; font-weight: 700; white-space: nowrap;">
                                 <img class="whats-icone" src="{{ url('/images/marca/whatsapp-email.png') }}" alt="WhatsApp" width="40" height="40" style="display: inline-block; width: 40px; height: 40px; vertical-align: middle; border: 0;"><span class="so-computador" style="vertical-align: middle;">&nbsp;&#128072; Dúvidas? Clique e fale conosco</span><span class="so-celular" style="display: none; mso-hide: all; vertical-align: middle; font-size: 13px;">&nbsp;&#128072; Dúvidas? Toque aqui</span>
                             </a>
                             {{-- Gmail/iPhone viram número em link sozinho (pedido 2026-10-10:
                                  texto branco, sem link). O caractere invisível (&#8203;)
                                  depois de cada separador quebra essa detecção. --}}
                             <div class="sem-link" style="margin-top: 12px; color: #ffffff; text-decoration: none;">
-                                {{ $empresa['nome'] }}<span class="selo-ponto"> &middot; </span><span class="quebra-celular">CNPJ {!! $semLink($empresa['cnpj']) !!}</span>
+                                {{ $marcaEmail['rodape'] ?? $empresa['nome'] }}<span class="selo-ponto"> &middot; </span><span class="quebra-celular">CNPJ {!! $semLink($empresa['cnpj']) !!}</span>
                             </div>
                             @hasSection('footer-extra')
                                 <div style="margin-top: 8px; font-size: 11px; color: #9ca3af;">@yield('footer-extra')</div>

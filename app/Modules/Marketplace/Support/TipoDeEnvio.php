@@ -119,6 +119,7 @@ final class TipoDeEnvio
         }
 
         return CorreiosPrePostagem::query()
+            ->deEnvio()
             ->where('order_id', $order->id)
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
             ->latest('id')

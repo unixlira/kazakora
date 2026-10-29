@@ -79,7 +79,7 @@ const destroy = async (item) => {
                 </thead>
                 <tbody class="divide-y divide-[var(--surface-border)]">
                     <tr v-for="item in props.items.data" :key="item.id" class="hover:bg-[var(--surface-muted)]/50">
-                        <td class="px-4 py-3 font-medium">{{ item.customerName }}</td>
+                        <td class="px-4 py-3 font-medium">{{ item.customerName }}<span v-if="item.devolucao" class="ml-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"><i class="fas fa-rotate-left" aria-hidden="true"></i> Devolução</span></td>
                         <td class="px-4 py-3">
                             {{ item.originLabel }}
                             <span v-if="item.externalOrderId" class="block text-xs text-slate-400">{{ item.externalOrderId }}</span>

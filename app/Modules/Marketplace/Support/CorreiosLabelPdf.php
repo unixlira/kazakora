@@ -54,6 +54,11 @@ class CorreiosLabelPdf
         $pdf->AddPage();
         $pdf->SetLineWidth(0.6);
         $util = self::LARGURA - 2 * self::MARGEM;
+        $empresa = Company::query()->first();
+        // Devolução (Lira 2026-10-29): a cliente remete e a KazaKora recebe;
+        // sem DANFE da venda, só a declaração do que volta.
+        $devolucao = (bool) $pp->devolucao;
+        $cepDestino = $devolucao ? $empresa?->zip : $pp->zip;
 
         // 1. QR + código de postagem + CEP.
         $qrLado = 40.0;
@@ -71,19 +76,23 @@ class CorreiosLabelPdf
         // CEP em código de barras (pedido dos Correios, 2026-10-05). O
         // número fica escrito no título, pra digitar se a leitura falhar.
         $pdf->Line($x, 21, self::LARGURA - self::MARGEM, 21);
-        $this->kicker($pdf, $x, 22.5, $w, 'CEP destinatário '.$this->cep($pp->zip));
-        $digitosCep = preg_replace('/\D/', '', (string) $pp->zip);
+        $this->kicker($pdf, $x, 22.5, $w, 'CEP destinatário '.$this->cep($cepDestino));
+        $digitosCep = preg_replace('/\D/', '', (string) $cepDestino);
 
         if (strlen($digitosCep) === 8) {
             $this->cepEmBarras($pdf, $digitosCep, $x, 27, $w, 16);
         } else {
             $pdf->SetFont('Helvetica', 'B', 18);
             $pdf->SetXY($x, 30);
-            $pdf->Cell($w, 8, $this->t($this->cep($pp->zip)), 0, 0, 'C');
+            $pdf->Cell($w, 8, $this->t($this->cep($cepDestino)), 0, 0, 'C');
         }
 
         $y = self::MARGEM + $qrLado + 2;
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
+
+        if ($devolucao) {
+            return $this->restoDaDevolucao($pdf, $pp, $empresa, $y);
+        }
 
         // 2. Destinatário. Pedido da Amazon leva o logo da Amazon e pedido
         // do kazakora.com o da KazaKora, no mesmo canto; o nome encolhe pra
@@ -109,7 +118,6 @@ class CorreiosLabelPdf
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
 
         // 3. Remetente.
-        $empresa = Company::query()->first();
         $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Remetente', 'L');
         $pdf->SetFont('Helvetica', 'B', 9);
         $pdf->SetXY(self::MARGEM, $y + 5);
@@ -148,6 +156,53 @@ class CorreiosLabelPdf
         $pdf->SetFont('Helvetica', '', 6.5);
         $pdf->SetXY(self::MARGEM, self::ALTURA - self::MARGEM - 2.5);
         $pdf->Cell($util, 3, $this->t(trim(trim($this->nomeDoCanal($pp).' '.($pp->external_order_id ?? '')).' · Pedido #'.$pp->order_id)), 0, 0, 'C');
+
+        return $pdf->Output('S');
+    }
+
+    /**
+     * Destinatário (KazaKora), remetente (cliente), declaração do que volta
+     * e rodapé "Devolução". Sem logo do canal e sem DANFE: a nota da venda
+     * não acompanha o objeto que volta.
+     */
+    private function restoDaDevolucao(FPDF $pdf, CorreiosPrePostagem $pp, ?Company $empresa, float $y): string
+    {
+        $util = self::LARGURA - 2 * self::MARGEM;
+
+        $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Destinatário', 'L');
+        $pdf->SetFont('Helvetica', 'B', 10);
+        $pdf->SetXY(self::MARGEM, $y + 5);
+        $pdf->Cell($util, 4.5, $this->t($this->lojaRemetente($pp).($empresa?->cnpj ? ' · CNPJ '.$empresa->cnpj : '')), 0, 1);
+        $pdf->SetFont('Helvetica', '', 8);
+        foreach ($this->enderecoEmpresa($empresa) as $linha) {
+            $pdf->SetX(self::MARGEM);
+            $pdf->Cell($util, 3.6, $this->t($linha), 0, 1);
+        }
+
+        $y = $pdf->GetY() + 1.5;
+        $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
+
+        $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Remetente', 'L');
+        $pdf->SetFont('Helvetica', 'B', 9);
+        $pdf->SetXY(self::MARGEM, $y + 5);
+        $pdf->Cell($util, 4, $this->caber($pdf, (string) $pp->customer_name, $util), 0, 1);
+        $pdf->SetFont('Helvetica', '', 7.5);
+        foreach ([...$this->enderecoDestinatario($pp), 'CEP '.$this->cep($pp->zip)] as $linha) {
+            $pdf->SetX(self::MARGEM);
+            $pdf->Cell($util, 3.4, $this->t($linha), 0, 1);
+        }
+
+        $y = $pdf->GetY() + 1.5;
+        $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
+
+        // O que a cliente declarou no formulário (pode ser só parte do pedido).
+        $declarado = $pp->replicate()->setRelation('order', null);
+        $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Declaração do produto', 'L');
+        $this->declaracaoNaEtiqueta($pdf, $declarado, $y + 5, self::ALTURA - self::MARGEM - 5);
+
+        $pdf->SetFont('Helvetica', 'B', 7);
+        $pdf->SetXY(self::MARGEM, self::ALTURA - self::MARGEM - 2.5);
+        $pdf->Cell($util, 3, $this->t(trim('DEVOLUÇÃO · '.trim($this->nomeDoCanal($pp).' '.($pp->external_order_id ?? '')).' · Pedido #'.$pp->order_id)), 0, 0, 'C');
 
         return $pdf->Output('S');
     }

@@ -124,7 +124,7 @@ class WhatsAppWebhookController extends Controller
 
     private function handleUnsupported(array $message, array $contact, array $payload, WhatsAppSettings $settings, string $loja): void
     {
-        if (! WhatsAppConversation::query()->where('wa_id', $message['from'] ?? null)->where('loja', $loja)->exists()) {
+        if (! WhatsAppConversation::doNumero($message['from'] ?? null, $loja)) {
             return;
         }
 
@@ -168,20 +168,19 @@ class WhatsAppWebhookController extends Controller
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp'], config('app.timezone')) : now();
         $waId = $message['from'];
 
-        // Mesmo cliente nos dois números = duas conversas (uma por loja).
-        $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId, 'loja' => $loja]);
+        // Mesmo cliente nos dois números = duas conversas (uma por loja). Conversa
+        // nova já nasce com a chave da Manuela no padrão escolhido em
+        // Configurações > "Resposta automática".
+        $conversation = WhatsAppConversation::paraNumero($waId, $loja, ['ai_enabled' => $settings->bool('auto_reply_enabled')]);
         $conversation->fill([
+            // O número que a Meta manda é o que vale para responder.
+            'wa_id' => $waId,
             'phone' => $waId,
             'profile_name' => $contact['profile']['name'] ?? $conversation->profile_name,
             'last_customer_message_at' => $receivedAt,
             // Mescla: o metadata também guarda o produto que a Manuela abriu.
             'metadata' => array_merge($conversation->metadata ?? [], ['last_payload_object' => $payload['object'] ?? null]),
         ]);
-        // Conversa nova já nasce com a chave da Manuela no padrão escolhido
-        // em Configurações > "Resposta automática".
-        if (! $conversation->exists) {
-            $conversation->ai_enabled = $settings->bool('auto_reply_enabled');
-        }
         // Conversa encerrada volta pra fila quando o cliente escreve de novo.
         if ($conversation->status === 'resolved') {
             $conversation->status = 'open';
@@ -221,10 +220,10 @@ class WhatsAppWebhookController extends Controller
             return;
         }
 
-        $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $status['recipient_id'] ?? 'unknown', 'loja' => $loja],
-            ['phone' => $status['recipient_id'] ?? null, 'last_message_at' => now()],
-        );
+        $conversation = WhatsAppConversation::paraNumero($status['recipient_id'] ?? 'unknown', $loja, [
+            'phone' => $status['recipient_id'] ?? null,
+            'last_message_at' => now(),
+        ]);
 
         WhatsAppMessage::query()->create([
             'conversation_id' => $conversation->id,

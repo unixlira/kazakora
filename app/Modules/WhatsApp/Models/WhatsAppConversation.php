@@ -2,9 +2,11 @@
 
 namespace App\Modules\WhatsApp\Models;
 
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class WhatsAppConversation extends Model
 {
@@ -45,6 +47,45 @@ class WhatsAppConversation extends Model
         'last_auto_reply_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    /**
+     * A chave acompanha o wa_id em qualquer gravação. O índice único
+     * (numero_chave, loja) é o que garante uma conversa só por número.
+     */
+    public function setWaIdAttribute(?string $value): void
+    {
+        $this->attributes['wa_id'] = $value;
+        $this->attributes['numero_chave'] = WhatsAppPhone::chave($value);
+    }
+
+    /** Conversa do número na loja, com ou sem o nono dígito. */
+    public static function doNumero(?string $waId, string $loja): ?self
+    {
+        $chave = WhatsAppPhone::chave($waId);
+
+        return $chave === null ? null : self::query()->where('loja', $loja)->where('numero_chave', $chave)->first();
+    }
+
+    /**
+     * Único caminho para achar ou abrir conversa por número (webhook, disparo
+     * de pedido, tela e alertas). Dois processos juntos: quem perde a corrida
+     * no índice único usa a conversa que o outro criou.
+     *
+     * @param  array<string, mixed>  $dados  só usados se a conversa for nova
+     */
+    public static function paraNumero(string $waId, string $loja, array $dados = []): self
+    {
+        $conversa = self::doNumero($waId, $loja);
+        if ($conversa) {
+            return $conversa;
+        }
+
+        try {
+            return self::query()->create(['wa_id' => $waId, 'loja' => $loja, ...$dados]);
+        } catch (UniqueConstraintViolationException $exception) {
+            return self::doNumero($waId, $loja) ?? throw $exception;
+        }
+    }
 
     public function messages(): HasMany
     {

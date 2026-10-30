@@ -5,10 +5,12 @@ import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
+import { formatPrice } from '@/Shared/graficos';
 
 const props = defineProps({
     items: { type: Object, required: true },
     filters: { type: Object, default: () => ({}) },
+    totalAPagar: { type: Number, default: 0 },
 });
 
 const monthFilter = ref(props.filters.mes ?? '');
@@ -62,6 +64,10 @@ const destroy = async (item) => {
                 @click="applyFilters">
                 Filtrar
             </button>
+            <div class="ml-auto text-right">
+                <p class="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">Total a pagar aos Correios</p>
+                <p class="text-xl font-bold tabular-nums">{{ formatPrice(totalAPagar) }}</p>
+            </div>
         </div>
 
         <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">

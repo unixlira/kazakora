@@ -78,6 +78,18 @@ const agir = (acao, dados = {}) => router.post(`/admin/devolucoes/${aberto.value
     onSuccess: (page) => { aberto.value = page.props.casos.find((c) => c.id === aberto.value.id) ?? null; nota.value = ''; },
 });
 
+// Nota de devolução: enviar não é autorizar, e sem NF-e gerada ainda não há resposta da SEFAZ.
+const rotuloNotaDevolucao = (nota) => {
+    if (nota.status === 'emitida' && !nota.nota) return 'enviada à SEFAZ, aguardando resposta';
+
+    return { preparada: 'pronta, ainda não emitida', emitida: 'emitida', descartada: 'descartada', pelo_canal: 'emitida pelo canal', sem_nota: 'sem nota de venda', pendencia: 'com pendência' }[nota.status];
+};
+
+const emitirNotaDevolucao = () => {
+    if (!confirm(`Emitir agora a nota de devolução do pedido #${aberto.value.pedidoId}? Ela vai para a SEFAZ e não se desfaz.`)) return;
+    agir('emitir_nota');
+};
+
 // ---- Evidências (fotos e vídeos) -----------------------------------------
 // Pedido do usuário 2026-10-07: até 30 MB por arquivo e vídeo de até 1
 // minuto. A conferência aqui só poupa o upload — o servidor mede de novo.
@@ -306,11 +318,14 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                     <div v-if="aberto.notaDevolucao" class="rounded-lg border border-[var(--surface-border)] p-3 text-sm">
                         <p class="font-semibold"><i class="fas fa-file-invoice me-1 text-primary"></i> Nota de devolução:
                             <span :class="{ 'text-success': ['emitida', 'preparada'].includes(aberto.notaDevolucao.status), 'text-warning': aberto.notaDevolucao.status === 'pendencia', 'text-slate-500': ['descartada', 'pelo_canal', 'sem_nota'].includes(aberto.notaDevolucao.status) }">
-                                {{ { preparada: 'pronta, sai quando o produto chegar', emitida: 'emitida', descartada: 'descartada', pelo_canal: 'emitida pelo canal', sem_nota: 'sem nota de venda', pendencia: 'com pendência' }[aberto.notaDevolucao.status] }}
+                                {{ rotuloNotaDevolucao(aberto.notaDevolucao) }}
                             </span>
                         </p>
                         <p class="mt-1 text-xs text-slate-500">{{ aberto.notaDevolucao.obs }}</p>
                         <a v-if="aberto.notaDevolucao.nota" :href="`/admin/notas-fiscais/${aberto.notaDevolucao.nota.id}`" class="mt-1 inline-block text-xs font-semibold text-primary">Ver NF-e {{ aberto.notaDevolucao.nota.numero }} ({{ aberto.notaDevolucao.nota.status }})</a>
+                        <button v-if="aberto.notaDevolucao.status === 'preparada'" type="button" class="mt-2 block rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90" @click="emitirNotaDevolucao">
+                            <i class="fas fa-paper-plane me-1"></i> Emitir nota de devolução
+                        </button>
                     </div>
 
                     <button v-if="aberto.pedidoId && !aberto.estoqueDevolvidoEm && aberto.veredito === 'ok'" type="button"

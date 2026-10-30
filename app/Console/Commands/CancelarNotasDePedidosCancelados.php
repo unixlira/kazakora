@@ -3,17 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
-use App\Modules\Checkout\Models\Order;
-use App\Modules\Financeiro\Models\MercadoPagoPagamento;
-use App\Modules\Fiscal\Models\Invoice;
-use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Support\CancelamentoAutomaticoDaNota;
 use App\Notifications\FiscalAlertNotification;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-use Throwable;
 
 /**
  * Pedido cancelado no canal com NF-e de venda autorizada há menos de 24h:
@@ -24,26 +18,30 @@ use Throwable;
  * do TikTok ou da Amazon só mudava o status do pedido: a nota ficava viva e
  * passava do prazo (95 casos em 26/10).
  *
- * Nunca cancela fora do prazo: só nota autorizada há menos de
- * 24h − nfe.cancelamento_auto_folga_minutos, e sempre sem confirmar multa
- * (InvoiceService::cancelInvoice recusa a janela extemporânea). Passou
- * disso, a devolução sai pelo devolucoes:vendas-canceladas --automatico.
+ * Desde 2026-10-29 o webhook já cancela na hora
+ * (CancelarNotaDoPedidoCanceladoJob); esta rodada de 10 min fica de rede e
+ * tenta de novo o que deu erro. Nunca cancela fora do prazo: só nota
+ * autorizada há menos de 24h − nfe.cancelamento_auto_folga_minutos, e
+ * sempre sem confirmar multa (InvoiceService::cancelInvoice recusa a janela
+ * extemporânea). Passou disso, a devolução sai pelo
+ * devolucoes:vendas-canceladas --automatico.
  */
 class CancelarNotasDePedidosCancelados extends Command
 {
     protected $signature = 'nfe:cancelar-pedidos-cancelados
-        {--simular : Só lista, não cancela nada}';
+        {--simular : Só lista, não cancela nada}
+        {--checagem : Rechecagem das 22h e das 9h: tenta de novo as que deram erro, sem a espera de 1h}';
 
     protected $description = 'Cancela na SEFAZ (sem multa, dentro das 24h) a NF-e de venda de pedido cancelado no canal';
 
     /** Depois de uma falha, espera 1h antes de tentar a mesma nota de novo. */
     private const ESPERA_FALHA_MINUTOS = 60;
 
-    public function handle(InvoiceService $invoices): int
+    public function handle(CancelamentoAutomaticoDaNota $cancelamento): int
     {
         $simular = (bool) $this->option('simular');
 
-        if (! $simular && ! self::servidorDeProducao()) {
+        if (! $simular && ! CancelamentoAutomaticoDaNota::servidorDeProducao()) {
             $this->warn('Fora do servidor de produção (APP_URL não é '.config('nfe.automatico_host').'): nada é cancelado. Use --simular.');
 
             return self::SUCCESS;
@@ -52,7 +50,7 @@ class CancelarNotasDePedidosCancelados extends Command
         $canceladas = [];
         $falhas = [];
 
-        foreach ($this->casos() as $nota) {
+        foreach ($cancelamento->casos() as $nota) {
             $pedido = $nota->order;
             $linha = sprintf('#%d %s %s: NF-e %d-%d R$ %s, autorizada %s', $pedido->id, $pedido->origin, $pedido->external_order_id, $nota->serie, $nota->numero,
                 number_format((float) $nota->valor_total, 2, ',', '.'), $nota->autorizada_em->format('d/m H:i'));
@@ -64,19 +62,26 @@ class CancelarNotasDePedidosCancelados extends Command
             }
 
             $chaveEspera = "nfe-cancelar-pedido-cancelado:{$nota->id}";
-            if (Cache::has($chaveEspera)) {
+            if (! $this->option('checagem') && Cache::has($chaveEspera)) {
                 continue;
             }
 
-            try {
-                $invoices->cancelInvoice($nota, "Pedido cancelado no canal ({$pedido->origin} {$pedido->external_order_id})");
+            if ($cancelamento->cancelar($nota)) {
                 $this->info("{$linha} -> CANCELADA");
                 $canceladas[] = "#{$pedido->id}";
-            } catch (Throwable $e) {
+            } else {
                 Cache::put($chaveEspera, true, now()->addMinutes(self::ESPERA_FALHA_MINUTOS));
-                Log::warning('nfe:cancelar-pedidos-cancelados falhou', ['order_id' => $pedido->id, 'invoice_id' => $nota->id, 'erro' => $e->getMessage()]);
-                $this->error("{$linha} -> não cancelada: ".mb_substr($e->getMessage(), 0, 200));
+                $this->error("{$linha} -> não cancelada (alerta em Sistema › Alertas)");
                 $falhas[] = "#{$pedido->id}";
+            }
+        }
+
+        foreach ($cancelamento->semProtocolo() as $nota) {
+            $linha = sprintf('#%d %s: NF-e %d-%d sem protocolo de autorização (Bling)', $nota->order->id, $nota->order->origin, $nota->serie, $nota->numero);
+            $this->line($linha.($simular ? '' : ' -> para checagem'));
+
+            if (! $simular && ($this->option('checagem') || Cache::add("nfe-sem-protocolo-marcada:{$nota->id}", true, now()->addDay()))) {
+                $cancelamento->marcarParaChecagem($nota, 'Nota sem protocolo de autorização gravado (emitida pelo Bling): o sistema não consegue cancelar sozinho. Cancele no Bling.');
             }
         }
 
@@ -87,31 +92,10 @@ class CancelarNotasDePedidosCancelados extends Command
         return self::SUCCESS;
     }
 
-    /** Só o servidor de produção (APP_URL kazakora.com) age sozinho; ver config nfe.automatico_host. */
+    /** Mantido para quem já chamava pelo comando. */
     public static function servidorDeProducao(): bool
     {
-        return strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST)) === strtolower((string) config('nfe.automatico_host'));
-    }
-
-    /** @return Collection<int, Invoice> */
-    public function casos(): Collection
-    {
-        $limite = now()->subMinutes((int) config('nfe.cancelamento_horas', 24) * 60 - (int) config('nfe.cancelamento_auto_folga_minutos', 30));
-        $valeram = collect(config('nfe.vendas_que_valeram', []))->map(fn ($id) => (int) $id)->all();
-        $cobertosPeloMl = MercadoPagoPagamento::query()->where('status_detalhe', 'bpp_covered')->whereNotNull('order_id')->pluck('order_id')->all();
-
-        return Invoice::query()
-            ->where('status', Invoice::STATUS_AUTHORIZED)
-            ->whereNotNull('chave_acesso')
-            ->whereNotNull('protocolo_autorizacao')
-            ->where('autorizada_em', '>', $limite)
-            ->whereHas('order', fn ($q) => $q
-                ->where('status', Order::STATUS_CANCELLED)
-                ->whereNotIn('origin', [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE])
-                ->whereNotIn('id', array_merge($valeram, $cobertosPeloMl)))
-            ->with('order')
-            ->orderBy('autorizada_em')
-            ->get();
+        return CancelamentoAutomaticoDaNota::servidorDeProducao();
     }
 
     /**
@@ -122,7 +106,7 @@ class CancelarNotasDePedidosCancelados extends Command
     {
         $texto = count($canceladas).' NF-e de pedido cancelado no canal cancelada(s) na SEFAZ, sem multa: '.(implode(', ', $canceladas) ?: 'nenhuma').'.';
         if ($falhas !== []) {
-            $texto .= ' Não cancelada(s), tenta de novo em 1h (ver log): '.implode(', ', $falhas).'.';
+            $texto .= ' Não cancelada(s), tenta de novo em 1h (ver Sistema › Alertas): '.implode(', ', $falhas).'.';
         }
 
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();

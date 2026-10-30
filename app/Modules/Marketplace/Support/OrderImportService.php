@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Fiscal\Jobs\CancelarNotaDoPedidoCanceladoJob;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Support\PackDoPedido;
@@ -1042,6 +1043,10 @@ class OrderImportService
 
         if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
             $this->avisarNotaAutorizadaDePedidoCancelado($order);
+
+            // Lira, 2026-10-29: cancelar a nota assim que o webhook cancela o
+            // pedido, sem esperar a rodada de 10 min; erro vira alerta.
+            CancelarNotaDoPedidoCanceladoJob::dispatch($order->id)->afterCommit();
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {

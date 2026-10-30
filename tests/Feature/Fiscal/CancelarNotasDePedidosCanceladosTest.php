@@ -3,12 +3,17 @@
 namespace Tests\Feature\Fiscal;
 
 use App\Models\User;
+use App\Modules\Admin\Models\AlertaAdmin;
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\MercadoPagoPagamento;
+use App\Modules\Fiscal\Jobs\CancelarNotaDoPedidoCanceladoJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeWebserviceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use NFePHP\Common\Certificate;
@@ -132,5 +137,86 @@ class CancelarNotasDePedidosCanceladosTest extends TestCase
 
         $this->webservice->shouldNotHaveReceived('cancelarComEvento');
         $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
+    }
+
+    public function test_webhook_que_cancela_o_pedido_dispara_o_cancelamento_da_nota(): void
+    {
+        Queue::fake();
+        $nota = $this->nota(status: Order::STATUS_PAID);
+
+        app(OrderImportService::class)->syncStatus($nota->order, Order::STATUS_CANCELLED, 'CANCELLED');
+
+        Queue::assertPushed(CancelarNotaDoPedidoCanceladoJob::class, fn ($job) => $job->orderId === $nota->order_id);
+    }
+
+    public function test_job_cancela_na_hora_so_a_nota_do_pedido(): void
+    {
+        $this->sefazResponde('135');
+        $nota = $this->nota();
+        $outra = $this->nota();
+
+        CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
+
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->fresh()->status);
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $outra->fresh()->status);
+        $this->assertSame(0, AlertaAdmin::query()->count());
+    }
+
+    public function test_job_com_erro_na_sefaz_marca_para_checagem_e_a_rodada_resolve(): void
+    {
+        $nota = $this->nota();
+        $this->webservice->shouldReceive('cancelarComEvento')->once()->andThrow(new \RuntimeException('SEFAZ fora do ar'));
+
+        CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
+
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
+        $alerta = AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::NFE_CANCELAMENTO)->sole();
+        $this->assertSame("invoice:{$nota->id}", $alerta->chave);
+        $this->assertStringContainsString('SEFAZ fora do ar', $alerta->mensagem);
+        $this->assertSame("/admin/pedidos/{$nota->order_id}", $alerta->link);
+
+        $this->sefazResponde('135');
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->fresh()->status);
+        $this->assertNotNull($alerta->fresh()->resolvido_em);
+    }
+
+    public function test_nota_do_bling_sem_protocolo_vai_para_checagem(): void
+    {
+        $nota = $this->nota(origem: Order::ORIGIN_TIKTOK_SHOP);
+        $nota->update(['serie' => 3, 'protocolo_autorizacao' => null]);
+
+        CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $alerta = AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::NFE_CANCELAMENTO)->sole();
+        $this->assertStringContainsString('Bling', $alerta->mensagem);
+    }
+
+    public function test_job_no_homolog_nao_cancela(): void
+    {
+        config(['app.url' => 'https://kazakora.devlira.com.br']);
+        $nota = $this->nota();
+
+        CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
+
+        $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $this->assertSame(0, AlertaAdmin::query()->count());
+    }
+
+    public function test_checagem_das_22h_e_9h_tenta_de_novo_sem_esperar_1h(): void
+    {
+        $nota = $this->nota();
+        $this->webservice->shouldReceive('cancelarComEvento')->once()->andThrow(new \RuntimeException('SEFAZ fora do ar'));
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->sefazResponde('135');
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
+
+        $this->artisan('nfe:cancelar-pedidos-cancelados', ['--checagem' => true])->assertSuccessful();
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->fresh()->status);
     }
 }

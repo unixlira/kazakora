@@ -27,6 +27,8 @@ class AlertasAdmin
 
     public const FRETE_TABELA = 'frete_tabela';
 
+    public const NFE_CANCELAMENTO = 'nfe_cancelamento';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -36,6 +38,10 @@ class AlertasAdmin
         self::FRETE_TABELA => [
             'nome' => 'Falha na atualização da tabela de frete (Correios)',
             'descricao' => 'A atualização mensal do frete por localidade não conseguiu falar com os Correios (credencial, API fora do ar ou cotações recusadas). Some sozinho quando a tabela termina de atualizar.',
+        ],
+        self::NFE_CANCELAMENTO => [
+            'nome' => 'NF-e de pedido cancelado que não foi cancelada',
+            'descricao' => 'O canal cancelou o pedido e o cancelamento automático da nota na SEFAZ deu erro ou não é possível (nota do Bling sem protocolo). Precisa cancelar dentro das 24h. Some sozinho quando a nota é cancelada pela rotina.',
         ],
     ];
 

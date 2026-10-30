@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** Modal "Avalie sua compra" depois do login (pedido 2026-10-23). */
+/** Modal "Avalie sua compra" depois do login (pedido 2026-10-23, todo login até avaliar em 2026-10-29). */
 class ModalAvaliacaoTest extends TestCase
 {
     use RefreshDatabase;
@@ -77,10 +77,9 @@ class ModalAvaliacaoTest extends TestCase
         $this->assertNull($this->modal());
     }
 
-    public function test_ignora_fora_da_janela_nao_entregue_ja_avaliado_e_outro_site(): void
+    public function test_ignora_nao_entregue_ja_avaliado_e_outro_site(): void
     {
         $user = $this->cliente();
-        $this->pedido($user, Product::factory()->create(['is_active' => true]), diasAtras: 45);
         $this->pedido($user, Product::factory()->create(['is_active' => true]), Order::STATUS_SHIPPED);
         $this->pedido($user, Product::factory()->create(['is_active' => true]), site: Order::SITE_FERRAKORA);
         $avaliado = Product::factory()->create(['is_active' => true]);
@@ -103,7 +102,18 @@ class ModalAvaliacaoTest extends TestCase
         $this->assertNull($this->modal());
     }
 
-    public function test_fechar_nao_reabre_no_mesmo_login_e_volta_no_proximo(): void
+    public function test_entregue_ha_muito_tempo_tambem_abre(): void
+    {
+        $user = $this->cliente();
+        $produto = Product::factory()->create(['is_active' => true]);
+        $this->pedido($user, $produto, diasAtras: 120);
+
+        $this->entrar($user);
+
+        $this->assertSame($produto->id, $this->modal()['produto_id']);
+    }
+
+    public function test_nao_avaliar_agora_registra_e_volta_no_proximo_login(): void
     {
         $user = $this->cliente();
         $produto = Product::factory()->create(['is_active' => true]);
@@ -112,31 +122,88 @@ class ModalAvaliacaoTest extends TestCase
         $this->entrar($user);
         $this->assertNotNull($this->modal());
 
-        $this->post('/avaliar/dispensar')->assertRedirect();
+        $this->post('/avaliar/dispensar', ['produto_id' => $produto->id])->assertRedirect();
+        // Mesmo login: não abre de novo.
         $this->assertNull($this->modal());
 
+        $lembrete = DB::table('avaliacao_lembretes')->where('user_id', $user->id)->where('product_id', $produto->id)->first();
+        $this->assertSame(1, (int) $lembrete->vezes_nao_avaliar);
+        $this->assertNotNull($lembrete->nao_avaliar_em);
+
+        // Login seguinte, no mesmo dia: abre de novo, sem esperar.
         $this->post('/sair');
         $this->entrar($user);
         $this->assertSame($produto->id, $this->modal()['produto_id']);
     }
 
-    public function test_aparece_no_maximo_tres_vezes_por_item(): void
+    public function test_abre_em_todo_login_ate_avaliar(): void
     {
         $user = $this->cliente();
         $produto = Product::factory()->create(['is_active' => true]);
         $this->pedido($user, $produto);
 
-        foreach ([1, 2, 3] as $vez) {
+        foreach (range(1, 5) as $vez) {
             $this->entrar($user);
-            $this->assertNotNull($this->modal(), "login {$vez}");
+            $this->assertSame($produto->id, $this->modal()['produto_id'] ?? null, "login {$vez}");
             // Navegar de novo no mesmo login não conta outra aparição.
             $this->get('/')->assertOk();
+            $this->post('/avaliar/dispensar', ['produto_id' => $produto->id]);
             $this->post('/sair');
         }
 
+        $lembrete = DB::table('avaliacao_lembretes')->where('user_id', $user->id)->first();
+        $this->assertSame(5, (int) $lembrete->aparicoes);
+        $this->assertSame(5, (int) $lembrete->vezes_nao_avaliar);
+
+        $this->entrar($user);
+        $this->post("/produtos/{$produto->id}/avaliacoes", ['rating' => 5])->assertSessionHasNoErrors();
+        $this->post('/sair');
         $this->entrar($user);
         $this->assertNull($this->modal());
-        $this->assertSame(3, (int) DB::table('avaliacao_lembretes')->where('user_id', $user->id)->value('aparicoes'));
+    }
+
+    public function test_nao_avaliar_agora_de_produto_que_nao_e_dele_nao_grava(): void
+    {
+        $user = $this->cliente();
+        $outro = Product::factory()->create(['is_active' => true]);
+        $this->pedido($user, Product::factory()->create(['is_active' => true]));
+
+        $this->entrar($user);
+        $this->post('/avaliar/dispensar', ['produto_id' => $outro->id])->assertRedirect();
+
+        $this->assertFalse(DB::table('avaliacao_lembretes')->where('product_id', $outro->id)->exists());
+        $this->assertNull($this->modal());
+    }
+
+    public function test_nao_avaliar_agora_passa_para_o_proximo_e_no_proximo_login_volta_o_mais_recente(): void
+    {
+        $user = $this->cliente();
+        $a = Product::factory()->create(['is_active' => true]);
+        $b = Product::factory()->create(['is_active' => true]);
+        $c = Product::factory()->create(['is_active' => true]);
+        $this->pedido($user, $a, diasAtras: 1);
+        $this->pedido($user, $b, diasAtras: 3);
+        $this->pedido($user, $c, diasAtras: 5);
+
+        $this->entrar($user);
+        $this->assertSame($a->id, $this->modal()['produto_id']);
+        $this->post('/avaliar/dispensar', ['produto_id' => $a->id]);
+        // Fechar um mostra o próximo, até acabar a lista.
+        $this->assertSame($b->id, $this->modal()['produto_id']);
+        $this->post("/produtos/{$b->id}/avaliacoes", ['rating' => 5])->assertSessionHasNoErrors();
+        $this->assertSame($c->id, $this->modal()['produto_id']);
+        $this->post('/avaliar/dispensar', ['produto_id' => $c->id]);
+        $this->assertNull($this->modal());
+
+        $this->assertSame(1, (int) DB::table('avaliacao_lembretes')->where('user_id', $user->id)->where('product_id', $a->id)->value('vezes_nao_avaliar'));
+        $this->assertSame(1, (int) DB::table('avaliacao_lembretes')->where('user_id', $user->id)->where('product_id', $c->id)->value('vezes_nao_avaliar'));
+
+        // Login seguinte: os pulados voltam, o mais recente primeiro; o avaliado não.
+        $this->post('/sair');
+        $this->entrar($user);
+        $this->assertSame($a->id, $this->modal()['produto_id']);
+        $this->post('/avaliar/dispensar', ['produto_id' => $a->id]);
+        $this->assertSame($c->id, $this->modal()['produto_id']);
     }
 
     public function test_avaliar_mostra_o_proximo_item_e_depois_nada(): void

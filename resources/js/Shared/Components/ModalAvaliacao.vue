@@ -2,8 +2,10 @@
 // Modal "Avalie sua compra" depois do login (pedido 2026-10-23). O servidor
 // decide se e qual item mostrar (ModalAvaliacao.php, prop `avaliacaoModal`):
 // um por vez, o mais recente primeiro. A avaliação vai para o mesmo endpoint
-// da tela "Avalie suas compras". Fechar (X, Esc, clique fora) avisa o servidor
-// para não abrir de novo neste login.
+// da tela "Avalie suas compras". Avaliar ou "Não avaliar agora" (e também X,
+// Esc, clique fora) passa para o próximo produto, cada um com o seu modal,
+// até acabar a lista; o pulado volta no próximo login, até o cliente avaliar
+// (pedido do Lira 2026-10-29).
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -20,10 +22,10 @@ const aberto = ref(false);
 const nota = ref(0);
 const passando = ref(0);
 const comentario = ref('');
-const ocultarNome = ref(false);
 const fotos = ref([]); // { id, file, url }
 const erro = ref('');
 const enviando = ref(false);
+const pulando = ref(false);
 const dialogo = ref(null);
 const botaoFechar = ref(null);
 const entradaGaleria = ref(null);
@@ -42,7 +44,6 @@ const reiniciar = () => {
     nota.value = 0;
     passando.value = 0;
     comentario.value = '';
-    ocultarNome.value = false;
     erro.value = '';
     enviando.value = false;
     limparFotos();
@@ -81,12 +82,27 @@ onBeforeUnmount(() => {
     if (aberto.value) travarRolagem(false);
 });
 
-const fechar = () => {
-    if (!aberto.value) return;
+const fecharModal = () => {
     aberto.value = false;
     travarRolagem(false);
     foiAberto?.focus?.();
-    router.post('/avaliar/dispensar', {}, { preserveScroll: true, preserveState: true, only: ['avaliacaoModal'] });
+};
+
+// Pula o produto: o servidor manda o próximo (o watch troca o formulário) ou
+// nada (o watch fecha). Se a resposta não trocar o item, fecha aqui.
+const fechar = () => {
+    if (!aberto.value || enviando.value || pulando.value) return;
+    const produtoId = item.value?.produto_id ?? null;
+    pulando.value = true;
+    router.post('/avaliar/dispensar', { produto_id: produtoId }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['avaliacaoModal'],
+        onFinish: () => {
+            pulando.value = false;
+            if (aberto.value && item.value?.produto_id === produtoId) fecharModal();
+        },
+    });
 };
 
 const focaveis = () => Array.from(dialogo.value?.querySelectorAll(
@@ -149,7 +165,7 @@ const enviar = () => {
     }
     erro.value = '';
     enviando.value = true;
-    const dados = { rating: nota.value, comment: comentario.value.trim() || null, ocultar_nome: ocultarNome.value };
+    const dados = { rating: nota.value, comment: comentario.value.trim() || null };
     if (fotos.value.length) dados.fotos = fotos.value.map((f) => f.file);
 
     router.post(`/produtos/${item.value.produto_id}/avaliacoes`, dados, {
@@ -213,7 +229,7 @@ const dataEntrega = computed(() => item.value?.entregue_em
                         <label for="aval-modal-comentario" class="mt-4 block text-sm font-semibold">Comentário <span class="font-normal text-slate-600">(opcional)</span></label>
                         <textarea id="aval-modal-comentario" v-model="comentario" rows="3" :maxlength="MAX_COMENTARIO"
                             class="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base focus:border-[#F27A2A] focus:outline-none focus:ring-2 focus:ring-[#F27A2A]/40"
-                            placeholder="Qualidade, tamanho, se chegou como na foto…"></textarea>
+                            placeholder="Coloque aqui a sua avaliação: o que você achou do produto?"></textarea>
                         <p class="text-right text-xs text-slate-600">{{ comentario.length }}/{{ MAX_COMENTARIO }}</p>
 
                         <div class="mt-2">
@@ -245,19 +261,19 @@ const dataEntrega = computed(() => item.value?.entregue_em
                             </ul>
                         </div>
 
-                        <label class="mt-4 flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-                            <input v-model="ocultarNome" type="checkbox" class="h-5 w-5 rounded border-slate-400 accent-[#F27A2A]">
-                            <span>Ocultar meu nome na avaliação</span>
-                        </label>
-
                         <p v-if="erro" class="mt-2 text-sm font-medium text-red-700" role="alert">{{ erro }}</p>
                     </div>
 
-                    <div class="border-t border-slate-200 bg-white px-5 py-3">
-                        <button type="submit" :disabled="enviando"
+                    <div class="flex flex-col gap-2 border-t border-slate-200 bg-white px-5 py-3">
+                        <button type="submit" :disabled="enviando || pulando"
                             class="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#0B8F25] px-5 text-base font-bold text-white hover:brightness-95 disabled:opacity-60">
                             <i class="fas" :class="enviando ? 'fa-spinner fa-spin' : 'fa-paper-plane'" aria-hidden="true"></i>
                             {{ enviando ? 'Enviando…' : 'Enviar avaliação' }}
+                        </button>
+                        <button type="button" :disabled="enviando || pulando" data-testid="aval-nao-avaliar"
+                            class="flex min-h-11 w-full items-center justify-center rounded-full px-5 text-sm font-semibold text-slate-700 underline-offset-2 hover:bg-slate-100 hover:underline disabled:opacity-60"
+                            @click="fechar">
+                            Não avaliar agora
                         </button>
                     </div>
                 </form>

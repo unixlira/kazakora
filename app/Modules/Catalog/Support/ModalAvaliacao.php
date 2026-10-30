@@ -12,17 +12,17 @@ use Illuminate\Support\Facades\DB;
 /**
  * Modal "Avalie sua compra" que abre depois do login (pedido 2026-10-23).
  *
- * Regras: pedido do kazakora.com (origin loja, sem site_origem) ENTREGUE nos
- * últimos 30 dias, produto ainda sem avaliação do cliente. Um item por vez, o
- * mais recente primeiro. Cada produto abre o modal no máximo 3 vezes (uma por
- * login). Fechou sem avaliar: não abre mais naquele login. A avaliação em si
- * é gravada pelo mesmo ReviewController::store da tela "Avalie suas compras".
+ * Regras (revistas pelo Lira em 2026-10-29): pedido do kazakora.com (origin
+ * loja, sem site_origem) ENTREGUE, produto ainda sem avaliação do cliente. Um
+ * item por vez, o mais recente primeiro. Avaliar ou "Não avaliar agora" (ou
+ * fechar no X, Esc, clique fora) passa para o próximo produto, até acabar a
+ * lista (pedido do Lira 2026-10-29). O produto pulado fica registrado e não
+ * volta naquele login: no login seguinte ele abre de novo, toda vez, até o
+ * cliente avaliar (sem espera de dias, sem janela e sem teto de aparições). A avaliação em si é
+ * gravada pelo mesmo ReviewController::store da tela "Avalie suas compras".
  */
 class ModalAvaliacao
 {
-    public const JANELA_DIAS = 30;
-
-    public const MAX_APARICOES = 3;
 
     public const MAX_FOTOS = 4;
 
@@ -36,10 +36,13 @@ class ModalAvaliacao
     /** Sessão: produtos que já contaram como "apareceu" neste login. */
     private const MOSTRADOS = 'avaliacao_modal.mostrados';
 
+    /** Sessão: produtos pulados ("Não avaliar agora") neste login. */
+    private const PULADOS = 'avaliacao_modal.pulados';
+
     public static function ativar(Session $session): void
     {
         $session->put(self::ATIVO, true);
-        $session->forget(self::MOSTRADOS);
+        $session->forget([self::MOSTRADOS, self::PULADOS]);
     }
 
     public static function encerrar(Session $session): void
@@ -64,7 +67,8 @@ class ModalAvaliacao
             return null;
         }
 
-        $item = $this->itensPendentes($user)->first();
+        $pulados = (array) $session->get(self::PULADOS, []);
+        $item = $this->itensPendentes($user)->first(fn ($item) => ! in_array((int) $item->product_id, $pulados, true));
 
         if (! $item) {
             self::encerrar($session);
@@ -88,21 +92,45 @@ class ModalAvaliacao
         ];
     }
 
-    /** Itens entregues na janela, sem avaliação e abaixo do limite de aparições, mais recente primeiro. */
+    /**
+     * "Não avaliar agora": registra a ação e pula o produto neste login (o
+     * modal segue para o próximo); no próximo login ele volta. Só grava para
+     * produto que está mesmo pendente para o cliente (nada de gravar lembrete
+     * de produto qualquer); produto alheio encerra o modal do login.
+     */
+    public function naoAvaliarAgora(User $user, int $productId, Session $session): bool
+    {
+        if (! $this->itensPendentes($user)->contains('product_id', $productId)) {
+            self::encerrar($session);
+
+            return false;
+        }
+
+        $session->put(self::PULADOS, array_values(array_unique([...(array) $session->get(self::PULADOS, []), $productId])));
+
+        $chave = ['user_id' => $user->id, 'product_id' => $productId];
+        $this->garantirLembrete($chave);
+
+        DB::table('avaliacao_lembretes')->where($chave)->update([
+            'vezes_nao_avaliar' => DB::raw('vezes_nao_avaliar + 1'),
+            'nao_avaliar_em' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    /** Itens entregues e sem avaliação do cliente, mais recente primeiro. */
     private function itensPendentes(User $user)
     {
         $avaliados = Review::query()->where('user_id', $user->id)->pluck('product_id');
-        $esgotados = DB::table('avaliacao_lembretes')->where('user_id', $user->id)
-            ->where('aparicoes', '>=', self::MAX_APARICOES)->pluck('product_id');
 
         return OrderItem::query()
             ->whereNotNull('product_id')
             ->whereNotIn('product_id', $avaliados)
-            ->whereNotIn('product_id', $esgotados)
             ->whereHas('order', function ($query) use ($user) {
                 $query->where('user_id', $user->id)
-                    ->where('status', Order::STATUS_COMPLETED)
-                    ->where('updated_at', '>=', now()->subDays(self::JANELA_DIAS));
+                    ->where('status', Order::STATUS_COMPLETED);
                 Order::filtrarCanal($query, Order::ORIGIN_STORE);
             })
             ->whereHas('product', fn ($query) => $query->where('is_active', true))
@@ -123,16 +151,22 @@ class ModalAvaliacao
     private function contarAparicao(User $user, int $productId): void
     {
         $chave = ['user_id' => $user->id, 'product_id' => $productId];
-        $tabela = DB::table('avaliacao_lembretes');
-
-        if (! (clone $tabela)->where($chave)->exists()) {
-            $tabela->insertOrIgnore($chave + ['aparicoes' => 0, 'created_at' => now(), 'updated_at' => now()]);
-        }
+        $this->garantirLembrete($chave);
 
         DB::table('avaliacao_lembretes')->where($chave)->update([
             'aparicoes' => DB::raw('aparicoes + 1'),
             'ultima_aparicao_em' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /** @param  array{user_id:int,product_id:int}  $chave */
+    private function garantirLembrete(array $chave): void
+    {
+        $tabela = DB::table('avaliacao_lembretes');
+
+        if (! (clone $tabela)->where($chave)->exists()) {
+            $tabela->insertOrIgnore($chave + ['aparicoes' => 0, 'created_at' => now(), 'updated_at' => now()]);
+        }
     }
 }

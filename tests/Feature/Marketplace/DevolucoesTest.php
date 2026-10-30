@@ -12,6 +12,7 @@ use App\Notifications\MarketplaceReturnAlertNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -153,6 +154,70 @@ class DevolucoesTest extends TestCase
 
         $this->actingAs($this->admin)->get('/admin/devolucoes?aba=todas')->assertOk()
             ->assertInertia(fn ($page) => $page->where('casos.0.veredito', 'faltando_pecas'));
+    }
+
+    /** 429 na consulta do envio não apaga o status nem repete a linha no histórico. */
+    public function test_ml_rate_limit_on_return_keeps_status_and_does_not_repeat_history(): void
+    {
+        Notification::fake();
+        $claim = [
+            'id' => 8, 'type' => 'returns', 'stage' => 'dispute', 'status' => 'closed', 'reason_id' => 'PDD9949',
+            'resource' => 'order', 'resource_id' => 8, 'date_created' => now()->subDays(3)->toIso8601String(), 'players' => [],
+            'resolution' => ['reason' => 'item_returned', 'benefited' => ['complainant'], 'date_created' => now()->subDay()->toIso8601String()],
+        ];
+        $devolucao = ['status' => 'delivered', 'status_money' => 'refunded', 'shipments' => [['type' => 'return', 'tracking_number' => 'AP8BR']]];
+        config(['mercadolivre.retry.times' => 1]);
+
+        Http::fake([
+            'https://api.mercadolibre.com/post-purchase/v1/claims/reasons/*' => Http::response(['name' => 'not_working_item']),
+            'https://api.mercadolibre.com/post-purchase/v2/claims/*' => Http::sequence()
+                ->push($devolucao)->push(['message' => 'too many requests'], 429)->push($devolucao),
+            'https://api.mercadolibre.com/post-purchase/v1/claims/*' => Http::response($claim),
+        ]);
+
+        $sync = app(ReturnsSyncService::class);
+        $caso = $sync->sincronizarClaimMercadoLivre('8');
+        $eventos = $caso->events()->count();
+
+        $caso = $sync->sincronizarClaimMercadoLivre('8');
+        $this->assertSame('delivered', $caso->return_status);
+        $this->assertSame('refunded', $caso->money_status);
+        $this->assertSame(MarketplaceReturn::ENTREGUE, $caso->situacao);
+
+        $sync->sincronizarClaimMercadoLivre('8');
+        $this->assertSame($eventos, $caso->events()->count());
+    }
+
+    /** Limpeza: só linha repetida da sincronização sai; a da equipe fica, e sem --aplicar nada muda. */
+    public function test_history_cleanup_keeps_first_sync_line_and_team_lines(): void
+    {
+        Storage::fake('local');
+        $caso = MarketplaceReturn::create(['channel' => 'mercado_livre', 'external_id' => '9', 'kind' => 'devolucao', 'situacao' => MarketplaceReturn::ENCERRADA]);
+        $linha = fn (string $texto, string $quando, ?int $usuario = null) => $caso->events()->create([
+            'situacao' => $caso->situacao, 'description' => $texto, 'user_id' => $usuario, 'happened_at' => $quando,
+        ]);
+
+        $primeira = $linha('Dinheiro: retido pela plataforma', '2026-10-06 10:00:00');
+        $linha('Dinheiro: devolvido ao comprador', '2026-10-07 10:00:00');
+        $linha('Dinheiro: retido pela plataforma', '2026-10-08 10:00:00');
+        $linha('Encerrada', '2026-10-08 10:00:00');
+        $linha('Entregue — falta conferir', '2026-10-08 11:00:00');
+        $linha('Encerrada', '2026-10-08 12:00:00');
+        $linha('Nota: ligar para o cliente', '2026-10-08 13:00:00', $this->admin->id);
+        $linha('Nota: ligar para o cliente', '2026-10-08 13:00:01', $this->admin->id);
+        $linha('Nota de devolução: rascunho', '2026-10-08 14:00:00');
+        $linha('Nota de devolução: rascunho', '2026-10-08 15:00:00');
+
+        $this->artisan('devolucoes:limpar-historico')->assertSuccessful();
+        $this->assertSame(10, $caso->events()->count());
+
+        $this->artisan('devolucoes:limpar-historico --aplicar')->assertSuccessful();
+        $this->assertSame(8, $caso->events()->count());
+        $this->assertTrue($caso->events()->whereKey($primeira->id)->exists());
+        $this->assertSame(1, $caso->events()->where('description', 'Encerrada')->count());
+        $this->assertSame(2, $caso->events()->where('description', 'Nota: ligar para o cliente')->count());
+        $this->assertSame(2, $caso->events()->where('description', 'Nota de devolução: rascunho')->count());
+        $this->assertCount(1, Storage::disk('local')->files('devolucoes'));
     }
 
     /** A plataforma mudar o status depois não apaga o que a equipe conferiu. */

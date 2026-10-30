@@ -80,8 +80,17 @@ class CorreiosController extends Controller
             ->withQueryString()
             ->through(fn (CorreiosPrePostagem $item) => $this->presentListItem($item));
 
+        // Total do mês a pagar aos Correios (Lira 2026-10-30): só etiqueta
+        // gerada, devolução inclusa porque a loja paga. Não usa a busca nem a
+        // página de propósito: é o total do mês, somado no banco.
+        $totalAPagar = CorreiosPrePostagem::query()
+            ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+            ->whereBetween('created_at', [$selectedMonth->copy()->startOfMonth(), $selectedMonth->copy()->endOfMonth()])
+            ->sum('postage_price');
+
         return Inertia::render('Admin/Correios/Index', [
             'items' => $items,
+            'totalAPagar' => round((float) $totalAPagar, 2),
             'filters' => [
                 'mes' => $selectedMonth->format('Y-m'),
                 'pedido' => $search,

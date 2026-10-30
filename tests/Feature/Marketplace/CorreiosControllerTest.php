@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -98,6 +99,78 @@ class CorreiosControllerTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->has('items.data', 1)
             ->where('items.data.0.customerName', 'Ana Souza'));
+    }
+
+    public function test_index_totals_only_generated_labels_of_the_month_including_returns(): void
+    {
+        Carbon::setTestNow('2026-10-15 12:00:00');
+        $admin = $this->admin();
+
+        $this->postagem(['customer_name' => 'Ana Souza', 'postage_price' => 100.10], '2026-10-01 00:00:00');
+        $this->postagem(['customer_name' => 'Bruno Lima', 'postage_price' => 26.85], '2026-10-31 23:59:59');
+        $this->postagem(['customer_name' => 'Devolução', 'postage_price' => 300.00, 'devolucao' => true], '2026-10-10 10:00:00');
+        $this->postagem(['customer_name' => 'Sem valor', 'postage_price' => null], '2026-10-10 10:00:00');
+
+        $this->postagem(['status' => CorreiosPrePostagem::STATUS_CANCELADA, 'postage_price' => 1000.00], '2026-10-10 10:00:00');
+        $this->postagem(['status' => CorreiosPrePostagem::STATUS_ERRO, 'postage_price' => 2000.00], '2026-10-10 10:00:00');
+        $this->postagem(['postage_price' => 4000.00], '2026-09-30 23:59:59');
+        $this->postagem(['postage_price' => 8000.00], '2026-11-01 00:00:00');
+
+        $this->actingAs($admin)->get('/admin/correios?mes=2026-10')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('totalAPagar', 426.95));
+
+        // O outro mês tem o próprio total.
+        $this->actingAs($admin)->get('/admin/correios?mes=2026-09')
+            ->assertInertia(fn ($page) => $page->where('totalAPagar', 4000));
+    }
+
+    public function test_index_total_does_not_change_with_search_or_page(): void
+    {
+        Carbon::setTestNow('2026-10-15 12:00:00');
+        $admin = $this->admin();
+
+        $this->postagem(['customer_name' => 'Ana Souza', 'postage_price' => 10.50], '2026-10-10 10:00:00');
+        // 30 etiquetas: passa dos 25 por página.
+        foreach (range(1, 30) as $i) {
+            $this->postagem(['customer_name' => "Bruno {$i}", 'postage_price' => 2.00], '2026-10-10 10:00:00');
+        }
+
+        $this->actingAs($admin)->get('/admin/correios?mes=2026-10&pedido=Ana')
+            ->assertInertia(fn ($page) => $page
+                ->has('items.data', 1)
+                ->where('filters.pedido', 'Ana')
+                ->where('totalAPagar', 70.5));
+
+        $this->actingAs($admin)->get('/admin/correios?mes=2026-10&pedido=ninguem-com-esse-nome')
+            ->assertInertia(fn ($page) => $page
+                ->has('items.data', 0)
+                ->where('totalAPagar', 70.5));
+
+        foreach (['', '&page=2'] as $pagina) {
+            $this->actingAs($admin)->get("/admin/correios?mes=2026-10{$pagina}")
+                ->assertInertia(fn ($page) => $page->where('totalAPagar', 70.5));
+        }
+    }
+
+    public function test_index_total_is_zero_in_a_month_without_generated_labels(): void
+    {
+        Carbon::setTestNow('2026-10-15 12:00:00');
+
+        $this->actingAs($this->admin())->get('/admin/correios?mes=2026-10')
+            ->assertInertia(fn ($page) => $page->where('totalAPagar', 0));
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function postagem(array $overrides, string $createdAt): CorreiosPrePostagem
+    {
+        $postagem = CorreiosPrePostagem::create($this->recordAttributes($overrides));
+        $postagem->created_at = $createdAt;
+        $postagem->save();
+
+        return $postagem;
     }
 
     public function test_store_without_credentials_does_not_persist_and_shows_error(): void

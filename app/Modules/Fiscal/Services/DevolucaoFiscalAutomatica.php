@@ -28,6 +28,9 @@ use Throwable;
  * Fica de fora: TikTok (o canal emite a devolução — nota 2567 foi cancelada
  * por duplicidade) e venda cuja nota é do Bling (série 3).
  * Estoque NÃO mexe aqui: segue o botão "devolver ao estoque" da tela.
+ *
+ * Pedido do Lira (2026-10-30): botão "Emitir nota de devolução" no caso, que
+ * dispara na hora sem esperar o produto chegar (ver emitirAgora).
  */
 class DevolucaoFiscalAutomatica
 {
@@ -42,6 +45,11 @@ class DevolucaoFiscalAutomatica
     public const SEM_NOTA = 'sem_nota';
 
     public const PENDENCIA = 'pendencia';
+
+    /** Sem número do pedido técnico: o Lira leu "pedido #3595" como nota de outro pedido (2026-10-30). */
+    public const OBS_PREPARADA = 'Esta nota é deste pedido e ainda não foi emitida. Sai sozinha quando o produto chegar, ou agora pelo botão.';
+
+    public const OBS_EMITIDA_PELO_BOTAO = 'Enviada à SEFAZ pelo botão, aguardando resposta.';
 
     public function __construct(private readonly SalesReturnService $devolucoes)
     {
@@ -68,6 +76,56 @@ class DevolucaoFiscalAutomatica
             GenerateInvoiceJob::dispatch($caso->devolucao_order_id);
             $this->marcar($caso, self::EMITIDA, 'Produto chegou: NF-e de devolução enviada à SEFAZ.');
         }
+    }
+
+    /**
+     * Botão da tela do caso: emite o rascunho na hora, decisão de quem clicou
+     * (não exige veredito nem produto chegado). A troca de status é um update
+     * condicional, então só um clique consegue disparar.
+     *
+     * @return string|null  o motivo da recusa; null quando foi enviada
+     */
+    public function emitirAgora(MarketplaceReturn $caso): ?string
+    {
+        if ($caso->devolucao_fiscal_status !== self::PREPARADA) {
+            return 'Essa nota de devolução não está pronta para emitir: a situação dela mudou. Atualize a tela.';
+        }
+
+        $rascunho = $caso->devolucaoOrder()->with('invoice')->first();
+
+        if (! $rascunho) {
+            return 'Não encontrei a nota de devolução montada deste caso: nada foi enviado.';
+        }
+
+        if ($rascunho->invoice) {
+            return 'Essa nota de devolução já tem NF-e gerada: nada foi enviado de novo.';
+        }
+
+        $obsAnterior = $caso->devolucao_fiscal_obs;
+
+        // Query direta de propósito: não dispara o saved() do modelo.
+        $trocou = MarketplaceReturn::query()
+            ->whereKey($caso->id)
+            ->where('devolucao_fiscal_status', self::PREPARADA)
+            ->update(['devolucao_fiscal_status' => self::EMITIDA, 'devolucao_fiscal_obs' => self::OBS_EMITIDA_PELO_BOTAO]);
+
+        if ($trocou === 0) {
+            return 'Essa nota de devolução já foi enviada à SEFAZ: nada foi enviado de novo.';
+        }
+
+        try {
+            GenerateInvoiceJob::dispatch($rascunho->id);
+        } catch (Throwable $e) {
+            // Fila fora do ar: nada saiu, então o caso não pode ficar como enviado.
+            MarketplaceReturn::query()->whereKey($caso->id)->update(['devolucao_fiscal_status' => self::PREPARADA, 'devolucao_fiscal_obs' => $obsAnterior]);
+            report($e);
+
+            return 'Não consegui enviar a nota de devolução agora: nada foi emitido. Tente de novo em instantes.';
+        }
+
+        $caso->refresh();
+
+        return null;
     }
 
     public function preparar(MarketplaceReturn $caso): void
@@ -139,7 +197,7 @@ class DevolucaoFiscalAutomatica
         }
 
         $caso->forceFill(['devolucao_order_id' => $rascunho->id])->save();
-        $this->marcar($caso, self::PREPARADA, "NF-e de entrada montada (pedido #{$rascunho->id}); sai quando o produto chegar.");
+        $this->marcar($caso, self::PREPARADA, self::OBS_PREPARADA);
     }
 
     private function descartar(MarketplaceReturn $caso): void

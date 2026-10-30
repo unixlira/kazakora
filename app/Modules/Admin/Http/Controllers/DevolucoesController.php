@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Fiscal\Services\DevolucaoFiscalAutomatica;
 use App\Modules\Marketplace\Models\MarketplaceReturn;
 use App\Modules\Marketplace\Models\MarketplaceReturnEvidence;
 use App\Modules\Marketplace\Support\DuracaoDeVideo;
@@ -131,11 +132,12 @@ class DevolucoesController extends Controller
     /**
      * Ações da equipe sobre o caso: confirmar que o produto chegou, dar o
      * veredito, anotar, mudar a situação (só nos registrados à mão — os
-     * de API seguem a plataforma) e devolver ao estoque.
+     * de API seguem a plataforma), devolver ao estoque e emitir a nota de
+     * devolução na hora.
      */
-    public function update(Request $request, MarketplaceReturn $devolucao, OrderPaymentFinalizer $finalizer): RedirectResponse
+    public function update(Request $request, MarketplaceReturn $devolucao, OrderPaymentFinalizer $finalizer, DevolucaoFiscalAutomatica $notaDeDevolucao): RedirectResponse
     {
-        $acao = $request->validate(['acao' => ['required', Rule::in(['receber', 'veredito', 'nota', 'situacao', 'estoque'])]])['acao'];
+        $acao = $request->validate(['acao' => ['required', Rule::in(['receber', 'veredito', 'nota', 'situacao', 'estoque', 'emitir_nota'])]])['acao'];
         $usuario = $request->user();
         $registrar = fn (string $texto) => $devolucao->events()->create([
             'situacao' => $devolucao->situacao, 'description' => $texto, 'user_id' => $usuario->id, 'happened_at' => now(),
@@ -187,6 +189,17 @@ class DevolucoesController extends Controller
                 $finalizer->restoreStockIfNeeded($devolucao->order, 'Devolução '.$this->nomeDoCanal($devolucao)." — caso #{$devolucao->id}");
                 $registrar('Produto devolvido ao estoque');
                 break;
+
+            case 'emitir_nota':
+                if ($recusa = $notaDeDevolucao->emitirAgora($devolucao)) {
+                    return back()->with('error', $recusa);
+                }
+
+                $registrar('Nota de devolução: '.DevolucaoFiscalAutomatica::OBS_EMITIDA_PELO_BOTAO);
+                $this->limparContagem();
+
+                // Enviar não é autorizar: quem responde é a SEFAZ, na fila de notas.
+                return back()->with('success', 'Nota de devolução enviada à SEFAZ. Acompanhe a resposta aqui no caso.');
         }
 
         $this->limparContagem();
@@ -342,6 +355,18 @@ class DevolucoesController extends Controller
         return self::CANAIS[$caso->channel] ?? (string) $caso->channel;
     }
 
+    /**
+     * Casos gravados antes de 2026-10-30 trazem "montada (pedido #3595)": esse é
+     * o pedido técnico que guarda o rascunho, e na tela parecia nota de outro
+     * pedido. Corrige só na exibição.
+     */
+    private function semPedidoTecnico(?string $texto): ?string
+    {
+        return $texto === null
+            ? null
+            : preg_replace('/NF-e de entrada montada \(pedido #\d+\); sai quando o produto chegar\./u', DevolucaoFiscalAutomatica::OBS_PREPARADA, $texto);
+    }
+
     /** @return array<string, mixed> */
     private function linha(MarketplaceReturn $caso): array
     {
@@ -359,7 +384,7 @@ class DevolucoesController extends Controller
             // Nota de devolução automática (2026-10-11).
             'notaDevolucao' => $caso->devolucao_fiscal_status ? [
                 'status' => $caso->devolucao_fiscal_status,
-                'obs' => $caso->devolucao_fiscal_obs,
+                'obs' => $this->semPedidoTecnico($caso->devolucao_fiscal_obs),
                 'pedidoId' => $caso->devolucao_order_id,
                 'nota' => $caso->devolucaoOrder?->invoice ? ['id' => $caso->devolucaoOrder->invoice->id, 'numero' => $caso->devolucaoOrder->invoice->numero, 'status' => $caso->devolucaoOrder->invoice->status] : null,
             ] : null,
@@ -397,7 +422,7 @@ class DevolucoesController extends Controller
             ])->values(),
             'historico' => $caso->events->take(30)->map(fn ($evento) => [
                 'quando' => $evento->happened_at?->toIso8601String(),
-                'texto' => $evento->description,
+                'texto' => $this->semPedidoTecnico($evento->description),
                 'quem' => $evento->user?->name,
             ])->values(),
         ];

@@ -159,9 +159,7 @@ class WhatsAppInboxController extends Controller
         $pedido ??= isset($cliente['pedidos'][0]) ? Order::query()->find($cliente['pedidos'][0]['id']) : null;
         $loja = $pedido ? WhatsAppNumeros::lojaDoPedido($pedido) : WhatsAppNumeros::KAZAKORA;
 
-        $conversation = $this->conversaExistente($telefone, $loja) ?? WhatsAppConversation::query()->create([
-            'wa_id' => $telefone,
-            'loja' => $loja,
+        $conversation = WhatsAppConversation::paraNumero($telefone, $loja, [
             'phone' => $telefone,
             'profile_name' => $cliente['nome'] ?? null,
             'status' => 'open',
@@ -194,20 +192,8 @@ class WhatsAppInboxController extends Controller
             // WhatsApp que vai falar com o cliente (FerraKora só com o número dela ligado).
             'numeroLoja' => $loja,
             'numeroLojaNome' => WhatsAppNumeros::nome($loja),
-            'conversaId' => $telefone ? $this->conversaExistente($telefone, $loja)?->id : null,
+            'conversaId' => WhatsAppConversation::doNumero($telefone, $loja)?->id,
         ];
-    }
-
-    /** Conversa do mesmo número na loja: a Meta grava muito celular sem o nono dígito. */
-    private function conversaExistente(string $telefone, string $loja): ?WhatsAppConversation
-    {
-        return WhatsAppConversation::query()
-            ->where('loja', $loja)
-            ->where('wa_id', 'like', '%'.substr($telefone, -4))
-            ->orderByDesc('last_message_at')
-            ->limit(50)
-            ->get()
-            ->first(fn (WhatsAppConversation $c) => WhatsAppPhone::mesmoNumero($c->wa_id, [$telefone]));
     }
 
     public function updates(Request $request): JsonResponse

@@ -73,11 +73,13 @@ class AlertaColetaFinanceira
             return 'sem_credencial';
         }
 
-        $conversa = WhatsAppConversation::query()->firstOrCreate(
-            // Aviso interno sai sempre pelo número da KazaKora.
-            ['wa_id' => $para, 'loja' => 'kazakora'],
-            ['phone' => $para, 'profile_name' => 'Lira', 'last_message_at' => now(), 'unread_count' => 0],
-        );
+        // Aviso interno sai sempre pelo número da KazaKora.
+        $conversa = WhatsAppConversation::paraNumero($para, 'kazakora', [
+            'phone' => $para,
+            'profile_name' => 'Lira',
+            'last_message_at' => now(),
+            'unread_count' => 0,
+        ]);
 
         $texto = "⚠️ Falha na coleta financeira {$canal}\n\n{$motivo}\n\n".now()->format('d/m H:i').'. Precisa da sua ação.';
         $extra = ['origem' => 'alerta-coleta-financeira', 'canal' => $canal];

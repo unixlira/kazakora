@@ -44,6 +44,25 @@ class WhatsAppPhone
         return false;
     }
 
+    /**
+     * Identidade do número numa conversa: só dígitos e, no Brasil, sem o nono
+     * dígito. Com o 9 (cadastro do pedido) ou sem (webhook da Meta), a chave é
+     * a mesma. Achado real 30/10, #3662: disparo e resposta abriam duas conversas.
+     */
+    public static function chave(?string $waId): ?string
+    {
+        if (blank($waId)) {
+            return null;
+        }
+
+        $digitos = preg_replace('/\D+/', '', $waId);
+        if ($digitos === '') {
+            return $waId;
+        }
+
+        return str_starts_with($digitos, '55') ? self::semNonoDigito($digitos) : $digitos;
+    }
+
     /** 55 + DDD + 9 + 8 dígitos (celular) vira 55 + DDD + 8 dígitos, só para comparar. */
     private static function semNonoDigito(?string $phone): ?string
     {

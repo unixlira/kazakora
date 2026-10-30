@@ -138,7 +138,12 @@ class ReturnsSyncService
         try {
             $devolucao = $this->mercadoLivre->get("post-purchase/v2/claims/{$claimId}/returns");
         } catch (Throwable) {
-            $devolucao = null;
+            // 429 ou falha passageira não apaga o que já se sabia: gravar vazio
+            // fazia o status voltar na varredura seguinte como se fosse novo, e
+            // o histórico repetia "Dinheiro" e "Envio de volta" sem parar.
+            $devolucao = MarketplaceReturn::query()
+                ->where('channel', Order::ORIGIN_MERCADO_LIVRE)->where('external_id', $claimId)
+                ->first()?->raw_payload['return'] ?? null;
         }
 
         $envio = collect($devolucao['shipments'] ?? [])->firstWhere('type', 'return') ?? ($devolucao['shipments'][0] ?? null);

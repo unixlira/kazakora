@@ -29,6 +29,8 @@ class AlertasAdmin
 
     public const CONTEUDO_FK = 'conteudo_fk';
 
+    public const NFE_CANCELAMENTO = 'nfe_cancelamento';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -42,6 +44,10 @@ class AlertasAdmin
         self::CONTEUDO_FK => [
             'nome' => 'Falha no conteúdo automático da FerraKora',
             'descricao' => 'A rotina que gera e publica os 20 conteúdos diários da FerraKora no Instagram, TikTok e Facebook falhou. Some quando alguém resolve.',
+        ],
+        self::NFE_CANCELAMENTO => [
+            'nome' => 'NF-e de pedido cancelado que não foi cancelada',
+            'descricao' => 'O canal cancelou o pedido e o cancelamento automático da nota na SEFAZ deu erro ou não é possível (nota do Bling sem protocolo). Precisa cancelar dentro das 24h. Some sozinho quando a nota é cancelada pela rotina.',
         ],
     ];
 

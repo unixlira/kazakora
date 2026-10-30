@@ -264,7 +264,12 @@ Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverla
 // (de 10 em 10 min, com folga antes das 24h). Passou disso, todo dia às
 // 08:20 sai sozinha a NF-e de devolução. Venda que valeu (config
 // nfe.vendas_que_valeram, bpp_covered) fica de fora das duas.
+// Desde 2026-10-29 o webhook que cancela o pedido já cancela a nota na hora
+// (CancelarNotaDoPedidoCanceladoJob); erro vira alerta em Sistema › Alertas.
+// Às 22h e às 9h a rodada rechecha as marcadas com erro sem a espera de 1h
+// (Lira, 2026-10-29).
 Schedule::command('nfe:cancelar-pedidos-cancelados')->everyTenMinutes()->withoutOverlapping(15);
+Schedule::command('nfe:cancelar-pedidos-cancelados --checagem')->twiceDailyAt(9, 22)->timezone('America/Sao_Paulo')->withoutOverlapping(15);
 Schedule::command('devolucoes:vendas-canceladas --automatico')->dailyAt('08:20')->withoutOverlapping(60);
 
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido

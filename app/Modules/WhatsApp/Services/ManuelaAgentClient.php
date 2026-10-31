@@ -5,6 +5,7 @@ namespace App\Modules\WhatsApp\Services;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
+use App\Modules\WhatsApp\Support\ManuelaSemPreco;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -32,6 +33,12 @@ class ManuelaAgentClient
      * alertado para assumir (pedido do Lira 2026-10-25).
      */
     public const ALERT_TAG = '[ALERTA_ATENDIMENTO]';
+
+    /**
+     * Cliente insistiu no preço, pediu desconto ou cupom: o cliente recebe
+     * ManuelaSemPreco::RESPOSTA e uma pessoa assume (pedido do Lira 2026-10-31).
+     */
+    public const GERENCIA_TAG = '[GERENCIA]';
 
     /** Rede de segurança: negativas óbvias sem a marcação (comparado sem acento, minúsculas). */
     private const NEGATIVAS = '/\bnao sei\b|\bnao tenho (essa |a )?(informacao|certeza)|\bnao tenho como (confirmar|informar|afirmar)|\bnao consigo (confirmar|informar|afirmar)|\bnao (encontrei|localizei|achei)\b|\bnao temos\b|\bnao tem (esse|essa|este|esta|disponivel|a informacao)|\bnao trabalhamos com\b|\bnao possuimos\b|\bnao consta\b/';
@@ -66,7 +73,7 @@ class ManuelaAgentClient
 
     /**
      * @param  (callable(string): void)|null  $sendNow  manda uma mensagem pro cliente na hora (o "só um minutinho")
-     * @return array{reply: string, needs_human: bool, provider: string, alerta_atendimento: bool, rascunho: string}
+     * @return array{reply: string, needs_human: bool, provider: string, alerta_atendimento: bool, rascunho: string, gerencia?: bool}
      */
     public function reply(WhatsAppConversation $conversation, string $systemPrompt, ?callable $sendNow = null): array
     {
@@ -78,7 +85,13 @@ class ManuelaAgentClient
 
         $alerta = Str::contains($text, self::ALERT_TAG);
         $needsHuman = Str::contains($text, self::HANDOFF_TAG);
-        $text = trim(str_replace([self::HANDOFF_TAG, self::ALERT_TAG], '', $text));
+        $gerencia = Str::contains($text, self::GERENCIA_TAG);
+        $text = trim(str_replace([self::HANDOFF_TAG, self::ALERT_TAG, self::GERENCIA_TAG], '', $text));
+
+        if ($gerencia || ManuelaSemPreco::temPreco($text)) {
+            return ['reply' => ManuelaSemPreco::RESPOSTA, 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => $text, 'gerencia' => true];
+        }
+
         $alerta = $alerta || self::respostaNegativa($text);
 
         if ($alerta) {
@@ -182,7 +195,7 @@ class ManuelaAgentClient
             ],
             [
                 'name' => 'abrir_produto',
-                'description' => 'Abre a ficha completa (descrição, preço, estoque, link) de um produto achado pelo buscar_produto, depois que o cliente confirmou que é ele.',
+                'description' => 'Abre a ficha completa (descrição, estoque, link) de um produto achado pelo buscar_produto, depois que o cliente confirmou que é ele.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -252,7 +265,7 @@ class ManuelaAgentClient
             return null;
         }
 
-        return collect($product)->except('aberto_em')->all();
+        return collect($product)->except(['aberto_em', 'preco'])->all();
     }
 
     private function replyFromHermes(WhatsAppConversation $conversation, string $systemPrompt): string
@@ -317,7 +330,7 @@ class ManuelaAgentClient
             $legenda = trim((string) $message->body);
             $foto = '[cliente enviou uma FOTO'.($v['descricao'] ? " de: {$v['descricao']}" : '').'.';
             $foto .= $v['produto_id']
-                ? " É o produto da loja \"{$v['nome']}\" (origem loja, id {$v['produto_id']}) — a ficha dele é o produto em conversa agora; preço e estoque só dela.]"
+                ? " É o produto da loja \"{$v['nome']}\" (origem loja, id {$v['produto_id']}) — a ficha dele é o produto em conversa agora; estoque só dela.]"
                 : ' Não foi possível identificar o produto da foto no catálogo. NÃO use o produto falado antes: pergunte com gentileza qual é o produto (nome ou link).]';
 
             return $legenda !== '' ? "{$foto} Legenda: {$legenda}" : $foto;

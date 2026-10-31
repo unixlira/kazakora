@@ -9,10 +9,11 @@
 // fim da Oferta Relâmpago do carrinho: mostrava 568:47:51 (oferta de 23 dias).
 // Rodapé TOTALMENTE estático desde 2026-10-25 (pedido do Lira): só texto e
 // imagens, sem link nem sanfona, igual em todas as telas. No celular as
-// bandeiras e os selos ficam sempre centralizados. Sem menu, busca e rodapé
-// da loja. Sempre claro (cores fixas).
+// bandeiras e os selos ficam sempre centralizados. Sem menu e busca da loja.
+// Desde 2026-10-31 (pedido do Lira) o rodapé é o preto da KazaKora, sem links
+// e sem o selo do Reclame Aqui com QR Code. O resto da tela segue sempre claro
+// (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
-import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
@@ -82,34 +83,40 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
 
         <slot />
 
-        <footer class="mt-auto px-4 pb-10 pt-2">
+        <footer class="mt-auto bg-[#0b0b0b] text-white" data-testid="checkout-rodape">
             <!-- Rodapé estático (2026-10-25): nada clicável, só texto e imagens. -->
-            <div class="mx-auto max-w-[1200px] border-t border-slate-300/70 pt-8 text-center">
-                <p class="text-sm font-medium text-slate-600">Formas de pagamento</p>
-                <ul class="mx-auto mt-3 flex max-w-[420px] flex-wrap items-center justify-center gap-1.5" aria-label="Bandeiras aceitas">
-                    <li v-for="bandeira in BANDEIRAS" :key="bandeira" class="w-[calc(25%-0.3rem)] sm:w-auto sm:min-w-0 sm:flex-1">
-                        <img :src="`/images/payments/novas/${bandeira}.webp`" :alt="bandeira" width="249" height="167" loading="lazy" class="mx-auto h-auto w-full rounded-[6px] border border-slate-200 bg-white">
-                    </li>
-                </ul>
+            <div class="mx-auto max-w-[1320px] px-4 py-10 text-center md:px-6">
+                <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" loading="lazy" class="mx-auto h-8 w-auto">
 
-                <!-- Selos sem link (o RA também, com semLink). -->
-                <div class="mt-5 flex flex-wrap items-center justify-center gap-2">
-                    <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
-                        <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-7 w-auto">
+                <div class="mt-8 flex flex-col items-center gap-6 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
+                    <div>
+                        <p class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</p>
+                        <ul class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start" aria-label="Bandeiras aceitas">
+                            <li v-for="bandeira in BANDEIRAS" :key="bandeira">
+                                <img :src="`/images/payments/novas/${bandeira}.webp`" :alt="bandeira" width="249" height="167" loading="lazy" class="h-[30px] w-auto rounded-[8px] sm:h-[44px]">
+                            </li>
+                        </ul>
                     </div>
-                    <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
-                        <SeloReclameAqui :altura="28" sem-link />
-                    </div>
-                    <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
-                        <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-6 w-auto">
+
+                    <!-- Selos sem link. -->
+                    <div class="lg:text-right">
+                        <p class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</p>
+                        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
+                            <div class="flex h-[30px] items-center justify-center rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3">
+                                <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-[22px] w-auto sm:h-[34px]">
+                            </div>
+                            <div class="flex h-[30px] items-center justify-center rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3">
+                                <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-[22px] w-auto sm:h-[30px]">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="mt-6 space-y-1 text-xs text-slate-600">
-                    <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
-                    <p>{{ COMPANY.enderecoCompleto }}</p>
-                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
-                    <p>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
+                <div class="mt-8 space-y-1 border-t border-white/10 pt-6 text-xs">
+                    <p class="opacity-70">{{ COMPANY.nomeFantasia }}: kazakora.com</p>
+                    <p class="opacity-70">{{ COMPANY.enderecoCompleto }}</p>
+                    <p class="opacity-70">© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
+                    <p class="opacity-70">WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
                 </div>
             </div>
         </footer>

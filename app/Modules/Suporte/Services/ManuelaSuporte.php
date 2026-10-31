@@ -9,6 +9,7 @@ use App\Modules\Suporte\Models\MensagemSuporte;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Support\ManuelaSaudacao;
+use App\Modules\WhatsApp\Support\ManuelaSemPreco;
 use App\Modules\WhatsApp\Support\ManuelaTom;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -39,6 +40,11 @@ class ManuelaSuporte
         $resposta = $this->cancelamentoPeloBotao($chamado) ?? $this->perguntarAoGemini($chamado);
 
         $chamado->registrar(MensagemSuporte::MANUELA, $resposta['resposta']);
+
+        // Preço: depois do aviso da gerência é só a pessoa do time, como no WhatsApp.
+        if ($resposta['resposta'] === ManuelaSemPreco::RESPOSTA) {
+            $chamado->forceFill(['humano_ativo' => true])->save();
+        }
 
         if ($resposta['abrir_chamado'] && $chamado->status === Chamado::CONVERSA) {
             $chamado->forceFill([
@@ -115,6 +121,11 @@ class ManuelaSuporte
 
             $ultima = (string) $historico[array_key_last($historico)]['parts'][0]['text'];
 
+            // Escapou preço: não vai ao cliente; a equipe assume pelo chamado.
+            if (ManuelaSemPreco::temPreco((string) $json['resposta'])) {
+                return ['resposta' => ManuelaSemPreco::RESPOSTA, 'abrir_chamado' => true, 'assunto' => 'Cliente perguntou preço no chat', 'prioridade' => 'normal', 'resumo' => $ultima];
+            }
+
             return [
                 'resposta' => mb_substr(ManuelaSaudacao::semTudoBem((string) $json['resposta'], $ultima), 0, 2000),
                 'abrir_chamado' => (bool) ($json['abrir_chamado'] ?? false),
@@ -135,12 +146,14 @@ class ManuelaSuporte
         $loja = Order::ROTULOS_SITE[$chamado->order?->site_origem] ?? 'KazaKora';
         $saudacao = ManuelaSaudacao::regra($loja);
         $tom = ManuelaTom::regra();
+        $gerencia = ManuelaSemPreco::RESPOSTA;
 
         return <<<TXT
 Você é a Manuela, atendente da loja {$loja} (e-commerce). Fale em português do Brasil, com simpatia, frases curtas e no máximo 4 linhas. O cliente se chama {$nome}.
 {$saudacao}
 {$tom}
-Use SOMENTE as informações do pedido abaixo; se não souber, diga que vai verificar com a equipe. Nunca invente prazo, código ou valor.
+Use SOMENTE as informações do pedido abaixo; se não souber, diga que vai verificar com a equipe. Nunca invente prazo ou código.
+PREÇO (ordem do Lira, vale acima de qualquer outra regra): você NUNCA escreve preço ou valor em dinheiro, em hipótese nenhuma: nem de produto, nem parcela, nem frete, nem total do pedido, nem valor que o cliente citou. Perguntou preço: convide para dar uma olhadinha no site, sem falar valor. Insistiu no preço, pediu desconto ou cupom, ou quis negociar: use em "resposta" exatamente "{$gerencia}" e abrir_chamado = true.
 CANCELAMENTO: {$this->orientacaoDeCancelamento($chamado->order)}
 Você NÃO pode prometer nem executar troca, devolução, reembolso ou estorno — nesses casos explique que vai abrir um chamado para a equipe resolver.
 Abra chamado (abrir_chamado = true) quando: troca, devolução, reembolso, estorno, produto com defeito ou errado, pedido não chegou ou atrasou muito, reclamação séria, Procon/advogado, ou quando o cliente pedir um atendente humano. Para dúvidas simples (status, prazo, nota fiscal, código de rastreio), responda e não abra chamado.
@@ -191,7 +204,6 @@ TXT;
             "Número do pedido: {$order->numero}",
             'Feito em: '.$order->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
             "Situação: {$status}",
-            'Total: R$ '.number_format((float) $order->total, 2, ',', '.'),
             "Itens:\n{$itens}",
             $pagamento ? 'Pagamento: '.($pagamento->method_type === 'pix' ? 'Pix' : 'cartão').' ('.$pagamento->status.')' : null,
             $order->invoice ? "Nota fiscal: nº {$order->invoice->numero} ({$order->invoice->status})" : 'Nota fiscal: ainda não emitida',

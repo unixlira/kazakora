@@ -47,12 +47,11 @@ class ManuelaProductSearch
         $products = Product::query()
             ->with('parent:id,slug,is_active')
             ->naKazaKora()
-            ->get(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount', 'stock'])
+            ->get(['id', 'parent_product_id', 'name', 'slug', 'stock'])
             ->map(fn (Product $product) => [
                 'origem' => self::ORIGIN_STORE,
                 'id' => (string) $product->id,
                 'nome' => $product->name,
-                'preco' => $this->money($product->final_price),
                 'em_estoque' => $product->stock > 0,
                 'link' => $base.'/produtos/'.($product->parent?->slug ?? $product->slug),
             ]);
@@ -87,7 +86,6 @@ class ManuelaProductSearch
                 'origem' => self::ORIGIN_STORE,
                 'id' => (string) $product->id,
                 'nome' => $product->name,
-                'preco' => $this->money($product->final_price),
                 'em_estoque' => $product->stock > 0,
                 'marca' => $product->brand,
                 'modelo' => $product->model,
@@ -149,7 +147,6 @@ class ManuelaProductSearch
                     'origem' => $origin,
                     'id' => (string) $item['external_id'],
                     'nome' => $item['name'],
-                    'preco' => $item['price'] !== null ? $this->money($item['price']) : null,
                     'link' => $item['link'],
                 ])
                 ->values()
@@ -238,11 +235,6 @@ class ManuelaProductSearch
             ->unique()
             ->values()
             ->all();
-    }
-
-    private function money(float|string $value): string
-    {
-        return 'R$ '.number_format((float) $value, 2, ',', '.');
     }
 
     private function plain(?string $html): ?string

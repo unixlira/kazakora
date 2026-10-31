@@ -4,7 +4,9 @@ namespace Tests\Feature\Notifications;
 
 use App\Models\User;
 use App\Notifications\AlertaAdminNotification;
+use App\Notifications\PrintJobFailedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -56,5 +58,45 @@ class NotificacoesEquipeTest extends TestCase
 
         $this->actingAs($outro)->get('/notificacoes/'.$dono->notifications()->first()->id)->assertNotFound();
         $this->assertNull($dono->notifications()->first()->read_at);
+    }
+
+    public function test_sino_mostra_alerta_interno_para_equipe_nas_telas_de_notificacao(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->alertaInterno($admin);
+        $this->alertaInterno($admin);
+
+        foreach (['/admin/fluxo-de-caixa', '/notificacoes'] as $url) {
+            $this->actingAs($admin)->get($url)->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('notifications.unreadCount', 2)
+                ->has('notifications.items', 2));
+        }
+
+        $abrir = $admin->notifications()->first()->id;
+        $this->actingAs($admin)->get("/notificacoes/{$abrir}")->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('notifications.unreadCount', 1)
+            ->has('notifications.items', 1));
+    }
+
+    public function test_sino_segue_sem_alerta_interno_para_equipe_na_loja_e_para_cliente(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->alertaInterno($admin);
+        $this->actingAs($admin)->get('/')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('notifications.unreadCount', 0));
+
+        $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $this->alertaInterno($cliente);
+        $this->actingAs($cliente)->get('/notificacoes')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('notifications.unreadCount', 0));
+    }
+
+    private function alertaInterno(User $user): void
+    {
+        $user->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => PrintJobFailedNotification::class,
+            'data' => ['message' => 'Impressão falhou'],
+        ]);
     }
 }

@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
-    notifications: { type: Object, required: true },
+    lista: { type: Object, required: true },
 });
 
 const remove = (notification) => {
@@ -31,12 +31,12 @@ const markAllRead = () => router.post('/notificacoes/ler-todas', {}, { preserveS
         </div>
 
         <div class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)]">
-            <p v-if="props.notifications.data.length === 0" class="px-4 py-10 text-center text-sm text-slate-400">
+            <p v-if="props.lista.data.length === 0" class="px-4 py-10 text-center text-sm text-slate-400">
                 Nenhuma notificação por aqui ainda.
             </p>
 
             <ul v-else class="divide-y divide-[var(--surface-border)]">
-                <li v-for="notification in props.notifications.data" :key="notification.id"
+                <li v-for="notification in props.lista.data" :key="notification.id"
                     class="flex items-start gap-3 px-4 py-3" :class="{ 'bg-lightprimary': !notification.read }">
                     <span class="mt-2 h-2 w-2 shrink-0 rounded-full" :class="notification.read ? 'bg-transparent' : 'bg-primary'"></span>
 
@@ -53,8 +53,8 @@ const markAllRead = () => router.post('/notificacoes/ler-todas', {}, { preserveS
                 </li>
             </ul>
 
-            <div v-if="props.notifications.links.length > 3" class="flex flex-wrap items-center justify-center gap-1 border-t border-[var(--surface-border)] px-4 py-3">
-                <template v-for="(link, index) in props.notifications.links" :key="index">
+            <div v-if="props.lista.links.length > 3" class="flex flex-wrap items-center justify-center gap-1 border-t border-[var(--surface-border)] px-4 py-3">
+                <template v-for="(link, index) in props.lista.links" :key="index">
                     <Link v-if="link.url" :href="link.url" preserve-scroll preserve-state
                         class="rounded-lg px-3 py-1.5 text-sm"
                         :class="link.active ? 'bg-primary text-white' : 'text-slate-500 hover:bg-[var(--surface-muted)]'"

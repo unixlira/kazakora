@@ -118,4 +118,112 @@ class DevolucaoFiscalAutomaticaTest extends TestCase
         $this->assertSame('pendencia', $caso->devolucao_fiscal_status);
         $this->assertStringContainsString('NCM', $caso->devolucao_fiscal_obs);
     }
+
+    private function admin(): User
+    {
+        return User::factory()->create(['role' => User::ROLE_ADMIN]);
+    }
+
+    public function test_botao_emite_na_hora_sem_o_produto_chegar_e_segundo_clique_nao_dispara(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+        $rascunhoId = $caso->devolucao_order_id;
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post("/admin/devolucoes/{$caso->id}", ['acao' => 'emitir_nota'])->assertSessionHas('success');
+
+        Bus::assertDispatchedTimes(GenerateInvoiceJob::class, 1);
+        Bus::assertDispatched(GenerateInvoiceJob::class, fn ($job) => $job->orderId === $rascunhoId);
+        $caso->refresh();
+        $this->assertSame('emitida', $caso->devolucao_fiscal_status);
+        $this->assertSame($rascunhoId, $caso->devolucao_order_id);
+        $this->assertSame(MarketplaceReturn::AGUARDANDO_ENVIO, $caso->situacao);
+        $this->assertSame($admin->id, $caso->events()->where('description', 'like', '%Enviada à SEFAZ%')->sole()->user_id);
+
+        $this->actingAs($admin)->post("/admin/devolucoes/{$caso->id}", ['acao' => 'emitir_nota'])->assertSessionHas('error');
+
+        Bus::assertDispatchedTimes(GenerateInvoiceJob::class, 1);
+    }
+
+    public function test_dois_cliques_ao_mesmo_tempo_so_um_passa(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+        $mesmoCasoNoOutroClique = MarketplaceReturn::find($caso->id);
+        $servico = app(\App\Modules\Fiscal\Services\DevolucaoFiscalAutomatica::class);
+
+        $this->assertNull($servico->emitirAgora($caso));
+        // Ainda lê "preparada" na memória: quem barra é o update condicional.
+        $this->assertSame('preparada', $mesmoCasoNoOutroClique->devolucao_fiscal_status);
+        $this->assertNotNull($servico->emitirAgora($mesmoCasoNoOutroClique));
+
+        Bus::assertDispatchedTimes(GenerateInvoiceJob::class, 1);
+    }
+
+    public function test_botao_recusa_status_diferente_de_preparada(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda(ncm: null))->fresh();
+        $this->assertSame('pendencia', $caso->devolucao_fiscal_status);
+
+        $this->actingAs($this->admin())->post("/admin/devolucoes/{$caso->id}", ['acao' => 'emitir_nota'])->assertSessionHas('error');
+
+        $this->assertSame('pendencia', $caso->fresh()->devolucao_fiscal_status);
+        Bus::assertNotDispatched(GenerateInvoiceJob::class);
+    }
+
+    public function test_botao_recusa_rascunho_que_ja_tem_nota(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+        Invoice::create([
+            'order_id' => $caso->devolucao_order_id, 'serie' => 2, 'numero' => 1507, 'status' => Invoice::STATUS_REJECTED,
+            'origem' => Invoice::ORIGEM_PEDIDO, 'ambiente' => Invoice::AMBIENTE_PRODUCAO,
+        ]);
+
+        $this->actingAs($this->admin())->post("/admin/devolucoes/{$caso->id}", ['acao' => 'emitir_nota'])->assertSessionHas('error');
+
+        $this->assertSame('preparada', $caso->fresh()->devolucao_fiscal_status);
+        Bus::assertNotDispatched(GenerateInvoiceJob::class);
+    }
+
+    public function test_botao_recusa_rascunho_que_nao_existe_mais(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+        MarketplaceReturn::query()->whereKey($caso->id)->update(['devolucao_order_id' => null]);
+
+        $this->actingAs($this->admin())->post("/admin/devolucoes/{$caso->id}", ['acao' => 'emitir_nota'])->assertSessionHas('error');
+
+        $this->assertSame('preparada', $caso->fresh()->devolucao_fiscal_status);
+        Bus::assertNotDispatched(GenerateInvoiceJob::class);
+    }
+
+    public function test_tela_nao_mostra_o_pedido_tecnico_nos_textos_gravados_antes(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+        $velho = 'NF-e de entrada montada (pedido #3595); sai quando o produto chegar.';
+        MarketplaceReturn::query()->whereKey($caso->id)->update(['devolucao_fiscal_obs' => $velho]);
+        $caso->events()->create(['situacao' => $caso->situacao, 'description' => "Nota de devolução: {$velho}", 'happened_at' => now()]);
+
+        $linha = $this->actingAs($this->admin())->get('/admin/devolucoes')->assertOk()->viewData('page')['props']['casos'][0];
+
+        $textos = [$linha['notaDevolucao']['obs'], ...array_column($linha['historico'], 'texto')];
+        $this->assertStringNotContainsString('#3595', implode(' ', $textos));
+        $this->assertStringNotContainsString('montada', implode(' ', $textos));
+        $this->assertSame(\App\Modules\Fiscal\Services\DevolucaoFiscalAutomatica::OBS_PREPARADA, $linha['notaDevolucao']['obs']);
+        // O banco continua como estava: a correção é só na exibição.
+        $this->assertSame($velho, $caso->fresh()->devolucao_fiscal_obs);
+    }
+
+    public function test_texto_novo_nao_traz_numero_de_pedido(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $caso = $this->caso($this->venda())->fresh();
+
+        $this->assertStringNotContainsString('#', $caso->devolucao_fiscal_obs);
+        $this->assertStringContainsString('ainda não foi emitida', $caso->devolucao_fiscal_obs);
+    }
 }

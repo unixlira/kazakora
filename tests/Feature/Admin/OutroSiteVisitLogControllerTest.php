@@ -185,4 +185,27 @@ class OutroSiteVisitLogControllerTest extends TestCase
             ->assertJsonPath('pagina', 2)
             ->assertJsonCount(50, 'visitas');
     }
+
+    public function test_olho_mostra_as_rotas_do_ip_com_link_para_o_site(): void
+    {
+        $this->travelTo('2026-10-31 15:00:00');
+        config(['services.ferrakora.origens' => 'ferrakora.com, ferrakora.devlira.com.br']);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->visita('1.1.1.1', '2026-10-31 10:00:00', '/produtos');
+        $this->visita('1.1.1.1', '2026-10-31 10:05:00', '/produto/furadeira');
+        $this->visita('1.1.1.1', '2026-10-31 10:10:00', '/produto/furadeira');
+        $this->visita('2.2.2.2', '2026-10-31 10:10:00', '/de-outro-ip');
+        $this->visita('1.1.1.1', '2026-10-31 10:15:00', '/de-outro-site', 'kazakora');
+
+        $this->actingAs($admin)->getJson('/admin/visitas-ferrakora/visitante?de=2026-10-31&ate=2026-10-31&ip=1.1.1.1')
+            ->assertOk()
+            ->assertJsonPath('total', 3)
+            ->assertJsonPath('rotas.distintas', 2)
+            ->assertJsonPath('rotas.lista.0.path', '/produto/furadeira')
+            ->assertJsonPath('rotas.lista.0.url', 'https://ferrakora.com/produto/furadeira')
+            ->assertJsonPath('rotas.lista.0.vezes', 2)
+            ->assertJsonPath('rotas.lista.1.path', '/produtos')
+            ->assertJsonPath('visitas.0.path', '/produtos')
+            ->assertJsonPath('visitas.0.url', 'https://ferrakora.com/produtos');
+    }
 }

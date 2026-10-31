@@ -19,7 +19,7 @@ class NotificationController extends Controller
      */
     public function index(Request $request): Response
     {
-        $notifications = $request->user()->notifications()
+        $lista = $request->user()->notifications()
             ->latest()
             ->paginate(30)
             ->through(fn ($notification) => [
@@ -32,7 +32,8 @@ class NotificationController extends Controller
             ]);
 
         return Inertia::render('Notifications/Index', [
-            'notifications' => $notifications,
+            // Não pode se chamar "notifications": cobriria a prop do sino (2026-10-31).
+            'lista' => $lista,
         ]);
     }
 

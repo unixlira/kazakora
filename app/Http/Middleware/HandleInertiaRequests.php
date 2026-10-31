@@ -180,7 +180,9 @@ class HandleInertiaRequests extends Middleware
         // pra cada query — MorphMany não clona a Builder interna de forma
         // confiável, então reconstruir do zero evita as duas consultas se
         // contaminarem.
-        $isAdminArea = $request->is('admin*');
+        // As telas /notificacoes* da equipe usam o layout do painel: o sino
+        // mostra o mesmo que em /admin (pedido do Lira 2026-10-31).
+        $isAdminArea = $request->is('admin*') || ($request->is('notificacoes*') && $user->isStaff());
 
         $scope = function ($query) use ($isAdminArea) {
             if (! $isAdminArea) {

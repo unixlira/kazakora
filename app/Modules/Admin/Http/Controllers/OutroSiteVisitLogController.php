@@ -27,7 +27,8 @@ use Inertia\Response;
  * Lê site_visits com site = o da rota (gravada por /api/{site}/visita).
  *
  * Uma linha por IP no período, com a hora do primeiro acesso. O olho mostra
- * os horários de cada página aberta; a lixeira apaga as visitas do IP no
+ * as rotas visitadas e o horário de cada página aberta (rotas: pedido
+ * 2026-10-31, como em Visitas KazaKora); a lixeira apaga as visitas do IP no
  * período (fica na auditoria).
  *
  * Cliente: esses sites não têm login no KazaKora, então "Sim" é o IP que entrou logado
@@ -42,6 +43,9 @@ class OutroSiteVisitLogController extends Controller
 
     /** Linhas por página no histórico do olho. */
     private const POR_PAGINA_HISTORICO = 100;
+
+    /** Rotas diferentes listadas no olho (as mais vistas). */
+    private const MAX_ROTAS = 200;
 
     public function index(Request $request): Response
     {
@@ -122,7 +126,8 @@ class OutroSiteVisitLogController extends Controller
         $request->validate(['page' => ['nullable', 'integer', 'min:1']]);
         [$de, $ate, $fim] = $this->periodo($validated);
 
-        $query = $this->doSite($this->site($request))
+        $nomeSite = $this->site($request);
+        $query = $this->doSite($nomeSite)
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->where('ip', $validated['ip']);
@@ -131,8 +136,26 @@ class OutroSiteVisitLogController extends Controller
         $paginas = max(1, (int) ceil($total / self::POR_PAGINA_HISTORICO));
         $paginaAtual = min((int) $request->input('page', 1), $paginas);
         $cliente = $this->clientesPorIp(collect([$validated['ip']]))[$validated['ip']] ?? null;
+        $endereco = $this->enderecoDoSite($nomeSite);
+
+        // Cada página diferente com quantas vezes foi aberta, da mais vista para a menos.
+        $rotas = (clone $query)->toBase()
+            ->selectRaw('path, COUNT(*) as vezes, MAX(created_at) as ultima')
+            ->groupBy('path')
+            ->orderByDesc('vezes')
+            ->orderBy('path')
+            ->get();
 
         return response()->json([
+            'rotas' => [
+                'distintas' => $rotas->count(),
+                'lista' => $rotas->take(self::MAX_ROTAS)->map(fn ($r) => [
+                    'path' => $r->path,
+                    'url' => $endereco.$r->path,
+                    'vezes' => (int) $r->vezes,
+                    'ultima' => Carbon::parse($r->ultima)->format('d/m/Y H:i'),
+                ])->values(),
+            ],
             'ip' => $validated['ip'],
             'de' => $de->format('d/m/Y'),
             'ate' => $ate->format('d/m/Y'),
@@ -143,7 +166,12 @@ class OutroSiteVisitLogController extends Controller
             'cliente' => $cliente,
             'localizacao' => LocalizacaoDaVisita::resumo($query, $validated['ip'], $local),
             'visitas' => $query->orderBy('created_at')->orderBy('id')->forPage($paginaAtual, self::POR_PAGINA_HISTORICO)->get()
-                ->map(fn (SiteVisit $v) => ['id' => $v->id, 'quando' => $v->created_at?->format('d/m/Y H:i:s')]),
+                ->map(fn (SiteVisit $v) => [
+                    'id' => $v->id,
+                    'quando' => $v->created_at?->format('d/m/Y H:i:s'),
+                    'path' => $v->path,
+                    'url' => $endereco.$v->path,
+                ]),
         ]);
     }
 
@@ -197,6 +225,12 @@ class OutroSiteVisitLogController extends Controller
         abort_unless(array_key_exists($site, SiteVisit::OUTROS_SITES), 404);
 
         return $site;
+    }
+
+    /** Endereço público do site: o primeiro domínio de services.{site}.origens. */
+    private function enderecoDoSite(string $site): string
+    {
+        return 'https://'.trim(explode(',', (string) config("services.{$site}.origens"))[0]);
     }
 
     private function doSite(string $site): Builder

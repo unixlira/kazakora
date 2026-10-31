@@ -102,6 +102,8 @@ class AvaliacoesDoCheckout
 
         $base = fn () => Review::query()
             ->where('rating', 5)
+            // Vinda de marketplace só aparece na seção do produto, com o aviso (2026-10-31).
+            ->where('outra_loja', false)
             ->whereNotNull('comment')
             ->whereRaw('LENGTH(TRIM(comment)) >= 15')
             ->with(['user:id,name', 'images'])

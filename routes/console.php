@@ -258,6 +258,9 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // prazos e alertas. O webhook do ML já traz reclamação nova na hora; isto
 // é a rede de segurança e o que pega a Shopee (sem push de devolução).
 Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
+// Etiqueta de Devolução PAC (Lira 2026-10-31): rastreio dos Correios (sem webhook);
+// entregue dispara a nota e avisa no sino (AcompanharDevolucaoPac).
+Schedule::command('devolucoes:acompanhar-pac')->everyTenMinutes()->withoutOverlapping(15);
 
 // Pedido cancelado no canal com NF-e autorizada (Lira, 2026-10-26: "sem
 // multa"). Até 24h da autorização a nota é cancelada na SEFAZ, sem multa

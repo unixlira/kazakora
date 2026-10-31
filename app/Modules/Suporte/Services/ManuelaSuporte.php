@@ -41,6 +41,11 @@ class ManuelaSuporte
 
         $chamado->registrar(MensagemSuporte::MANUELA, $resposta['resposta']);
 
+        // Preço: depois do aviso da gerência é só a pessoa do time, como no WhatsApp.
+        if ($resposta['resposta'] === ManuelaSemPreco::RESPOSTA) {
+            $chamado->forceFill(['humano_ativo' => true])->save();
+        }
+
         if ($resposta['abrir_chamado'] && $chamado->status === Chamado::CONVERSA) {
             $chamado->forceFill([
                 'status' => Chamado::ABERTO,

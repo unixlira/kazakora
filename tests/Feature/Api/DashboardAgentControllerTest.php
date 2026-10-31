@@ -695,13 +695,15 @@ class DashboardAgentControllerTest extends TestCase
      * "sem limite nenhum", foi longe demais e trazia venda de meses atrás
      * já enviada/concluída, ver teste abaixo).
      */
-    public function test_out_of_stock_orders_are_shown_from_the_start_of_the_month_but_not_before(): void
+    public function test_out_of_stock_orders_are_shown_within_the_last_30_days_but_not_before(): void
     {
         $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL']);
 
-        // Início do mês corrente (limite INCLUSIVE) — ainda deve aparecer.
+        // Dentro da janela de 30 dias corridos — ainda deve aparecer. Não usa
+        // startOfMonth(): em dia 31 o início do mês fica fora da janela e o
+        // teste caía sem o sistema ter nada de errado (deploy de 31/10/2026).
         $earlyThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-EARLY-MONTH']);
-        $earlyThisMonth->forceFill(['created_at' => now()->startOfMonth()])->save();
+        $earlyThisMonth->forceFill(['created_at' => now()->subDays(29)])->save();
         $earlyThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
         // Fora da janela de 30 dias corridos (a regra deixou de ser "só o

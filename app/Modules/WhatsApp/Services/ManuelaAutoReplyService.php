@@ -4,6 +4,7 @@ namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Support\ManuelaSaudacao;
+use App\Modules\WhatsApp\Support\ManuelaSemPreco;
 use App\Modules\WhatsApp\Support\ManuelaTom;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
@@ -70,6 +71,8 @@ class ManuelaAutoReplyService
                     'reply' => $remote['reply'] === '' ? '' : ManuelaSaudacao::semTudoBem($remote['reply'], $message),
                     'needs_human' => $remote['needs_human'] || $this->needsHuman(Str::lower(Str::ascii($message)), $this->settings->all()),
                     'alerta_atendimento' => $remote['alerta_atendimento'],
+                    'gerencia' => $remote['gerencia'] ?? false,
+                    'stop_bot' => $remote['gerencia'] ?? false,
                     'rascunho' => $remote['rascunho'],
                     'needs_data' => [],
                     'suggested_next_action' => $remote['alerta_atendimento'] ? 'alerta_atendimento' : ($remote['needs_human'] ? 'handoff' : 'reply'),
@@ -116,6 +119,7 @@ class ManuelaAutoReplyService
         $alerta = ManuelaAgentClient::ALERT_TAG;
         $saudacao = ManuelaSaudacao::regra($s['brand_name']);
         $tom = ManuelaTom::regra();
+        $semPreco = ManuelaSemPreco::regra(ManuelaAgentClient::GERENCIA_TAG);
         $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
         $productBlock = $product
             ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
@@ -148,9 +152,10 @@ Regras de formato:
 - ÁUDIO: você entende áudio do cliente (ele chega transcrito, marcado com [áudio do cliente, transcrito]) e responde sempre e somente por TEXTO. Nunca envie áudio, nota de voz, nem diga que vai mandar áudio ou gravar um; se ele pedir resposta em áudio, explique com simpatia que por aqui o atendimento é por escrito. Não mencione a transcrição: responda ao que ele disse como numa conversa normal. Se o áudio chegar sem transcrição ([cliente enviou ... Áudio]), diga em texto que não conseguiu ouvir e peça para ele escrever ou mandar o áudio de novo.
 - {$saudacao}
 - {$tom}
-- Preço, estoque, link e características só da ficha ou da busca. Nunca invente.
-- FOTO do cliente: responda sobre o produto DA FOTO, nunca sobre o produto falado antes. Se a foto não foi identificada, pergunte qual é o produto antes de falar de preço ou estoque.
-- Preço e estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte: errar o preço afasta o cliente.
+- {$semPreco}
+- Estoque, link e características só da ficha ou da busca. Nunca invente.
+- FOTO do cliente: responda sobre o produto DA FOTO, nunca sobre o produto falado antes. Se a foto não foi identificada, pergunte qual é o produto antes de falar de estoque.
+- Estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte.
 - Se o assunto envolver {$s['handoff_keywords']}, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
 PROMPT;
     }
@@ -169,6 +174,7 @@ PROMPT;
         $site = WhatsAppNumeros::site(WhatsAppNumeros::FERRAKORA);
         $saudacao = ManuelaSaudacao::regra($loja);
         $tom = ManuelaTom::regra('simpática e direta, prestativa como quem entende de ferramenta');
+        $semPreco = ManuelaSemPreco::regra(ManuelaAgentClient::GERENCIA_TAG);
 
         return <<<PROMPT
 Você é a {$s['attendant_name']}, atendente da {$loja} no WhatsApp oficial da loja. A {$loja} vende ferramentas (elétricas, manuais, acessórios e equipamentos para obra, oficina e casa). Site: {$site}.
@@ -182,7 +188,8 @@ Como você conversa:
 
 Produtos, preço e compra:
 - Você não tem a ficha dos produtos aqui. Para preço, estoque, especificação e compra, mande o cliente ao site {$site}, onde estão o preço e o estoque atualizados. Nunca diga um preço, prazo ou estoque de cabeça.
-- Não dá desconto, cupom, brinde nem preço diferente do site, nem promete que vai conseguir. Se pedirem, diga com educação que o preço é o do site.
+- Não dá desconto, cupom, brinde nem preço diferente do site, nem promete que vai conseguir.
+- {$semPreco}
 - Dúvida técnica que você não sabe responder com segurança: é caso de resposta negativa (regra abaixo), não responda "não sei" ao cliente.
 
 Resposta negativa: se a sua resposta seria negativa ou sem resposta ("não sei", "não tem", "não consigo confirmar"), NÃO responda isso ao cliente. Escreva só {$alerta} seguido de uma linha curta com o que o cliente quer saber. O sistema não envia essa mensagem ao cliente: ele alerta o time de Atendimento, que assume a conversa.

@@ -129,3 +129,11 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
 - **Reembolso de logística/da plataforma do TikTok** (R$ 560 em set, R$ 291 em out):
   dinheiro que entra por pedido perdido/cancelado; não entra no lucro (conservador).
 
+## Correções de 2026-10-31 (auditoria do financeiro)
+
+- **Meta Ads na conta:** `ads:sync-spend` grava o gasto diário com canal `meta_ads`; `porCanal()` junta no canal `loja`. A tela da Meta continua lendo a API.
+- **ADS:** janela de 7 dias e rodada extra às 23:30, antes do e-mail das 23:50.
+- **Extrato do TikTok:** regra 3 de `removerLinhasSuperadas` tira a linha "Pagos" repetida com ID provisório e definitivo; a regra 2 olha `updated_at`, para não apagar GMV Max real do mesmo arquivo.
+- **Cobranças sem pedido na linha de taxas** (`ContributionMargin::cobrancasSemPedido`): Full e Minha página do ML e DIFAL da Shopee (`financeiro:lancamentos`, tabela `financeiro_lancamentos`), reembolso e cobrança de pedido cancelado do TikTok, frete recebido no Mercado Pago, etiqueta de pedido fora da receita.
+- **Ao levar à produção, dados a acertar uma vez:** `tiktok:limpar-extrato`, reimportar o último demonstrativo do TikTok, `ads:sync-spend --dias=60`, `financeiro:lancamentos --desde=2026-05-01`, `orders:recalcular-taxas --desde=2026-07-01 --canal=shopee`.
+- **Fora daqui:** custo sem histórico, insumos de R$ 2 por pedido, imposto real da guia DAS.

@@ -21,12 +21,9 @@ use InvalidArgumentException;
  *     por dia: impressions, clicks, attributed_orders, attributed_gmv, spend.
  *  2. Ligar no comando ads:sync-spend (App\Console\Commands\
  *     SyncChannelAdSpend), gravando com channel = canal() daqui.
- *  3. Decidir com o Lira como esse gasto entra na conta de lucro:
- *     ContributionMargin::periodo() soma channel_ad_spends inteiro (então
- *     passa a descontar sozinho), mas porCanal() separa por `channel`, e
- *     "meta_ads"/"google_ads" não são origem de pedido. Provavelmente o
- *     gasto deve ir para o canal `loja` (site próprio). Não gravar nada
- *     antes dessa decisão.
+ *  3. Na conta de lucro, a Meta (ads:sync-spend, 2026-10-31) é gasto do canal
+ *     `loja`: ContributionMargin::porCanal() junta meta_ads no site. Google
+ *     continua sem integração e sem linha.
  */
 final class PlataformaDeAnuncio
 {

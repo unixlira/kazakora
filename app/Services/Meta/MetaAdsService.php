@@ -984,6 +984,39 @@ class MetaAdsService
     }
 
     /**
+     * Gasto diário da conta inteira (nível account, inclui campanha excluída),
+     * no formato de ads:sync-spend (correção do financeiro, 2026-10-31: a Meta
+     * ficava fora da conta de lucro). Só leitura.
+     *
+     * @return list<array{date: string, impressions: int, clicks: int, attributed_orders: int, attributed_gmv: float, spend: float}>
+     *
+     * @throws MetaAdsException
+     */
+    public function gastoDiario(Carbon $de, Carbon $ate): array
+    {
+        $linhas = $this->getPaginado($this->conta().'/insights', [
+            'level' => 'account',
+            'time_increment' => 1,
+            'time_range' => json_encode(['since' => $de->toDateString(), 'until' => $ate->toDateString()]),
+            'fields' => 'spend,impressions,clicks,actions,action_values',
+            'limit' => 500,
+        ]);
+
+        return array_map(function (array $linha) {
+            $m = $this->metricas($linha);
+
+            return [
+                'date' => (string) $linha['date_start'],
+                'impressions' => $m['impressoes'],
+                'clicks' => $m['cliques'],
+                'attributed_orders' => $m['compras'],
+                'attributed_gmv' => $m['vendas'],
+                'spend' => $m['gasto'],
+            ];
+        }, $linhas);
+    }
+
+    /**
      * Estrutura da conta para gravar no banco (metadados, Lira 2026-10-27):
      * campanhas, conjuntos e anúncios em todos os status que a Meta lista
      * (excluído ela não lista; quem grava marca como DELETED). Só leitura.

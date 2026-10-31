@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
@@ -166,7 +167,7 @@ class ContributionMargin
             ->where('orders.created_at', '>=', $desde)
             ->where('orders.created_at', '<', $ate)
             ->tap(fn ($q) => self::semDevolucao($q))
-            ->sum('order_channel_fees.fee_amount'), 2);
+            ->sum('order_channel_fees.fee_amount') + array_sum(self::cobrancasSemPedido($desde, $ate)), 2);
 
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $frete = round(self::correios($desde, $ate) + $flex, 2);
@@ -218,12 +219,18 @@ class ContributionMargin
         $taxas = $vendas()->join('order_channel_fees', 'order_channel_fees.order_id', '=', 'orders.id')
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(order_channel_fees.fee_amount), 0) as total')
             ->groupBy('canal')->pluck('total', 'canal');
+        $cobrancas = self::cobrancasSemPedido($desde, $ate);
         $correios = self::correios($desde, $ate, porCanal: true);
         $ads = ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())
             ->where('date', '<', $ate->toDateString())
             ->selectRaw('channel, COALESCE(SUM(spend), 0) as total')
             ->groupBy('channel')->pluck('total', 'channel');
+        // Meta Ads (2026-10-31): anúncio do site, não é origem de pedido.
+        if (isset($ads[PlataformaDeAnuncio::META])) {
+            $ads[Order::ORIGIN_STORE] = (float) ($ads[Order::ORIGIN_STORE] ?? 0) + (float) $ads[PlataformaDeAnuncio::META];
+            unset($ads[PlataformaDeAnuncio::META]);
+        }
         foreach (self::adsDoExtrato($desde, $ate) as $canal => $valor) {
             $ads[$canal] = (float) ($ads[$canal] ?? 0) + $valor;
         }
@@ -231,19 +238,19 @@ class ContributionMargin
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $bonus = self::bonificacoes($desde, $ate);
 
-        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), $ads->keys()])
+        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), $ads->keys(), array_keys($cobrancas)])
             ->flatten()->filter()->unique()->values();
         if ($flex > 0 || $bonus > 0) {
             $canais->push(Order::ORIGIN_MERCADO_LIVRE);
         }
 
-        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $correios, $ads, $imposto, $flex, $bonus) {
+        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $cobrancas, $correios, $ads, $imposto, $flex, $bonus) {
             $ml = $canal === Order::ORIGIN_MERCADO_LIVRE;
             $linha = [
                 'pedidos' => (int) ($receita->get($canal)?->pedidos ?? 0),
                 'receita' => round((float) ($receita->get($canal)?->receita ?? 0), 2),
                 'custo_produtos' => round((float) ($custo[$canal] ?? 0), 2),
-                'taxas' => round((float) ($taxas[$canal] ?? 0), 2),
+                'taxas' => round((float) ($taxas[$canal] ?? 0) + ($cobrancas[$canal] ?? 0), 2),
                 'frete' => round((float) ($correios[$canal] ?? 0) + ($ml ? $flex : 0), 2),
                 'ads' => round((float) ($ads[$canal] ?? 0), 2),
                 'bonificacoes' => $ml ? $bonus : 0.0,
@@ -266,10 +273,10 @@ class ContributionMargin
      *
      * ADS, Flex e bônus do Flex são do canal inteiro, não de um pedido: ficam
      * em 'canal' e NÃO entram na margem de cada linha. Por isso
-     *   soma(linhas.margem) − ads − flex + bonificacoes = porCanal()[canal].margem
+     *   soma(linhas.margem) − ads − flex + bonificacoes − cobrancas = porCanal()[canal].margem
      * (o teste OportunidadesCurvaAbcTest confere essa igualdade).
      *
-     * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float}}
+     * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float, cobrancas: float}}
      */
     public function porItem(Carbon $desde, Carbon $ate, ?string $canal = null): array
     {
@@ -345,6 +352,7 @@ class ContributionMargin
             ->all();
 
         $ml = $canal === null || $canal === Order::ORIGIN_MERCADO_LIVRE;
+        $cobrancas = self::cobrancasSemPedido($desde, $ate);
 
         return [
             'linhas' => $linhas,
@@ -352,10 +360,11 @@ class ContributionMargin
                 'ads' => round((float) ChannelAdSpend::query()
                     ->where('date', '>=', $desde->toDateString())
                     ->where('date', '<', $ate->toDateString())
-                    ->when($canal, fn ($q) => $q->where('channel', $canal))
+                    ->when($canal, fn ($q) => $q->whereIn('channel', $canal === Order::ORIGIN_STORE ? [$canal, PlataformaDeAnuncio::META] : [$canal]))
                     ->sum('spend') + ($canal === null ? array_sum(self::adsDoExtrato($desde, $ate)) : (self::adsDoExtrato($desde, $ate)[$canal] ?? 0)), 2),
                 'flex' => $ml ? (float) app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'] : 0.0,
                 'bonificacoes' => $ml ? self::bonificacoes($desde, $ate) : 0.0,
+                'cobrancas' => round($canal === null ? array_sum($cobrancas) : ($cobrancas[$canal] ?? 0), 2),
             ],
         ];
     }
@@ -390,6 +399,79 @@ class ContributionMargin
             ->pluck('total', 'channel')
             ->map(fn ($total) => round(max(0.0, (float) $total), 2))
             ->all();
+    }
+
+    /**
+     * Dinheiro do canal que não pertence a uma venda efetiva (auditoria
+     * 2026-10-31), por canal; positivo é custo, negativo é crédito. Entra na
+     * linha de taxas:
+     *  - financeiro_lancamentos: Full e Minha página do ML, DIFAL da Shopee;
+     *  - extrato do TikTok: reembolso de logística/plataforma (crédito) e
+     *    cobrança em pedido que não conta como venda;
+     *  - frete do comprador recebido no Mercado Pago (marketplace_shipment);
+     *  - etiqueta dos Correios gerada para pedido que não conta como venda.
+     *
+     * @return array<string, float>
+     */
+    public static function cobrancasSemPedido(Carbon $desde, Carbon $ate): array
+    {
+        $total = [];
+        $somar = function (string $canal, float $valor) use (&$total) {
+            $total[$canal] = ($total[$canal] ?? 0.0) + $valor;
+        };
+        $efetiva = fn ($q) => $q->whereIn('orders.status', self::REVENUE_STATUSES)->tap(fn ($v) => self::semDevolucao($v));
+
+        if (Schema::hasTable('financeiro_lancamentos')) {
+            DB::table('financeiro_lancamentos')
+                ->where('data', '>=', $desde->toDateString())
+                ->where('data', '<', $ate->toDateString())
+                ->selectRaw('canal, SUM(valor) as total')->groupBy('canal')->get()
+                ->each(fn ($l) => $somar($l->canal, (float) $l->total));
+        }
+
+        if (Schema::hasTable('marketplace_settlement_details')) {
+            $reembolso = (float) DB::table('marketplace_settlement_details')
+                ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
+                ->where('transaction_type', 'like', 'Reembolso%')
+                ->where('settlement_date', '>=', $desde->toDateString())
+                ->where('settlement_date', '<', $ate->toDateString())
+                ->sum('payout_amount');
+            $somar(Order::ORIGIN_TIKTOK_SHOP, -$reembolso);
+
+            $foraDaVenda = (float) DB::table('marketplace_settlement_details as d')
+                ->join('orders', fn ($j) => $j->on('orders.external_order_id', '=', 'd.external_order_id')->where('orders.origin', Order::ORIGIN_TIKTOK_SHOP))
+                ->where('d.channel', Order::ORIGIN_TIKTOK_SHOP)
+                ->where('d.transaction_type', 'Pedido')
+                ->where('d.payout_amount', '<', 0)
+                ->where('orders.created_at', '>=', $desde)
+                ->where('orders.created_at', '<', $ate)
+                ->whereNotIn('orders.id', fn ($q) => $efetiva($q->from('orders')->select('orders.id')))
+                ->sum('d.payout_amount');
+            $somar(Order::ORIGIN_TIKTOK_SHOP, -$foraDaVenda);
+        }
+
+        if (Schema::hasTable('mercado_pago_pagamentos')) {
+            $somar(Order::ORIGIN_MERCADO_LIVRE, -(float) DB::table('mercado_pago_pagamentos')
+                ->whereNull('order_id')
+                ->where('descricao', 'marketplace_shipment')
+                ->where('status', 'approved')
+                ->where('data_criacao', '>=', $desde)
+                ->where('data_criacao', '<', $ate)
+                ->sum('valor'));
+        }
+
+        DB::table('correios_pre_postagens')
+            ->join('orders', 'orders.id', '=', 'correios_pre_postagens.order_id')
+            ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
+            ->where('correios_pre_postagens.devolucao', false)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->whereNotIn('orders.id', fn ($q) => $efetiva($q->from('orders')->select('orders.id')))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
+            ->groupBy('canal')->get()
+            ->each(fn ($l) => $somar((string) $l->canal, (float) $l->total));
+
+        return array_filter(array_map(fn (float $v) => round($v, 2), $total), fn (float $v) => $v != 0.0);
     }
 
     /** Alíquota efetiva do Simples (%), informada pelo contador. */

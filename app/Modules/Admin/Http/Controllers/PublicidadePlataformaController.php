@@ -68,10 +68,11 @@ class PublicidadePlataformaController extends Controller
             ? ['diagnostico' => Inertia::defer(fn () => $this->diagnosticoMeta()), 'temDiagnostico' => true]
             : ['temDiagnostico' => false];
 
-        // Lira 2026-10-27: sem gasto diário gravado, os números do mês vêm
-        // direto da Meta (nível conta, inclui campanha excluída), adiados
-        // para não travar a tela.
-        if ($metaConectada && $ultimaSincronizacao === null) {
+        // Lira 2026-10-27: os números do mês vêm direto da Meta (nível conta,
+        // inclui campanha excluída), adiados para não travar a tela. Desde
+        // 2026-10-31 ads:sync-spend grava a Meta para a conta de lucro; a tela
+        // continua igual.
+        if ($metaConectada) {
             $extras['resumoMeta'] = Inertia::defer(fn () => $this->resumoMeta($inicioMes, $hoje, $inicioAnterior, $fimAnterior));
         }
 
@@ -94,7 +95,7 @@ class PublicidadePlataformaController extends Controller
 
         return Inertia::render('Admin/Publicidade/Plataforma', $extras + [
             'plataforma' => PlataformaDeAnuncio::dados($canal),
-            'daMeta' => $metaConectada && $ultimaSincronizacao === null,
+            'daMeta' => $metaConectada,
             // Lira 2026-10-27: a Meta está conectada pela API (MetaAdsService)
             // mesmo sem gasto diário gravado em channel_ad_spends; antes a
             // tela dizia "Não conectada" por falta dessas linhas.

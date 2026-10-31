@@ -80,6 +80,20 @@ class SyncChannelAdSpendTest extends TestCase
         $this->assertDatabaseHas('channel_ad_spends', ['channel' => 'shopee', 'spend' => 45.0]);
     }
 
+    public function test_grava_o_gasto_da_meta_com_canal_meta_ads(): void
+    {
+        $meta = Mockery::mock(\App\Services\Meta\MetaAdsService::class);
+        $meta->shouldReceive('configurado')->andReturn(true);
+        $meta->shouldReceive('gastoDiario')->once()->andReturn([
+            ['date' => '2026-10-05', 'impressions' => 10, 'clicks' => 2, 'attributed_orders' => 0, 'attributed_gmv' => 0.0, 'spend' => 33.5],
+        ]);
+        $this->app->instance(\App\Services\Meta\MetaAdsService::class, $meta);
+
+        $this->artisan('ads:sync-spend')->assertSuccessful();
+
+        $this->assertDatabaseHas('channel_ad_spends', ['channel' => 'meta_ads', 'date' => '2026-10-05', 'spend' => 33.5]);
+    }
+
     public function test_skips_channels_that_are_not_connected_without_failing(): void
     {
         // Nenhuma conta conectada — comando precisa terminar OK mesmo assim.

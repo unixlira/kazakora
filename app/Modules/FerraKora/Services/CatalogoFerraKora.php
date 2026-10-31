@@ -116,6 +116,8 @@ class CatalogoFerraKora extends CatalogoOutroSite
 
         return [
             ...$resumo,
+            // Vindas de marketplace (outra_loja): o site avisa uma vez, no topo da seção (pedido 2026-10-31).
+            'de_marketplace' => $this->avaliacoesDoGrupo($pai)->where('outra_loja', true)->exists(),
             'por_nota' => collect([5, 4, 3, 2, 1])->mapWithKeys(fn (int $nota) => [$nota => (int) ($notas[$nota] ?? 0)])->all(),
             'pagina' => $pagina,
             'por_pagina' => $porPagina,

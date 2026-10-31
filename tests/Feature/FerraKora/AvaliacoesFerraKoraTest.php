@@ -69,6 +69,20 @@ class AvaliacoesFerraKoraTest extends TestCase
         $this->assertStringNotContainsString('Obrigado!', $resposta->getContent());
     }
 
+    public function test_avisa_quando_ha_avaliacao_de_marketplace(): void
+    {
+        [$pai] = $this->publicado();
+        Review::create(['product_id' => $pai->id, 'rating' => 5, 'comment' => 'Própria', 'reviewer_name' => 'Ana']);
+
+        $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id.'/avaliacoes')->assertOk()->assertJsonPath('de_marketplace', false);
+
+        Review::create(['product_id' => $pai->id, 'rating' => 5, 'comment' => 'De fora', 'reviewer_name' => 'guibruno1234'])->forceFill(['outra_loja' => true])->save();
+
+        $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id.'/avaliacoes')->assertOk()
+            ->assertJsonPath('de_marketplace', true)
+            ->assertJsonFragment(['nome' => 'guibruno1234']);
+    }
+
     public function test_produto_fora_do_site_da_404(): void
     {
         $fora = Product::factory()->create(['sku' => 'FORA', 'is_active' => true]);

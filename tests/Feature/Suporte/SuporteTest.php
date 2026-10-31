@@ -10,6 +10,7 @@ use App\Modules\Suporte\Models\Chamado;
 use App\Modules\Suporte\Models\MensagemSuporte;
 use App\Modules\Suporte\Services\ManuelaSuporte;
 use App\Modules\WhatsApp\Services\GeminiClient;
+use App\Modules\WhatsApp\Support\ManuelaSemPreco;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
@@ -115,6 +116,22 @@ class SuporteTest extends TestCase
             [MensagemSuporte::CLIENTE, MensagemSuporte::MANUELA, MensagemSuporte::SISTEMA],
             $chamado->mensagens()->pluck('autor')->all(),
         );
+    }
+
+    public function test_preco_no_chat_nao_sai_e_a_equipe_assume(): void
+    {
+        $this->gemini(json_encode(['resposta' => 'O total do seu pedido foi R$ 100,00.', 'abrir_chamado' => false]));
+        $order = $this->pedido();
+        $chamado = Chamado::create(['numero' => Chamado::gerarNumero(), 'user_id' => $order->user_id, 'order_id' => $order->id, 'status' => Chamado::CONVERSA, 'aberto_por' => 'cliente']);
+        $chamado->registrar(MensagemSuporte::CLIENTE, 'Quanto foi meu pedido?');
+
+        app(ManuelaSuporte::class)->responder($chamado);
+
+        $chamado->refresh();
+        $this->assertSame(ManuelaSemPreco::RESPOSTA, $chamado->mensagens()->where('autor', MensagemSuporte::MANUELA)->value('conteudo'));
+        $this->assertSame(Chamado::ABERTO, $chamado->status);
+        $this->assertTrue($chamado->humano_ativo);
+        $this->assertStringNotContainsString('100,00', app(ManuelaSuporte::class)->contexto($order));
     }
 
     public function test_manuela_manda_para_o_botao_quando_o_cliente_ainda_pode_cancelar(): void

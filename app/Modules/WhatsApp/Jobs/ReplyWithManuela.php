@@ -161,6 +161,12 @@ class ReplyWithManuela
             $conversation->update(['ai_enabled' => false]);
         }
 
+        // Preço (pedido do Lira 2026-10-31): cliente recebe o aviso da gerência,
+        // a chave desliga e o time é alertado para assumir.
+        if ($reply['gerencia'] ?? false) {
+            $this->alertarAtendimento($conversation, $text !== '' ? $text : $inbound->preview(), (string) ($reply['rascunho'] ?? ''));
+        }
+
         // Resposta negativa ("não sei", "não tem"): nada vai ao cliente; o
         // time de Atendimento é alertado para assumir (pedido do Lira 2026-10-25).
         if ($reply['alerta_atendimento'] ?? false) {

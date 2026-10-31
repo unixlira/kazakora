@@ -167,7 +167,7 @@ class ManuelaProductFlowTest extends TestCase
         $this->assertTrue($sent[0]->payload['interim']);
 
         $response = $this->functionResponse($this->geminiRequests()[1]);
-        $this->assertSame([['origem' => 'mercado_livre', 'id' => 'MLB1', 'nome' => 'Ring Light 26cm Com Tripé', 'preco' => 'R$ 59,90', 'link' => 'https://produto.mercadolivre.com.br/MLB-1']], $response['response']['encontrados']);
+        $this->assertSame([['origem' => 'mercado_livre', 'id' => 'MLB1', 'nome' => 'Ring Light 26cm Com Tripé', 'link' => 'https://produto.mercadolivre.com.br/MLB-1']], $response['response']['encontrados']);
     }
 
     public function test_nao_acha_em_lugar_nenhum_alerta_o_atendimento_sem_responder_o_cliente(): void

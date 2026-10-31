@@ -9,6 +9,7 @@ use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
+use App\Modules\Marketplace\Support\DevolucaoPacCaso;
 use App\Services\Correios\CorreiosPrePostagemService;
 use App\Services\Correios\Exceptions\CorreiosException;
 use App\Services\Correios\Exceptions\CorreiosNotConfiguredException;
@@ -53,6 +54,7 @@ class CorreiosController extends Controller
     public function __construct(
         private readonly CorreiosPrePostagemService $service,
         private readonly CorreiosFreightQuoteService $freightQuote,
+        private readonly DevolucaoPacCaso $devolucaoPac,
     ) {
     }
 
@@ -349,6 +351,8 @@ class CorreiosController extends Controller
             );
             $record->save();
 
+            $this->devolucaoPac->etiquetaGerada($record);
+
             return redirect()->route('admin.correios.ver', $record)->with('success', $successMessage);
         } catch (CorreiosNotConfiguredException $exception) {
             return back()->withInput()->with('error', $exception->getMessage());
@@ -407,7 +411,13 @@ class CorreiosController extends Controller
 
     public function destroy(CorreiosPrePostagem $correio): RedirectResponse
     {
+        $estavaGerada = $correio->status === CorreiosPrePostagem::STATUS_GERADA;
+
         $correio->delete();
+
+        if ($estavaGerada) {
+            $this->devolucaoPac->etiquetaSaiu($correio, 'removida');
+        }
 
         return redirect()->route('admin.correios.listar')->with('success', 'Registro removido.');
     }

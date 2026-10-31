@@ -14,7 +14,10 @@ use RuntimeException;
  */
 class CorreiosCancelamento
 {
-    public function __construct(private readonly CorreiosPrePostagemService $correios) {}
+    public function __construct(
+        private readonly CorreiosPrePostagemService $correios,
+        private readonly DevolucaoPacCaso $devolucaoPac,
+    ) {}
 
     public function cancelar(CorreiosPrePostagem $prePostagem): void
     {
@@ -28,5 +31,7 @@ class CorreiosCancelamento
             'status' => CorreiosPrePostagem::STATUS_CANCELADA,
             'error_message' => 'Cancelada nos Correios em '.now()->timezone('America/Sao_Paulo')->format('d/m/Y H:i').'.',
         ]);
+
+        $this->devolucaoPac->etiquetaSaiu($prePostagem, 'cancelada');
     }
 }

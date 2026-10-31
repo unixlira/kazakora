@@ -220,6 +220,11 @@ Schedule::command('marketplace:relink-unmapped-items')->everyThirtyMinutes();
 // 3 dias (padrão do comando) corrige sozinha o número parcial do dia
 // anterior, que a Shopee ainda ajusta por umas horas depois da virada.
 Schedule::command('ads:sync-spend')->dailyAt('06:00');
+// Correção do financeiro (2026-10-31): o e-mail das 23h50 saía com o ADS do dia
+// incompleto (29/10: 43,29 no e-mail, 219,09 no dia seguinte).
+Schedule::command('ads:sync-spend')->dailyAt('23:30');
+// Cobranças sem pedido (Full e Minha página do ML, DIFAL da Shopee).
+Schedule::command('financeiro:lancamentos')->dailyAt('05:50')->withoutOverlapping(30);
 // Estratégia Shopee (2026-10-14): campanhas de ADS por dia, só leitura.
 // De hora em hora porque o dia corrente muda; 3 dias corrige o anterior.
 Schedule::command('shopee:ads-campanhas')->hourlyAt(35)->withoutOverlapping(30);

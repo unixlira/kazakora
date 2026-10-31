@@ -96,17 +96,11 @@ const sidebarCollapsed = ref(false);
 useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
 useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
 
-// Pedido explícito 2026-08-16: clicar num aviso do dropdown marca como
-// lida (some da sineta, ver notificationsFor() no backend — só mostra não
-// lidas agora) E abre a tela com todas listadas, não só marca inline.
+// Clicar num aviso abre a tela dele, com o texto inteiro; é ela que marca como
+// lida (2026-10-31). Um POST junto com a visita fazia a página voltar sozinha.
 const openNotification = (item) => {
     notifMenuOpen.value = false;
-
-    if (!item.read) {
-        router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
-    }
-
-    router.visit('/notificacoes');
+    router.visit(`/notificacoes/${item.id}`);
 };
 
 // Botão de excluir (pedido explícito 2026-08-16) — some de vez, não some

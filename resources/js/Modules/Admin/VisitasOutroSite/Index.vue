@@ -10,6 +10,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 // Visitas dos outros sites do grupo (FerraKora, Beauty Kora; 2026-10-12):
 // mesmo layout de Visitas Casa Cora, só com Data/Hora, IP, Cliente e Ações.
+// O olho mostra as rotas visitadas, como em Visitas KazaKora (pedido 2026-10-31).
 // Uma tela para todos: site é a coluna site_visits.site.
 const props = defineProps({
     site: { type: String, required: true },
@@ -67,7 +68,7 @@ const tituloCliente = (linha) => (linha.cliente
     ? `IP de ${linha.cliente}, cliente do kazakora.com`
     : 'IP sem cliente logado no kazakora.com nos últimos 6 meses');
 
-// Olho: horários das páginas abertas pelo IP no período.
+// Olho: rotas e horários das páginas abertas pelo IP no período.
 const detalhe = reactive({ aberto: false, carregando: false, erro: '', linha: null, dados: null });
 const corpoDetalhe = ref(null);
 
@@ -231,7 +232,7 @@ const confirmarApagar = () => {
                             </td>
                             <td class="whitespace-nowrap px-4 py-2.5">
                                 <div v-if="visita.ip" class="flex justify-end gap-1.5">
-                                    <ActionIcon icon="fa-eye" label="Ver os horários das visitas" color="slate" @click="abrirDetalhe(visita)" />
+                                    <ActionIcon icon="fa-eye" label="Ver as páginas que abriu" color="slate" @click="abrirDetalhe(visita)" />
                                     <ActionIcon icon="fa-trash" label="Apagar as visitas do período" color="red" @click="paraApagar = visita" />
                                 </div>
                             </td>
@@ -249,12 +250,12 @@ const confirmarApagar = () => {
             <ServerPagination :paginator="props.visitas" embedded />
         </div>
 
-        <!-- Olho: horários das visitas do IP no período. Sem Teleport: as cores
+        <!-- Olho: rotas e horários das visitas do IP no período. Sem Teleport: as cores
              do admin (--surface etc.) só valem dentro do .admin-shell. -->
         <div v-if="detalhe.aberto" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="fecharDetalhe"></div>
             <div role="dialog" aria-modal="true" aria-labelledby="outro-site-visitante-titulo"
-                class="relative flex w-full max-w-lg flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
+                class="relative flex w-full max-w-3xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
                 style="max-height: 90vh;">
                 <div class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-6 py-4">
                     <div>
@@ -278,16 +279,41 @@ const confirmarApagar = () => {
                     </p>
                     <p v-else-if="detalhe.erro" class="px-4 py-10 text-center text-red-600">{{ detalhe.erro }}</p>
                     <CardLocalizacao v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" :localizacao="detalhe.dados.localizacao" :total="detalhe.dados.total" />
+                    <section v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="mx-4 mb-3 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 p-4"
+                        aria-labelledby="outro-site-visitante-rotas">
+                        <h3 id="outro-site-visitante-rotas" class="mb-1 text-sm font-semibold">
+                            <i class="fas fa-route mr-1" aria-hidden="true"></i> Rotas visitadas
+                        </h3>
+                        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400" data-testid="rotas-resumo">
+                            {{ numero(detalhe.dados.total) }} {{ detalhe.dados.total === 1 ? 'página vista' : 'páginas vistas' }},
+                            {{ numero(detalhe.dados.rotas?.distintas ?? 0) }} {{ (detalhe.dados.rotas?.distintas ?? 0) === 1 ? 'rota diferente' : 'rotas diferentes' }}
+                        </p>
+                        <ul v-if="(detalhe.dados.rotas?.lista ?? []).length" class="max-h-64 divide-y divide-[var(--surface-border)] overflow-auto text-sm">
+                            <li v-for="r in detalhe.dados.rotas.lista" :key="r.path" class="flex items-baseline gap-3 py-1.5">
+                                <a :href="r.url" target="_blank" rel="noopener noreferrer"
+                                    class="min-w-0 flex-1 truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
+                                    :title="r.path">{{ r.path }}</a>
+                                <span class="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400"
+                                    :title="`Última vez em ${r.ultima}`">{{ numero(r.vezes) }}×</span>
+                            </li>
+                        </ul>
+                        <p v-else class="text-sm text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</p>
+                    </section>
                     <table v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Data/Hora</th>
+                                <th scope="col" class="px-4 py-3">Página (rota)</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--surface-border)]">
                             <tr v-for="v in detalhe.dados.visitas" :key="v.id">
                                 <td class="whitespace-nowrap px-4 py-2 tabular-nums text-slate-500 dark:text-slate-400">{{ v.quando }}</td>
+                                <td class="px-4 py-2" data-testid="visita-rota">
+                                    <a :href="v.url" target="_blank" rel="noopener noreferrer" :title="v.url"
+                                        class="break-all font-mono text-xs text-primary hover:underline">{{ v.path }}</a>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <span v-if="detalhe.dados.cliente"
                                         class="rounded-full bg-green-100 px-2.5 py-0.5 font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Sim · {{ detalhe.dados.cliente }}</span>
@@ -295,7 +321,7 @@ const confirmarApagar = () => {
                                 </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="2" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma visita nesse período.</td>
+                                <td colspan="3" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma visita nesse período.</td>
                             </tr>
                         </tbody>
                     </table>

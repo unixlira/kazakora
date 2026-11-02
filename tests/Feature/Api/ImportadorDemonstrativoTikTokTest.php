@@ -71,6 +71,29 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
      * quando paga, e o mesmo pedido entrava duas vezes (receita e taxa em
      * dobro em 116 pedidos). Fica uma linha por lançamento.
      */
+    public function test_paga_repetida_no_mesmo_pagamento_sai_e_gmv_do_mesmo_arquivo_fica(): void
+    {
+        $velha = now()->subDays(4);
+        $base = ['status' => 'Pagos', 'transaction_type' => 'Pedido', 'external_order_id' => 'P1', 'external_sku_id' => 'S', 'payment_id' => 'PG1',
+            'settlement_date' => '2026-10-26', 'product_net_sales' => 49.99, 'payout_amount' => 9.79, 'source_file' => 'a.xlsx'];
+        $provisoria = DB::table('marketplace_settlement_details')->insertGetId(['channel' => 'tiktok_shop', 'statement_id' => '374', 'created_at' => $velha, 'updated_at' => $velha] + $base);
+        $definitiva = DB::table('marketplace_settlement_details')->insertGetId(['channel' => 'tiktok_shop', 'statement_id' => '770', 'created_at' => now(), 'updated_at' => now()] + $base);
+
+        // Mesmo valor e dia em demonstrativos diferentes, ambos vistos no último
+        // arquivo, um criado numa importação anterior: cobranças reais.
+        $gmv = ['status' => 'Pagamento pendente', 'transaction_type' => 'Pagamento de GMV para anúncios do TikTok', 'external_order_id' => 'G', 'external_sku_id' => '',
+            'settlement_date' => '2026-10-30', 'product_net_sales' => 0, 'payout_amount' => -27, 'source_file' => 'a.xlsx', 'updated_at' => now()];
+        $g1 = DB::table('marketplace_settlement_details')->insertGetId(['channel' => 'tiktok_shop', 'statement_id' => 'g1', 'created_at' => $velha] + $gmv);
+        $g2 = DB::table('marketplace_settlement_details')->insertGetId(['channel' => 'tiktok_shop', 'statement_id' => 'g2', 'created_at' => now()] + $gmv);
+
+        $removidas = app(ImportadorDemonstrativoTikTok::class)->removerLinhasSuperadas();
+
+        $this->assertSame([$provisoria], $removidas['ids']);
+        $this->assertDatabaseHas('marketplace_settlement_details', ['id' => $definitiva]);
+        $this->assertDatabaseHas('marketplace_settlement_details', ['id' => $g1]);
+        $this->assertDatabaseHas('marketplace_settlement_details', ['id' => $g2]);
+    }
+
     public function test_linha_pendente_repetida_em_outra_importacao_sai_e_a_taxa_e_refeita(): void
     {
         $pedido = \App\Modules\Checkout\Models\Order::create([
@@ -81,8 +104,8 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
         $pendente = $this->linha(['statement_id' => '3689299302187107662']);
         $pago = $this->linha(['statement_id' => '7678349834398566151', 'status' => 'Pagos', 'source_file' => 'b.xlsx']);
         // Pendente que só trocou de ID provisório no download seguinte (mesmo nome de arquivo, outro horário).
-        $velha = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '3725403326006854990', 'created_at' => '2026-10-12 00:53:57']);
-        $nova = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '7695197615289403142', 'created_at' => '2026-10-12 23:30:59']);
+        $velha = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '3725403326006854990', 'created_at' => '2026-10-12 00:53:57', 'updated_at' => '2026-10-12 00:53:57']);
+        $nova = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '7695197615289403142', 'created_at' => '2026-10-12 23:30:59', 'updated_at' => '2026-10-12 23:30:59']);
         // Duas cobranças de GMV iguais no MESMO arquivo são reais e ficam.
         $gmv = ['transaction_type' => 'Pagamento de GMV para anúncios do TikTok', 'external_order_id' => '7639742860367250197', 'external_sku_id' => '', 'settlement_date' => '2026-10-06', 'product_net_sales' => 0, 'payout_amount' => -27];
         $gmv1 = $this->linha([...$gmv, 'statement_id' => '3720583572082165070']);

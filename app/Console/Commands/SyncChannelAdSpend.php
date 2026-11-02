@@ -2,9 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
+use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\MercadoLivre\MercadoLivreAdsService;
+use App\Services\Meta\MetaAdsService;
 use App\Services\Shopee\ShopeeAdsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -18,14 +21,18 @@ use Throwable;
  * horas depois da meia-noite (a Shopee mesma já mostrou isso nos testes ao
  * vivo — o dia mais recente da série sempre vinha com número parcial),
  * então cada rodada re-sincroniza os últimos dias pra corrigir sozinha.
+ *
+ * Correção do financeiro (2026-10-31): janela de 7 dias, porque com 3 dias uma
+ * falha de duas rodadas deixou 21/10 parcial para sempre (Shopee: API 112,28 ×
+ * banco 15,59), e a Meta entra aqui, com canal meta_ads (o site na conta de lucro).
  */
 class SyncChannelAdSpend extends Command
 {
-    protected $signature = 'ads:sync-spend {--dias=3 : Quantos dias pra trás re-sincronizar, incluindo hoje}';
+    protected $signature = 'ads:sync-spend {--dias=7 : Quantos dias pra trás re-sincronizar, incluindo hoje}';
 
-    protected $description = 'Sincroniza o gasto diário real com anúncio (Shopee Ads + Mercado Ads)';
+    protected $description = 'Sincroniza o gasto diário real com anúncio (Shopee Ads, Mercado Ads e Meta Ads)';
 
-    public function handle(ShopeeAdsService $shopeeAds, MercadoLivreAdsService $mlAds): int
+    public function handle(ShopeeAdsService $shopeeAds, MercadoLivreAdsService $mlAds, MetaAdsService $metaAds): int
     {
         $days = max(1, (int) $this->option('dias'));
         $from = now()->subDays($days - 1)->startOfDay();
@@ -33,6 +40,7 @@ class SyncChannelAdSpend extends Command
 
         $this->syncShopee($shopeeAds, $from, $to);
         $this->syncMercadoLivre($mlAds, $from, $to);
+        $this->syncMeta($metaAds, $from, $to);
 
         return self::SUCCESS;
     }
@@ -50,6 +58,11 @@ class SyncChannelAdSpend extends Command
         try {
             $rows = $service->dailyPerformance($from, $to);
 
+            // 2026-11-02: em 02/11 às 06h a rodada não gravou nada e ninguém viu.
+            if ($rows === []) {
+                $this->avisarFalha('Shopee Ads', 'A Shopee devolveu a série vazia.');
+            }
+
             foreach ($rows as $row) {
                 $this->upsert(MarketplaceAccount::CHANNEL_SHOPEE, $row);
             }
@@ -57,6 +70,7 @@ class SyncChannelAdSpend extends Command
             $this->info('Shopee Ads: '.count($rows).' dia(s) sincronizado(s).');
         } catch (Throwable $exception) {
             $this->error("Shopee Ads: falha ao sincronizar — {$exception->getMessage()}");
+            $this->avisarFalha('Shopee Ads', $exception->getMessage());
         }
     }
 
@@ -90,6 +104,34 @@ class SyncChannelAdSpend extends Command
         }
 
         $this->info("Mercado Ads: {$synced} dia(s) sincronizado(s).");
+    }
+
+    private function syncMeta(MetaAdsService $service, Carbon $from, Carbon $to): void
+    {
+        if (! $service->configurado()) {
+            $this->warn('Meta não configurada — pulando sincronização de anúncio.');
+
+            return;
+        }
+
+        try {
+            $rows = $service->gastoDiario($from, $to);
+
+            foreach ($rows as $row) {
+                $this->upsert(PlataformaDeAnuncio::META, $row);
+            }
+
+            $this->info('Meta Ads: '.count($rows).' dia(s) sincronizado(s).');
+        } catch (Throwable $exception) {
+            $this->error("Meta Ads: falha ao sincronizar — {$exception->getMessage()}");
+            $this->avisarFalha('Meta Ads', $exception->getMessage());
+        }
+    }
+
+    /** Falha de canal vira alerta: a saída do comando agendado é descartada. */
+    private function avisarFalha(string $canal, string $motivo): void
+    {
+        rescue(fn () => app(AlertaColetaFinanceira::class)->avisar($canal, "ads:sync-spend: {$motivo}"), report: false);
     }
 
     /**

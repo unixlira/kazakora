@@ -62,7 +62,7 @@ class CurvaAbc
             'ads' => $canalCustos['ads'],
             'flex' => $canalCustos['flex'],
             'bonificacoes' => $canalCustos['bonificacoes'],
-            'lucro' => round($lucroProdutos - $canalCustos['ads'] - $canalCustos['flex'] + $canalCustos['bonificacoes'], 2),
+            'lucro' => round($lucroProdutos - $canalCustos['ads'] - $canalCustos['flex'] + $canalCustos['bonificacoes'] - $canalCustos['cobrancas'], 2),
             'produtos' => $curva->values()->all(),
             'classes' => collect(['A', 'B', 'C'])->mapWithKeys(fn ($classe) => [$classe => [
                 'produtos' => $curva->where('classe', $classe)->count(),

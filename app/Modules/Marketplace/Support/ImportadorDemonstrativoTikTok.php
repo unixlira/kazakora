@@ -151,8 +151,15 @@ class ImportadorDemonstrativoTikTok
      *     ou foi importada depois: sai a não paga. Igual = mesmo pedido, tipo
      *     e SKU; em Pedido, mesmas vendas líquidas; nos outros tipos, mesma
      *     data e valor. Linha "Pagos" nunca sai pela regra 2, e duas linhas
-     *     do mesmo arquivo nunca são cópia uma da outra (o GMV Max cobrou
-     *     R$ 27 duas vezes no mesmo dia, em demonstrativos diferentes).
+     *     vistas no mesmo arquivo nunca são cópia uma da outra (o GMV Max
+     *     cobrou R$ 27 várias vezes no mesmo dia, em demonstrativos
+     *     diferentes). O upsert renova updated_at de tudo que o arquivo traz,
+     *     então é updated_at que diz a última importação da linha: created_at
+     *     apagava cobrança real (R$ 187 de GMV Max em 28 a 30/10/2026);
+     *  3. linha "Pagos" igual a outra do mesmo pagamento (payment_id), em
+     *     outro demonstrativo e de outra importação: o TikTok pagou com o ID
+     *     provisório e depois trocou pelo definitivo (31 pedidos de out/2026,
+     *     R$ 712,34 de lucro a mais). Fica a mais nova.
      *
      * @param  list<string>|null  $ids  pedidos/ajustes a olhar; null = extrato inteiro
      * @return array{ids: list<int>, pedidos: list<string>}
@@ -163,7 +170,7 @@ class ImportadorDemonstrativoTikTok
             ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
             ->when($ids !== null, fn ($q) => $q->whereIn('external_order_id', $ids))
             ->orderBy('id')
-            ->get(['id', 'statement_id', 'status', 'transaction_type', 'external_order_id', 'external_sku_id', 'settlement_date', 'product_net_sales', 'payout_amount', 'source_file', 'created_at']);
+            ->get(['id', 'statement_id', 'status', 'transaction_type', 'external_order_id', 'external_sku_id', 'settlement_date', 'product_net_sales', 'payout_amount', 'payment_id', 'source_file', 'created_at', 'updated_at']);
 
         $sku = fn ($l) => in_array(trim((string) $l->external_sku_id), ['', '/'], true) ? '' : trim((string) $l->external_sku_id);
         $remover = [];
@@ -175,6 +182,7 @@ class ImportadorDemonstrativoTikTok
         }
 
         $restantes = $linhas->reject(fn ($l) => isset($remover[$l->id]));
+        $outraImportacao = fn ($a, $b) => $a->source_file !== $b->source_file || (string) $a->updated_at !== (string) $b->updated_at;
         $chave = fn ($l) => $l->transaction_type === 'Pedido'
             ? $l->external_order_id.'|Pedido|'.$sku($l).'|'.round((float) $l->product_net_sales, 2)
             : $l->external_order_id.'|'.$l->transaction_type.'|'.$sku($l).'|'.$l->settlement_date.'|'.round((float) $l->payout_amount, 2);
@@ -185,9 +193,19 @@ class ImportadorDemonstrativoTikTok
                     continue;
                 }
                 $superada = $iguais->contains(fn ($o) => $o->id !== $l->id && $o->statement_id !== $l->statement_id
-                    && ($o->source_file !== $l->source_file || (string) $o->created_at !== (string) $l->created_at)
+                    && $outraImportacao($o, $l)
                     && ($o->status === 'Pagos' || $o->id > $l->id));
                 if ($superada) {
+                    $remover[$l->id] = $l;
+                }
+            }
+        }
+
+        $pagas = $linhas->reject(fn ($l) => isset($remover[$l->id]) || $l->status !== 'Pagos' || (string) $l->payment_id === '');
+        foreach ($pagas->groupBy(fn ($l) => $l->payment_id.'|'.$chave($l).'|'.round((float) $l->payout_amount, 2)) as $iguais) {
+            $novas = $iguais->sortBy('id')->values();
+            foreach ($novas->slice(0, -1) as $l) {
+                if ($l->statement_id !== $novas->last()->statement_id && $outraImportacao($l, $novas->last())) {
                     $remover[$l->id] = $l;
                 }
             }

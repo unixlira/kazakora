@@ -446,7 +446,7 @@ class CashFlowController extends Controller
                     'bonificacoes' => $conta['canal']['bonificacoes'],
                     // Igual à margem do Resumo (periodo/porCanal) quando não
                     // há busca nem filtro de linha.
-                    'margemOficial' => $filtrado ? null : round($margemLinhas - $conta['canal']['ads'] - $conta['canal']['flex'] + $conta['canal']['bonificacoes'], 2),
+                    'margemOficial' => $filtrado ? null : round($margemLinhas - $conta['canal']['ads'] - $conta['canal']['flex'] + $conta['canal']['bonificacoes'] - $conta['canal']['cobrancas'], 2),
                     'filtrado' => $filtrado,
                     'semCusto' => $todas->filter(fn ($l) => $l['item_id'] !== null && ! $l['tem_custo'])->count(),
                     'taxaEstimada' => $todas->filter(fn ($l) => $l['taxa_estimada'])->count(),

@@ -61,6 +61,40 @@ class TikTokFeeEstimateTest extends TestCase
         $this->assertSame(84.8, $estimativa['payout_amount']);
     }
 
+    public function test_base_is_what_the_customer_paid_not_the_full_price(): void
+    {
+        $this->extrato();
+        $pedido = $this->pedido([[1, 200]]);
+        $pedido->update(['total' => 110, 'shipping_cost' => 10]);
+
+        // Pago R$ 100: fixo 6 (R$ 100 >= 50) + 6% de 100 = 12; afiliado 5; frete 8.
+        $estimativa = app(TikTokFeeEstimator::class)->estimate($pedido->fresh());
+
+        $this->assertSame(100.0, $estimativa['gross_amount']);
+        $this->assertSame(12.0, $estimativa['service_fee']);
+        $this->assertSame(25.0, $estimativa['fee_amount']);
+        $this->assertSame(75.0, $estimativa['payout_amount']);
+    }
+
+    public function test_adjustment_closes_the_gap_with_settled_orders(): void
+    {
+        // 25 pedidos de R$ 100 com R$ 40 de taxa real; o modelo prevê 25 (12 + 5 + 8).
+        for ($i = 0; $i < 25; $i++) {
+            $this->pedido([[1, 100]], "EXT{$i}");
+            DB::table('marketplace_settlement_details')->insert([
+                'channel' => 'tiktok_shop', 'transaction_type' => 'Pedido', 'external_order_id' => "EXT{$i}",
+                'quantity' => 1, 'product_net_sales' => 100, 'payout_amount' => 60, 'affiliate_commissions' => -5, 'platform_commission_fee' => 0,
+                'net_shipping_cost' => -8, 'order_created_at' => now()->subDays(10)->toDateString(),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $estimativa = app(TikTokFeeEstimator::class)->estimate($this->pedido([[1, 100]], 'NOVO'));
+
+        $this->assertSame(0.15, round(app(TikTokFeeEstimator::class)->medias()['ajuste'], 4));
+        $this->assertSame(40.0, $estimativa['fee_amount']);
+    }
+
     public function test_without_enough_statement_it_uses_the_calibrated_defaults(): void
     {
         $this->extrato(3);

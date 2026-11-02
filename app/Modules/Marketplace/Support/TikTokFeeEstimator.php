@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Schema;
  *   da conta oficial enquanto o extrato não chega. O subtotal é o preço cheio,
  *   antes do desconto da loja, e inflava a taxa (outubro: 55% × 46% real).
  * - Ajuste: o que o extrato cobrou além dessas parcelas, em % do pago, nos
- *   pedidos liquidados do mesmo período.
+ *   pedidos liquidados dos últimos 60 dias.
  *
  * As médias são recalculadas do extrato dos últimos 90 dias a cada uso:
  * se o TikTok mudar a cobrança, a estimativa acompanha conforme novos
@@ -42,6 +42,9 @@ class TikTokFeeEstimator
     private const MINIMO_DE_PEDIDOS = 20;
 
     private const DIAS_DE_BASE = 90;
+
+    /** Agosto/2026 cobrou menos que hoje e, nos 90 dias, puxava o ajuste para baixo. */
+    private const DIAS_DO_AJUSTE = 60;
 
     /** @var array{afiliado: float, comissao: float, frete_por_pedido: float, ajuste: float, pedidos: int}|null */
     private ?array $medias = null;
@@ -118,7 +121,7 @@ class TikTokFeeEstimator
         $reais = DB::table('marketplace_settlement_details')
             ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
             ->where('transaction_type', 'Pedido')
-            ->where('order_created_at', '>=', now()->subDays(self::DIAS_DE_BASE)->toDateString())
+            ->where('order_created_at', '>=', now()->subDays(self::DIAS_DO_AJUSTE)->toDateString())
             ->groupBy('external_order_id')
             ->selectRaw('external_order_id, SUM(product_net_sales) - SUM(payout_amount) as taxa')
             ->pluck('taxa', 'external_order_id');

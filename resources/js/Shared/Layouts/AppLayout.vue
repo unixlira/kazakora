@@ -526,6 +526,7 @@ const REDES = [
                         <div>
                             <h2 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h2>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><Link href="/quem-somos" class="hover:opacity-100">Quem Somos</Link></li>
                                 <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
                                 <li><Link href="/politica-de-cookies" class="hover:opacity-100">Política de Cookies</Link></li>
                                 <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>

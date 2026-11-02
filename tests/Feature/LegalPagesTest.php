@@ -19,6 +19,7 @@ class LegalPagesTest extends TestCase
             'trocas e devoluções' => ['/trocas-e-devolucoes'],
             'política de privacidade' => ['/politica-de-privacidade'],
             'termos de uso' => ['/termos-de-uso'],
+            'quem somos' => ['/quem-somos'],
         ];
     }
 
@@ -34,8 +35,6 @@ class LegalPagesTest extends TestCase
     public static function legacyUrls(): array
     {
         return [
-            'quem somos' => ['/quem-somos', '/'],
-            'quem somos com barra' => ['/quem-somos/', '/'],
             'produtos' => ['/produtos', '/?todos=1'],
             'política de frete' => ['/politica-de-frete', '/politica-de-entrega'],
             'contato' => ['/contato', '/fale-conosco'],

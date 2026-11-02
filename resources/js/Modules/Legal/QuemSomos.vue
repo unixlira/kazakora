@@ -15,27 +15,39 @@ import { Head, Link } from '@inertiajs/vue3';
             </p>
             <h1 class="mt-2 font-display text-3xl font-semibold">Quem Somos</h1>
             <p class="mt-3 text-base leading-relaxed text-store-fg-muted">
-                Uma loja criada por quem constrói tecnologia, para deixar a sua casa mais prática e a sua compra mais simples.
+                Uma loja que cresceu junto com quem compra aqui.
             </p>
 
             <div class="mt-8 space-y-4">
-                <LegalCard title="De onde viemos">
+                <LegalCard title="Como surgimos">
                     <p>
-                        A KazaKora tem a cabeça de um desenvolvedor de sistemas. José Roberto Lira trabalha resolvendo
-                        problemas com tecnologia e levou esse jeito de pensar para o varejo: criar a própria loja, dentro
-                        do Grupo AlphaKora, e cuidar de perto de cada etapa, da escolha do produto à importação, da
-                        separação ao despacho.
+                        A KazaKora surgiu de uma ideia simples: comprar pela internet pode ser fácil, seguro e justo.
+                        José Roberto Lira, desenvolvedor de sistemas, trouxe para o varejo o mesmo jeito de trabalhar que
+                        usa na tecnologia: entender o problema, testar e melhorar até funcionar. Foi assim que a loja
+                        ganhou forma, dentro do Grupo AlphaKora.
                     </p>
                 </LegalCard>
 
-                <LegalCard title="A nossa jornada">
+                <LegalCard title="Uma história de crescimento">
                     <p>
-                        A KazaKora foi conquistando espaço pedido a pedido. Hoje está na Shopee, no Mercado Livre, no
-                        TikTok Shop, na Amazon e na Magalu, além da nossa casa principal, o site kazakora.com.
+                        Começamos pequenos e crescemos pedido a pedido. Cada venda ensinou alguma coisa: o que o cliente
+                        procura, o que precisa chegar mais rápido, o que dá para fazer melhor na próxima vez.
                     </p>
                     <p>
-                        Conforme os pedidos cresceram, a tecnologia entrou na operação. Criamos nossos próprios sistemas
-                        de separação e de entrega, para o seu pedido sair conferido e com a etiqueta certa.
+                        Quando o volume aumentou, a tecnologia virou nossa maior aliada. Criamos sistemas próprios de
+                        separação e de entrega, e a operação ficou mais organizada a cada etapa. Hoje entregamos para
+                        todo o Brasil, sem perder o cuidado com cada pedido.
+                    </p>
+                </LegalCard>
+
+                <LegalCard title="Um sucesso que também é do cliente">
+                    <p>
+                        O nosso crescimento só faz sentido quando é bom para quem compra. A importação direta nos ajuda a
+                        buscar um preço justo, a conferência ajuda o pedido a sair certo e a verificação no Reclame AQUI
+                        mostra que a nossa loja está aberta a ser avaliada por quem compra.
+                    </p>
+                    <p>
+                        Cada cliente que volta faz parte dessa história. É por isso que continuamos melhorando.
                     </p>
                 </LegalCard>
 
@@ -49,9 +61,8 @@ import { Head, Link } from '@inertiajs/vue3';
 
                 <LegalCard title="O que você encontra aqui">
                     <p>
-                        Produtos para a casa, a cozinha, a organização, a tecnologia, o bem-estar e as crianças. Como
-                        trabalhamos com importação direta, buscamos oferecer um preço justo, com atendimento de gente de
-                        verdade antes e depois da compra.
+                        Produtos para a casa, a cozinha, a organização, a tecnologia, o bem-estar e as crianças. Tudo com
+                        atendimento antes e depois da compra.
                     </p>
                 </LegalCard>
 

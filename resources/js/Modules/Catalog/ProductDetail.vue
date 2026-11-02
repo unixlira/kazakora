@@ -6,6 +6,7 @@ import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
+import { parcelaMaxima } from '@/Shared/parcelas';
 import { ehFavorito } from '@/Shared/favoritos';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -174,9 +175,8 @@ const priceParts = computed(() => {
     return { whole, cents: cents ?? '00' };
 });
 
-// Parcelamento informativo (sem juros, calculado sobre o preço real — não há
-// gateway de pagamento integrado ainda, então isso é conteúdo de vitrine).
-const installmentValue = computed(() => Number(props.product.final_price) / 12);
+// Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
+const parcela = computed(() => parcelaMaxima(props.product.final_price, page.props.parcelamento));
 
 const showPaymentModal = ref(false);
 
@@ -410,7 +410,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </span>
                                     <span v-if="discountPercent > 0" class="mt-1 rounded-md bg-emerald-100 px-2 py-0.5 text-sm font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">-{{ discountPercent }}%</span>
                                 </div>
-                                <p class="mt-2 text-sm text-store-fg-muted">em 12x {{ formatPrice(installmentValue) }} sem juros</p>
+                                <p class="mt-2 text-sm text-store-fg-muted"><template v-if="parcela">em até {{ parcela.parcelas }}x de {{ formatPrice(parcela.valor) }}</template><template v-else>em até 12x</template></p>
                                 <button type="button" class="mt-1 text-sm font-semibold text-store-accent hover:underline" @click="showPaymentModal = true">Ver meios de pagamento</button>
                             </div>
 
@@ -597,7 +597,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
             <h3 class="font-display text-xl font-semibold">Meios de pagamento</h3>
             <ul class="mt-4 flex flex-col gap-3 text-sm text-store-fg-muted">
                 <li class="flex items-center gap-3"><i class="fas fa-qrcode w-5 text-store-accent"></i>Pix — aprovação imediata</li>
-                <li class="flex items-center gap-3"><i class="fas fa-credit-card w-5 text-store-accent"></i>Cartão de crédito em até 12x sem juros ({{ formatPrice(installmentValue) }}/mês)</li>
+                <li class="flex items-center gap-3"><i class="fas fa-credit-card w-5 text-store-accent"></i>Cartão de crédito em até {{ parcela?.parcelas ?? 12 }}x<template v-if="parcela"> de {{ formatPrice(parcela.valor) }}</template></li>
                 <li class="flex items-center gap-3"><i class="fas fa-barcode w-5 text-store-accent"></i>Boleto bancário</li>
             </ul>
         </Modal>

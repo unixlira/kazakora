@@ -136,4 +136,31 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
         $this->assertDatabaseHas('order_channel_fees', ['order_id' => $pedido->id, 'source' => 'report', 'gross_amount' => 37.99, 'fee_amount' => 6.28, 'payout_amount' => 31.71]);
         $this->assertSame(37.99, (float) DB::table('orders')->where('id', $pedido->id)->value(DB::raw(\App\Modules\Marketplace\Support\ContributionMargin::receitaSql())));
     }
+
+    /** Produção 02/11: 38 linhas repetidas somavam acima do que o TikTok pagou. */
+    public function test_extrato_acima_do_valor_pago_abre_alerta_e_some_quando_bate(): void
+    {
+        $repetida = $this->linha(['statement_id' => '374', 'status' => 'Pagos', 'payment_id' => 'PG1', 'payout_amount' => 100]);
+        $this->linha(['statement_id' => '770', 'status' => 'Pagos', 'payment_id' => 'PG1', 'payout_amount' => 100]);
+        $aba = [['ID do pagamento', 'Valor do pagamento'], ['PG1', '100.00']];
+        $importador = app(ImportadorDemonstrativoTikTok::class);
+
+        $excessos = $importador->conferirPagamentos($aba);
+
+        $this->assertCount(1, $excessos);
+        $this->assertStringContainsString('PG1', $excessos[0]);
+        $this->assertDatabaseHas('admin_alertas', ['chave' => 'tiktok-extrato', 'resolvido_em' => null]);
+
+        DB::table('marketplace_settlement_details')->where('id', $repetida)->delete();
+
+        $this->assertSame([], $importador->conferirPagamentos($aba));
+        $this->assertDatabaseMissing('admin_alertas', ['chave' => 'tiktok-extrato', 'resolvido_em' => null]);
+    }
+
+    public function test_pagamento_com_linhas_faltando_nao_e_duplicidade(): void
+    {
+        $this->linha(['statement_id' => '770', 'status' => 'Pagos', 'payment_id' => 'PG2', 'payout_amount' => 50]);
+
+        $this->assertSame([], app(ImportadorDemonstrativoTikTok::class)->conferirPagamentos([['ID do pagamento', 'Valor do pagamento'], ['PG2', '100.00']]));
+    }
 }

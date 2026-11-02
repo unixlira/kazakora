@@ -141,4 +141,4 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
 ## Correções de 2026-11-02 (TikTok)
 
 - **Trava de duplicidade:** cada importação compara o extrato do banco com a aba Pagamentos (`conferirPagamentos`). Soma acima do valor pago abre alerta em Sistema › Alertas e sai no aviso da importação; some quando bate. A remoção continua em `removerLinhasSuperadas`.
-- **Taxa estimada:** base = o que o cliente pagou (total − frete), não o subtotal, mais o ajuste calibrado nos pedidos liquidados dos últimos 90 dias. Teste em produção de set e out/2026: −1,5% a +3,5% do real, na conta aproximada, antes de −8,6% a +7,4%.
+- **Taxa estimada:** base = o que o cliente pagou (total − frete), não o subtotal, mais o ajuste calibrado nos pedidos liquidados dos últimos 60 dias. Conferido com os dados de produção em 02/11: set/2026 −1,9% e out/2026 +2,5% contra a taxa real (antes −8,6% e +6,0%). Os mesmos pedidos entram na calibragem, então não é teste independente.

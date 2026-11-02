@@ -1651,7 +1651,8 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 /* Celular: menos sobra nas laterais para o Turbo do motoboy caber numa linha a partir de 360px. */
 @media (max-width: 480px) { .pd2 .compra .prazo-cep { padding-left: 6px; padding-right: 6px; } .pd2 .prazo-cep label.opcao-frete { padding: 10px 4px; } }
 /* Botrel, 2026-11-02: parcela com total; botões de variação em grade; pontos e descrição recolhida só no celular. */
-.pd2 .compra .parc { flex-wrap: wrap; }
+.pd2 .compra .parc { align-items: flex-start; }
+.pd2 .compra .parc i { flex: 0 0 auto; margin-top: 3px; }
 .pd2 .compra .parc-total { color: #6b7280; font-size: 12px; }
 .dark .pd2 .compra .parc-total { color: var(--text); }
 .pd2 .opcoes.em-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }

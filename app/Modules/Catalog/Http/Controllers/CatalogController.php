@@ -364,7 +364,17 @@ class CatalogController extends Controller
             ->orderByDesc('id')
             ->get()
             // Nome oculto: o usuário não vai no JSON da página.
-            ->each(fn (Review $review) => $review->ocultar_nome && $review->setRelation('user', null));
+            ->each(function (Review $review) {
+                if ($review->ocultar_nome) {
+                    $review->setRelation('user', null);
+                }
+                // Importada de outra loja com o campo zerado (3.963 em 02/11): o selo
+                // "Comprado em outra loja" de 21/10 aparece. Só na tela: o banco não muda,
+                // então os carrosséis do checkout seguem iguais.
+                if ($review->channel === 'outra_loja') {
+                    $review->setAttribute('outra_loja', true);
+                }
+            });
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
@@ -529,7 +539,7 @@ class CatalogController extends Controller
             // Entregáveis: sorteios, livros digitais (sem o PDF) e a imagem
             // dos tablets do quadro dos livros (null = padrão das costas).
             'sorteios' => $promocoes['sorteios'],
-            'livrosDigitais' => $promocoes['livrosDigitais'],
+            'livrosDigitais' => PromocoesDoProduto::mostraQuadroDosLivros($product, $promocoes['livrosQuadro']) ? $promocoes['livrosDigitais'] : [],
             'livrosQuadro' => $promocoes['livrosQuadro'],
             // Condições e botão para a página da promoção de cada quadro (2026-10-21).
             'quadrosPromocao' => $promocoes['quadros'],

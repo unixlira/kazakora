@@ -213,6 +213,9 @@ class CheckoutController extends Controller
 
         $produto = Product::query()->with('fiscalData')->find((int) $request->query('produto'));
         $prazo = $prazoPorCep->consultar($cep, $produto);
+        if ($produto) {
+            CheckoutEvento::naPaginaDoProduto($request, CheckoutEvento::PRODUTO_CEP, $produto->id);
+        }
 
         // Rua do CEP e opção TURBO na página do produto (pedido 2026-10-23):
         // mesmo TURBO do checkout (SEDEX pela diferença), também no Full.

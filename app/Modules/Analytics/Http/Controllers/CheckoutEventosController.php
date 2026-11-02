@@ -124,6 +124,8 @@ class CheckoutEventosController extends Controller
         $inteiro = fn (string $chave, int $max) => is_int($e[$chave] ?? null) && $e[$chave] >= 0 && $e[$chave] <= $max;
 
         return match ($nome) {
+            CheckoutEvento::PRODUTO_ROLAGEM => $so(['campo', 'valor']) && is_string($e['campo'] ?? null) && preg_match('/^\d{1,12}$/', $e['campo']) === 1
+                && is_int($e['valor'] ?? null) && in_array($e['valor'], CheckoutEvento::MARCOS_ROLAGEM, true),
             'rolagem' => $so(['valor']) && is_int($e['valor'] ?? null) && in_array($e['valor'], CheckoutEvento::MARCOS_ROLAGEM, true),
             'foco', 'preencheu' => $so(['campo']) && $campoEm(CheckoutEvento::CAMPOS),
             'pagamento' => $so(['campo']) && $campoEm(CheckoutEvento::FORMAS_PAGAMENTO),

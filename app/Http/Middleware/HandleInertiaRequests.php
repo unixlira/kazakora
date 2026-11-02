@@ -92,6 +92,8 @@ class HandleInertiaRequests extends Middleware
             ], null, false),
             // Checkout com o Mercado Pago em modo teste: faixa amarela avisando.
             'pagamentoTeste' => fn () => $request->is('finalizacao*') && \App\Services\MercadoPago\CredenciaisCheckout::emTeste(),
+            // Parcelas reais do cartão (Botrel, 2026-11-02): preço de vitrine e página do produto.
+            'parcelamento' => fn () => $request->is('admin*') ? null : \App\Modules\Checkout\Support\ParcelasCartao::tabela(),
             // Aviso de cookies (docs/privacidade-e-cookies.md): some depois do OK.
             'cookies' => fn () => $request->is('admin*') ? null : [
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),

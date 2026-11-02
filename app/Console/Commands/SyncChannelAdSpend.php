@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
+use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\MercadoLivre\MercadoLivreAdsService;
@@ -57,6 +58,11 @@ class SyncChannelAdSpend extends Command
         try {
             $rows = $service->dailyPerformance($from, $to);
 
+            // 2026-11-02: em 02/11 às 06h a rodada não gravou nada e ninguém viu.
+            if ($rows === []) {
+                $this->avisarFalha('Shopee Ads', 'A Shopee devolveu a série vazia.');
+            }
+
             foreach ($rows as $row) {
                 $this->upsert(MarketplaceAccount::CHANNEL_SHOPEE, $row);
             }
@@ -64,6 +70,7 @@ class SyncChannelAdSpend extends Command
             $this->info('Shopee Ads: '.count($rows).' dia(s) sincronizado(s).');
         } catch (Throwable $exception) {
             $this->error("Shopee Ads: falha ao sincronizar — {$exception->getMessage()}");
+            $this->avisarFalha('Shopee Ads', $exception->getMessage());
         }
     }
 
@@ -117,7 +124,14 @@ class SyncChannelAdSpend extends Command
             $this->info('Meta Ads: '.count($rows).' dia(s) sincronizado(s).');
         } catch (Throwable $exception) {
             $this->error("Meta Ads: falha ao sincronizar — {$exception->getMessage()}");
+            $this->avisarFalha('Meta Ads', $exception->getMessage());
         }
+    }
+
+    /** Falha de canal vira alerta: a saída do comando agendado é descartada. */
+    private function avisarFalha(string $canal, string $motivo): void
+    {
+        rescue(fn () => app(AlertaColetaFinanceira::class)->avisar($canal, "ads:sync-spend: {$motivo}"), report: false);
     }
 
     /**

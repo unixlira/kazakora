@@ -141,13 +141,14 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
 ]))->name('legal.cookies');
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
+// Quem Somos (pedido 2026-11-02): link só no rodapé, sem item no menu.
+Route::inertia('/quem-somos', 'Legal/QuemSomos')->name('legal.quem-somos');
 // Página pública da promoção (pedido 2026-10-21): título e descrição de Vender › Promoções.
 Route::get('/promocoes/{slug}', [\App\Modules\Catalog\Http\Controllers\PromocaoPublicaController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('promocoes.ver');
 
 // URLs da loja antiga (Nuvemshop) que o Google ainda mostra nos resultados
-// (pedido 2026-10-12: clicar em "kazakora.com › quem-somos" dava 404).
+// (pedido 2026-10-12).
 // 301 para a página atual equivalente, o Google troca o link sozinho.
-Route::permanentRedirect('/quem-somos', '/');
 Route::permanentRedirect('/produtos', '/?todos=1');
 Route::permanentRedirect('/politica-de-frete', '/politica-de-entrega');
 Route::permanentRedirect('/contato', '/fale-conosco');

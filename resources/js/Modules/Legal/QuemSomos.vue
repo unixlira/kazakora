@@ -1,90 +1,107 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
-import LegalCard from '@/Shared/Legal/LegalCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { Head, Link } from '@inertiajs/vue3';
+
+const compromissos = [
+    { titulo: 'Preço', texto: 'Compramos por importação direta, com menos intermediários, para buscar um preço justo no que você leva para casa.' },
+    { titulo: 'Pedido', texto: 'Cada pedido passa por separação e conferência no nosso próprio sistema antes de sair daqui.' },
+    { titulo: 'Confiança', texto: 'Somos verificados no Reclame AQUI e deixamos nossos dados e nossas regras de troca à vista.' },
+];
+
+const dados = [
+    { rotulo: 'Razão social', valor: COMPANY.razaoSocial },
+    { rotulo: 'CNPJ', valor: COMPANY.cnpj },
+    { rotulo: 'Endereço', valor: COMPANY.enderecoCompleto },
+    { rotulo: 'Atendimento', valor: COMPANY.horario },
+];
 </script>
 
 <template>
     <Head title="Quem Somos" />
 
     <AppLayout>
-        <div class="mx-auto max-w-[840px] px-4 py-12 md:px-6">
+        <div class="mx-auto max-w-[760px] px-4 py-12 md:px-6 md:py-16">
             <p class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">
                 <Link href="/" class="hover:text-store-accent">Início</Link> / Quem Somos
             </p>
-            <h1 class="mt-2 font-display text-3xl font-semibold">Quem Somos</h1>
-            <p class="mt-3 text-base leading-relaxed text-store-fg-muted">
-                Uma loja que cresceu junto com quem compra aqui.
+
+            <h1 class="mt-5 font-display text-4xl font-semibold leading-tight md:text-5xl">
+                A KazaKora começou depois do expediente.
+            </h1>
+            <p class="mt-5 text-lg leading-relaxed text-store-fg-muted">
+                De dia, sistemas. À noite, uma loja. Esta é a nossa história, e ela também é de quem compra aqui.
             </p>
 
-            <div class="mt-8 space-y-4">
-                <LegalCard title="Como surgimos">
-                    <p>
-                        A KazaKora surgiu de uma ideia simples: comprar pela internet pode ser fácil, seguro e justo.
-                        José Roberto Lira, desenvolvedor de sistemas, trouxe para o varejo o mesmo jeito de trabalhar que
-                        usa na tecnologia: entender o problema, testar e melhorar até funcionar. Foi assim que a loja
-                        ganhou forma, dentro do Grupo AlphaKora.
-                    </p>
-                </LegalCard>
+            <section class="mt-12 space-y-5 text-base leading-relaxed text-store-fg-muted">
+                <p>
+                    José Roberto Lira é desenvolvedor de sistemas. Passa o dia resolvendo problemas com código e, quando o
+                    expediente acaba, continua trabalhando no que é dele: o Grupo AlphaKora.
+                </p>
+                <p>
+                    Foi nessas noites que a KazaKora tomou forma, a partir de uma pergunta direta: dá para ter uma loja com
+                    preço justo, em que o pedido sai certo e o cliente não precisa correr atrás de ninguém?
+                </p>
+                <p>
+                    A resposta começou pequena, na Mooca, em São Paulo: importação direta e muita atenção
+                    a cada venda.
+                </p>
+            </section>
 
-                <LegalCard title="Uma história de crescimento">
+            <section class="mt-12">
+                <h2 class="font-display text-2xl font-semibold">Os pedidos cresceram. Os problemas também.</h2>
+                <div class="mt-4 space-y-5 text-base leading-relaxed text-store-fg-muted">
                     <p>
-                        Começamos pequenos e crescemos pedido a pedido. Cada venda ensinou alguma coisa: o que o cliente
-                        procura, o que precisa chegar mais rápido, o que dá para fazer melhor na próxima vez.
+                        Mais vendas trouxeram etiqueta para imprimir, pedido para separar e entrega para acompanhar. Em vez
+                        de aceitar o erro como parte do negócio, fizemos o que um desenvolvedor faz: criamos nossos próprios
+                        sistemas de separação e de entrega.
                     </p>
                     <p>
-                        Quando o volume aumentou, a tecnologia virou nossa maior aliada. Criamos sistemas próprios de
-                        separação e de entrega, e a operação ficou mais organizada a cada etapa. Hoje entregamos para
-                        todo o Brasil, sem perder o cuidado com cada pedido.
+                        Hoje entregamos para todo o Brasil. Do power bank ao cesto de bambu, da ring light à bike de spinning,
+                        da cozinha de brinquedo ao organizador, tudo passa pela mesma operação.
                     </p>
-                </LegalCard>
+                </div>
+            </section>
 
-                <LegalCard title="Um sucesso que também é do cliente">
-                    <p>
-                        O nosso crescimento só faz sentido quando é bom para quem compra. A importação direta nos ajuda a
-                        buscar um preço justo, a conferência ajuda o pedido a sair certo e a verificação no Reclame AQUI
-                        mostra que a nossa loja está aberta a ser avaliada por quem compra.
-                    </p>
-                    <p>
-                        Cada cliente que volta faz parte dessa história. É por isso que continuamos melhorando.
-                    </p>
-                </LegalCard>
+            <section class="mt-12">
+                <h2 class="font-display text-2xl font-semibold">Só é sucesso se for bom para os dois lados.</h2>
+                <p class="mt-4 text-base leading-relaxed text-store-fg-muted">
+                    Para nós, um bom resultado não é só vender mais. É você receber o que comprou e ter vontade de voltar.
+                    É assim que tentamos fazer isso acontecer:
+                </p>
+                <ul class="mt-6 space-y-5 border-l-2 border-store-accent pl-5">
+                    <li v-for="item in compromissos" :key="item.titulo">
+                        <h3 class="font-semibold">{{ item.titulo }}</h3>
+                        <p class="mt-1 text-sm leading-relaxed text-store-fg-muted">{{ item.texto }}</p>
+                    </li>
+                </ul>
+                <p class="mt-6 text-sm text-store-fg-muted">
+                    Veja como funcionam as
+                    <Link href="/trocas-e-devolucoes" class="font-medium text-store-accent hover:underline">trocas e devoluções</Link>.
+                </p>
+            </section>
 
-                <LegalCard title="O Grupo AlphaKora">
-                    <p>
-                        A KazaKora faz parte do Grupo AlphaKora, de José Roberto Lira, que reúne desenvolvimento de sites
-                        e sistemas, agência de marketing digital e varejo de produtos importados. É essa experiência que
-                        está por trás de cada compra feita aqui.
-                    </p>
-                </LegalCard>
+            <section class="mt-12">
+                <h2 class="font-display text-2xl font-semibold">Parte do Grupo AlphaKora</h2>
+                <p class="mt-4 text-base leading-relaxed text-store-fg-muted">
+                    A KazaKora faz parte do Grupo AlphaKora, de José Roberto Lira, que também atua com desenvolvimento de
+                    sites e sistemas e com marketing digital. É a mesma cabeça de tecnologia, agora cuidando da sua compra.
+                </p>
+            </section>
 
-                <LegalCard title="O que você encontra aqui">
-                    <p>
-                        Produtos para a casa, a cozinha, a organização, a tecnologia, o bem-estar e as crianças. Tudo com
-                        atendimento antes e depois da compra.
-                    </p>
-                </LegalCard>
-
-                <LegalCard title="Dados da empresa e contato">
-                    <dl class="grid gap-x-6 gap-y-3 sm:grid-cols-[150px_1fr]">
-                        <dt class="font-semibold text-store-fg">Nome fantasia</dt>
-                        <dd>{{ COMPANY.nomeFantasia }} | Grupo AlphaKora</dd>
-                        <dt class="font-semibold text-store-fg">Razão social</dt>
-                        <dd>{{ COMPANY.razaoSocial }}</dd>
-                        <dt class="font-semibold text-store-fg">CNPJ</dt>
-                        <dd>{{ COMPANY.cnpj }}</dd>
-                        <dt class="font-semibold text-store-fg">Endereço</dt>
-                        <dd>{{ COMPANY.enderecoCompleto }}</dd>
-                        <dt class="font-semibold text-store-fg">WhatsApp</dt>
-                        <dd><a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" class="text-store-accent hover:underline">{{ COMPANY.whatsappDisplay }}</a></dd>
-                        <dt class="font-semibold text-store-fg">E-mail</dt>
-                        <dd><a :href="`mailto:${COMPANY.email}`" class="text-store-accent hover:underline">{{ COMPANY.email }}</a></dd>
-                        <dt class="font-semibold text-store-fg">Atendimento</dt>
-                        <dd>{{ COMPANY.horario }}</dd>
-                    </dl>
-                </LegalCard>
-            </div>
+            <section class="mt-12 rounded-2xl border border-store-border bg-store-bg-raised p-6 lg:p-7">
+                <h2 class="font-display text-2xl font-semibold">Fale com a gente</h2>
+                <div class="mt-4 flex flex-col gap-2 text-base sm:flex-row sm:gap-6">
+                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" class="font-medium text-store-accent hover:underline">WhatsApp {{ COMPANY.whatsappDisplay }}</a>
+                    <a :href="`mailto:${COMPANY.email}`" class="font-medium text-store-accent hover:underline">{{ COMPANY.email }}</a>
+                </div>
+                <dl class="mt-6 space-y-3 border-t border-store-border pt-5 text-sm">
+                    <div v-for="item in dados" :key="item.rotulo" class="sm:grid sm:grid-cols-[120px_1fr] sm:gap-4">
+                        <dt class="font-semibold">{{ item.rotulo }}</dt>
+                        <dd class="text-store-fg-muted">{{ item.valor }}</dd>
+                    </div>
+                </dl>
+            </section>
         </div>
     </AppLayout>
 </template>

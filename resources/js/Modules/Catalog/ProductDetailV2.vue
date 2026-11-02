@@ -1661,17 +1661,21 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 @media (max-width: 767px) {
     /* A faixa laranja repete as faixas de cima e empurra a foto; miniaturas viram pontos. */
     .pd2 .faixa, .pd2 .miniaturas { display: none; }
-    .pd2 .pontos { display: flex; justify-content: center; flex-wrap: wrap; }
+    .pd2 .pontos { display: flex; justify-content: safe center; overflow-x: auto; scrollbar-width: none; }
+    .pd2 .pontos button { flex: 0 0 auto; }
     .pd2 .pontos button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; }
     .pd2 .pontos span { width: 8px; height: 8px; border-radius: 50%; background: #c9c9c9; }
     .pd2 .pontos button[aria-current=true] span { background: #1c1c1c; }
     .dark .pd2 .pontos button[aria-current=true] span { background: var(--ink); }
-    /* Estrelas logo abaixo do título, antes dos checks. */
+    /* Estrelas logo abaixo do título e preço antes dos checks: a oferta aparece sem rolar, acima da barra fixa. */
     .pd2 .compra { display: flex; flex-direction: column; }
-    .pd2 .compra > * { order: 3; }
+    .pd2 .compra > * { order: 5; }
     .pd2 .compra > .condicao { order: 0; }
     .pd2 .compra > h1 { order: 1; }
     .pd2 .compra > .nota { order: 2; }
+    .pd2 .compra > .preco { order: 3; }
+    .pd2 .compra > .checks { order: 4; }
+    .pd2 .compra > .divisor { display: none; }
     .pd2 .descricao-card.recolhida article.bloco-anuncio:nth-of-type(n+5),
     .pd2 .descricao-card.recolhida div.bloco-anuncio,
     .pd2 .descricao-card.recolhida .descricao > .bloco:nth-of-type(n+5),

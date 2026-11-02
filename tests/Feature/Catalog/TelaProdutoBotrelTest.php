@@ -7,11 +7,13 @@ use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductSlugAntigo;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Support\ParcelasCartao;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class TelaProdutoBotrelTest extends TestCase
@@ -68,6 +70,15 @@ class TelaProdutoBotrelTest extends TestCase
         $this->assertTrue(PromocoesDoProduto::mostraQuadroDosLivros($casa, 'http://x/quadro.webp'));
         // O brinde do pedido não muda: só o quadro da página.
         $this->assertCount(1, LivroDigital::doProduto($casa));
+    }
+
+    public function test_selo_de_outra_loja_vale_pelo_canal_sem_mudar_o_banco(): void
+    {
+        $produto = Product::factory()->create(['is_active' => true]);
+        $avaliacao = Review::query()->forceCreate(['product_id' => $produto->id, 'rating' => 5, 'comment' => 'Bom', 'channel' => 'outra_loja', 'outra_loja' => false]);
+
+        $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page->where('reviews.0.outra_loja', true));
+        $this->assertFalse((bool) $avaliacao->fresh()->outra_loja);
     }
 
     public function test_comprar_agora_fica_registrado(): void

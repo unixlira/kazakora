@@ -15,6 +15,7 @@ import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
 import { COMPANY } from '@/Shared/company';
 import { fotoAvaliacaoAmpliada, miniaturaAvaliacao } from '@/Shared/fotoAvaliacao';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
+import { parcelaMaxima } from '@/Shared/parcelas';
 import { ehFavorito } from '@/Shared/favoritos';
 import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -75,8 +76,8 @@ const FAQ = [
     ['O frete é grátis?', 'Sim. Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
-        ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
-        : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`],
+        ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`
+        : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`],
 ];
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
@@ -293,7 +294,8 @@ const precoDe = computed(() => {
     return precoBase.value.has_discount ? Number(precoBase.value.preco_de ?? precoBase.value.price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((1 - precoPor.value / precoDe.value) * 100)) : 0));
-const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
+// Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
+const parcela = computed(() => parcelaMaxima(precoBase.value.final_price, page.props.parcelamento));
 
 // Preço no Pix (pedido 2026-10-23): pagando o pedido todo no Pix. O de 1
 // unidade vem pronto do backend (preco_pix, DescontoPix::precoPix); kits e
@@ -838,7 +840,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <!-- Selo de desconto ao lado do preço, com seta para baixo (pedido 2026-10-26; antes ficava na foto com "-"). -->
                                     <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`"><i class="fas fa-arrow-down" aria-hidden="true"></i>{{ percentualTotal }}%</span>
                                 </div>
-                                <div class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x de <strong>{{ formatPrice(installmentValue) }}</strong></div>
+                                <div v-if="parcela" class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ parcela.parcelas }}x de <strong>{{ formatPrice(parcela.valor) }}</strong></div>
+                                <div v-else-if="!page.props.parcelamento?.length" class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x</div>
                                 <div v-if="precoPix !== null && seloPix" class="linha-pix">
                                     <i class="fa-brands fa-pix" aria-hidden="true"></i> pague no pix <b>{{ seloPix }}</b>
                                 </div>

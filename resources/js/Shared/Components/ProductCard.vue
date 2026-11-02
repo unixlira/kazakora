@@ -45,11 +45,12 @@ if (typeof document !== 'undefined' && document.fonts?.addEventListener) {
 </script>
 
 <script setup>
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
+import { parcelaMaxima } from '@/Shared/parcelas';
 import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 
 const props = defineProps({
@@ -81,7 +82,7 @@ const props = defineProps({
     },
 });
 
-// Mesmo parcelamento da página do produto (12x sem juros).
+// Sem tabela do Mercado Pago, a parcela não mostra valor.
 const PARCELAS = 12;
 
 
@@ -274,7 +275,10 @@ const precoPartes = computed(() => {
     const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
-const parcela = computed(() => Number(preco.value.final_price) / PARCELAS);
+// Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
+const inertia = usePage();
+const tabelaParcelas = computed(() => inertia.props.parcelamento);
+const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParcelas.value));
 </script>
 
 <template>
@@ -364,9 +368,10 @@ const parcela = computed(() => Number(preco.value.final_price) / PARCELAS);
                     </div>
                     <s v-if="precoAntes" class="min-w-0 truncate whitespace-nowrap pb-px text-[11px] text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
                 </div>
-                <p class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
+                <p v-if="parcela || !tabelaParcelas?.length" class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
                     <i class="far fa-credit-card" aria-hidden="true"></i>
-                    ou {{ PARCELAS }}x de <span class="font-semibold text-store-verde-texto">{{ formatPrice(parcela) }}</span>
+                    <template v-if="parcela">ou {{ parcela.parcelas }}x de <span class="font-semibold text-store-verde-texto">{{ formatPrice(parcela.valor) }}</span></template>
+                    <template v-else>ou em até {{ PARCELAS }}x</template>
                 </p>
                 <p v-if="product.stock <= 0" class="mt-1 text-[11px] font-semibold text-red-600">Esgotado</p>
                 <p v-else class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto">

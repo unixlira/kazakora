@@ -16,8 +16,8 @@ use Illuminate\Support\Str;
  *   OK — sem eles a loja não abre carrinho, login nem checkout.
  * - Visitante (kazakora_visitor): desde 2026-10-25 criado no primeiro
  *   acesso (garantirVisitante), para o histórico de páginas existir desde a
- *   entrada. Navegador completo, valor do clique e cookies de terceiros no
- *   log continuam só depois do OK.
+ *   entrada. Navegador completo, valor do clique (menos o fbclid, sempre desde
+ *   2026-11-02) e cookies de terceiros no log continuam só depois do OK.
  *
  * Aceite (gravado por registrarAceite()): desde 2026-10-26 sem faixa de
  * cookies; ao navegar o visitante concorda pelos Termos de Uso e o aceite é
@@ -31,10 +31,11 @@ class Cookies
     // 2026-10-18: API de Conversões da Meta (o servidor também manda os eventos).
     // 2026-10-24: aceite na frase do checkout, no lugar do aviso flutuante.
     // 2026-10-25: faixa de volta, aceite ao navegar (OK ou 3 s sem clique).
-    public const VERSAO = '2026-10-25';
+    // 2026-11-02: fbclid gravado em toda visita, sem esperar o aceite.
+    public const VERSAO = '2026-11-02';
 
     /** OKs anteriores para os mesmos cookies (aviso de 2026-10-18): continuam valendo. */
-    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24'];
+    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24', '2026-10-25'];
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';

@@ -115,8 +115,9 @@ const direitos = [
                     <p>
                         Em toda visita registramos a página aberta, a data e a hora, o endereço IP, o tipo de aparelho
                         (celular, tablet ou computador), o site de onde você veio e a campanha (UTM), sem o restante do
-                        endereço. Depois do aceite, registramos também o navegador completo, o código de visitante e o código
-                        de clique dos anúncios (como fbclid ou gclid), e a Loja passa a avisar a Meta, pelo nosso servidor
+                        endereço. Se você chegou por um link do Facebook ou do Instagram, registramos também o código de clique
+                        dessas redes (fbclid). Depois do aceite, registramos também o navegador completo, o código de visitante e
+                        o código de clique dos outros anúncios (como gclid), e a Loja passa a avisar a Meta, pelo nosso servidor
                         (API de Conversões), quando você coloca um produto no carrinho ou tem a compra aprovada, com e-mail,
                         telefone, nome, cidade e CEP embaralhados (hash SHA-256): a Meta não recebe o texto desses dados.
                         No pagamento, o Mercado Pago pode usar cookies próprios, conforme a política de privacidade dele.
@@ -198,7 +199,7 @@ const direitos = [
                         <div><dt class="text-xs text-store-fg-faint">E-mail</dt><dd class="text-store-fg">{{ COMPANY.email }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">WhatsApp</dt><dd class="text-store-fg">{{ COMPANY.whatsappDisplay }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">Horário de atendimento</dt><dd class="text-store-fg">{{ COMPANY.horario }}</dd></div>
-                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">26/10/2026</dd></div>
+                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">02/11/2026</dd></div>
                     </dl>
                     <p class="mt-2">
                         Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados, para

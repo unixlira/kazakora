@@ -135,7 +135,8 @@ const cookies = [
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Página visitada, data e hora</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Site de onde você veio e campanha (UTM), sem o restante do endereço</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Tipo de aparelho (celular, tablet ou computador)</span></li>
-                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Navegador completo, código de visitante e código de clique dos anúncios: só depois do seu aceite</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Código de clique do Facebook e do Instagram (fbclid), se você chegou por um link dessas redes</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span>Navegador completo, código de visitante e código de clique dos outros anúncios: só depois do seu aceite</span></li>
                     </ul>
                     <p class="mt-2">
                         Usamos esses dados para saber quais produtos interessam mais, de onde vêm as visitas e melhorar a loja.

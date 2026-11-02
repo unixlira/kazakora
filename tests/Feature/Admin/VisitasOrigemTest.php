@@ -34,7 +34,7 @@ class VisitasOrigemTest extends TestCase
         ]);
     }
 
-    public function test_grava_origem_e_parametro_de_clique_sem_o_valor_quando_nao_deu_ok(): void
+    public function test_sem_ok_grava_o_valor_do_fbclid(): void
     {
         $this->withHeader('User-Agent', self::NAVEGADOR)
             ->withHeader('Referer', 'https://l.instagram.com/?u=x')
@@ -43,8 +43,19 @@ class VisitasOrigemTest extends TestCase
         $visita = SiteVisit::sole();
         $this->assertSame('instagram', $visita->origem);
         $this->assertSame('fbclid', $visita->click_id_param);
-        $this->assertNull($visita->click_id);
+        $this->assertSame('IwAR123', $visita->click_id);
+        $this->assertFalse($visita->consentiu);
         $this->assertSame('https://l.instagram.com/', $visita->referer);
+    }
+
+    public function test_sem_ok_outro_clique_grava_so_o_parametro(): void
+    {
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->get('https://kazakora.com/politica-de-entrega?gclid=Cj0KCQ');
+
+        $visita = SiteVisit::sole();
+        $this->assertSame('gclid', $visita->click_id_param);
+        $this->assertNull($visita->click_id);
     }
 
     public function test_com_ok_grava_o_valor_do_clique_e_utm_vale_mais_que_o_referer(): void

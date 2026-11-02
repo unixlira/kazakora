@@ -10,7 +10,6 @@ import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import ModalAvaliacao from '@/Shared/Components/ModalAvaliacao.vue';
 import { cliqueSelo } from '@/Shared/cliqueSelo';
-import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 
 const page = usePage();
@@ -577,13 +576,15 @@ const REDES = [
                                 <img :src="imagensLiberadas ? '/images/selos/selo-google-safe.webp' : undefined" :alt="imagensLiberadas ? 'Google Safe Browsing' : ''" width="139" height="45" loading="lazy" decoding="async"
                                     class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
-                            <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma
-                                 escala do Google: caixa branca da mesma altura e o selo com a altura
-                                 do logo do Google dentro dela (pedido 2026-10-14). -->
-                            <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]"
-                                @click.capture="$event.target.closest('a') && cliqueSelo('reclame_aqui')">
-                                <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
-                            </div>
+                            <!-- Selo RA Verificada: imagem "Verificada por Reclame AQUI", sem QR Code (pedido
+                                 2026-11-02). O widget oficial passou a desenhar "Estamos há mais de 1 mês" e
+                                 saía cortado. Na mesma escala do Google (pedido 2026-10-14). -->
+                            <a :href="page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/rav/F68R'" target="_blank" rel="noopener" @click="cliqueSelo('reclame_aqui')"
+                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                title="Verificada por Reclame AQUI">
+                                <img :src="imagensLiberadas ? '/images/selos/reclame-aqui-verificada.webp' : undefined" :alt="imagensLiberadas ? 'Verificada por Reclame AQUI' : ''" width="578" height="158" loading="lazy" decoding="async"
+                                    class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
+                            </a>
                             <!-- Norton Safe Web (2026-10-23): classificação "Seguro" para kazakora.com.
                                  SVG vetorial de 5 KB, mesma caixa branca e altura dos outros selos. -->
                             <a href="https://safeweb.norton.com/report?url=kazakora.com" target="_blank" rel="noopener" @click="cliqueSelo('norton')"

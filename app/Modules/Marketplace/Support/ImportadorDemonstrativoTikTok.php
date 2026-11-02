@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Models\Order;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,7 @@ class ImportadorDemonstrativoTikTok
         $superadas = $this->removerLinhasSuperadas($ids);
         $taxas = $this->aplicarTaxasReais($ids);
         $datas = array_filter(array_column($linhas, 'settlement_date'));
+        $excessos = $this->conferirPagamentos($abas['Pagamentos'] ?? []);
 
         return [
             'linhas' => count($linhas),
@@ -130,7 +132,7 @@ class ImportadorDemonstrativoTikTok
             'liquido' => round(array_sum(array_column($linhas, 'payout_amount')), 2),
             'de' => $datas ? min($datas) : null,
             'ate' => $datas ? max($datas) : null,
-            'divergencias' => $this->conferir($linhas, $abas['Extratos'] ?? []),
+            'divergencias' => [...$this->conferir($linhas, $abas['Extratos'] ?? []), ...$excessos],
             'taxas_reais' => $taxas,
             'linhas_superadas' => count($superadas['ids']),
         ];
@@ -266,6 +268,47 @@ class ImportadorDemonstrativoTikTok
         }
 
         return $gravadas;
+    }
+
+    /**
+     * Trava contra duplicidade (2026-11-02): o que o TikTok depositou é a prova.
+     * Extrato do banco acima do "Valor do pagamento" da aba Pagamentos é linha
+     * repetida e abre alerta. Abaixo não: o arquivo pode não cobrir tudo.
+     *
+     * @param  list<list<string>>  $pagamentos
+     * @return list<string>
+     */
+    public function conferirPagamentos(array $pagamentos): array
+    {
+        $cab = array_map('trim', array_shift($pagamentos) ?? []);
+        $iId = array_search('ID do pagamento', $cab, true);
+        $iValor = array_search('Valor do pagamento', $cab, true);
+        if ($iId === false || $iValor === false) {
+            return [];
+        }
+
+        $excessos = [];
+        foreach ($pagamentos as $p) {
+            $id = trim((string) ($p[$iId] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $pago = round((float) ($p[$iValor] ?? 0), 2);
+            $noBanco = round((float) DB::table('marketplace_settlement_details')
+                ->where('channel', Order::ORIGIN_TIKTOK_SHOP)->where('payment_id', $id)->sum('payout_amount'), 2);
+            if ($noBanco - $pago > 0.01) {
+                $excessos[] = "pagamento {$id}: extrato soma R$ ".number_format($noBanco, 2, ',', '.').', TikTok pagou R$ '.number_format($pago, 2, ',', '.');
+            }
+        }
+
+        $alertas = app(AlertasAdmin::class);
+        if ($excessos) {
+            $alertas->disparar(AlertasAdmin::COLETA_FINANCEIRA, 'tiktok-extrato', 'Extrato do TikTok acima do valor pago', 'Possível linha repetida: '.implode('; ', $excessos));
+        } elseif ($cab !== [] && $pagamentos !== []) {
+            $alertas->resolver(AlertasAdmin::COLETA_FINANCEIRA, 'tiktok-extrato');
+        }
+
+        return $excessos;
     }
 
     /** Conferência 1 do plano: soma das linhas = valor do demonstrativo. */

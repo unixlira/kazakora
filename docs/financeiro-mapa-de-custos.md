@@ -137,3 +137,8 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
 - **Cobranças sem pedido na linha de taxas** (`ContributionMargin::cobrancasSemPedido`): Full e Minha página do ML e DIFAL da Shopee (`financeiro:lancamentos`, tabela `financeiro_lancamentos`), reembolso e cobrança de pedido cancelado do TikTok, frete recebido no Mercado Pago, etiqueta de pedido fora da receita.
 - **Ao levar à produção, dados a acertar uma vez:** `tiktok:limpar-extrato`, reimportar o último demonstrativo do TikTok, `ads:sync-spend --dias=60`, `financeiro:lancamentos --desde=2026-05-01`, `orders:recalcular-taxas --desde=2026-07-01 --canal=shopee`.
 - **Fora daqui:** custo sem histórico, insumos de R$ 2 por pedido, imposto real da guia DAS.
+
+## Correções de 2026-11-02 (TikTok)
+
+- **Trava de duplicidade:** cada importação compara o extrato do banco com a aba Pagamentos (`conferirPagamentos`). Soma acima do valor pago abre alerta em Sistema › Alertas e sai no aviso da importação; some quando bate. A remoção continua em `removerLinhasSuperadas`.
+- **Taxa estimada:** base = o que o cliente pagou (total − frete), não o subtotal, mais o ajuste calibrado nos pedidos liquidados dos últimos 60 dias. Conferido com os dados de produção em 02/11: set/2026 −1,9% e out/2026 +2,5% contra a taxa real (antes −8,6% e +6,0%). Os mesmos pedidos entram na calibragem, então não é teste independente.

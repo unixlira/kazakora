@@ -23,6 +23,12 @@ use Illuminate\Support\Facades\Schema;
  *   venda que eles levaram nos pedidos liquidados (4,4% no extrato acima).
  * - Frete líquido cobrado da loja: média real por pedido (R$ 7,17).
  *
+ * - Base (2026-11-02): o que o cliente pagou (total − frete), a mesma receita
+ *   da conta oficial enquanto o extrato não chega. O subtotal é o preço cheio,
+ *   antes do desconto da loja, e inflava a taxa (outubro: 55% × 46% real).
+ * - Ajuste: o que o extrato cobrou além dessas parcelas, em % do pago, nos
+ *   pedidos liquidados dos últimos 60 dias.
+ *
  * As médias são recalculadas do extrato dos últimos 90 dias a cada uso:
  * se o TikTok mudar a cobrança, a estimativa acompanha conforme novos
  * extratos são importados. Quando o pedido aparece no extrato, a taxa
@@ -31,38 +37,36 @@ use Illuminate\Support\Facades\Schema;
 class TikTokFeeEstimator
 {
     /** Médias do extrato de 21/07 a 20/09/2026 — usadas só sem extrato recente. */
-    private const PADRAO = ['afiliado' => 0.0445, 'comissao' => 0.0015, 'frete_por_pedido' => 7.17, 'pedidos' => 0];
+    private const PADRAO = ['afiliado' => 0.0445, 'comissao' => 0.0015, 'frete_por_pedido' => 7.17, 'ajuste' => 0.0, 'pedidos' => 0];
 
     private const MINIMO_DE_PEDIDOS = 20;
 
-    /** @var array{afiliado: float, comissao: float, frete_por_pedido: float, pedidos: int}|null */
+    private const DIAS_DE_BASE = 90;
+
+    /** Agosto/2026 cobrou menos que hoje e, nos 90 dias, puxava o ajuste para baixo. */
+    private const DIAS_DO_AJUSTE = 60;
+
+    /** @var array{afiliado: float, comissao: float, frete_por_pedido: float, ajuste: float, pedidos: int}|null */
     private ?array $medias = null;
 
     /**
-     * @return array{fee_amount: float, commission_fee: float, service_fee: float, shipping_fee: float, seller_discount: null, platform_discount: null, payout_amount: float, breakdown: array<string, mixed>}
+     * @return array{fee_amount: float, gross_amount: float, commission_fee: float, service_fee: float, shipping_fee: float, seller_discount: null, platform_discount: null, payout_amount: float, breakdown: array<string, mixed>}
      */
     public function estimate(Order $order): array
     {
-        $order->loadMissing('items');
         $medias = $this->medias();
-        $venda = round((float) $order->subtotal, 2);
-
-        $servico = 0.0;
-
-        foreach ($order->items as $item) {
-            $quantidade = max(1, (int) $item->quantity);
-            $unitario = (float) $item->subtotal / $quantidade;
-            $servico += ($unitario >= 50 ? 6 : 4) * $quantidade + 0.06 * (float) $item->subtotal;
-        }
-
-        $servico = round($servico, 2);
-        $comissao = round($venda * $medias['comissao'], 2);
-        $afiliado = round($venda * $medias['afiliado'], 2);
-        $frete = round($medias['frete_por_pedido'], 2);
-        $taxa = round($servico + $comissao + $afiliado + $frete, 2);
+        $partes = $this->parcelas($order, $medias);
+        $venda = $partes['venda'];
+        $servico = $partes['servico'];
+        $comissao = $partes['comissao'];
+        $afiliado = $partes['afiliado'];
+        $frete = $partes['frete'];
+        $ajuste = round($venda * $medias['ajuste'], 2);
+        $taxa = round($servico + $comissao + $afiliado + $frete + $ajuste, 2);
 
         return [
             'fee_amount' => $taxa,
+            'gross_amount' => $venda,
             'commission_fee' => $comissao,
             'service_fee' => $servico,
             'shipping_fee' => $frete,
@@ -74,13 +78,73 @@ class TikTokFeeEstimator
                 'afiliado_esperado' => $afiliado,
                 'taxa_afiliado' => round($medias['afiliado'], 4),
                 'frete_medio' => $frete,
+                'ajuste_extrato' => $ajuste,
                 'base_pedidos_extrato' => $medias['pedidos'],
             ],
         ];
     }
 
     /**
-     * @return array{afiliado: float, comissao: float, frete_por_pedido: float, pedidos: int}
+     * @return array{venda: float, servico: float, comissao: float, afiliado: float, frete: float}
+     */
+    private function parcelas(Order $order, array $medias): array
+    {
+        $order->loadMissing('items');
+        $subtotal = (float) $order->subtotal;
+        $venda = round(max(0.0, (float) $order->total - (float) $order->shipping_cost), 2);
+        $fator = $subtotal > 0 ? min(1.0, $venda / $subtotal) : 1.0;
+
+        $servico = 0.0;
+
+        foreach ($order->items as $item) {
+            $quantidade = max(1, (int) $item->quantity);
+            $pagoNoItem = (float) $item->subtotal * $fator;
+            $servico += ($pagoNoItem / $quantidade >= 50 ? 6 : 4) * $quantidade + 0.06 * $pagoNoItem;
+        }
+
+        return [
+            'venda' => $venda,
+            'servico' => round($servico, 2),
+            'comissao' => round($venda * $medias['comissao'], 2),
+            'afiliado' => round($venda * $medias['afiliado'], 2),
+            'frete' => round($medias['frete_por_pedido'], 2),
+        ];
+    }
+
+    /**
+     * Fração do pago que o extrato cobrou além das parcelas estimadas.
+     *
+     * @param  array{afiliado: float, comissao: float, frete_por_pedido: float}  $medias
+     */
+    private function ajuste(array $medias): float
+    {
+        $reais = DB::table('marketplace_settlement_details')
+            ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
+            ->where('transaction_type', 'Pedido')
+            ->where('order_created_at', '>=', now()->subDays(self::DIAS_DO_AJUSTE)->toDateString())
+            ->groupBy('external_order_id')
+            ->selectRaw('external_order_id, SUM(product_net_sales) - SUM(payout_amount) as taxa')
+            ->pluck('taxa', 'external_order_id');
+
+        $pedidos = Order::query()->where('origin', Order::ORIGIN_TIKTOK_SHOP)
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
+            ->whereIn('external_order_id', $reais->keys())
+            ->with('items')
+            ->get();
+
+        $pago = 0.0;
+        $diferenca = 0.0;
+        foreach ($pedidos as $pedido) {
+            $partes = $this->parcelas($pedido, $medias);
+            $pago += $partes['venda'];
+            $diferenca += (float) $reais[$pedido->external_order_id] - $partes['servico'] - $partes['comissao'] - $partes['afiliado'] - $partes['frete'];
+        }
+
+        return $pedidos->count() >= self::MINIMO_DE_PEDIDOS && $pago > 0 ? max(0.0, $diferenca / $pago) : 0.0;
+    }
+
+    /**
+     * @return array{afiliado: float, comissao: float, frete_por_pedido: float, ajuste: float, pedidos: int}
      */
     public function medias(): array
     {
@@ -97,7 +161,7 @@ class TikTokFeeEstimator
             ->where('transaction_type', 'Pedido')
             ->where('product_net_sales', '>', 0);
 
-        $recente = $base()->where('order_created_at', '>=', now()->subDays(90)->toDateString());
+        $recente = $base()->where('order_created_at', '>=', now()->subDays(self::DIAS_DE_BASE)->toDateString());
         $consulta = $recente->count() >= self::MINIMO_DE_PEDIDOS ? $recente : $base();
 
         $linha = $consulta->selectRaw('COUNT(*) as pedidos, SUM(product_net_sales) as venda,
@@ -110,11 +174,13 @@ class TikTokFeeEstimator
 
         // No extrato as taxas vêm negativas (saída de dinheiro); saldo
         // positivo (canal cobriu mais do que cobrou) não vira custo.
-        return $this->medias = [
+        $medias = [
             'afiliado' => max(0.0, -(float) $linha->afiliado) / (float) $linha->venda,
             'comissao' => max(0.0, -(float) $linha->comissao) / (float) $linha->venda,
             'frete_por_pedido' => max(0.0, -(float) $linha->frete) / (int) $linha->pedidos,
             'pedidos' => (int) $linha->pedidos,
         ];
+
+        return $this->medias = $medias + ['ajuste' => $this->ajuste($medias)];
     }
 }

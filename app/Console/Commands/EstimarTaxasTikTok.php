@@ -62,7 +62,7 @@ class EstimarTaxasTikTok extends Command
             OrderChannelFee::query()->updateOrCreate(
                 ['order_id' => $pedido->id, 'channel' => Order::ORIGIN_TIKTOK_SHOP],
                 [
-                    'gross_amount' => $pedido->subtotal,
+                    'gross_amount' => $estimativa['gross_amount'],
                     'fee_amount' => $estimativa['fee_amount'],
                     ...array_intersect_key($estimativa, array_flip(OrderChannelFee::COMPONENTES)),
                     'source' => OrderChannelFee::SOURCE_ESTIMATE,

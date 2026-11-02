@@ -111,7 +111,11 @@ Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
             ?? \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar($slug);
         abort_unless($produto, 404);
 
-        return redirect()->route('produtos.ver', $produto->slug, 301);
+        // Mantém UTM, fbclid e o que mais vier no link (Botrel, 2026-11-02): sem
+        // isso a visita do anúncio chegava sem origem depois de renomear o produto.
+        $query = $request->getQueryString();
+
+        return redirect()->to(route('produtos.ver', $produto->slug).($query ? '?'.$query : ''), 301);
     });
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
 

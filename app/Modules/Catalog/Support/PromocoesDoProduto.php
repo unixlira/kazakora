@@ -27,6 +27,9 @@ class PromocoesDoProduto
 
     private const TTL = 21600; // 6 h; a troca de versão é que invalida de verdade.
 
+    /** Categorias em que o quadro padrão dos livros (dor nas costas) faz sentido. */
+    private const CATEGORIAS_DO_TEMA_PADRAO = ['Saúde e Fitness', 'Beleza e Bem-Estar'];
+
     /** Imagem do quadro dos livros quando nenhum livro tem a sua. */
     public const QUADRO_LIVROS_PADRAO = 'images/promocoes/livros-revista-cama.webp';
 
@@ -63,6 +66,19 @@ class PromocoesDoProduto
     public const FORMATOS = ['jpg', 'jpeg', 'png', 'webp'];
 
     public const MAX_KB = 5120;
+
+    /**
+     * Quadro padrão (guias de dor nas costas) só onde o tema combina (Botrel,
+     * 2026-11-02: aparecia até na árvore de Natal). Só decide o quadro da página do
+     * produto; o brinde no checkout e no e-mail continua igual.
+     */
+    public static function mostraQuadroDosLivros(Product $produto, ?string $quadro): bool
+    {
+        return filled($quadro)
+            || in_array($produto->category?->name, self::CATEGORIAS_DO_TEMA_PADRAO, true)
+            // Livro ligado a este produto no admin aparece sempre.
+            || LivroDigital::doProduto($produto)->contains('todos_produtos', false);
+    }
 
     /**
      * Props da página do produto: sorteios, livrosDigitais, livrosQuadro e

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Cart\Http\Controllers;
 
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Cart\Support\CartManager;
@@ -112,6 +113,7 @@ class CartController extends Controller
         $quantidade = min($data['quantity'], $product->stock);
         $this->cart->iniciarCompraDireta($product->id, $quantidade);
         $this->addToCartNaMeta($request, $product, $quantidade);
+        CheckoutEvento::naPaginaDoProduto($request, CheckoutEvento::PRODUTO_COMPRAR, $product->id);
 
         return redirect()->route('finalizacao.entrega');
     }

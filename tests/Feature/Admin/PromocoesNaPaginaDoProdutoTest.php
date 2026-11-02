@@ -34,8 +34,9 @@ class PromocoesNaPaginaDoProdutoTest extends TestCase
         Storage::fake('local');
         Storage::fake('public');
         $this->admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $this->produto = Product::factory()->create(['is_active' => true]);
-        $this->outro = Product::factory()->create(['is_active' => true]);
+        $categoria = \App\Modules\Catalog\Models\Category::factory()->create(['name' => 'Saúde e Fitness']);
+        $this->produto = Product::factory()->create(['is_active' => true, 'category_id' => $categoria->id]);
+        $this->outro = Product::factory()->create(['is_active' => true, 'category_id' => $categoria->id]);
         // A migration já cadastra o sorteio da AirFryer para todos.
         LivroDigital::query()->create([
             'titulo' => 'Dores nas costas', 'arquivo' => 'livros-digitais/a.pdf', 'nome_arquivo' => 'a.pdf',
@@ -108,7 +109,7 @@ class PromocoesNaPaginaDoProdutoTest extends TestCase
 
     public function test_variacao_liga_pelo_pai(): void
     {
-        $filho = Product::factory()->create(['is_active' => true, 'parent_product_id' => $this->produto->id]);
+        $filho = Product::factory()->create(['is_active' => true, 'parent_product_id' => $this->produto->id, 'category_id' => $this->produto->category_id]);
 
         $this->actingAs($this->admin)->post('/admin/promocoes/airfryer/produtos', ['product_id' => $filho->id])
             ->assertSessionHasNoErrors();

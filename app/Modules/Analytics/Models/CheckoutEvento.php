@@ -35,8 +35,19 @@ class CheckoutEvento extends Model
      */
     public const EVENTOS_DO_NAVEGADOR = [
         'abriu', 'viu_formulario', 'rolagem', 'foco', 'preencheu', 'cep_respondido',
-        'pagamento', 'finalizar', 'erro', 'saiu',
+        'pagamento', 'finalizar', 'erro', 'saiu', self::PRODUTO_ROLAGEM,
     ];
+
+    /**
+     * Medição da página do produto (Botrel, 2026-11-02): até onde rolou, se usou
+     * a calculadora de CEP e se clicou em COMPRAR AGORA. `campo` guarda o id do
+     * produto. Leitura em `produto:funil`.
+     */
+    public const PRODUTO_ROLAGEM = 'produto_rolagem';
+
+    public const PRODUTO_CEP = 'produto_cep';
+
+    public const PRODUTO_COMPRAR = 'produto_comprar';
 
     public const PEDIDO_CRIADO = 'pedido_criado';
 
@@ -65,6 +76,24 @@ class CheckoutEvento extends Model
 
         return (clone $visitas)->whereNotIn('origem', ['interno'])->whereNotNull('origem')->latest('id')->value('origem')
             ?? $visitas->latest('id')->value('origem');
+    }
+
+    /** CEP consultado ou COMPRAR AGORA na página do produto (servidor). Nunca guarda o CEP. */
+    public static function naPaginaDoProduto(Request $request, string $evento, int $produtoId): void
+    {
+        rescue(function () use ($request, $evento, $produtoId) {
+            if (! TrackSiteVisit::dominioDaLoja($request) || TrackSiteVisit::naoENavegador($request)) {
+                return;
+            }
+
+            self::create([
+                'visitor_id' => self::visitante($request),
+                'user_id' => $request->user()?->id,
+                'evento' => $evento,
+                'campo' => (string) $produtoId,
+                'dispositivo' => TrackSiteVisit::dispositivo((string) $request->userAgent()),
+            ]);
+        }, null, false);
     }
 
     /** Pedido criado pelo checkout (servidor). $visitante calculado antes de criar o pedido. */

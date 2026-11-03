@@ -272,6 +272,16 @@ class BlingInvoiceImporter
             return null;
         }
 
+        // Pedido com a NF-e emitida pelo próprio TikTok (série 6, registrada
+        // por nfe:nota-do-canal): a nota do Bling não sobrescreve nem é
+        // transmitida (2026-11-03, #3779 com 3-655 do Bling em dobro com a
+        // 6-568 do TikTok).
+        $registrada = $order->invoice()->first();
+
+        if ($registrada?->emitida_por === Invoice::EMITIDA_TIKTOK) {
+            return $this->manterNotaDoCanal($order, $registrada, $nfeId, $nota);
+        }
+
         // Nota gerada pelo Bling nasce PENDENTE (situação 1) — ele gera a
         // partir do pedido, mas não envia à SEFAZ. Sem esse envio não há
         // chave de acesso, não há XML, o TikTok não recebe nada e a
@@ -430,6 +440,57 @@ class BlingInvoiceImporter
         if ($nfeId > 0) {
             Cache::forget($this->chaveDaUltimaTentativa($nfeId));
         }
+    }
+
+    /**
+     * O pedido já tem a nota do TikTok. Nota do Bling cancelada vai para o
+     * histórico (chave, número, XML); nota do Bling ainda viva é nota em
+     * dobro: não envia, não grava e avisa uma vez.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function manterNotaDoCanal(Order $order, Invoice $doCanal, int $nfeId, array $nota): Invoice
+    {
+        $chave = preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''));
+        $situacao = (int) ($nota['situacao'] ?? 0);
+
+        if ($chave === $doCanal->chave_acesso) {
+            return $doCanal;
+        }
+
+        if ($this->statusDaSituacao($situacao) === Invoice::STATUS_CANCELLED && $chave !== '') {
+            app(\App\Modules\Fiscal\Services\HistoricoDeNotas::class)->registrar($order, [
+                'plataforma' => 'Bling',
+                'serie' => isset($nota['serie']) ? (int) $nota['serie'] : null,
+                'numero' => isset($nota['numero']) ? (int) $nota['numero'] : null,
+                'chave' => $chave,
+                'valor' => isset($nota['valorNota']) ? (float) $nota['valorNota'] : null,
+                'xml_path' => null,
+            ]);
+
+            return $doCanal;
+        }
+
+        if (Cache::add("bling.invoice.dobro_canal.{$nfeId}", true, now()->addDay())) {
+            $mensagem = 'Nota do Bling '.($nota['serie'] ?? '?').'-'.($nota['numero'] ?? '?')." (situação {$situacao}) NÃO enviada nem gravada: o pedido já tem a NF-e {$doCanal->serie}-{$doCanal->numero} emitida pelo TikTok. Cancelar ou excluir a do Bling para não duplicar.";
+
+            Log::warning('bling.invoice.dobro_com_nota_do_canal', ['order_id' => $order->id, 'nfe_id' => $nfeId, 'situacao' => $situacao]);
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $mensagem);
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+            if ($admins->isNotEmpty()) {
+                rescue(fn () => Notification::send($admins, new FiscalAlertNotification("Pedido #{$order->id}: {$mensagem}")), report: false);
+            }
+        }
+
+        return $doCanal;
+    }
+
+    /** XML da nota pela chave, direto do Bling (histórico de nota cancelada). */
+    public function baixarXml(string $chave): ?string
+    {
+        return $this->fetchXml($chave);
     }
 
     public function temNotaNossaAutorizada(Order $order): bool

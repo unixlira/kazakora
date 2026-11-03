@@ -579,15 +579,16 @@ class TabelaFreteLocalidades
 
     /**
      * Localidades (linhas de frete_localidades) com o PAC e o SEDEX salvos de
-     * cada categoria, no formato das tabelas do admin (Frete por localidade e
-     * página da cidade em Fretes por estado).
+     * cada categoria, no formato das tabelas do admin (página da cidade em
+     * Fretes por estado). Sem provedor, o conectado; a aba da tela pede o outro
+     * (2026-11-03).
      */
-    public function paraTela(Collection $localidades): array
+    public function paraTela(Collection $localidades, ?string $provedor = null): array
     {
         $cotacoes = DB::table('frete_tabela')
             ->whereIn('cep_destino', $localidades->pluck('cep_cotacao')->filter()->unique())
             ->where('cep_origem', $this->origem())
-            ->where('provedor', FreteProvedor::ativo())
+            ->where('provedor', $provedor ?? FreteProvedor::ativo())
             ->get()
             ->groupBy('cep_destino');
 

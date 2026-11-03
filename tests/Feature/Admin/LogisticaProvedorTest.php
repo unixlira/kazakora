@@ -197,6 +197,63 @@ class LogisticaProvedorTest extends TestCase
         $this->assertEquals(10.0, $this->freteDoSite($produto));
     }
 
+    public function test_cidades_tem_abas_correios_e_melhor_envio_e_cotam_todas_as_transportadoras(): void
+    {
+        // Abas Correios e Melhor Envio nas telas de cidades (pedido do Lira em 2026-11-03).
+        $agora = now();
+        DB::table('ibge_estados')->insert(['id' => 32, 'sigla' => 'ES', 'nome' => 'Espírito Santo', 'created_at' => $agora, 'updated_at' => $agora]);
+        DB::table('ibge_municipios')->insert(['id' => 3200169, 'nome' => 'Água Doce do Norte', 'nome_normalizado' => 'agua doce do norte', 'estado_id' => 32, 'uf' => 'ES', 'created_at' => $agora, 'updated_at' => $agora]);
+        $this->contaMelhorEnvio();
+        $admin = $this->admin();
+
+        // Conecta o Melhor Envio (cota o CEP de referência, Santa Luzia do Azul) e volta para os Correios.
+        $this->actingAs($admin)->post('/admin/logistica/provedor/melhor_envio/conectar');
+        $this->post('/admin/logistica/provedor/correios/conectar');
+
+        // Sem aba abre a do conectado (Correios); a aba Melhor Envio mostra a tabela salva dele.
+        $this->get('/admin/logistica/fretes-por-estado/cidades/3200169')->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/FretesPorCidade/Cidade', false)
+            ->where('aba', 'correios')
+            ->where('conectado', 'correios')
+            ->where('localidades.1.nome', 'Santa Luzia do Azul')
+            ->where('localidades.1.regras.pequena.pac', 10)
+            ->where('localidades.1.regras.pequena.pac_servico', null));
+        $this->get('/admin/logistica/fretes-por-estado/cidades/3200169?aba=melhor-envio')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'melhor-envio')
+            ->where('conectado', 'correios')
+            ->where('localidades.1.regras.pequena.pac', 8)
+            ->where('localidades.1.regras.pequena.pac_servico', 'Jadlog Package')
+            ->where('localidades.1.regras.pequena.sedex_servico', 'Loggi Express')
+            ->where('localidades.0.regras', []));
+
+        // Lista das cidades: o preço ao lado da regra é o da aba.
+        $this->get('/admin/logistica/fretes-por-estado/cidades?uf=ES&aba=correios')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'correios')
+            ->where('cidades.0.precos.pequena.pac', 10));
+        $this->get('/admin/logistica/fretes-por-estado/cidades?uf=ES&aba=melhor-envio')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'melhor-envio')
+            ->where('cidades.0.precos', []));
+
+        // Na hora: todas as transportadoras para o CEP da cidade, sem gravar nada.
+        $linhas = DB::table('frete_tabela')->count();
+        $this->postJson('/admin/logistica/fretes-por-estado/cidades/3200169/cotar-melhor-envio')
+            ->assertOk()
+            ->assertJsonPath('erro', null)
+            ->assertJsonPath('cep', '29820000')
+            ->assertJsonPath('categorias.0.chave', 'pequena')
+            ->assertJsonPath('categorias.0.opcoes.0.transportadora', 'Jadlog')
+            ->assertJsonPath('categorias.0.opcoes.1.transportadora', 'Loggi')
+            ->assertJsonCount(2, 'categorias.0.opcoes');
+        $this->assertSame($linhas, DB::table('frete_tabela')->count());
+
+        // Sem conta válida: avisa para conectar em Logística.
+        MelhorEnvioToken::query()->delete();
+        $this->postJson('/admin/logistica/fretes-por-estado/cidades/3200169/cotar-melhor-envio')
+            ->assertOk()
+            ->assertJsonPath('reconectar', true)
+            ->assertJsonPath('categorias', []);
+    }
+
     public function test_melhor_envio_sem_conta_valida_vai_ao_login_e_conecta_na_volta(): void
     {
         $this->actingAs($this->admin())

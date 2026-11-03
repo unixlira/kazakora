@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Jobs;
 
 use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
+use App\Support\FreteProvedor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,6 +35,18 @@ class PreencherTabelaFreteJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public const CEPS_POR_VEZ = 40;
+
+    /**
+     * Melhor Envio (2026-11-03): 4 chamadas por CEP e limite de 250 por
+     * minuto na API, então 10 CEPs por vez com 12 s entre os pedaços
+     * (~200 chamadas por minuto).
+     */
+    public const CEPS_POR_VEZ_MELHOR_ENVIO = 10;
+
+    public static function cepsPorVez(): int
+    {
+        return FreteProvedor::melhorEnvio() ? self::CEPS_POR_VEZ_MELHOR_ENVIO : self::CEPS_POR_VEZ;
+    }
 
     private const CADEIA = 'frete-tabela:cadeia';
 
@@ -99,7 +112,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
                 return;
             }
 
-            $ceps = $tabela->cepsPendentes(self::CEPS_POR_VEZ);
+            $ceps = $tabela->cepsPendentes(self::cepsPorVez());
             if ($ceps === []) {
                 self::anotar(['fase' => 'parado', 'uf' => null, 'erro' => null, 'concluido_em' => now()->toIso8601String()]);
                 rescue(fn () => app(AlertasAdmin::class)->resolver(AlertasAdmin::FRETE_TABELA, 'correios'), report: false);
@@ -110,7 +123,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
             self::anotar(['fase' => 'cotacao', 'uf' => null]);
             $gravados = $tabela->cotar($ceps);
             self::anotar(['cotados' => self::status()['cotados'] + $gravados, 'erro' => null]);
-            self::dispatch($this->cadeia)->delay(now()->addSeconds(2));
+            self::dispatch($this->cadeia)->delay(now()->addSeconds(FreteProvedor::melhorEnvio() ? 12 : 2));
         } catch (Throwable $e) {
             Log::channel('correios')->warning('frete_tabela.job_falhou', ['message' => $e->getMessage(), 'falhas' => $this->falhas + 1]);
 
@@ -149,7 +162,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
         rescue(fn () => app(AlertasAdmin::class)->disparar(
             AlertasAdmin::FRETE_TABELA,
             'correios',
-            'Falha na atualização da tabela de frete (Correios)',
+            'Falha na atualização da tabela de frete ('.FreteProvedor::NOMES[FreteProvedor::ativo()].')',
             $mensagem,
             self::LINK,
         ), report: false);

@@ -257,6 +257,7 @@ class FretesPorCidadeController extends Controller
             ->join('frete_tabela as t', 't.cep_destino', '=', 'l.cep_cotacao')
             ->where('l.tipo', 'M')
             ->where('t.cep_origem', $origem)
+            ->where('t.provedor', \App\Support\FreteProvedor::ativo())
             ->whereIn('l.municipio_id', IbgeMunicipio::query()->where('estado_id', $estadoId)->select('id'))
             ->get(['l.municipio_id', 't.categoria', 't.pac_preco', 't.sedex_preco'])
             ->groupBy('municipio_id')

@@ -29,13 +29,23 @@ class MelhorEnvioClient
      */
     public function post(string $uri, array $data = []): array
     {
-        return $this->request('POST', $uri, $data);
+        $resposta = $this->request('POST', $uri, $data);
+
+        return is_array($resposta) ? $resposta : [$resposta];
     }
 
     /**
-     * @return array<int|string, mixed>
+     * @return array<int|string, mixed>|string
      */
-    private function request(string $method, string $uri, array $data): array
+    public function get(string $uri): array|string
+    {
+        return $this->request('GET', $uri, []);
+    }
+
+    /**
+     * @return array<int|string, mixed>|string
+     */
+    private function request(string $method, string $uri, array $data): array|string
     {
         $token = $this->auth->ensureValidToken($this->auth->currentToken());
 
@@ -60,7 +70,7 @@ class MelhorEnvioClient
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
-                $response = $request->send($method, $uri, ['json' => $data]);
+                $response = $request->send($method, $uri, $method === 'GET' ? [] : ['json' => $data]);
             } catch (ConnectionException $exception) {
                 if ($attempt >= $maxAttempts) {
                     throw new MelhorEnvioException("Falha de conexão com a API do Melhor Envio: {$exception->getMessage()}");
@@ -89,9 +99,9 @@ class MelhorEnvioClient
     }
 
     /**
-     * @return array<int|string, mixed>
+     * @return array<int|string, mixed>|string
      */
-    private function handleResponse(Response $response): array
+    private function handleResponse(Response $response): array|string
     {
         if ($response->failed()) {
             throw new MelhorEnvioException(
@@ -100,7 +110,10 @@ class MelhorEnvioClient
             );
         }
 
-        return $response->json() ?? [];
+        $json = $response->json();
+
+        // me/imprimir/pdf/{id} devolve a URL do arquivo como string JSON.
+        return is_string($json) ? $json : ($json ?? []);
     }
 
     private function log(string $method, string $uri, Response $response): void

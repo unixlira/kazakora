@@ -914,10 +914,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::put('logistica/frete-por-localidade/categorias/{chave}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'salvarCategoria'])->where('chave', '[a-z_]+')->name('logistica.frete-por-localidade.categorias.salvar')->middleware('permission:operacional.edit');
         Route::put('logistica/frete-por-localidade/produtos/{product}', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'classificar'])->whereNumber('product')->name('logistica.frete-por-localidade.produtos.classificar')->middleware('permission:operacional.edit');
     });
+    // Correios ou Melhor Envio, só um conectado (pedido do Lira em 2026-11-03).
+    Route::post('logistica/provedor/{provedor}/conectar', [ShippingMethodController::class, 'conectar'])->where('provedor', 'correios|melhor_envio')->name('logistica.provedor.conectar')->middleware('permission:operacional.edit');
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');
     Route::delete('logistica/{shipping_method}', [ShippingMethodController::class, 'destroy'])->name('logistica.excluir')->middleware('permission:operacional.delete');
-    Route::delete('logistica/melhor-envio', [ShippingMethodController::class, 'disconnectMelhorEnvio'])->name('logistica.melhor-envio.desconectar')->middleware('permission:operacional.edit');
 
     // KoraSync (versão web, dentro do admin) — mesma tela do app desktop
     // (Fila normal/Sem estoque/Vendas futuras/Separados/Cancelados), pedido

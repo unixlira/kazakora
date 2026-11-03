@@ -61,7 +61,7 @@ class MarketplaceReturn extends Model
     ];
 
     protected $fillable = [
-        'channel', 'external_id', 'order_id', 'external_order_id', 'kind', 'reason_code', 'reason_label',
+        'channel', 'external_id', 'order_id', 'external_order_id', 'kind', 'reason_code', 'reason_label', 'product_label', 'buyer_note',
         'situacao', 'platform_status', 'return_status', 'money_status', 'refund_at', 'refund_amount',
         'tracking_number', 'respond_due_at', 'receive_due_at', 'opened_at', 'delivered_at', 'closed_at',
         'resolution', 'received_at', 'received_by', 'verdict', 'verdict_note', 'verdict_at', 'verdict_by',

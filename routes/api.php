@@ -210,6 +210,10 @@ Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import']
 Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status'])
     ->middleware('throttle:30,1')
     ->name('api.tiktok.reports.status');
+// Devoluções do TikTok Shop lidas pelo agente do TikTok (03/11/2026).
+Route::post('/tiktok/devolucoes', [TikTokReportsController::class, 'devolucoes'])
+    ->middleware('throttle:30,1')
+    ->name('api.tiktok.devolucoes');
 
 // Falha na coleta financeira (TikTok/Amazon): a Manuela avisa o Lira no
 // WhatsApp na hora (2026-10-16). Bearer do agente do TikTok ou da Amazon.

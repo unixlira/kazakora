@@ -6,7 +6,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 // Controle de devoluções e reclamações (pedido do usuário 2026-10-06). Ver
-// DevolucoesController: ML e Shopee vêm das APIs, TikTok/Amazon à mão.
+// DevolucoesController: ML e Shopee vêm das APIs, TikTok do agente do TikTok, Amazon à mão.
 const props = defineProps({
     casos: { type: Array, default: () => [] },
     filtros: { type: Object, default: () => ({}) },
@@ -164,7 +164,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="text-2xl font-bold">Devoluções e reclamações</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Mercado Livre e Shopee atualizam sozinhos a cada 30 min · TikTok e Amazon são registrados aqui</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Mercado Livre, Shopee e TikTok atualizam sozinhos · Amazon é registrada aqui</p>
             </div>
             <div v-if="podeEditar" class="flex gap-2">
                 <button type="button" class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-muted)]"
@@ -276,6 +276,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                     <dd><Link v-if="aberto.pedidoId" :href="`/admin/pedidos/${aberto.pedidoId}`" class="text-primary hover:underline">#{{ aberto.pedidoId }}</Link><span v-else>{{ aberto.pedidoExterno ?? '—' }}</span></dd>
                     <dt class="text-slate-500">Cliente</dt><dd>{{ aberto.cliente ?? '—' }}</dd>
                     <dt class="text-slate-500">Produtos</dt><dd>{{ aberto.produtos || '—' }}</dd>
+                    <template v-if="aberto.observacaoCliente"><dt class="text-slate-500">Observação do cliente</dt><dd>{{ aberto.observacaoCliente }}</dd></template>
                     <dt class="text-slate-500">Aberta em</dt><dd>{{ dataHora(aberto.abertaEm) }}</dd>
                     <template v-if="aberto.prazoResposta"><dt class="text-slate-500">Prazo de resposta</dt><dd>{{ dataHora(aberto.prazoResposta) }}</dd></template>
                     <template v-if="aberto.prazoConferir"><dt class="text-slate-500">Prazo pra conferir</dt><dd>{{ dataHora(aberto.prazoConferir) }}</dd></template>
@@ -397,7 +398,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
         <div v-if="registrando" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="registrando = false">
             <form class="w-full max-w-lg space-y-3 rounded-xl bg-[var(--surface)] p-5 shadow-xl" @submit.prevent="registrar">
                 <h2 class="text-lg font-bold">Registrar devolução ou reclamação</h2>
-                <p class="text-xs text-slate-500">Para plataformas sem integração de devolução (TikTok, Amazon) ou caso que não apareceu sozinho.</p>
+                <p class="text-xs text-slate-500">Para plataformas sem integração de devolução (Amazon) ou caso que não apareceu sozinho.</p>
                 <div class="grid grid-cols-2 gap-3">
                     <label class="text-sm">Plataforma
                         <select v-model="form.channel" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2">

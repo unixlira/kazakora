@@ -16,7 +16,8 @@ use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
- * Traz devoluções e reclamações do Mercado Livre e da Shopee pro controle
+ * Traz devoluções e reclamações do Mercado Livre, da Shopee e do TikTok
+ * Shop (este pelo agente do TikTok, ver sincronizarTikTok) pro controle
  * de devoluções (pedido do usuário 2026-10-06) e põe tudo na mesma régua
  * (MarketplaceReturn::SITUACOES). Cada mudança vira evento no histórico, e
  * pendência nova avisa a equipe na sineta uma vez só.
@@ -343,6 +344,197 @@ class ReturnsSyncService
             'closed_at' => in_array($status, ['CLOSED', 'REFUND_PAID', 'CANCELLED'], true) ? $quando($devolucao['update_time'] ?? 0) : null,
             'raw_payload' => [...$devolucao, 'logistics_status' => $logistica],
         ], $statusEnvio === 'delivered');
+    }
+
+    // ---- TikTok Shop ----------------------------------------------------
+
+    /**
+     * Devoluções do TikTok Shop (pedido do Lira 03/11/2026). O app da loja no
+     * Partner Center não está ligado, então o agente do TikTok (Chrome logado
+     * na Cora Box) lê a tela Pedidos › Devoluções do seller-br e manda os
+     * cartões crus como vieram (POST /api/tiktok/devolucoes). A leitura fica
+     * aqui para mudar sem mexer no outro PC.
+     *
+     * Cartão conferido em 03/11 (api/v1/reverse/component/orders/list):
+     * biz_data traz pedido e ID da devolução; os blocos trazem tipo, motivo,
+     * observação do cliente, status, envio de volta e valores; o
+     * product_detail_card traz produto, cor e SKU.
+     *
+     * @param  list<array<string, mixed>>  $cartoes
+     */
+    public function sincronizarTikTok(array $cartoes): int
+    {
+        $total = 0;
+
+        foreach ($cartoes as $cartao) {
+            try {
+                if (is_array($cartao) && $this->gravarTikTok($cartao)) {
+                    $total++;
+                }
+            } catch (Throwable $exception) {
+                Log::warning('devolucoes.tiktok.cartao_falhou', ['devolucao' => $cartao['biz_data']['reverse_main_order_id'] ?? null, 'erro' => $exception->getMessage()]);
+            }
+        }
+
+        return $total;
+    }
+
+    public function gravarTikTok(array $cartao): ?MarketplaceReturn
+    {
+        $id = (string) ($cartao['biz_data']['reverse_main_order_id'] ?? '');
+        $pedido = (string) ($cartao['biz_data']['main_order_id'] ?? '');
+
+        if ($id === '' || $pedido === '') {
+            return null;
+        }
+
+        $campos = [];
+        $this->camposTikTok($cartao['card'] ?? [], $campos);
+        $campo = fn (string $nome) => $campos[$nome][0] ?? null;
+
+        $status = trim((string) $campo('status_description'));
+        $envioTexto = mb_strtolower(trim((string) $campo('fulfillment_return_button')));
+        $botoes = collect($campos['button_list'] ?? [])->map(fn ($b) => mb_strtolower((string) $b));
+        $aceitarPacote = $botoes->contains(fn ($b) => str_contains($b, 'aceitar pacote'));
+
+        $statusEnvio = match (true) {
+            $envioTexto === '' => null,
+            str_contains($envioTexto, 'entregue') => 'delivered',
+            str_contains($envioTexto, 'trânsito') || str_contains($envioTexto, 'transito') || str_contains($envioTexto, 'postado') => 'shipped',
+            str_contains($envioTexto, 'cancel') || str_contains($envioTexto, 'falh') || str_contains($envioTexto, 'devolvido ao') => 'not_delivered',
+            default => 'shipped',
+        };
+
+        $s = mb_strtolower($status);
+        $situacao = match (true) {
+            str_contains($s, 'cancelad') => MarketplaceReturn::CANCELADA,
+            str_contains($s, 'recurso') || str_contains($s, 'contest') || str_contains($s, 'disputa') || str_contains($s, 'em análise') => MarketplaceReturn::EM_MEDIACAO,
+            str_contains($s, 'aguardando devolução') => MarketplaceReturn::AGUARDANDO_ENVIO,
+            str_contains($s, 'aguardando sua') || str_contains($s, 'aguardando a sua') || str_contains($s, 'aguardando o vendedor') || str_contains($s, 'aguardando resposta do vendedor') => MarketplaceReturn::AGUARDANDO_RESPOSTA,
+            $statusEnvio === 'delivered' && $aceitarPacote => MarketplaceReturn::ENTREGUE,
+            $statusEnvio === 'shipped' => MarketplaceReturn::EM_TRANSITO,
+            str_contains($s, 'encerrad') || str_contains($s, 'concluíd') || str_contains($s, 'aprovada automaticamente') => MarketplaceReturn::ENCERRADA,
+            $statusEnvio === 'delivered' => MarketplaceReturn::ENCERRADA,
+            default => MarketplaceReturn::EM_MEDIACAO,
+        };
+
+        $tipo = (int) ($cartao['biz_data']['reverseType'] ?? 0);
+        $tipoTexto = (string) $campo('reason_reverse_type');
+        $semDevolverProduto = $tipo === 2 || str_contains(mb_strtolower($tipoTexto), 'apenas reembolso');
+
+        // Data vem em segundos; o ID da devolução (19 dígitos) também é número
+        // e não pode passar por data.
+        $ehData = fn ($v) => is_numeric($v) && (float) $v > 1_500_000_000 && (float) $v < 4_000_000_000;
+        $quando = fn ($ts) => $ehData($ts) ? Carbon::createFromTimestamp((int) $ts, config('app.timezone')) : null;
+        $momentos = collect([...($campos['status_detail_element'] ?? []), ...($campos['amount_refund_time'] ?? []), ...($campos['fulfillment_return_time'] ?? [])])
+            ->filter($ehData)->map(fn ($v) => (int) $v);
+        $encerrada = in_array($situacao, [MarketplaceReturn::ENCERRADA, MarketplaceReturn::CANCELADA], true);
+        $reembolsado = str_contains($s, 'reembolso concluído') || str_contains($s, 'aprovada automaticamente');
+
+        $produtos = collect($cartao['linked_cards'] ?? [])->firstWhere('name', 'product_detail_card');
+        $skus = [];
+        $this->skusTikTok($produtos ?? [], $skus);
+
+        return $this->gravar(Order::ORIGIN_TIKTOK_SHOP, $id, [
+            'external_order_id' => $pedido,
+            'kind' => $semDevolverProduto ? MarketplaceReturn::KIND_RECLAMACAO : MarketplaceReturn::KIND_DEVOLUCAO,
+            'reason_label' => $campo('reason_name') ?: $campo('reason'),
+            'product_label' => $skus !== [] ? mb_substr(implode(', ', $skus), 0, 500) : null,
+            'buyer_note' => trim((string) ($campo('reason_note') ?: $campo('customers_remarks'))) ?: null,
+            'situacao' => $situacao,
+            'platform_status' => mb_substr(trim($tipoTexto.' / '.$status, ' /'), 0, 64),
+            'return_status' => $semDevolverProduto ? null : ($statusEnvio ?? ($situacao === MarketplaceReturn::AGUARDANDO_ENVIO ? 'pending' : null)),
+            'money_status' => $reembolsado ? 'refunded' : null,
+            'refund_amount' => $this->valorTikTok($campo('amount_refund') ?? ($cartao['biz_data']['return_price'] ?? null)),
+            'opened_at' => $quando($campo('header_right_time')),
+            'closed_at' => $encerrada && $momentos->isNotEmpty() ? $quando($momentos->max()) : null,
+            'raw_payload' => [
+                'biz_data' => $cartao['biz_data'] ?? null,
+                'tipo' => $tipoTexto,
+                'status' => $status,
+                'envio' => $envioTexto ?: null,
+                'botoes' => $botoes->values()->all(),
+                'produtos' => $skus,
+                'historico' => $campos['status_detail_element'] ?? [],
+            ],
+        ], $statusEnvio === 'delivered');
+    }
+
+    /** Junta nome => textos de cada elemento do cartão (texto, par título/valor, botão). */
+    private function camposTikTok(mixed $no, array &$campos): void
+    {
+        if (! is_array($no)) {
+            return;
+        }
+
+        if (isset($no['name']) && is_string($no['name'])) {
+            $valor = match (true) {
+                isset($no['text_pair']) => $this->textoTikTok($no['text_pair']['content'] ?? null),
+                isset($no['text']) => $this->textoTikTok($no['text']),
+                isset($no['button']) => $this->textoTikTok($no['button']['text'] ?? null),
+                default => null,
+            };
+
+            if ($valor !== null && $valor !== '') {
+                $campos[$no['name']][] = $valor;
+            }
+        }
+
+        foreach ($no as $filho) {
+            $this->camposTikTok($filho, $campos);
+        }
+    }
+
+    private function textoTikTok(mixed $texto): ?string
+    {
+        if (! is_array($texto)) {
+            return null;
+        }
+
+        if (isset($texto['content']) && is_string($texto['content'])) {
+            return trim($texto['content']);
+        }
+
+        $partes = [];
+        foreach ($texto['dynamic_express']['items'] ?? [] as $item) {
+            $frase = (string) ($item['message_content'] ?? '');
+            foreach ($item['params'] ?? [] as $chave => $param) {
+                $kvs = $param['kvs'] ?? [];
+                $valor = $chave === 'copy' ? '' : (string) ($kvs['title'] ?? $kvs['content'] ?? $kvs['target_timestamp'] ?? '');
+                $frase = str_replace('{{'.$chave.'}}', $valor, $frase);
+            }
+            $partes[] = $frase;
+        }
+
+        return $partes === [] ? null : trim(implode(' ', $partes));
+    }
+
+    private function skusTikTok(mixed $no, array &$skus): void
+    {
+        if (! is_array($no)) {
+            return;
+        }
+
+        if (isset($no['product_name']) && is_string($no['product_name'])) {
+            $cor = trim((string) ($no['sku_name'] ?? ''));
+            $sku = trim((string) ($no['seller_sku'] ?? ''));
+            $skus[] = ((int) ($no['quantity'] ?? 1)).'x '.trim($no['product_name']).($cor !== '' ? " ({$cor})" : '').($sku !== '' ? " · SKU {$sku}" : '');
+
+            return;
+        }
+
+        foreach ($no as $filho) {
+            $this->skusTikTok($filho, $skus);
+        }
+    }
+
+    private function valorTikTok(mixed $texto): ?float
+    {
+        if (! is_string($texto) || ! preg_match('/(\d{1,3}(?:\.\d{3})*,\d{2})/', $texto, $m)) {
+            return null;
+        }
+
+        return (float) str_replace(['.', ','], ['', '.'], $m[1]);
     }
 
     // ---- Gravação comum -------------------------------------------------

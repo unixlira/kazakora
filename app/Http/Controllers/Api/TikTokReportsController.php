@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Http\Controllers\DevolucoesController;
 use App\Modules\Marketplace\Support\RelatoriosTikTok;
+use App\Modules\Marketplace\Support\ReturnsSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -80,5 +82,25 @@ class TikTokReportsController extends Controller
         $this->relatorios->avisar((bool) $dados['ok'], $dados['mensagem']);
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Devoluções do TikTok Shop (pedido do Lira 03/11/2026): o agente lê a
+     * tela de devoluções do seller-br e manda os cartões crus em
+     * {"cartoes": [...]}; ReturnsSyncService::sincronizarTikTok grava no
+     * controle de devoluções do admin.
+     */
+    public function devolucoes(Request $request, ReturnsSyncService $sync): JsonResponse
+    {
+        $esperado = (string) config('services.tiktok_reports.token');
+        if ($esperado === '' || ! hash_equals($esperado, (string) Str::after((string) $request->header('Authorization'), 'Bearer '))) {
+            return response()->json(['ok' => false, 'erro' => 'Token inválido.'], 401);
+        }
+
+        $cartoes = $request->validate(['cartoes' => ['present', 'array', 'max:1000']])['cartoes'];
+        $gravados = $sync->sincronizarTikTok(array_values($cartoes));
+        DevolucoesController::limparContagem();
+
+        return response()->json(['ok' => true, 'recebidos' => count($cartoes), 'gravados' => $gravados]);
     }
 }

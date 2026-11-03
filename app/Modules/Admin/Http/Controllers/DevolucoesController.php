@@ -28,8 +28,9 @@ use Throwable;
  * veredito de quem conferiu (voltou certo, mau uso, faltando peças...) e,
  * principalmente, o que a plataforma encerrou sem o produto voltar.
  *
- * ML e Shopee vêm das APIs (ReturnsSyncService); TikTok e Amazon, sem API
- * disponível, entram pelo botão "Registrar devolução".
+ * ML e Shopee vêm das APIs (ReturnsSyncService); TikTok Shop vem do agente
+ * do TikTok (POST /api/tiktok/devolucoes, desde 03/11/2026); Amazon entra
+ * pelo botão "Registrar devolução".
  */
 class DevolucoesController extends Controller
 {
@@ -379,7 +380,9 @@ class DevolucoesController extends Controller
             'pedidoId' => $caso->order_id,
             'pedidoExterno' => $caso->external_order_id,
             'cliente' => $caso->order?->shipping_name,
-            'produtos' => $caso->order?->items->map(fn ($item) => "{$item->quantity}x {$item->product_name}")->implode(', '),
+            // TikTok manda o produto no próprio caso: vale mesmo sem o pedido no Kazakora.
+            'produtos' => $caso->product_label ?: $caso->order?->items->map(fn ($item) => "{$item->quantity}x {$item->product_name}")->implode(', '),
+            'observacaoCliente' => $caso->buyer_note,
             'estoqueDevolvidoEm' => $caso->order?->stock_restored_at?->toIso8601String(),
             // Nota de devolução automática (2026-10-11).
             'notaDevolucao' => $caso->devolucao_fiscal_status ? [

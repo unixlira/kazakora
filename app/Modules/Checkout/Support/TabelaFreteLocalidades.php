@@ -5,6 +5,8 @@ namespace App\Modules\Checkout\Support;
 use App\Models\IbgeMunicipio;
 use App\Modules\Fiscal\Models\Company;
 use App\Services\Correios\CorreiosTokenService;
+use App\Services\MelhorEnvio\CotacaoMelhorEnvio;
+use App\Support\FreteProvedor;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
@@ -39,6 +41,13 @@ use Throwable;
  *
  * Quem roda: PreencherTabelaFreteJob (fila default), comando
  * frete:tabela-localidades e o agendamento mensal.
+ *
+ * Provedor (pedido do Lira em 2026-11-03, App\Support\FreteProvedor): a
+ * cotação, a consulta e as telas usam só as linhas do provedor conectado
+ * (coluna provedor). As localidades continuam vindo da API de CEP dos
+ * Correios. No Melhor Envio, "pac" = serviço mais barato e "sedex" = mais
+ * rápido, de qualquer transportadora da conta (um pacote por chamada, até
+ * 250 chamadas por minuto).
  */
 class TabelaFreteLocalidades
 {
@@ -220,6 +229,7 @@ class TabelaFreteLocalidades
             ->join('frete_categorias_pacote as c', 'c.chave', '=', 't.categoria')
             ->whereColumn('t.cep_destino', 'frete_localidades.cep_cotacao')
             ->where('t.cep_origem', $origem)
+            ->where('t.provedor', FreteProvedor::ativo())
             ->where('t.cotado_em', '>=', now()->subDays(self::VALIDADE_DIAS))
             ->whereColumn('t.categoria_versao', 'c.versao')
             ->selectRaw('count(*)');
@@ -257,6 +267,10 @@ class TabelaFreteLocalidades
         $origem = $this->origem();
         if (! $origem || $ceps === []) {
             return 0;
+        }
+
+        if (FreteProvedor::melhorEnvio()) {
+            return $this->cotarMelhorEnvio($origem, $ceps);
         }
 
         $token = $this->token();
@@ -379,6 +393,7 @@ class TabelaFreteLocalidades
                     'categoria' => $c->chave,
                     'categoria_versao' => (int) $c->versao,
                     'cep_origem' => $origem,
+                    'provedor' => FreteProvedor::CORREIOS,
                     'pac_preco' => $pac['preco'] ?? null,
                     'pac_prazo' => isset($pac['preco']) ? $prazoPac : null,
                     'sedex_preco' => $sedex['preco'] ?? null,
@@ -391,11 +406,7 @@ class TabelaFreteLocalidades
             }
         }
 
-        foreach (array_chunk($linhas, 500) as $lote) {
-            DB::table('frete_tabela')->upsert($lote, ['cep_destino', 'categoria'], [
-                'categoria_versao', 'cep_origem', 'pac_preco', 'pac_prazo', 'sedex_preco', 'sedex_prazo', 'erro', 'cotado_em', 'updated_at',
-            ]);
-        }
+        $this->gravar($linhas);
 
         if ($semResposta !== [] && $gravados === 0) {
             throw new RuntimeException('A API de Preço/Prazo dos Correios não respondeu.');
@@ -404,6 +415,93 @@ class TabelaFreteLocalidades
         $this->novaVersao();
 
         return $gravados;
+    }
+
+    /**
+     * Mesma tabela pelo Melhor Envio: uma cotação por CEP e categoria (a
+     * caixa de referência da categoria). "pac" fica com o serviço mais
+     * barato e "sedex" com o mais rápido, com o nome da transportadora.
+     * CEP sem resposta da API continua pendente; todos sem resposta lança.
+     *
+     * @param  list<string>  $ceps
+     */
+    private function cotarMelhorEnvio(string $origem, array $ceps): int
+    {
+        $categorias = DB::table('frete_categorias_pacote')->whereNotNull('ref_peso_g')->orderBy('ordem')->get();
+
+        $pacotes = [];
+        foreach ($ceps as $cep) {
+            foreach ($categorias as $c) {
+                $pacotes["{$cep}|{$c->chave}"] = [
+                    'origem' => $origem, 'cep' => $cep, 'peso_g' => (int) $c->ref_peso_g,
+                    'comprimento' => max(16, (float) $c->ref_comprimento_cm),
+                    'largura' => max(11, (float) $c->ref_largura_cm),
+                    'altura' => max(2, (float) $c->ref_altura_cm),
+                ];
+            }
+        }
+
+        $cotacoes = app(CotacaoMelhorEnvio::class)->cotar($pacotes);
+
+        $agora = now();
+        $linhas = [];
+        $gravados = 0;
+        foreach ($ceps as $cep) {
+            if ($categorias->contains(fn ($c) => ($cotacoes["{$cep}|{$c->chave}"] ?? null) === null)) {
+                continue; // falha da API em alguma categoria: o CEP fica pendente inteiro
+            }
+            $gravados++;
+            foreach ($categorias as $c) {
+                $opcoes = $cotacoes["{$cep}|{$c->chave}"];
+                $barata = CotacaoMelhorEnvio::maisBarata($opcoes);
+                $rapida = CotacaoMelhorEnvio::maisRapida($opcoes);
+
+                $linhas[] = [
+                    'cep_destino' => $cep,
+                    'categoria' => $c->chave,
+                    'categoria_versao' => (int) $c->versao,
+                    'cep_origem' => $origem,
+                    'provedor' => FreteProvedor::MELHOR_ENVIO,
+                    'pac_preco' => $barata['preco'] ?? null,
+                    'pac_prazo' => $barata['prazo'] ?? null,
+                    'pac_servico' => isset($barata['nome']) ? Str::limit($barata['nome'], 80, '') : null,
+                    'sedex_preco' => $rapida['preco'] ?? null,
+                    'sedex_prazo' => $rapida['prazo'] ?? null,
+                    'sedex_servico' => isset($rapida['nome']) ? Str::limit($rapida['nome'], 80, '') : null,
+                    'erro' => $opcoes === [] ? 'Nenhuma transportadora do Melhor Envio atende' : null,
+                    'cotado_em' => $agora,
+                    'created_at' => $agora,
+                    'updated_at' => $agora,
+                ];
+            }
+        }
+
+        if ($gravados === 0) {
+            throw new RuntimeException('A API do Melhor Envio não respondeu.');
+        }
+
+        $this->gravar($linhas);
+        $this->novaVersao();
+
+        return $gravados;
+    }
+
+    private function gravar(array $linhas): void
+    {
+        foreach (array_chunk($linhas, 500) as $lote) {
+            DB::table('frete_tabela')->upsert($lote, ['cep_destino', 'categoria', 'provedor'], [
+                'categoria_versao', 'cep_origem', 'pac_preco', 'pac_prazo', 'pac_servico', 'sedex_preco', 'sedex_prazo', 'sedex_servico', 'erro', 'cotado_em', 'updated_at',
+            ]);
+        }
+    }
+
+    /** CEP de cotação da localidade do CEP (null = fora da tabela). */
+    public function cepDeCotacao(?string $cep): ?string
+    {
+        $cep = self::cep($cep);
+        $localidade = $cep ? $this->localidadeDoCep($cep) : null;
+
+        return $localidade?->cep_cotacao ?: null;
     }
 
     /** Motivo de a caixa não ir para os Correios (null = dentro do limite). */
@@ -438,7 +536,9 @@ class TabelaFreteLocalidades
 
         $versao = (int) Cache::get(self::VERSAO, 0);
 
-        return rescue(fn () => Cache::remember("frete-tabela:{$versao}:{$cep}", now()->addHours(6), function () use ($cep) {
+        $provedor = FreteProvedor::ativo();
+
+        return rescue(fn () => Cache::remember("frete-tabela:{$versao}:{$provedor}:{$cep}", now()->addHours(6), function () use ($cep, $provedor) {
             $localidade = $this->localidadeDoCep($cep);
             if (! $localidade || ! $localidade->cep_cotacao) {
                 return null;
@@ -447,12 +547,15 @@ class TabelaFreteLocalidades
             $categorias = DB::table('frete_tabela')
                 ->where('cep_destino', $localidade->cep_cotacao)
                 ->where('cep_origem', $this->origem())
+                ->where('provedor', $provedor)
                 ->get()
                 ->mapWithKeys(fn ($t) => [$t->categoria => [
                     'pac' => $t->pac_preco !== null ? (float) $t->pac_preco : null,
                     'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
                     'prazo_pac' => $t->pac_prazo !== null ? (int) $t->pac_prazo : null,
                     'prazo_sedex' => $t->sedex_prazo !== null ? (int) $t->sedex_prazo : null,
+                    'servico_pac' => $t->pac_servico,
+                    'servico_sedex' => $t->sedex_servico,
                     'erro' => $t->erro,
                     'cotado_em' => $t->cotado_em,
                 ]])
@@ -484,6 +587,7 @@ class TabelaFreteLocalidades
         $cotacoes = DB::table('frete_tabela')
             ->whereIn('cep_destino', $localidades->pluck('cep_cotacao')->filter()->unique())
             ->where('cep_origem', $this->origem())
+            ->where('provedor', FreteProvedor::ativo())
             ->get()
             ->groupBy('cep_destino');
 
@@ -501,6 +605,8 @@ class TabelaFreteLocalidades
                 'pac_prazo' => $t->pac_prazo,
                 'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
                 'sedex_prazo' => $t->sedex_prazo,
+                'pac_servico' => $t->pac_servico,
+                'sedex_servico' => $t->sedex_servico,
                 'erro' => $t->erro,
                 'cotado_em' => $t->cotado_em,
             ]]),
@@ -543,7 +649,7 @@ class TabelaFreteLocalidades
     }
 
     /** Invalida o cache das consultas (paraCep) depois de gravar. */
-    private function novaVersao(): void
+    public function novaVersao(): void
     {
         Cache::forever(self::VERSAO, (int) Cache::get(self::VERSAO, 0) + 1);
     }

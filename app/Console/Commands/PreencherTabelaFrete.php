@@ -54,7 +54,7 @@ class PreencherTabelaFrete extends Command
 
         $limite = (int) $this->option('limite');
         $total = 0;
-        while ($ceps = $tabela->cepsPendentes(PreencherTabelaFreteJob::CEPS_POR_VEZ)) {
+        while ($ceps = $tabela->cepsPendentes(PreencherTabelaFreteJob::cepsPorVez())) {
             $total += $tabela->cotar($ceps);
             $this->line("Cotados: {$total}");
             if ($limite > 0 && $total >= $limite) {

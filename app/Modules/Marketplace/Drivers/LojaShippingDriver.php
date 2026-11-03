@@ -10,6 +10,8 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\J3FlexLabel;
+use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
+use App\Support\FreteProvedor;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -28,6 +30,12 @@ use RuntimeException;
  * da área da J3 sai pela J3, com a etiqueta dela, em vez dos Correios —
  * vale para KazaKora, FerraKora e Beauty Kora (todos origin=loja). Ver
  * J3FlexLabel::atendeSite().
+ *
+ * Melhor Envio (2026-11-03): com o Melhor Envio conectado em Logística
+ * (App\Support\FreteProvedor), o pedido da KazaKora fora da J3 sai com a
+ * etiqueta do Melhor Envio (MelhorEnvioAutoShipping) em vez da pré-postagem
+ * dos Correios. Pedido que já tem uma das duas continua nela (nunca dois
+ * fretes pagos). FerraKora e Beauty Kora seguem nos Correios.
  *
  * Só ENVIO: o site não é marketplace. Fica fora de
  * MarketplaceDriverManager::channels() (publicar produto, importar pedido,
@@ -55,7 +63,9 @@ class LojaShippingDriver implements MarketplaceChannelDriver
         // pré-postagem nos Correios por cima (dois envios pagos).
         $jaNaJ3 = ChannelShipment::query()->where('order_id', $order->id)->whereNotNull('j3_tracking_number')->exists();
 
-        if ($jaNaJ3 || (! app(CorreiosAutoShipping::class)->geradaPara($order) && $j3->atendeSite($order))) {
+        $jaEmOutro = app(CorreiosAutoShipping::class)->geradaPara($order) || app(MelhorEnvioAutoShipping::class)->doPedido($order)?->me_order_id;
+
+        if ($jaNaJ3 || (! $jaEmOutro && $j3->atendeSite($order))) {
             $pedido = $j3->criarPedidoDoSite($order);
 
             ChannelShipment::query()->where('order_id', $order->id)->where('channel', Order::ORIGIN_STORE)->update([
@@ -67,6 +77,17 @@ class LojaShippingDriver implements MarketplaceChannelDriver
                 'external_shipment_id' => $j3->integracaoDoSite($order),
                 'tracking_code' => $pedido['tracking'],
                 'shipping_method' => self::METODO_J3,
+                'status' => 'confirmed',
+            ];
+        }
+
+        if ($this->peloMelhorEnvio($order)) {
+            $envio = app(MelhorEnvioAutoShipping::class)->confirm($order);
+
+            return [
+                'external_shipment_id' => $envio->me_order_id,
+                'tracking_code' => $envio->rastreio ?: $envio->protocolo,
+                'shipping_method' => 'Melhor Envio '.$envio->servico,
                 'status' => 'confirmed',
             ];
         }
@@ -89,6 +110,14 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             return ['ready' => true, 'contents' => app(J3FlexLabel::class)->etiquetaPorRastreio($j3Tracking), 'content_type' => 'application/pdf'];
         }
 
+        if ($envio = app(MelhorEnvioAutoShipping::class)->geradaPara($order)) {
+            $pdf = app(MelhorEnvioAutoShipping::class)->pdf($envio);
+
+            return $pdf
+                ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf']
+                : ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
         $correios = app(CorreiosAutoShipping::class);
         $prePostagem = $correios->geradaPara($order);
 
@@ -102,6 +131,22 @@ class LojaShippingDriver implements MarketplaceChannelDriver
         return $prePostagem
             ? ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf']
             : ['ready' => false, 'contents' => null, 'content_type' => null];
+    }
+
+    /**
+     * Etiqueta do Melhor Envio: já começou nele (carrinho/compra feitos) ou
+     * o Melhor Envio está conectado e o pedido ainda não tem pré-postagem
+     * dos Correios.
+     */
+    private function peloMelhorEnvio(Order $order): bool
+    {
+        $melhorEnvio = app(MelhorEnvioAutoShipping::class);
+        if ($melhorEnvio->doPedido($order)?->me_order_id) {
+            return true;
+        }
+
+        return FreteProvedor::doPedido($order->site_origem) === FreteProvedor::MELHOR_ENVIO
+            && ! app(CorreiosAutoShipping::class)->geradaPara($order);
     }
 
     public function publishProduct(Product $product, ProductChannelListing $listing): string

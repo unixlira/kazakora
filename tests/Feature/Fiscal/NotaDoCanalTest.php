@@ -227,6 +227,21 @@ class NotaDoCanalTest extends TestCase
         $this->assertTrue(OrderFulfillmentEvent::query()->where('order_id', $pedido->id)->where('status', OrderFulfillmentEvent::STATUS_FAILED)->exists());
     }
 
+    public function test_bling_dizendo_autorizada_nota_ja_cancelada_na_sefaz_nao_vira_alerta(): void
+    {
+        $this->sefazAutoriza();
+        $this->fakeBling(5);
+        $pedido = $this->pedido();
+        $this->notaDoBling($pedido)->update(['status' => Invoice::STATUS_CANCELLED, 'protocolo_cancelamento' => '135264687100313']);
+        $this->artisan('nfe:nota-do-canal', ['pedido' => $pedido->id, 'chave' => self::CHAVE_TIKTOK, '--valor' => '499,90', '--aplicar' => true])->assertSuccessful();
+
+        app(BlingInvoiceImporter::class)->syncForOrder($pedido);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+        $this->assertSame(6, $pedido->invoice()->first()->serie);
+        $this->assertFalse(OrderFulfillmentEvent::query()->where('order_id', $pedido->id)->where('status', OrderFulfillmentEvent::STATUS_FAILED)->exists());
+    }
+
     public function test_cancelamento_automatico_nao_pega_nota_do_tiktok(): void
     {
         $pedido = $this->pedido();

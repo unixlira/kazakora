@@ -47,6 +47,7 @@ const FULFILLMENT_STEP_LABELS = {
     stock_updated: 'Estoque atualizado',
     invoice_issued: 'Nota fiscal emitida',
     invoice_submitted: 'Nota enviada ao canal',
+    invoice_cancelled: 'Nota fiscal cancelada',
     shipping_confirmed: 'Frete confirmado',
     label_generated: 'Etiqueta gerada',
     label_printed: 'Etiqueta impressa',

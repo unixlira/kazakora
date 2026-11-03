@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Etiqueta do Melhor Envio de um pedido do site (ver MelhorEnvioAutoShipping). */
 class MelhorEnvioEnvio extends Model
 {
+    /** Transportadora escolhida no pedido, etiqueta ainda não comprada. */
+    public const STATUS_COTADA = 'cotada';
+
     public const STATUS_CARRINHO = 'carrinho';
 
     public const STATUS_PAGA = 'paga';

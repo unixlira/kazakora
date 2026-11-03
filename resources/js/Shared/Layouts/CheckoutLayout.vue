@@ -11,7 +11,8 @@
 // imagens, sem link nem sanfona, igual em todas as telas. No celular as
 // bandeiras e os selos ficam sempre centralizados. Sem menu e busca da loja.
 // Desde 2026-10-31 (pedido do Lira) o rodapé é o preto da KazaKora, sem links
-// e sem o selo do Reclame Aqui com QR Code. O resto da tela segue sempre claro
+// e sem o selo do Reclame Aqui com QR Code; desde 2026-11-03 o selo RA volta
+// na imagem do rodapé do site, sem QR Code. O resto da tela segue sempre claro
 // (cores fixas).
 import { COMPANY } from '@/Shared/company.js';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -104,6 +105,10 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <div class="flex h-[30px] items-center justify-center rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3">
                                 <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-[22px] w-auto sm:h-[34px]">
+                            </div>
+                            <!-- Selo RA igual ao do rodapé do site, sem QR Code e sem link (pedido do Lira 03/11). -->
+                            <div class="flex h-[30px] items-center justify-center rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3">
+                                <img src="/images/selos/reclame-aqui-verificada.webp" alt="Verificada por Reclame AQUI" width="578" height="158" loading="lazy" class="h-[22px] w-auto sm:h-[34px]">
                             </div>
                             <div class="flex h-[30px] items-center justify-center rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3">
                                 <img src="/images/selos/selo-norton.svg" alt="Norton Safe Web" width="104" height="40" loading="lazy" class="h-[22px] w-auto sm:h-[30px]">

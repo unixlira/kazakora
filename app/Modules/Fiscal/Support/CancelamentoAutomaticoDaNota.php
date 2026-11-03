@@ -127,6 +127,8 @@ class CancelamentoAutomaticoDaNota
         return Invoice::query()
             ->where('status', Invoice::STATUS_AUTHORIZED)
             ->whereNotNull('chave_acesso')
+            // Nota emitida pelo TikTok: quem cancela é a plataforma dele.
+            ->where(fn ($q) => $q->whereNull('emitida_por')->orWhere('emitida_por', '!=', Invoice::EMITIDA_TIKTOK))
             ->where('autorizada_em', '>', $limite)
             ->when($orderId, fn ($q) => $q->where('order_id', $orderId))
             ->whereHas('order', fn ($q) => $q

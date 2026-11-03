@@ -45,9 +45,21 @@ class Invoice extends Model
 
     public const ORIGEM_SEFAZ = 'sefaz';
 
+    /**
+     * Quem emitiu a nota (2026-11-03). TikTok = série 6 emitida pela
+     * plataforma do TikTok no nosso CNPJ: o Bling não sobrescreve, a
+     * KazaKora não cancela sozinha. Vazio = pela série (ver plataformaEmissora).
+     */
+    public const EMITIDA_KAZAKORA = 'kazakora';
+
+    public const EMITIDA_BLING = 'bling';
+
+    public const EMITIDA_TIKTOK = 'tiktok';
+
     protected $fillable = [
         'order_id',
         'origem',
+        'emitida_por',
         'destinatario_nome',
         'destinatario_documento',
         'nsu',
@@ -120,6 +132,37 @@ class Invoice extends Model
     public function multaCancelamentoExtemporaneo(): float
     {
         return round(max((float) $this->valor_total * 0.01, 6 * app(UfespService::class)->valor()), 2);
+    }
+
+    /**
+     * Histórico da nota cancelada (Lira 2026-11-03, "vale pra qualquer
+     * venda"): toda nota de pedido que vira cancelada deixa no histórico do
+     * pedido a chave, o número, a plataforma que gerou e o XML, mesmo que o
+     * registro seja trocado depois pela nota que vale.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (self $nota) {
+            if ($nota->order_id && $nota->wasChanged('status') && $nota->status === self::STATUS_CANCELLED) {
+                rescue(fn () => app(\App\Modules\Fiscal\Services\HistoricoDeNotas::class)->registrarCancelada($nota), report: true);
+            }
+        });
+    }
+
+    /** Nome da plataforma que gerou a nota, para o histórico. */
+    public function plataformaEmissora(): string
+    {
+        return match ($this->emitida_por) {
+            self::EMITIDA_TIKTOK => 'TikTok',
+            self::EMITIDA_BLING => 'Bling',
+            self::EMITIDA_KAZAKORA => 'KazaKora',
+            default => match ((int) $this->serie) {
+                2 => 'KazaKora',
+                3 => 'Bling',
+                6 => 'TikTok',
+                default => 'série '.$this->serie,
+            },
+        };
     }
 
     public function order(): BelongsTo

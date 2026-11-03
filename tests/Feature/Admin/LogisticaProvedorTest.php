@@ -267,6 +267,59 @@ class LogisticaProvedorTest extends TestCase
         $this->assertTrue(session('frete.conectar_melhor_envio'));
     }
 
+    public function test_tabela_do_melhor_envio_preenche_com_os_correios_conectados_e_o_site_nao_muda(): void
+    {
+        // Pedido do Lira em 2026-11-03: dados de produção do Melhor Envio sem ativá-lo.
+        $this->contaMelhorEnvio();
+        $produto = Product::factory()->create(['name' => 'Parafusadeira', 'sku' => 'KZ-P', 'categoria_frete' => 'pequena']);
+        Product::factory()->create(['name' => 'Escada', 'categoria_frete' => 'extra_grande', 'is_active' => false]);
+        Product::factory()->create(['name' => 'Sem medida', 'categoria_frete' => null]);
+        FreteEmbutido::esquecerCategorias();
+        $tabela = app(TabelaFreteLocalidades::class);
+
+        $this->assertSame([], $tabela->cepsPendentes(10));
+        $this->assertCount(2, $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO));
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
+        $this->assertSame(8, DB::table('frete_tabela')->where('provedor', 'melhor_envio')->count());
+        $this->assertSame([], $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO));
+        // O site segue somando os Correios (PAC 10 da Pequena).
+        $this->assertEquals(10.0, $this->freteDoSite($produto));
+
+        // Pela fila: cadeia própria, não para a dos Correios.
+        PreencherTabelaFreteJob::iniciar([]);
+        $correios = cache('frete-tabela:cadeia');
+        PreencherTabelaFreteJob::iniciar([], FreteProvedor::MELHOR_ENVIO);
+        $this->assertSame($correios, cache('frete-tabela:cadeia'));
+        Queue::assertPushed(PreencherTabelaFreteJob::class, fn ($job) => $job->provedor === FreteProvedor::MELHOR_ENVIO);
+
+        // Aba Melhor Envio de Fretes por estado: todos os produtos por categoria, com o frete salvo.
+        DB::table('frete_localidades')->insert([
+            'numero_correios' => 1, 'uf' => 'ES', 'nome' => 'Vitória', 'nome_normalizado' => 'vitoria', 'tipo' => 'M',
+            'cep' => '29010000', 'cep_cotacao' => '29823000', 'cep_herdado' => false, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->actingAs($this->admin())->getJson('/admin/logistica/fretes-por-estado/produtos-melhor-envio?uf=ES')
+            ->assertOk()
+            ->assertJsonPath('capital', 'Vitória')
+            ->assertJsonPath('ativo', 'Correios')
+            ->assertJsonPath('preenchimento.ceps', 2)
+            ->assertJsonPath('preenchimento.prontos', 2)
+            ->assertJsonPath('categorias.0.chave', 'pequena')
+            ->assertJsonPath('categorias.0.melhor_envio.barato.preco', 8)
+            ->assertJsonPath('categorias.0.melhor_envio.barato.servico', 'Jadlog Package')
+            ->assertJsonPath('categorias.0.melhor_envio.rapido.servico', 'Loggi Express')
+            ->assertJsonPath('categorias.0.correios.barato.preco', 10)
+            ->assertJsonPath('categorias.0.produtos.0.nome', 'Parafusadeira')
+            ->assertJsonPath('categorias.3.produtos.0.nome', 'Escada')
+            ->assertJsonPath('categorias.3.produtos.0.ativo', false)
+            ->assertJsonPath('sem_categoria.0.nome', 'Sem medida');
+
+        $this->getJson('/admin/logistica/fretes-por-estado/produtos-melhor-envio?uf=XX')->assertNotFound();
+    }
+
     public function test_ferrakora_continua_nos_correios(): void
     {
         $this->contaMelhorEnvio();

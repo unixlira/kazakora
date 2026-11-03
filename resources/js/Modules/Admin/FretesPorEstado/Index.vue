@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ImportarPlanilha from './ImportarPlanilha.vue';
+import ProdutosMelhorEnvio from './ProdutosMelhorEnvio.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -519,6 +520,8 @@ const campos = [
             <div v-else-if="carregandoMe" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Consultando o Melhor Envio para os 27 estados…
             </div>
+
+            <ProdutosMelhorEnvio v-if="aba === 'melhor-envio'" />
         </div>
 
         <ImportarPlanilha v-if="importando" @fechar="importando = false" @importado="aposImportar" />

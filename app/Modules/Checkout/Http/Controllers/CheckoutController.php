@@ -13,6 +13,7 @@ use App\Modules\Catalog\Models\LivroDownloadToken;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
+use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -835,6 +836,9 @@ class CheckoutController extends Controller
 
                 $this->createOrderItems($order, $cartItems, $lockedProducts);
                 $this->garantirLivrosDigitais($order);
+                // Transportadora do Melhor Envio fica escolhida no pedido e a
+                // etiqueta sai com ela (pedido do Lira em 2026-11-03).
+                CotarFreteDoPedidoJob::dispatch($order->id)->afterCommit();
 
                 $primaryMethod = $methods[0];
                 $isSplit = count($methods) > 1;

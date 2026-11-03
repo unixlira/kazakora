@@ -216,9 +216,15 @@ class TabelaFreteLocalidades
     // 2. Cotação
     // ------------------------------------------------------------------
 
-    /** CEPs de cotação sem as 4 categorias em dia (origem atual, dentro da validade, com a caixa atual da categoria). */
-    public function cepsPendentes(int $limite): array
+    /**
+     * CEPs de cotação sem as 4 categorias em dia (origem atual, dentro da
+     * validade, com a caixa atual da categoria). $provedor null = o conectado;
+     * o Melhor Envio pode ser preenchido com os Correios conectados (pedido
+     * do Lira em 2026-11-03: dados de produção sem ativar o Melhor Envio).
+     */
+    public function cepsPendentes(int $limite, ?string $provedor = null): array
     {
+        $provedor ??= FreteProvedor::ativo();
         $origem = $this->origem();
         $categorias = DB::table('frete_categorias_pacote')->whereNotNull('ref_peso_g')->count();
         if (! $origem || $categorias === 0) {
@@ -229,7 +235,7 @@ class TabelaFreteLocalidades
             ->join('frete_categorias_pacote as c', 'c.chave', '=', 't.categoria')
             ->whereColumn('t.cep_destino', 'frete_localidades.cep_cotacao')
             ->where('t.cep_origem', $origem)
-            ->where('t.provedor', FreteProvedor::ativo())
+            ->where('t.provedor', $provedor)
             ->where('t.cotado_em', '>=', now()->subDays(self::VALIDADE_DIAS))
             ->whereColumn('t.categoria_versao', 'c.versao')
             ->selectRaw('count(*)');
@@ -245,11 +251,11 @@ class TabelaFreteLocalidades
     }
 
     /** Quantos CEPs de cotação existem e quantos estão em dia. */
-    public function contagem(): array
+    public function contagem(?string $provedor = null): array
     {
         $total = DB::table('frete_localidades')->whereNotNull('cep_cotacao')->distinct()->count('cep_cotacao');
 
-        return ['ceps' => $total, 'pendentes' => count($this->cepsPendentes(1000000))];
+        return ['ceps' => $total, 'pendentes' => count($this->cepsPendentes(1000000, $provedor))];
     }
 
     /**
@@ -259,17 +265,19 @@ class TabelaFreteLocalidades
      * continua pendente. Lote em que os Correios recusam todas as cotações
      * lança exceção sem gravar (o job tenta de novo e alerta no painel).
      *
+     * $provedor null = o conectado em Logística.
+     *
      * @param  list<string>  $ceps
      * @return int quantos CEPs ficaram gravados
      */
-    public function cotar(array $ceps): int
+    public function cotar(array $ceps, ?string $provedor = null): int
     {
         $origem = $this->origem();
         if (! $origem || $ceps === []) {
             return 0;
         }
 
-        if (FreteProvedor::melhorEnvio()) {
+        if (($provedor ?? FreteProvedor::ativo()) === FreteProvedor::MELHOR_ENVIO) {
             return $this->cotarMelhorEnvio($origem, $ceps);
         }
 
@@ -579,15 +587,16 @@ class TabelaFreteLocalidades
 
     /**
      * Localidades (linhas de frete_localidades) com o PAC e o SEDEX salvos de
-     * cada categoria, no formato das tabelas do admin (Frete por localidade e
-     * página da cidade em Fretes por estado).
+     * cada categoria, no formato das tabelas do admin (página da cidade em
+     * Fretes por estado). Sem provedor, o conectado; a aba da tela pede o outro
+     * (2026-11-03).
      */
-    public function paraTela(Collection $localidades): array
+    public function paraTela(Collection $localidades, ?string $provedor = null): array
     {
         $cotacoes = DB::table('frete_tabela')
             ->whereIn('cep_destino', $localidades->pluck('cep_cotacao')->filter()->unique())
             ->where('cep_origem', $this->origem())
-            ->where('provedor', FreteProvedor::ativo())
+            ->where('provedor', $provedor ?? FreteProvedor::ativo())
             ->get()
             ->groupBy('cep_destino');
 

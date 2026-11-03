@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
+use App\Support\FreteProvedor;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -13,6 +14,10 @@ use Throwable;
  * Por padrão só agenda o PreencherTabelaFreteJob (segundo plano); --agora
  * roda aqui mesmo, mostrando o andamento. Erro (fila fora, Correios
  * recusando) vira alerta no painel do admin e o comando sai com falha.
+ *
+ * --provedor=melhor_envio (pedido do Lira em 2026-11-03) preenche as linhas
+ * do Melhor Envio com os Correios conectados: o site continua nos Correios
+ * e a tabela do Melhor Envio fica pronta para quando ele for conectado.
  */
 class PreencherTabelaFrete extends Command
 {
@@ -20,18 +25,25 @@ class PreencherTabelaFrete extends Command
         {--uf=* : Só estas UFs (ex.: --uf=ES --uf=SP)}
         {--sem-importar : Não baixa as localidades de novo, só cota o que está pendente}
         {--agora : Roda neste processo em vez da fila}
-        {--limite=0 : Com --agora, para depois de N CEPs cotados}';
+        {--limite=0 : Com --agora, para depois de N CEPs cotados}
+        {--provedor= : correios ou melhor_envio (padrão: o conectado em Logística)}';
 
     protected $description = 'Preenche a tabela de frete por localidade (PAC e SEDEX por categoria de tamanho)';
 
     public function handle(TabelaFreteLocalidades $tabela): int
     {
         $ufs = $this->option('sem-importar') ? [] : ($this->option('uf') ?: null);
+        $provedor = $this->option('provedor') ?: null;
+        if ($provedor !== null && ! in_array($provedor, FreteProvedor::TODOS, true)) {
+            $this->error('Provedor inválido: use '.implode(' ou ', FreteProvedor::TODOS).'.');
+
+            return self::INVALID;
+        }
 
         try {
-            return $this->executar($tabela, $ufs);
+            return $this->executar($tabela, $ufs, $provedor);
         } catch (Throwable $e) {
-            PreencherTabelaFreteJob::alertar('O comando frete:tabela-localidades falhou: '.$e->getMessage());
+            PreencherTabelaFreteJob::alertar('O comando frete:tabela-localidades falhou: '.$e->getMessage(), $provedor);
             $this->error($e->getMessage());
 
             return self::FAILURE;
@@ -39,10 +51,10 @@ class PreencherTabelaFrete extends Command
     }
 
     /** @param  list<string>|null  $ufs */
-    private function executar(TabelaFreteLocalidades $tabela, ?array $ufs): int
+    private function executar(TabelaFreteLocalidades $tabela, ?array $ufs, ?string $provedor): int
     {
         if (! $this->option('agora')) {
-            PreencherTabelaFreteJob::iniciar($ufs);
+            PreencherTabelaFreteJob::iniciar($ufs, $provedor);
             $this->info('Tabela de frete agendada na fila (acompanhe em Logística → Frete por localidade).');
 
             return self::SUCCESS;
@@ -54,8 +66,8 @@ class PreencherTabelaFrete extends Command
 
         $limite = (int) $this->option('limite');
         $total = 0;
-        while ($ceps = $tabela->cepsPendentes(PreencherTabelaFreteJob::cepsPorVez())) {
-            $total += $tabela->cotar($ceps);
+        while ($ceps = $tabela->cepsPendentes(PreencherTabelaFreteJob::cepsPorVez($provedor), $provedor)) {
+            $total += $tabela->cotar($ceps, $provedor);
             $this->line("Cotados: {$total}");
             if ($limite > 0 && $total >= $limite) {
                 break;

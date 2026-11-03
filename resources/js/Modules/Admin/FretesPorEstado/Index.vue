@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ImportarPlanilha from './ImportarPlanilha.vue';
+import ProdutosMelhorEnvio from './ProdutosMelhorEnvio.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, reactive, ref } from 'vue';
 
@@ -317,7 +318,7 @@ const campos = [
                                     <span class="inline-flex items-center gap-2">
                                         <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                         <span>
-                                            <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
+                                            <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}&aba=correios`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                             <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                         </span>
                                     </span>
@@ -341,7 +342,7 @@ const campos = [
                                 <td class="px-4 py-2 text-right tabular-nums">{{ dias(l.sedex.prazo) }}</td>
                                 <td class="px-4 py-2 text-center">
                                     <Link
-                                        :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`"
+                                        :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}&aba=correios`"
                                         class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
                                         :title="`Ver as cidades de ${l.estado}`"
                                         :aria-label="`Ver as cidades de ${l.estado}`"
@@ -442,7 +443,7 @@ const campos = [
                                             <span class="inline-flex items-center gap-2">
                                                 <span class="inline-flex w-9 justify-center rounded bg-lightprimary py-0.5 text-xs font-bold text-primary">{{ l.uf }}</span>
                                                 <span>
-                                                    <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
+                                                    <Link :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}&aba=melhor-envio`" class="font-semibold hover:text-primary hover:underline">{{ l.estado }}</Link>
                                                     <span class="block text-xs text-slate-500 dark:text-slate-400">{{ l.capital }} · {{ cep(l.cep) }}</span>
                                                 </span>
                                             </span>
@@ -476,7 +477,7 @@ const campos = [
                                                     {{ abertos[l.uf] ? 'ocultar' : `ver todas (${l.opcoes.length})` }}
                                                 </button>
                                                 <Link
-                                                    :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}`"
+                                                    :href="`/admin/logistica/fretes-por-estado/cidades?uf=${l.uf}&aba=melhor-envio`"
                                                     class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-lightprimary"
                                                     :title="`Ver as cidades de ${l.estado}`"
                                                     :aria-label="`Ver as cidades de ${l.estado}`"
@@ -519,6 +520,8 @@ const campos = [
             <div v-else-if="carregandoMe" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Consultando o Melhor Envio para os 27 estados…
             </div>
+
+            <ProdutosMelhorEnvio v-if="aba === 'melhor-envio'" />
         </div>
 
         <ImportarPlanilha v-if="importando" @fechar="importando = false" @importado="aposImportar" />

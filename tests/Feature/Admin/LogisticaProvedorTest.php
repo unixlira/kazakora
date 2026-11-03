@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\MelhorEnvioToken;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -15,6 +16,7 @@ use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Marketplace\Drivers\LojaShippingDriver;
 use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
 use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -197,6 +199,63 @@ class LogisticaProvedorTest extends TestCase
         $this->assertEquals(10.0, $this->freteDoSite($produto));
     }
 
+    public function test_cidades_tem_abas_correios_e_melhor_envio_e_cotam_todas_as_transportadoras(): void
+    {
+        // Abas Correios e Melhor Envio nas telas de cidades (pedido do Lira em 2026-11-03).
+        $agora = now();
+        DB::table('ibge_estados')->insert(['id' => 32, 'sigla' => 'ES', 'nome' => 'Espírito Santo', 'created_at' => $agora, 'updated_at' => $agora]);
+        DB::table('ibge_municipios')->insert(['id' => 3200169, 'nome' => 'Água Doce do Norte', 'nome_normalizado' => 'agua doce do norte', 'estado_id' => 32, 'uf' => 'ES', 'created_at' => $agora, 'updated_at' => $agora]);
+        $this->contaMelhorEnvio();
+        $admin = $this->admin();
+
+        // Conecta o Melhor Envio (cota o CEP de referência, Santa Luzia do Azul) e volta para os Correios.
+        $this->actingAs($admin)->post('/admin/logistica/provedor/melhor_envio/conectar');
+        $this->post('/admin/logistica/provedor/correios/conectar');
+
+        // Sem aba abre a do conectado (Correios); a aba Melhor Envio mostra a tabela salva dele.
+        $this->get('/admin/logistica/fretes-por-estado/cidades/3200169')->assertInertia(fn (Assert $page) => $page
+            ->component('Admin/FretesPorCidade/Cidade', false)
+            ->where('aba', 'correios')
+            ->where('conectado', 'correios')
+            ->where('localidades.1.nome', 'Santa Luzia do Azul')
+            ->where('localidades.1.regras.pequena.pac', 10)
+            ->where('localidades.1.regras.pequena.pac_servico', null));
+        $this->get('/admin/logistica/fretes-por-estado/cidades/3200169?aba=melhor-envio')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'melhor-envio')
+            ->where('conectado', 'correios')
+            ->where('localidades.1.regras.pequena.pac', 8)
+            ->where('localidades.1.regras.pequena.pac_servico', 'Jadlog Package')
+            ->where('localidades.1.regras.pequena.sedex_servico', 'Loggi Express')
+            ->where('localidades.0.regras', []));
+
+        // Lista das cidades: o preço ao lado da regra é o da aba.
+        $this->get('/admin/logistica/fretes-por-estado/cidades?uf=ES&aba=correios')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'correios')
+            ->where('cidades.0.precos.pequena.pac', 10));
+        $this->get('/admin/logistica/fretes-por-estado/cidades?uf=ES&aba=melhor-envio')->assertInertia(fn (Assert $page) => $page
+            ->where('aba', 'melhor-envio')
+            ->where('cidades.0.precos', []));
+
+        // Na hora: todas as transportadoras para o CEP da cidade, sem gravar nada.
+        $linhas = DB::table('frete_tabela')->count();
+        $this->postJson('/admin/logistica/fretes-por-estado/cidades/3200169/cotar-melhor-envio')
+            ->assertOk()
+            ->assertJsonPath('erro', null)
+            ->assertJsonPath('cep', '29820000')
+            ->assertJsonPath('categorias.0.chave', 'pequena')
+            ->assertJsonPath('categorias.0.opcoes.0.transportadora', 'Jadlog')
+            ->assertJsonPath('categorias.0.opcoes.1.transportadora', 'Loggi')
+            ->assertJsonCount(2, 'categorias.0.opcoes');
+        $this->assertSame($linhas, DB::table('frete_tabela')->count());
+
+        // Sem conta válida: avisa para conectar em Logística.
+        MelhorEnvioToken::query()->delete();
+        $this->postJson('/admin/logistica/fretes-por-estado/cidades/3200169/cotar-melhor-envio')
+            ->assertOk()
+            ->assertJsonPath('reconectar', true)
+            ->assertJsonPath('categorias', []);
+    }
+
     public function test_melhor_envio_sem_conta_valida_vai_ao_login_e_conecta_na_volta(): void
     {
         $this->actingAs($this->admin())
@@ -206,6 +265,59 @@ class LogisticaProvedorTest extends TestCase
 
         $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
         $this->assertTrue(session('frete.conectar_melhor_envio'));
+    }
+
+    public function test_tabela_do_melhor_envio_preenche_com_os_correios_conectados_e_o_site_nao_muda(): void
+    {
+        // Pedido do Lira em 2026-11-03: dados de produção do Melhor Envio sem ativá-lo.
+        $this->contaMelhorEnvio();
+        $produto = Product::factory()->create(['name' => 'Parafusadeira', 'sku' => 'KZ-P', 'categoria_frete' => 'pequena']);
+        Product::factory()->create(['name' => 'Escada', 'categoria_frete' => 'extra_grande', 'is_active' => false]);
+        Product::factory()->create(['name' => 'Sem medida', 'categoria_frete' => null]);
+        FreteEmbutido::esquecerCategorias();
+        $tabela = app(TabelaFreteLocalidades::class);
+
+        $this->assertSame([], $tabela->cepsPendentes(10));
+        $this->assertCount(2, $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO));
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
+        $this->assertSame(8, DB::table('frete_tabela')->where('provedor', 'melhor_envio')->count());
+        $this->assertSame([], $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO));
+        // O site segue somando os Correios (PAC 10 da Pequena).
+        $this->assertEquals(10.0, $this->freteDoSite($produto));
+
+        // Pela fila: cadeia própria, não para a dos Correios.
+        PreencherTabelaFreteJob::iniciar([]);
+        $correios = cache('frete-tabela:cadeia');
+        PreencherTabelaFreteJob::iniciar([], FreteProvedor::MELHOR_ENVIO);
+        $this->assertSame($correios, cache('frete-tabela:cadeia'));
+        Queue::assertPushed(PreencherTabelaFreteJob::class, fn ($job) => $job->provedor === FreteProvedor::MELHOR_ENVIO);
+
+        // Aba Melhor Envio de Fretes por estado: todos os produtos por categoria, com o frete salvo.
+        DB::table('frete_localidades')->insert([
+            'numero_correios' => 1, 'uf' => 'ES', 'nome' => 'Vitória', 'nome_normalizado' => 'vitoria', 'tipo' => 'M',
+            'cep' => '29010000', 'cep_cotacao' => '29823000', 'cep_herdado' => false, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->actingAs($this->admin())->getJson('/admin/logistica/fretes-por-estado/produtos-melhor-envio?uf=ES')
+            ->assertOk()
+            ->assertJsonPath('capital', 'Vitória')
+            ->assertJsonPath('ativo', 'Correios')
+            ->assertJsonPath('preenchimento.ceps', 2)
+            ->assertJsonPath('preenchimento.prontos', 2)
+            ->assertJsonPath('categorias.0.chave', 'pequena')
+            ->assertJsonPath('categorias.0.melhor_envio.barato.preco', 8)
+            ->assertJsonPath('categorias.0.melhor_envio.barato.servico', 'Jadlog Package')
+            ->assertJsonPath('categorias.0.melhor_envio.rapido.servico', 'Loggi Express')
+            ->assertJsonPath('categorias.0.correios.barato.preco', 10)
+            ->assertJsonPath('categorias.0.produtos.0.nome', 'Parafusadeira')
+            ->assertJsonPath('categorias.3.produtos.0.nome', 'Escada')
+            ->assertJsonPath('categorias.3.produtos.0.ativo', false)
+            ->assertJsonPath('sem_categoria.0.nome', 'Sem medida');
+
+        $this->getJson('/admin/logistica/fretes-por-estado/produtos-melhor-envio?uf=XX')->assertNotFound();
     }
 
     public function test_ferrakora_continua_nos_correios(): void
@@ -255,6 +367,49 @@ class LogisticaProvedorTest extends TestCase
         $etiqueta = $driver->fetchLabel($order);
         $this->assertTrue($etiqueta['ready']);
         $this->assertStringStartsWith('%PDF', $etiqueta['contents']);
+    }
+
+    public function test_transportadora_fica_escolhida_no_pedido_e_a_etiqueta_sai_com_ela(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        $order = $this->pedidoDoSite();
+        $melhorEnvio = app(MelhorEnvioAutoShipping::class);
+
+        // Correios conectados: nada é escolhido no Melhor Envio.
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $this->assertNull($melhorEnvio->doPedido($order));
+
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $escolhida = $melhorEnvio->doPedido($order);
+        $this->assertSame(MelhorEnvioEnvio::STATUS_COTADA, $escolhida->status);
+        $this->assertSame(3, (int) $escolhida->servico_id);
+        $this->assertSame('Jadlog Package', $escolhida->servico);
+
+        // Na hora do pedido a Loggi era a mais barata: a etiqueta sai na
+        // Loggi, mesmo que agora a Jadlog cote menos.
+        $escolhida->update(['servico_id' => 31, 'servico' => 'Loggi Express']);
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $this->assertSame(31, (int) $melhorEnvio->doPedido($order)->servico_id);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order->fresh());
+        $this->assertSame('Melhor Envio Loggi Express', $envio['shipping_method']);
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 31);
+    }
+
+    public function test_transportadora_do_pedido_que_nao_atende_mais_vai_para_a_mais_barata(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $order = $this->pedidoDoSite();
+        MelhorEnvioEnvio::create(['order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_COTADA, 'servico_id' => 99, 'servico' => 'Azul Cargo Amanhã']);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order);
+
+        $this->assertSame('Melhor Envio Jadlog Package', $envio['shipping_method']);
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 3);
     }
 
     private function freteDoSite(Product $produto): float

@@ -857,12 +857,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Aba Melhor Envio (2026-11-03): frete salvo de todos os produtos por categoria, sem ativar o Melhor Envio.
+        Route::get('logistica/fretes-por-estado/produtos-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'produtosMelhorEnvio'])->name('logistica.fretes-por-estado.produtos-melhor-envio');
         // Frete por cidade (2026-10-24): regra por categoria de pacote. Desde
         // 2026-10-25 sem item próprio no menu: fica dentro de Fretes por estado
         // (estado → cidades → cidade); os endereços antigos redirecionam.
         Route::get('logistica/fretes-por-estado/cidades', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'index'])->name('logistica.fretes-por-estado.cidades');
         Route::put('logistica/fretes-por-estado/categorias', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'salvarCategorias'])->name('logistica.fretes-por-estado.categorias')->middleware('permission:operacional.edit');
         Route::get('logistica/fretes-por-estado/cidades/{municipio}', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'show'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade');
+        // Aba Melhor Envio da página da cidade (2026-11-03): todas as transportadoras na hora.
+        Route::post('logistica/fretes-por-estado/cidades/{municipio}/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'cotarMelhorEnvio'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade.cotar-melhor-envio');
         Route::put('logistica/fretes-por-estado/cidades/{municipio}/regra', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'salvarRegra'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade.regra.salvar')->middleware('permission:operacional.edit');
         Route::delete('logistica/fretes-por-estado/cidades/{municipio}/regra', [\App\Modules\Admin\Http\Controllers\FretesPorCidadeController::class, 'removerRegra'])->whereNumber('municipio')->name('logistica.fretes-por-estado.cidade.regra.remover')->middleware('permission:operacional.edit');
         Route::get('logistica/fretes-por-cidade', fn (\Illuminate\Http\Request $request) => redirect()->route('admin.logistica.fretes-por-estado.cidades', $request->query()));
@@ -876,7 +880,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('logistica/fretes-por-estado/importar/previa', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'previa'])->name('logistica.fretes-por-estado.importar.previa')->middleware('permission:operacional.edit');
         Route::post('logistica/fretes-por-estado/importar', [\App\Modules\Admin\Http\Controllers\FretesImportacaoController::class, 'aplicar'])->name('logistica.fretes-por-estado.importar')->middleware('permission:operacional.edit');
         // Tabela de frete por localidade (2026-10-25): PAC/SEDEX salvos por cidade/distrito e categoria de tamanho.
-        Route::get('logistica/frete-por-localidade', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'index'])->name('logistica.frete-por-localidade');
+        // Tela Frete por localidade tirada (pedido do Lira em 2026-11-03: "eu quero frete por estado").
+        // A tabela continua: cron e fila preenchem, e Fretes por estado mostra por cidade.
+        Route::get('logistica/frete-por-localidade', fn () => redirect()->route('admin.logistica.fretes-por-estado'))->name('logistica.frete-por-localidade');
         Route::get('logistica/frete-por-localidade/status', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'status'])->name('logistica.frete-por-localidade.status');
         Route::get('logistica/frete-por-localidade/buscar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'buscar'])->name('logistica.frete-por-localidade.buscar');
         Route::post('logistica/frete-por-localidade/atualizar', [\App\Modules\Admin\Http\Controllers\FretePorLocalidadeController::class, 'atualizar'])->name('logistica.frete-por-localidade.atualizar')->middleware('permission:operacional.edit');

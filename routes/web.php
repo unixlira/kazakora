@@ -857,6 +857,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Aba Melhor Envio (2026-11-03): frete salvo de todos os produtos por categoria, sem ativar o Melhor Envio.
+        Route::get('logistica/fretes-por-estado/produtos-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'produtosMelhorEnvio'])->name('logistica.fretes-por-estado.produtos-melhor-envio');
         // Frete por cidade (2026-10-24): regra por categoria de pacote. Desde
         // 2026-10-25 sem item próprio no menu: fica dentro de Fretes por estado
         // (estado → cidades → cidade); os endereços antigos redirecionam.

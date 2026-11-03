@@ -5,13 +5,16 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\IbgeMunicipio;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Models\FreteRegiao;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Checkout\Services\MelhorEnvioTabelaPorEstado;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\DistritosDoMunicipio;
 use App\Modules\Checkout\Support\RegrasDeFrete;
+use App\Modules\Checkout\Support\TabelaFreteLocalidades;
 use App\Services\MelhorEnvio\MelhorEnvioAuthService;
+use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -276,6 +279,72 @@ class FretesPorEstadoController extends Controller
         $pacote = $this->pacote($request);
 
         return $pacote instanceof JsonResponse ? $pacote : response()->json($tabela->cotar($pacote));
+    }
+
+    /**
+     * Aba Melhor Envio, "Frete de todos os produtos" (pedido do Lira em
+     * 2026-11-03): o frete salvo em frete_tabela para a capital do estado,
+     * por categoria de tamanho, com os produtos cadastrados de cada uma.
+     * Mostra as linhas do Melhor Envio mesmo com os Correios conectados (a
+     * tabela dele é preenchida sem ativá-lo) e as dos Correios ao lado, para
+     * comparar. Só leitura: não cota na hora nem troca o provedor.
+     */
+    public function produtosMelhorEnvio(Request $request, TabelaFreteLocalidades $tabela): JsonResponse
+    {
+        $uf = strtoupper((string) $request->query('uf', 'SP'));
+        abort_unless(isset(CorreiosTabelaPorEstado::CAPITAIS[$uf]), 404);
+        [$estado, $capital, , $cepCapital] = CorreiosTabelaPorEstado::CAPITAIS[$uf];
+
+        $cepCotacao = $tabela->cepDeCotacao($cepCapital);
+        $linhas = $cepCotacao
+            ? DB::table('frete_tabela')->where('cep_destino', $cepCotacao)->where('cep_origem', $tabela->origem())->get()->groupBy('provedor')
+            : collect();
+        $porCategoria = fn (string $provedor) => ($linhas[$provedor] ?? collect())->keyBy('categoria');
+        $me = $porCategoria(FreteProvedor::MELHOR_ENVIO);
+        $correios = $porCategoria(FreteProvedor::CORREIOS);
+
+        $produtos = DB::table('products')->whereNull('parent_product_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sku', 'is_active', 'categoria_frete'])
+            ->map(fn ($p) => ['id' => (int) $p->id, 'nome' => $p->name, 'sku' => $p->sku, 'ativo' => (bool) $p->is_active, 'categoria' => $p->categoria_frete])
+            ->groupBy('categoria');
+
+        $categorias = DB::table('frete_categorias_pacote')->orderBy('ordem')->get()->map(fn ($c) => [
+            'chave' => $c->chave,
+            'nome' => $c->nome,
+            'exemplo' => $c->exemplo,
+            'melhor_envio' => self::linhaDaTabela($me[$c->chave] ?? null),
+            'correios' => self::linhaDaTabela($correios[$c->chave] ?? null),
+            'produtos' => ($produtos[$c->chave] ?? collect())->values(),
+        ])->values();
+
+        $contagem = $tabela->contagem(FreteProvedor::MELHOR_ENVIO);
+
+        return response()->json([
+            'uf' => $uf,
+            'estado' => $estado,
+            'capital' => $capital,
+            'cep' => $cepCotacao ?? $cepCapital,
+            'ativo' => FreteProvedor::NOMES[FreteProvedor::escolhido()],
+            'preenchimento' => [
+                'ceps' => $contagem['ceps'],
+                'prontos' => $contagem['ceps'] - $contagem['pendentes'],
+                'ultima_cotacao' => DB::table('frete_tabela')->where('provedor', FreteProvedor::MELHOR_ENVIO)->max('cotado_em'),
+                'andamento' => PreencherTabelaFreteJob::status(FreteProvedor::MELHOR_ENVIO),
+            ],
+            'categorias' => $categorias,
+            'sem_categoria' => ($produtos[''] ?? collect())->values(),
+        ]);
+    }
+
+    private static function linhaDaTabela(?object $t): ?array
+    {
+        return $t ? [
+            'barato' => $t->pac_preco !== null ? ['preco' => (float) $t->pac_preco, 'prazo' => $t->pac_prazo !== null ? (int) $t->pac_prazo : null, 'servico' => $t->pac_servico] : null,
+            'rapido' => $t->sedex_preco !== null ? ['preco' => (float) $t->sedex_preco, 'prazo' => $t->sedex_prazo !== null ? (int) $t->sedex_prazo : null, 'servico' => $t->sedex_servico] : null,
+            'erro' => $t->erro,
+            'cotado_em' => $t->cotado_em,
+        ] : null;
     }
 
     /** Pacote validado, ou a resposta 422 para a tela. */

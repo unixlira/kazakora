@@ -454,7 +454,16 @@ class BlingInvoiceImporter
         $chave = preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''));
         $situacao = (int) ($nota['situacao'] ?? 0);
 
-        if ($chave === $doCanal->chave_acesso) {
+        // Já cancelada e no histórico: o Bling pode seguir dizendo
+        // "autorizada" quando o cancelamento foi feito direto na SEFAZ (#3779,
+        // 3-655 cancelada pelo KZ com o Bling em funcionalidades reduzidas).
+        $jaNoHistorico = $chave !== '' && OrderFulfillmentEvent::query()
+            ->where('order_id', $order->id)
+            ->where('step', OrderFulfillmentEvent::STEP_INVOICE_CANCELLED)
+            ->where('context->chave', $chave)
+            ->exists();
+
+        if ($chave === $doCanal->chave_acesso || $jaNoHistorico) {
             return $doCanal;
         }
 

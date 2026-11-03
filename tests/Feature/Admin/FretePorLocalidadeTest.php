@@ -266,7 +266,7 @@ class FretePorLocalidadeTest extends TestCase
 
         $alerta = AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::FRETE_TABELA)->sole();
         $this->assertSame(6, $alerta->ocorrencias);
-        $this->assertSame('/admin/logistica/frete-por-localidade', $alerta->link);
+        $this->assertSame('/admin/logistica/fretes-por-estado', $alerta->link);
         $this->assertSame(1, $admin->unreadNotifications()->count()); // um aviso só no sino
 
         $this->correios = null;
@@ -308,7 +308,8 @@ class FretePorLocalidadeTest extends TestCase
         $admin = $this->admin();
         $produto = Product::factory()->create();
 
-        $this->actingAs($admin)->get('/admin/logistica/frete-por-localidade')->assertOk();
+        // A tela saiu em 2026-11-03: o endereço antigo abre Fretes por estado.
+        $this->actingAs($admin)->get('/admin/logistica/frete-por-localidade')->assertRedirect('/admin/logistica/fretes-por-estado');
 
         $this->actingAs($admin)->putJson("/admin/logistica/frete-por-localidade/produtos/{$produto->id}", ['categoria' => 'grande'])
             ->assertOk()->assertJsonPath('categoria', 'grande');

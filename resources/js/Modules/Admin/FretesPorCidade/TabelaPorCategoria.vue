@@ -1,12 +1,17 @@
 <script setup>
-// Cada categoria com PAC e SEDEX lado a lado (pedido do Lira em 2026-10-25).
-// Usada na consulta de Frete por localidade e na página da cidade em Fretes
-// por estado.
-defineProps({
+// Cada categoria com PAC e SEDEX lado a lado (pedido do Lira em 2026-10-25),
+// na página da cidade em Fretes por estado. Na aba Melhor Envio (2026-11-03)
+// as colunas são o serviço mais barato e o mais rápido, com a transportadora.
+const props = defineProps({
     categorias: { type: Array, default: () => [] },
     localidades: { type: Array, default: () => [] },
     achadas: { type: Array, default: () => [] },
+    provedor: { type: String, default: 'correios' },
 });
+
+const COLUNAS = { pac: 'PAC', sedex: 'SEDEX' };
+const COLUNAS_ME = { pac: 'Mais barato', sedex: 'Mais rápido' };
+const rotulo = (s) => (props.provedor === 'melhor-envio' ? COLUNAS_ME : COLUNAS)[s];
 
 const dinheiro = (v) => (v === null || v === undefined ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v));
 const dias = (v) => (v === null || v === undefined ? '' : `${v} ${v === 1 ? 'dia útil' : 'dias úteis'}`);
@@ -33,8 +38,8 @@ const TIPOS = { M: 'Município', D: 'Distrito', P: 'Povoado' };
                 </tr>
                 <tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     <template v-for="c in categorias" :key="c.chave">
-                        <th scope="col" class="border-l border-[var(--surface-border)] px-3 pb-2 font-semibold">PAC</th>
-                        <th scope="col" class="px-3 pb-2 font-semibold">SEDEX</th>
+                        <th scope="col" class="border-l border-[var(--surface-border)] px-3 pb-2 font-semibold">{{ rotulo('pac') }}</th>
+                        <th scope="col" class="px-3 pb-2 font-semibold">{{ rotulo('sedex') }}</th>
                     </template>
                 </tr>
             </thead>
@@ -60,6 +65,7 @@ const TIPOS = { M: 'Município', D: 'Distrito', P: 'Povoado' };
                                 <template v-if="l.regras[c.chave][s] !== null">
                                     <p class="font-medium tabular-nums">{{ dinheiro(l.regras[c.chave][s]) }}</p>
                                     <p class="text-xs text-slate-500 dark:text-slate-400">{{ dias(l.regras[c.chave][`${s}_prazo`]) }}</p>
+                                    <p v-if="provedor === 'melhor-envio' && l.regras[c.chave][`${s}_servico`]" class="text-xs text-slate-600 dark:text-slate-300">{{ l.regras[c.chave][`${s}_servico`] }}</p>
                                 </template>
                                 <span v-else class="text-xs text-slate-400">sem serviço</span>
                             </td>

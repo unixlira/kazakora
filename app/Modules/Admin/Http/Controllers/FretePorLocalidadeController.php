@@ -15,8 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Inertia\Inertia;
-use Inertia\Response;
 
 /**
  * Logística → Frete por localidade (pedido do Lira em 2026-10-25): a tabela
@@ -24,37 +22,12 @@ use Inertia\Response;
  * preenchimento em segundo plano, as 4 categorias de tamanho com a caixa de
  * referência, a busca por cidade/distrito/CEP com o PAC e o SEDEX salvos de
  * cada categoria e a classificação dos produtos.
+ *
+ * A tela saiu em 2026-11-03 (pedido do Lira: "eu quero frete por estado"); o
+ * endereço antigo abre Fretes por estado. Ficam só as chamadas JSON.
  */
 class FretePorLocalidadeController extends Controller
 {
-    public function index(): Response
-    {
-        $categorias = $this->categorias();
-
-        $produtos = Product::query()
-            ->whereNull('parent_product_id')
-            ->with('fiscalData:id,product_id,peso_bruto,altura_cm,largura_cm,profundidade_cm')
-            ->orderByDesc('is_active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'is_active', 'categoria_frete'])
-            ->map(fn (Product $p) => [
-                'id' => $p->id,
-                'nome' => $p->name,
-                'sku' => $p->sku,
-                'ativo' => (bool) $p->is_active,
-                'categoria' => $p->categoria_frete,
-                'medidas' => self::medidas($p),
-                'sugestao' => self::sugestao($p),
-            ])
-            ->values();
-
-        return Inertia::render('Admin/FretePorLocalidade/Index', [
-            'categorias' => $categorias,
-            'produtos' => $produtos,
-            'resumo' => $this->resumo(),
-        ]);
-    }
-
     public function status(): JsonResponse
     {
         return response()->json($this->resumo());
@@ -196,29 +169,5 @@ class FretePorLocalidadeController extends Controller
             'origem' => $tabela->origem(),
             'job' => PreencherTabelaFreteJob::status(),
         ];
-    }
-
-    private static function medidas(Product $p): ?array
-    {
-        $f = $p->fiscalData;
-        if (! $f || ! $f->peso_bruto) {
-            return null;
-        }
-
-        return [
-            'peso_g' => (int) round((float) $f->peso_bruto * 1000),
-            'lados' => [(float) $f->profundidade_cm, (float) $f->largura_cm, (float) $f->altura_cm],
-        ];
-    }
-
-    /** Categoria pelo peso tarifável e pelo maior lado (a mesma das regras por cidade). */
-    private static function sugestao(Product $p): ?string
-    {
-        if (! $p->fiscalData?->peso_bruto) {
-            return null;
-        }
-        $frete = app(FreteEmbutido::class);
-
-        return FreteCategoriaPacote::classificar($frete->pesoTarifavel($p), $frete->maiorLado($p));
     }
 }

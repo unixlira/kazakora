@@ -30,7 +30,9 @@ use Symfony\Component\HttpFoundation\Response;
  *   de onde veio sem o "?..." (pode ter dado pessoal).
  * - Em todos: a origem classificada (OrigemVisita: Instagram, Google Ads,
  *   Direto, Interno...) e o nome do parâmetro de clique (fbclid, gclid...).
- *   O valor do clique só com o OK (pedido 2026-10-12).
+ *   O valor do clique só com o OK (pedido 2026-10-12), menos o fbclid, gravado
+ *   sempre desde 2026-11-02 (pedido do Lira: sem a faixa de cookies, 111 de 124
+ *   visitas vindas da Meta ficavam sem o valor).
  *
  * - Contagem de visitantes (painel e Indicadores, pedido 2026-10-11): o
  *   cookie kazakora_visitor é o visitante; sem o OK, um por IP no dia, e o
@@ -192,7 +194,7 @@ class TrackSiteVisit
             ...$utm,
             'origem' => OrigemVisita::classificar($refererCompleto, $utm, $clique[0]),
             'click_id_param' => $clique[0],
-            'click_id' => $consentiu ? $clique[1] : null,
+            'click_id' => $consentiu || $clique[0] === 'fbclid' ? $clique[1] : null,
             'dispositivo' => self::dispositivo((string) $request->userAgent()),
             'consentiu' => $consentiu,
         ]);

@@ -129,7 +129,7 @@ jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento apro
 | origem (site, sem `?...`) e UTM | sim | sim |
 | origem classificada (`origem`: instagram, google_ads, direto...) | sim | sim |
 | parâmetro de clique (`click_id_param`: fbclid, gclid, ttclid...) | sim | sim |
-| valor do clique (`click_id`) | **não** | sim |
+| valor do clique (`click_id`) | só o `fbclid` (desde 02/11/2026, pedido do Lira); os outros **não** | sim |
 | `consentiu` | false | true |
 | cookies do visitante (`cookies`, JSON) | **não** | sim, só a lista permitida |
 

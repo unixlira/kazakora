@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\MelhorEnvioToken;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -15,6 +16,7 @@ use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Marketplace\Drivers\LojaShippingDriver;
 use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
 use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -312,6 +314,49 @@ class LogisticaProvedorTest extends TestCase
         $etiqueta = $driver->fetchLabel($order);
         $this->assertTrue($etiqueta['ready']);
         $this->assertStringStartsWith('%PDF', $etiqueta['contents']);
+    }
+
+    public function test_transportadora_fica_escolhida_no_pedido_e_a_etiqueta_sai_com_ela(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        $order = $this->pedidoDoSite();
+        $melhorEnvio = app(MelhorEnvioAutoShipping::class);
+
+        // Correios conectados: nada é escolhido no Melhor Envio.
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $this->assertNull($melhorEnvio->doPedido($order));
+
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $escolhida = $melhorEnvio->doPedido($order);
+        $this->assertSame(MelhorEnvioEnvio::STATUS_COTADA, $escolhida->status);
+        $this->assertSame(3, (int) $escolhida->servico_id);
+        $this->assertSame('Jadlog Package', $escolhida->servico);
+
+        // Na hora do pedido a Loggi era a mais barata: a etiqueta sai na
+        // Loggi, mesmo que agora a Jadlog cote menos.
+        $escolhida->update(['servico_id' => 31, 'servico' => 'Loggi Express']);
+        (new CotarFreteDoPedidoJob($order->id))->handle($melhorEnvio);
+        $this->assertSame(31, (int) $melhorEnvio->doPedido($order)->servico_id);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order->fresh());
+        $this->assertSame('Melhor Envio Loggi Express', $envio['shipping_method']);
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 31);
+    }
+
+    public function test_transportadora_do_pedido_que_nao_atende_mais_vai_para_a_mais_barata(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $order = $this->pedidoDoSite();
+        MelhorEnvioEnvio::create(['order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_COTADA, 'servico_id' => 99, 'servico' => 'Azul Cargo Amanhã']);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order);
+
+        $this->assertSame('Melhor Envio Jadlog Package', $envio['shipping_method']);
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 3);
     }
 
     private function freteDoSite(Product $produto): float

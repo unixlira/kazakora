@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use App\Services\MelhorEnvio\CotacaoMelhorEnvio;
 use App\Services\MelhorEnvio\Exceptions\MelhorEnvioException;
 use App\Services\MelhorEnvio\MelhorEnvioClient;
+use App\Support\FreteProvedor;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -26,7 +27,8 @@ use Throwable;
  *   com o saldo da carteira (me/shipment/checkout) → gera (me/shipment/generate)
  *   → PDF (me/imprimir/pdf/{id}) para a fila do KoraSync.
  *
- * Serviço: o mais barato; com TURBO pago pelo cliente, o mais rápido.
+ * Serviço: o mais barato; com TURBO pago pelo cliente, o mais rápido. Fica
+ * escolhido na hora do pedido (escolherNoPedido) e a etiqueta usa o mesmo.
  *
  * Idempotente: cada passo fica gravado em melhor_envio_envios e a próxima
  * tentativa continua de onde parou (carrinho já criado não cria outro,
@@ -86,18 +88,48 @@ class MelhorEnvioAutoShipping
         return $this->comRastreio($envio);
     }
 
-    private function criarCarrinho(Order $order, MelhorEnvioEnvio $envio): void
+    /**
+     * Grava no pedido a transportadora que vai levar a caixa, no momento da
+     * compra (CotarFreteDoPedidoJob): a mais barata para o CEP e o pacote
+     * do pedido, ou a mais rápida com TURBO. Só com o Melhor Envio
+     * conectado e uma vez por pedido; a etiqueta depois sai com ela.
+     */
+    public function escolherNoPedido(Order $order): ?MelhorEnvioEnvio
     {
-        $invoice = $order->invoice()->first();
-        if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED || ! $invoice->chave_acesso) {
-            throw new RuntimeException("Pedido #{$order->id}: NF-e ainda não autorizada com chave, a etiqueta do Melhor Envio espera por ela.");
+        if (FreteProvedor::doPedido($order->site_origem) !== FreteProvedor::MELHOR_ENVIO || $this->doPedido($order)) {
+            return null;
         }
 
+        ['pacote' => $pacote, 'volume' => $volume, 'opcoes' => $opcoes] = $this->cotarPedido($order, $this->empresa());
+        $servico = $this->melhorOpcao($order, $opcoes);
+
+        return MelhorEnvioEnvio::query()->firstOrCreate(['order_id' => $order->id], [
+            'status' => MelhorEnvioEnvio::STATUS_COTADA,
+            'servico_id' => $servico['servico_id'],
+            'servico' => Str::limit($servico['nome'], 80, ''),
+            'preco' => $servico['preco'],
+            'peso_g' => (int) $pacote['weight_grams'],
+            'volume' => $volume,
+        ]);
+    }
+
+    private function empresa(): Company
+    {
         $empresa = Company::query()->first();
         if (! $empresa || ! $empresa->zip) {
             throw new RuntimeException('Cadastre o endereço da empresa em Configurações › Empresa.');
         }
 
+        return $empresa;
+    }
+
+    /**
+     * Pacote do pedido e as transportadoras que o Melhor Envio cota para ele.
+     *
+     * @return array{pacote: array, volume: array, valor: float, opcoes: list<array>}
+     */
+    private function cotarPedido(Order $order, Company $empresa): array
+    {
         $pacote = $this->pacotes->forOrder($order, sempreComMedidas: true);
         $volume = [
             'height' => (int) ceil(max(2, (float) ($pacote['height'] ?? 2))),
@@ -115,8 +147,37 @@ class MelhorEnvioAutoShipping
         if (! $opcoes) {
             throw new RuntimeException("Pedido #{$order->id}: o Melhor Envio não cotou nenhuma transportadora para o CEP {$order->shipping_zip}.");
         }
+
+        return ['pacote' => $pacote, 'volume' => $volume, 'valor' => $valor, 'opcoes' => $opcoes];
+    }
+
+    /** Qualquer transportadora: a mais barata; com TURBO pago, a mais rápida. */
+    private function melhorOpcao(Order $order, array $opcoes): array
+    {
         $turbo = str_contains(mb_strtolower((string) $order->shipping_carrier_name), 'turbo');
-        $servico = $turbo ? CotacaoMelhorEnvio::maisRapida($opcoes) : CotacaoMelhorEnvio::maisBarata($opcoes);
+
+        return $turbo ? CotacaoMelhorEnvio::maisRapida($opcoes) : CotacaoMelhorEnvio::maisBarata($opcoes);
+    }
+
+    private function criarCarrinho(Order $order, MelhorEnvioEnvio $envio): void
+    {
+        $invoice = $order->invoice()->first();
+        if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED || ! $invoice->chave_acesso) {
+            throw new RuntimeException("Pedido #{$order->id}: NF-e ainda não autorizada com chave, a etiqueta do Melhor Envio espera por ela.");
+        }
+
+        $empresa = $this->empresa();
+        ['pacote' => $pacote, 'volume' => $volume, 'valor' => $valor, 'opcoes' => $opcoes] = $this->cotarPedido($order, $empresa);
+
+        // A transportadora escolhida no pedido (escolherNoPedido) manda; se
+        // ela não atende mais o CEP, vai a melhor da cotação de agora.
+        $servico = $envio->servico_id
+            ? collect($opcoes)->firstWhere('servico_id', (int) $envio->servico_id)
+            : null;
+        if ($envio->servico_id && ! $servico) {
+            Log::channel(config('melhorenvio.log_channel'))->warning('melhorenvio.servico_do_pedido_indisponivel', ['order_id' => $order->id, 'servico_id' => $envio->servico_id, 'servico' => $envio->servico]);
+        }
+        $servico ??= $this->melhorOpcao($order, $opcoes);
 
         $carrinho = $this->client->post('me/cart', [
             'service' => $servico['servico_id'],

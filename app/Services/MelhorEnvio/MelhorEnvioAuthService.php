@@ -38,7 +38,9 @@ class MelhorEnvioAuthService
             'redirect_uri' => config('services.melhorenvio.redirect_uri'),
             'response_type' => 'code',
             'state' => $state,
-            'scope' => 'shipping-calculate',
+            // Etiqueta pelo Melhor Envio (2026-11-03): carrinho, compra com o
+            // saldo da carteira, geração, impressão e rastreio.
+            'scope' => 'shipping-calculate cart-read cart-write shipping-checkout shipping-generate shipping-print shipping-tracking orders-read users-read',
         ]);
 
         return config('services.melhorenvio.auth_url').'?'.$query;

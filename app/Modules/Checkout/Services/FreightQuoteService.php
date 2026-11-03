@@ -5,12 +5,14 @@ namespace App\Modules\Checkout\Services;
 use App\Modules\Fiscal\Models\Company;
 use App\Services\MelhorEnvio\Exceptions\MelhorEnvioException;
 use App\Services\MelhorEnvio\MelhorEnvioClient;
+use App\Support\FreteProvedor;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Cota frete real pro carrinho atual — Melhor Envio e Correios (ver
- * CorreiosFreightQuoteService), combinados numa lista só. Nunca lança —
+ * Cota frete real pro carrinho atual — Melhor Envio OU Correios (ver
+ * CorreiosFreightQuoteService), o que estiver conectado em Logística
+ * (App\Support\FreteProvedor, desde 2026-11-03). Nunca lança —
  * cada fonte devolve [] sempre que a cotação não é possível pra ela (sem
  * token configurado, empresa sem CEP, produto sem peso/dimensões, API
  * fora do ar) sem afetar a outra; se as duas vierem vazias, o checkout cai
@@ -31,10 +33,10 @@ class FreightQuoteService
      */
     public function quote(Collection $cartItems, string $destinationZip): array
     {
-        $quotes = [
-            ...$this->quoteMelhorEnvio($cartItems, $destinationZip),
-            ...$this->correios->quote($cartItems, $destinationZip),
-        ];
+        // Só o provedor conectado em Logística cota (pedido do Lira em 2026-11-03).
+        $quotes = FreteProvedor::melhorEnvio()
+            ? $this->quoteMelhorEnvio($cartItems, $destinationZip)
+            : $this->correios->quote($cartItems, $destinationZip);
 
         usort($quotes, fn ($a, $b) => $a['price'] <=> $b['price']);
 

@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Jobs\PreencherTabelaFreteJob;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
+use App\Support\FreteProvedor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -190,8 +191,8 @@ class FretePorLocalidadeController extends Controller
         return [
             'localidades' => ['M' => (int) ($tipos['M'] ?? 0), 'D' => (int) ($tipos['D'] ?? 0), 'P' => (int) ($tipos['P'] ?? 0)],
             ...$tabela->contagem(),
-            'com_erro' => DB::table('frete_tabela')->whereNull('pac_preco')->whereNull('sedex_preco')->distinct()->count('cep_destino'),
-            'ultima_cotacao' => DB::table('frete_tabela')->max('cotado_em'),
+            'com_erro' => DB::table('frete_tabela')->where('provedor', FreteProvedor::ativo())->whereNull('pac_preco')->whereNull('sedex_preco')->distinct()->count('cep_destino'),
+            'ultima_cotacao' => DB::table('frete_tabela')->where('provedor', FreteProvedor::ativo())->max('cotado_em'),
             'origem' => $tabela->origem(),
             'job' => PreencherTabelaFreteJob::status(),
         ];

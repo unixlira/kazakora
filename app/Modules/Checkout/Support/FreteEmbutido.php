@@ -7,6 +7,8 @@ use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Fiscal\Models\Company;
 use App\Services\Correios\CorreiosTokenService;
+use App\Services\MelhorEnvio\CotacaoMelhorEnvio;
+use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
@@ -603,7 +605,7 @@ class FreteEmbutido
         }
 
         $origem = self::digitos(Company::query()->value('zip'));
-        $chave = "frete-embutido:{$origem}:{$cep}";
+        $chave = 'frete-embutido:'.FreteProvedor::chaveCache().":{$origem}:{$cep}";
         $tabela = Cache::get($chave);
 
         if ($tabela === null) {
@@ -619,6 +621,10 @@ class FreteEmbutido
 
     private function cotar(string $origem, string $cep): ?array
     {
+        if (FreteProvedor::melhorEnvio()) {
+            return $this->cotarMelhorEnvio($origem, $cep);
+        }
+
         $tokens = app(CorreiosTokenService::class);
         if (strlen($origem) !== 8 || ! $tokens->isConfigured()) {
             return null;
@@ -698,6 +704,56 @@ class FreteEmbutido
                 'prazo_pac' => $prazo[self::PAC] ?? null,
                 'prazo_sedex' => $prazo[self::SEDEX] ?? null,
             ];
+        }
+
+        return $tabela;
+    }
+
+    /**
+     * Mesma tabela por faixa de peso pelo Melhor Envio (provedor escolhido em
+     * Logística, 2026-11-03): caixa de config frete_embutido.caixa_cm com o
+     * peso da faixa; "pac" = serviço mais barato, "sedex" = o mais rápido,
+     * de qualquer transportadora da conta. Sem conta válida: null (entra o
+     * valor de segurança, como com os Correios fora do ar).
+     */
+    private function cotarMelhorEnvio(string $origem, string $cep): ?array
+    {
+        if (strlen($origem) !== 8) {
+            return null;
+        }
+
+        [$comprimento, $largura, $altura] = (array) config('frete_embutido.caixa_cm', [16, 11, 5]);
+        $faixas = array_map('intval', (array) config('frete_embutido.faixas_g'));
+        $pacotes = [];
+        foreach ($faixas as $peso) {
+            $pacotes[(string) $peso] = ['origem' => $origem, 'cep' => $cep, 'peso_g' => $peso, 'comprimento' => $comprimento, 'largura' => $largura, 'altura' => $altura];
+        }
+
+        try {
+            $cotacoes = app(CotacaoMelhorEnvio::class)->cotar($pacotes);
+        } catch (Throwable $exception) {
+            Log::channel(config('melhorenvio.log_channel'))->warning('frete_embutido.melhor_envio_falhou', ['message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $tabela = [];
+        foreach ($faixas as $peso) {
+            $opcoes = $cotacoes[(string) $peso] ?? null;
+            $barata = $opcoes ? CotacaoMelhorEnvio::maisBarata($opcoes) : null;
+            $rapida = $opcoes ? CotacaoMelhorEnvio::maisRapida($opcoes) : null;
+            $tabela[$peso] = [
+                'pac' => $barata['preco'] ?? null,
+                'sedex' => $rapida['preco'] ?? null,
+                'prazo_pac' => $barata['prazo'] ?? null,
+                'prazo_sedex' => $rapida['prazo'] ?? null,
+            ];
+        }
+
+        if (! collect($tabela)->contains(fn ($l) => $l['pac'] !== null)) {
+            Log::channel(config('melhorenvio.log_channel'))->warning('frete_embutido.melhor_envio_sem_preco', ['cep' => $cep]);
+
+            return null;
         }
 
         return $tabela;

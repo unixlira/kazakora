@@ -4,20 +4,46 @@ import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { h, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     shippingMethods: { type: Array, default: () => [] },
-    melhorEnvio: { type: Object, default: () => ({ connected: false, accountLabel: null }) },
+    provedorAtivo: { type: String, default: 'correios' },
+    provedores: { type: Array, default: () => [] },
+    tabela: { type: Object, default: () => ({ cep: null, linhas: [] }) },
+    preenchimento: { type: Object, default: () => ({}) },
 });
 
 const { can } = usePermissions();
 const showForm = ref(false);
+const conectando = ref(null);
 
-const disconnectMelhorEnvio = () => {
-    router.delete('/admin/logistica/melhor-envio', { preserveScroll: true });
+// Só um provedor conectado (pedido do Lira em 2026-11-03): conectar um
+// desconecta o outro e troca o frete do site inteiro na hora.
+const conectar = async (provedor) => {
+    const outro = props.provedores.find((p) => p.chave !== provedor.chave);
+    const ok = await confirmDelete({
+        icon: 'question',
+        title: `Conectar ${provedor.nome}?`,
+        text: `${outro?.nome ?? 'O outro'} será desconectado. O frete somado ao preço do site, as opções do checkout e as etiquetas dos pedidos novos da KazaKora passam a sair de ${provedor.nome}.`,
+        confirmButtonText: `Conectar ${provedor.nome}`,
+        confirmButtonColor: '#0d6efd',
+    });
+    if (!ok) return;
+
+    conectando.value = provedor.chave;
+    router.post(`/admin/logistica/provedor/${provedor.chave}/conectar`, {}, {
+        preserveScroll: true,
+        onFinish: () => { conectando.value = null; },
+    });
 };
+
+const nomeAtivo = computed(() => props.provedores.find((p) => p.chave === props.provedorAtivo)?.nome ?? '');
+const cepFormatado = computed(() => (props.tabela.cep ? `${props.tabela.cep.slice(0, 5)}-${props.tabela.cep.slice(5)}` : ''));
+const formatPrazo = (dias) => (dias ? `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}` : '');
+const formatData = (valor) => (valor ? new Date(valor.replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca');
+const preenchendo = computed(() => ['cotacao', 'localidades'].includes(props.preenchimento?.fase));
 
 const form = useForm({
     name: '',
@@ -78,27 +104,81 @@ const columns = [
             </button>
         </div>
 
-        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div>
-                <h2 class="text-sm font-semibold">Melhor Envio</h2>
-                <p class="mt-0.5 text-xs text-slate-400">
-                    Cotação real de frete no checkout. Quando conectado, substitui a lista abaixo sempre que
-                    conseguir cotar (produto com peso/dimensões cadastrados) — a lista fica como reserva.
-                </p>
-                <StatusBadge class="mt-2" :status="melhorEnvio.connected ? 'connected' : 'disconnected'"
-                    :label="melhorEnvio.connected
-                        ? `Conectado${melhorEnvio.accountLabel ? ` — ${melhorEnvio.accountLabel}` : ''}`
-                        : 'Não conectado'" />
+        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div v-for="provedor in provedores" :key="provedor.chave"
+                class="flex flex-col justify-between gap-3 rounded-xl border bg-[var(--surface)] p-4 shadow-sm"
+                :class="provedor.conectado ? 'border-primary' : 'border-[var(--surface-border)]'">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-sm font-semibold">{{ provedor.nome }}</h2>
+                        <StatusBadge :tone="provedor.conectado ? 'green' : 'gray'"
+                            :label="provedor.conectado ? 'Conectado' : 'Desconectado'" />
+                    </div>
+                    <p class="mt-1 text-xs text-slate-400">{{ provedor.descricao }}</p>
+                    <p v-if="provedor.conta" class="mt-1 text-xs text-slate-500">Conta: {{ provedor.conta }}</p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Tabela de frete: {{ provedor.cobertura.cotados.toLocaleString('pt-BR') }} de
+                        {{ provedor.cobertura.ceps.toLocaleString('pt-BR') }} CEPs cotados
+                        (última cotação {{ formatData(provedor.cobertura.ultima) }})
+                    </p>
+                    <p v-if="provedor.aviso" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{{ provedor.aviso }}</p>
+                </div>
+                <div>
+                    <span v-if="provedor.conectado" class="inline-flex items-center gap-2 text-sm font-medium text-success">
+                        <i class="fas fa-check-circle text-xs"></i> Em uso no site
+                    </span>
+                    <button v-else-if="can('operacional.edit')" type="button"
+                        :disabled="conectando !== null || (provedor.chave === 'correios' && !provedor.disponivel)"
+                        class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                        @click="conectar(provedor)">
+                        <i class="fas text-xs" :class="conectando === provedor.chave ? 'fa-spinner fa-spin' : 'fa-plug'"></i>
+                        Conectar {{ provedor.nome }}
+                    </button>
+                </div>
             </div>
-            <a v-if="!melhorEnvio.connected" href="/api/melhorenvio/auth"
-                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
-                <i class="fas fa-plug text-xs"></i> Conectar Melhor Envio
-            </a>
-            <button v-else type="button"
-                class="rounded-lg border border-error px-4 py-2 text-sm font-medium text-error hover:bg-error/10"
-                @click="disconnectMelhorEnvio">
-                Desconectar
-            </button>
+        </div>
+
+        <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+            <h2 class="text-sm font-semibold">Frete em uso: {{ nomeAtivo }}</h2>
+            <p class="mt-0.5 text-xs text-slate-400">
+                Valor somado ao preço dos produtos por categoria de tamanho, cotado para o CEP de referência
+                {{ cepFormatado }}. Mais barato vai no preço; o mais rápido é a opção paga do checkout.
+            </p>
+            <p v-if="preenchendo" class="mt-2 text-xs text-amber-600">
+                <i class="fas fa-spinner fa-spin"></i> Preenchendo a tabela de frete por localidade em segundo plano.
+            </p>
+            <div class="mt-3 overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-xs text-slate-400">
+                        <tr>
+                            <th class="py-1.5 pr-4 font-medium">Categoria</th>
+                            <th class="py-1.5 pr-4 font-medium">Caixa</th>
+                            <th class="py-1.5 pr-4 font-medium">Mais barato</th>
+                            <th class="py-1.5 font-medium">Mais rápido</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="linha in tabela.linhas" :key="linha.categoria" class="border-t border-[var(--surface-border)]">
+                            <td class="py-1.5 pr-4">{{ linha.nome }}</td>
+                            <td class="py-1.5 pr-4 text-xs text-slate-500">{{ linha.caixa }}</td>
+                            <td class="py-1.5 pr-4">
+                                <template v-if="linha.barato !== null">
+                                    {{ formatPrice(linha.barato) }}
+                                    <span class="block text-xs text-slate-500">{{ [linha.barato_servico ?? (provedorAtivo === 'correios' ? 'PAC' : null), formatPrazo(linha.barato_prazo)].filter(Boolean).join(' · ') }}</span>
+                                </template>
+                                <span v-else class="text-xs text-slate-400">{{ linha.erro ?? 'Sem cotação ainda' }}</span>
+                            </td>
+                            <td class="py-1.5">
+                                <template v-if="linha.rapido !== null">
+                                    {{ formatPrice(linha.rapido) }}
+                                    <span class="block text-xs text-slate-500">{{ [linha.rapido_servico ?? (provedorAtivo === 'correios' ? 'SEDEX' : null), formatPrazo(linha.rapido_prazo)].filter(Boolean).join(' · ') }}</span>
+                                </template>
+                                <span v-else class="text-xs text-slate-400">{{ linha.erro ?? 'Sem cotação ainda' }}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <form v-if="showForm" class="mb-6 grid grid-cols-1 gap-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm sm:grid-cols-4" @submit.prevent="submit">

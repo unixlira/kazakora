@@ -9,8 +9,11 @@ use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Models\FreteRegiao;
 use App\Modules\Checkout\Support\RegrasDeFrete;
 use App\Modules\Checkout\Support\TabelaFreteLocalidades;
+use App\Services\MelhorEnvio\CotacaoMelhorEnvio;
+use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 /**
  * Fretes por cidade (pedido do Lira em 2026-10-24): lista as cidades do
@@ -34,6 +38,12 @@ use Inertia\Response;
  * Fretes por estado (o olho do estado abre as cidades) e a página da cidade
  * mostra em cima o PAC e o SEDEX de cada categoria, da tabela de Frete por
  * localidade, para a cidade e os distritos dela.
+ *
+ * Abas Correios e Melhor Envio (pedido do Lira em 2026-11-03), como na lista
+ * dos estados: a lista das cidades e a página da cidade mostram a tabela
+ * salva do provedor da aba (?aba=correios|melhor-envio, padrão o conectado em
+ * Logística). No Melhor Envio a página da cidade cota na hora todas as
+ * transportadoras da conta (Jadlog, Loggi...) para o CEP da cidade.
  */
 class FretesPorCidadeController extends Controller
 {
@@ -63,11 +73,13 @@ class FretesPorCidadeController extends Controller
             ->selectRaw('ibge_municipios.uf as uf, count(distinct frete_regiao_locais.municipio_id) as n')
             ->pluck('n', 'uf');
 
-        $precos = $estado ? self::precosDaTabela($estado->id, $tabela->origem()) : collect();
+        $provedor = self::provedor($request);
+        $precos = $estado ? self::precosDaTabela($estado->id, $tabela->origem(), $provedor) : collect();
 
         return Inertia::render('Admin/FretesPorCidade/Index', [
             'site' => $site,
             'sites' => SiteAtual::SITES,
+            ...self::abas($provedor),
             'uf' => $estado?->sigla,
             'estado' => $estado?->nome,
             'estados' => IbgeEstado::query()->orderBy('nome')->get(['sigla', 'nome'])
@@ -95,9 +107,12 @@ class FretesPorCidadeController extends Controller
             ->where('frete_regiao_locais.municipio_id', $cidade->id)
             ->get(['frete_regiao_locais.municipio_id', 'frete_regioes.*']);
 
+        $provedor = self::provedor($request);
+
         return Inertia::render('Admin/FretesPorCidade/Cidade', [
             'site' => $site,
             'sites' => SiteAtual::SITES,
+            ...self::abas($provedor),
             'cidade' => [
                 'id' => $cidade->id,
                 'nome' => $cidade->nome,
@@ -112,8 +127,53 @@ class FretesPorCidadeController extends Controller
                 ->orderByRaw("case tipo when 'M' then 0 when 'D' then 1 else 2 end")
                 ->orderBy('nome')
                 ->limit(200)
-                ->get()),
+                ->get(), $provedor),
         ]);
+    }
+
+    /**
+     * Aba Melhor Envio da página da cidade: todas as transportadoras da conta
+     * para o CEP da cidade, na caixa de referência de cada categoria. Só
+     * consulta, não grava na tabela nem muda o frete do site.
+     */
+    public function cotarMelhorEnvio(int $municipio, TabelaFreteLocalidades $tabela, CotacaoMelhorEnvio $cotacao): JsonResponse
+    {
+        $cidade = IbgeMunicipio::query()->findOrFail($municipio);
+        $cep = DB::table('frete_localidades')->where('municipio_id', $cidade->id)->where('tipo', 'M')->value('cep_cotacao');
+        $origem = $tabela->origem();
+        $base = ['cep' => $cep, 'erro' => null, 'reconectar' => false, 'categorias' => []];
+        if (! $origem) {
+            return response()->json(['erro' => 'Cadastre o CEP da empresa em Configurações → Empresa.'] + $base);
+        }
+        if (! $cep) {
+            return response()->json(['erro' => 'Cidade ainda sem CEP na tabela de frete.'] + $base);
+        }
+
+        $categorias = DB::table('frete_categorias_pacote')->whereNotNull('ref_peso_g')->orderBy('ordem')->get();
+        $pacotes = [];
+        foreach ($categorias as $c) {
+            $pacotes[$c->chave] = [
+                'origem' => $origem, 'cep' => $cep, 'peso_g' => (int) $c->ref_peso_g,
+                'comprimento' => max(16, (float) $c->ref_comprimento_cm),
+                'largura' => max(11, (float) $c->ref_largura_cm),
+                'altura' => max(2, (float) $c->ref_altura_cm),
+            ];
+        }
+
+        try {
+            $opcoes = $cotacao->cotar($pacotes);
+        } catch (Throwable) {
+            return response()->json(['erro' => 'O Melhor Envio não está conectado ou o acesso venceu. Conecte a conta em Logística.', 'reconectar' => true] + $base);
+        }
+
+        $lista = $categorias->map(fn ($c) => [
+            'chave' => $c->chave,
+            'nome' => $c->nome,
+            'opcoes' => $opcoes[$c->chave] ?? null,
+        ])->values()->all();
+        $erro = collect($lista)->every(fn ($c) => $c['opcoes'] === null) ? 'A API do Melhor Envio não respondeu. Tente de novo em instantes.' : null;
+
+        return response()->json(['erro' => $erro, 'categorias' => $lista] + $base);
     }
 
     /** Cria ou troca a regra da cidade para uma categoria (ou para todas). */
@@ -211,6 +271,24 @@ class FretesPorCidadeController extends Controller
         return back()->with('success', 'Categorias de pacote salvas.');
     }
 
+    /** Provedor da aba (?aba=correios|melhor-envio); sem aba, o conectado em Logística. */
+    private static function provedor(Request $request): string
+    {
+        return match ((string) $request->query('aba')) {
+            'correios' => FreteProvedor::CORREIOS,
+            'melhor-envio' => FreteProvedor::MELHOR_ENVIO,
+            default => FreteProvedor::escolhido(),
+        };
+    }
+
+    /** @return array{aba: string, conectado: string} chaves das abas na URL */
+    private static function abas(string $provedor): array
+    {
+        $chave = fn (string $p) => $p === FreteProvedor::MELHOR_ENVIO ? 'melhor-envio' : 'correios';
+
+        return ['aba' => $chave($provedor), 'conectado' => $chave(FreteProvedor::escolhido())];
+    }
+
     private static function site(Request $request): string
     {
         $site = (string) $request->query('site', SiteAtual::KAZAKORA);
@@ -241,13 +319,15 @@ class FretesPorCidadeController extends Controller
 
     /**
      * PAC e SEDEX salvos (tabela de Frete por localidade) de cada categoria,
-     * pela localidade do município (tipo M), por cidade do estado. Sem isso a
+     * pela localidade do município (tipo M), por cidade do estado, do provedor
+     * da aba (no Melhor Envio: o mais barato e o mais rápido, com o nome do
+     * serviço). Sem isso a
      * lista só mostrava as regras e as cidades com tabela (ex.: o ES inteiro
      * com o valor de Afonso Cláudio, 25/10) apareciam como "Correios normal".
      *
-     * @return Collection<int, array<string, array{pac: ?float, sedex: ?float}>>
+     * @return Collection<int, array<string, array{pac: ?float, sedex: ?float, pac_servico: ?string, sedex_servico: ?string}>>
      */
-    private static function precosDaTabela(int $estadoId, ?string $origem): Collection
+    private static function precosDaTabela(int $estadoId, ?string $origem, string $provedor): Collection
     {
         if (! $origem) {
             return collect();
@@ -257,13 +337,15 @@ class FretesPorCidadeController extends Controller
             ->join('frete_tabela as t', 't.cep_destino', '=', 'l.cep_cotacao')
             ->where('l.tipo', 'M')
             ->where('t.cep_origem', $origem)
-            ->where('t.provedor', \App\Support\FreteProvedor::ativo())
+            ->where('t.provedor', $provedor)
             ->whereIn('l.municipio_id', IbgeMunicipio::query()->where('estado_id', $estadoId)->select('id'))
-            ->get(['l.municipio_id', 't.categoria', 't.pac_preco', 't.sedex_preco'])
+            ->get(['l.municipio_id', 't.categoria', 't.pac_preco', 't.sedex_preco', 't.pac_servico', 't.sedex_servico'])
             ->groupBy('municipio_id')
             ->map(fn (Collection $linhas) => $linhas->mapWithKeys(fn ($t) => [$t->categoria => [
                 'pac' => $t->pac_preco !== null ? (float) $t->pac_preco : null,
                 'sedex' => $t->sedex_preco !== null ? (float) $t->sedex_preco : null,
+                'pac_servico' => $t->pac_servico,
+                'sedex_servico' => $t->sedex_servico,
             ]])->all());
     }
 

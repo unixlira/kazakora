@@ -54,7 +54,7 @@ class PreencherTabelaFreteJob implements ShouldQueue
 
     private const MAX_FALHAS = 6;
 
-    private const LINK = '/admin/logistica/frete-por-localidade';
+    private const LINK = '/admin/logistica/fretes-por-estado';
 
     public int $tries = 1;
 

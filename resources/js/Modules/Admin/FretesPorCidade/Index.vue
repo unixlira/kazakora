@@ -2,7 +2,9 @@
 // Cidades do estado (pedido 2026-10-24) com a regra de cada categoria de
 // pacote; a cidade abre a página dela com o PAC e o SEDEX de cada categoria e
 // as regras. Desde 2026-10-25 fica dentro de Fretes por estado (sem item
-// próprio no menu): o olho do estado abre esta lista.
+// próprio no menu): o olho do estado abre esta lista. Abas Correios e Melhor
+// Envio (2026-11-03), como na lista dos estados: o preço ao lado da regra é o
+// da tabela salva do provedor da aba.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
@@ -16,7 +18,15 @@ const props = defineProps({
     estados: { type: Array, default: () => [] },
     categorias: { type: Array, default: () => [] },
     cidades: { type: Array, default: () => [] },
+    aba: { type: String, default: 'correios' },
+    conectado: { type: String, default: 'correios' },
 });
+
+const ABAS = [
+    { chave: 'correios', rotulo: 'Correios (contrato)', icone: 'fas fa-envelope' },
+    { chave: 'melhor-envio', rotulo: 'Melhor Envio', icone: 'fas fa-truck-fast' },
+];
+const me = computed(() => props.aba === 'melhor-envio');
 
 const POR_PAGINA = 150;
 const busca = ref('');
@@ -34,10 +44,10 @@ const filtradas = computed(() => {
 });
 
 function ir(params) {
-    router.get('/admin/logistica/fretes-por-estado/cidades', { site: props.site, uf: props.uf, ...params }, { preserveState: false });
+    router.get('/admin/logistica/fretes-por-estado/cidades', { site: props.site, uf: props.uf, aba: props.aba, ...params }, { preserveState: false });
 }
 
-const linkCidade = (c) => `/admin/logistica/fretes-por-estado/cidades/${c.id}?site=${props.site}`;
+const linkCidade = (c) => `/admin/logistica/fretes-por-estado/cidades/${c.id}?site=${props.site}&aba=${props.aba}`;
 
 // PAC e SEDEX salvos na tabela de Frete por localidade (2026-10-25): antes a
 // lista só mostrava as regras e as cidades com tabela pareciam vazias.
@@ -77,7 +87,7 @@ function salvarCategorias() {
         </h1>
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Regra de frete de cada cidade, por tamanho do pacote. Sem regra, vale o frete normal dos Correios.
-            Clique na cidade para ver o PAC e o SEDEX de cada categoria e criar ou trocar a regra.
+            Clique na cidade para ver o frete de cada categoria e criar ou trocar a regra.
             A regra muda o frete embutido no preço da loja para quem tem CEP da cidade; o custo real continua o dos Correios.
         </p>
 
@@ -92,6 +102,22 @@ function salvarCategorias() {
                 :class="site === chave ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
                 @click="ir({ site: chave })"
             >{{ nome }}</button>
+        </div>
+
+        <div role="tablist" aria-label="Frete" class="mb-4 flex gap-1 border-b border-[var(--surface-border)]">
+            <button
+                v-for="a in ABAS"
+                :key="a.chave"
+                type="button"
+                role="tab"
+                :aria-selected="aba === a.chave"
+                class="-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-semibold transition"
+                :class="aba === a.chave ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'"
+                @click="ir({ aba: a.chave })"
+            >
+                <i :class="a.icone" aria-hidden="true"></i>{{ a.rotulo }}
+                <span v-if="conectado === a.chave" class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-800 dark:bg-green-950 dark:text-green-300">conectado</span>
+            </button>
         </div>
 
         <section class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-labelledby="categorias-titulo">
@@ -159,7 +185,7 @@ function salvarCategorias() {
                     <input v-model="soComRegra" type="checkbox" class="rounded">
                     Só cidades com regra
                 </label>
-                <p id="cidades-titulo" class="ml-auto pb-2 text-xs text-slate-500 dark:text-slate-400">{{ cidades.length }} cidades em {{ estado }} · {{ comRegra }} com regra · {{ comTabela }} com PAC e SEDEX na tabela</p>
+                <p id="cidades-titulo" class="ml-auto pb-2 text-xs text-slate-500 dark:text-slate-400">{{ cidades.length }} cidades em {{ estado }} · {{ comRegra }} com regra · {{ comTabela }} com {{ me ? 'Melhor Envio' : 'PAC e SEDEX' }} na tabela</p>
             </div>
 
             <div class="overflow-x-auto">
@@ -190,7 +216,14 @@ function salvarCategorias() {
                                     v-if="preco(c, col.chave)"
                                     class="block whitespace-nowrap text-xs tabular-nums text-slate-600 dark:text-slate-300"
                                     :class="{ 'mt-1': c.regras[col.chave] }"
-                                >PAC {{ reais(preco(c, col.chave).pac) }} · SEDEX {{ reais(preco(c, col.chave).sedex) }}</span>
+                                    :title="me ? `Mais barato: ${preco(c, col.chave).pac_servico ?? '—'} · Mais rápido: ${preco(c, col.chave).sedex_servico ?? '—'}` : null"
+                                >
+                                    <template v-if="me">
+                                        {{ reais(preco(c, col.chave).pac) }} <span class="text-slate-500 dark:text-slate-400">{{ preco(c, col.chave).pac_servico }}</span>
+                                        · {{ reais(preco(c, col.chave).sedex) }} <span class="text-slate-500 dark:text-slate-400">{{ preco(c, col.chave).sedex_servico }}</span>
+                                    </template>
+                                    <template v-else>PAC {{ reais(preco(c, col.chave).pac) }} · SEDEX {{ reais(preco(c, col.chave).sedex) }}</template>
+                                </span>
                             </td>
                             <td class="px-3 py-2 text-right">
                                 <Link v-if="temRegra(c)" :href="linkCidade(c)" class="whitespace-nowrap text-xs font-semibold text-primary hover:underline">editar</Link>
@@ -209,7 +242,8 @@ function salvarCategorias() {
             </div>
             <p class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
                 "Todas" vale para qualquer pacote; a regra de uma categoria passa na frente dela. "—" = segue a regra de Todas (ou os Correios).
-                "PAC · SEDEX" = preço salvo na tabela de Frete por localidade para a cidade (R$).
+                <template v-if="me">Melhor Envio = o serviço mais barato · o mais rápido salvos na tabela para a cidade (R$), com a transportadora. A tabela é preenchida quando o Melhor Envio está conectado em Logística.</template>
+                <template v-else>"PAC · SEDEX" = preço do contrato dos Correios salvo na tabela de frete para a cidade (R$).</template>
             </p>
         </section>
     </AdminLayout>

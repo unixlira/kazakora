@@ -16,6 +16,9 @@ class OrderFulfillmentEvent extends Model
 
     public const STEP_INVOICE_SUBMITTED = 'invoice_submitted';
 
+    /** Nota cancelada: chave, número, plataforma e XML ficam no context (Lira 2026-11-03). */
+    public const STEP_INVOICE_CANCELLED = 'invoice_cancelled';
+
     public const STEP_SHIPPING_CONFIRMED = 'shipping_confirmed';
 
     public const STEP_LABEL_GENERATED = 'label_generated';

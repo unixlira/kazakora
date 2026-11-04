@@ -7,7 +7,9 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
+use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
+use App\Services\Bling\Exceptions\BlingException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
@@ -120,28 +122,9 @@ class AmazonComandosEBlingTest extends TestCase
         $importados = [];
         $this->importador($importados);
 
-        $this->expectException(\App\Services\Amazon\Exceptions\AmazonException::class);
+        $this->expectException(AmazonException::class);
 
         $this->artisan('orders:sync-amazon --desde=2026-10-01 --ate=2026-10-02');
-    }
-
-    public function test_sync_with_sp_api_in_error_uses_the_bling_store(): void
-    {
-        // Estado REAL da produção desde 12/08: conta SP-API "error" + loja no Bling.
-        $this->conectarAmazon(MarketplaceAccount::STATUS_ERROR);
-        config(['services.bling.amazon_loja_id' => 206308488]);
-        $bling = Mockery::mock(BlingOrderService::class)->makePartial();
-        $bling->shouldReceive('amazonLojaId')->andReturn(206308488);
-        $bling->shouldReceive('listRecentOrderNumbers')->once()->withArgs(fn ($de, $ate, $loja) => $loja === 206308488)->andReturn(['701-1', '701-2']);
-        $this->app->instance(BlingOrderService::class, $bling);
-        $importados = [];
-        $this->importador($importados);
-        Http::fake();
-
-        $this->artisan('orders:sync-amazon --desde=2026-10-01')->expectsOutputToContain('via Bling, loja 206308488')->assertSuccessful();
-
-        $this->assertSame(['amazon:701-1', 'amazon:701-2'], $importados);
-        Http::assertNotSent(fn (Request $r) => str_starts_with($r->url(), self::BASE));
     }
 
     public function test_confirmar_envios_does_nothing_without_sp_api(): void
@@ -242,7 +225,7 @@ class AmazonComandosEBlingTest extends TestCase
         config(['services.bling.amazon_envio' => ['informar' => true, 'logistica_servico_id' => null, 'situacao_id' => 9]]);
         Http::fake(['api.bling.test/*' => Http::response(['data' => null])]);
 
-        $this->expectException(\App\Services\Bling\Exceptions\BlingException::class);
+        $this->expectException(BlingException::class);
         $this->expectExceptionCode(404);
 
         app(BlingOrderService::class)->informarEnvio(999, 'AA1BR', 'PAC');

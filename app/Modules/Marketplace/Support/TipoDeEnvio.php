@@ -196,10 +196,11 @@ final class TipoDeEnvio
     /** @return array{0: string, 1: string, 2: string} */
     private static function amazon(string $metodo): array
     {
-        // Amazon pelo Bling sai sempre pelos Correios da loja; antes da
-        // pré-postagem (nota ainda saindo) o serviço ainda não foi escolhido.
-        if ($metodo === '') {
-            return [self::CORREIOS, 'Correios — PAC ou SEDEX, o mais barato, escolhido na pré-postagem', 'Correios'];
+        // DBA (Lira, 03/11/2026): pacote levado ao Ponto de Envio da Amazon,
+        // etiqueta TBR da Amazon. Antes do agendamento (nota ainda saindo)
+        // o envio fica sem método, mas também vai pelo DBA.
+        if ($metodo === '' || str_starts_with($metodo, 'Amazon DBA')) {
+            return [self::OUTRO, 'Amazon DBA — levar ao Ponto de Envio, etiqueta da Amazon', 'Amazon DBA'];
         }
 
         // CorreiosAutoShipping grava "Correios PAC (contrato)" /

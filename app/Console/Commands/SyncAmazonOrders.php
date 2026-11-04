@@ -6,7 +6,6 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\Amazon\AmazonClient;
-use App\Services\Bling\BlingOrderService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Throwable;
@@ -21,11 +20,10 @@ use Throwable;
  * de 15 dias que a Shopee tem — uma chamada por página cobre o período
  * inteiro pedido.
  *
- * Sem SP-API conectada (o caso real desde 2026-09-25: a Amazon está
- * conectada só ao Bling), lista os pedidos da loja Amazon NO BLING — mesmo
- * papel do orders:sync-tiktok: rede de segurança do webhook, que o Bling
- * desliga depois de 3 dias falhando entrega. Recupera o que entrou
- * enquanto o servidor esteve fora.
+ * Sempre pela SP-API (Lira, 04/11/2026: o Bling é só do TikTok Shop).
+ * Rede de segurança do aviso ORDER_CHANGE da fila SQS
+ * (amazon:notificacoes-ouvir): recupera o que entrou enquanto o servidor
+ * esteve fora ou o aviso falhou.
  */
 class SyncAmazonOrders extends Command
 {
@@ -33,13 +31,12 @@ class SyncAmazonOrders extends Command
 
     protected $description = 'Importa/sincroniza os pedidos da Amazon pro banco local, por período';
 
-    public function handle(AmazonClient $client, OrderImportService $importer, BlingOrderService $blingOrders): int
+    public function handle(AmazonClient $client, OrderImportService $importer): int
     {
         $account = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_AMAZON)->first();
-        $blingLojaId = $blingOrders->amazonLojaId();
 
-        if (! $account?->isConnected() && ! $blingLojaId) {
-            $this->error('Amazon não está conectada (nem por SP-API, nem por loja do Bling — BLING_AMAZON_LOJA_ID).');
+        if (! $account?->isConnected()) {
+            $this->error('Amazon não está conectada pela SP-API.');
 
             return self::FAILURE;
         }
@@ -52,12 +49,6 @@ class SyncAmazonOrders extends Command
         // padrão aqui era "agora", então toda rodada de hora em hora falharia
         // assim que a conta fosse reconectada.
         $to = $to->min(now()->subMinutes(3));
-
-        if (! $account?->isConnected()) {
-            $this->info("Buscando pedidos da Amazon (via Bling, loja {$blingLojaId}) de {$from->toDateString()} até {$to->toDateString()}...");
-
-            return $this->importAll($importer, $blingOrders->listRecentOrderNumbers($from, $to, $blingLojaId));
-        }
 
         $this->info("Buscando pedidos de {$from->toDateString()} até {$to->toDateString()}...");
 

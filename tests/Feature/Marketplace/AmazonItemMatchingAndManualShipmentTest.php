@@ -4,13 +4,15 @@ namespace Tests\Feature\Marketplace;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
-use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Services\Bling\BlingOrderService;
+use App\Services\Correios\CorreiosPrePostagemService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Http;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -89,7 +91,7 @@ class AmazonItemMatchingAndManualShipmentTest extends TestCase
      */
     public function test_linking_the_last_unlinked_item_issues_the_invoice_right_away(): void
     {
-        Queue::fake([GenerateInvoiceJob::class]);
+        \Illuminate\Support\Facades\Queue::fake([\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class]);
         $order = $this->pedido();
         $this->itemSemVinculo($order, 'AMZ-X1', 'Mini Power Bank 10000mah Para USB - C E Tipo C Preto');
         $this->itemSemVinculo($order, 'AMZ-X2', 'Carregador portátil Celular Mini Power Bank com Suporte');
@@ -97,12 +99,12 @@ class AmazonItemMatchingAndManualShipmentTest extends TestCase
         $this->artisan('marketplace:relink-unmapped-items');
 
         // Um item continua sem cor: nada de nota ainda.
-        Queue::assertNotPushed(GenerateInvoiceJob::class);
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class);
 
         $order->items()->whereNull('product_id')->update(['product_id' => Product::where('sku', 'CAR-CAR-SEM-POW-ROS-0001')->value('id')]);
-        GenerateInvoiceJob::seDestravou($order->fresh());
+        \App\Modules\Fiscal\Jobs\GenerateInvoiceJob::seDestravou($order->fresh());
 
-        Queue::assertPushed(GenerateInvoiceJob::class, 1);
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class, 1);
     }
 
     public function test_sku_match_ignores_case_and_spaces(): void
@@ -125,5 +127,28 @@ class AmazonItemMatchingAndManualShipmentTest extends TestCase
         ]);
 
         $this->assertNull(app(CorreiosAutoShipping::class)->problemaDaEtiqueta($order->fresh(), $antiga));
+    }
+
+    public function test_order_already_shipped_by_hand_in_bling_gets_no_second_postage(): void
+    {
+        $this->amazonComPedidoNoStatus('Unshipped');
+        Http::fake([
+            '*/pedidos/vendas?*' => Http::response(['data' => []]),
+            '*/pedidos/vendas/'.self::BLING_ID => Http::response(['data' => [
+                'id' => self::BLING_ID, 'numeroLoja' => self::NUMERO,
+                'transporte' => ['volumes' => [['id' => 1, 'codigoRastreamento' => 'QB123456789BR']]],
+            ]]),
+        ]);
+        app(BlingOrderService::class)->rememberOrderId(self::NUMERO, self::BLING_ID);
+
+        $correios = Mockery::mock(CorreiosPrePostagemService::class);
+        $correios->shouldNotReceive('create');
+        $this->app->instance(CorreiosPrePostagemService::class, $correios);
+
+        $order = $this->pedido();
+        $resultado = app(AmazonDriver::class)->confirmShipping($order);
+
+        $this->assertSame('QB123456789BR', $resultado['tracking_code']);
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status, 'Sai da fila: já foi despachado.');
     }
 }

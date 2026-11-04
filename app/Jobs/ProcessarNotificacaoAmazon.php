@@ -6,9 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Models\AmazonNotificacao;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
-use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\OrderImportService;
-use App\Services\Amazon\AmazonClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,11 +23,11 @@ use Throwable;
  *   OrderImportService::syncStatus() — a mesma trava de sempre (nada volta
  *   pra trás, cancelado devolve estoque e avisa se já tem NF-e autorizada;
  *   nota nunca é cancelada sozinha).
- * - Pedido novo e pago (Unshipped): importa direto da SP-API (Orders API,
- *   AmazonDriver::importOrder(); o Bling não entra na Amazon desde
- *   04/11/2026). NF-e do KazaKora e envio DBA seguem o fluxo de sempre.
- *   Falha passageira da API tenta de novo em 5, 10 e 20 min; depois, a
- *   varredura de hora em hora (orders:sync-amazon) pega.
+ * - Pedido novo e pago (Unshipped): importa pelo caminho de sempre, que com
+ *   loja Amazon no Bling busca o pedido NO BLING (nota e etiqueta seguem
+ *   por lá, ver AmazonDriver::viaBling()). A Amazon avisa antes de o Bling
+ *   ter o pedido, então tenta de novo em 5, 10 e 20 min; se ainda não
+ *   achar, desiste e a varredura de hora em hora (orders:sync-amazon) pega.
  * - Resto (Pending, pedido que nem existe e já veio cancelado): só registra.
  */
 class ProcessarNotificacaoAmazon implements ShouldQueue
@@ -77,16 +75,6 @@ class ProcessarNotificacaoAmazon implements ShouldQueue
                 return;
             }
 
-            // DBA (03/11/2026): agendar o pacote no Ponto de Envio já deixa o
-            // pedido "Shipped" na Amazon, com o pacote ainda na bancada
-            // (EasyShipShipmentStatus PendingDropOff). Enquanto não foi
-            // postado, segue pago, na fila do KoraSync.
-            if ($statusAmazon === 'Shipped' && $order->status === Order::STATUS_PAID && $this->dbaAindaNaLoja($order)) {
-                $aviso->concluir(AmazonNotificacao::STATUS_IGNORADA, "Pedido #{$order->id}: Shipped na Amazon = pacote DBA agendado, ainda não postado; segue pago.");
-
-                return;
-            }
-
             $antes = $order->status;
             $order = $importer->syncStatus($order, $novo, $statusAmazon);
 
@@ -124,21 +112,5 @@ class ProcessarNotificacaoAmazon implements ShouldQueue
         $aviso->concluir(AmazonNotificacao::STATUS_PROCESSADA, $order
             ? "Pedido #{$order->id} importado pelo aviso da Amazon."
             : 'Importação não criou pedido.');
-    }
-
-    /** Pedido sem pré-postagem dos Correios cujo pacote DBA ainda não saiu da loja. Sem resposta da Amazon, não arrisca tirar da fila. */
-    private function dbaAindaNaLoja(Order $order): bool
-    {
-        if (app(CorreiosAutoShipping::class)->geradaPara($order)) {
-            return false;
-        }
-
-        try {
-            $pedido = app(AmazonClient::class)->get("/orders/v0/orders/{$order->external_order_id}")['payload'] ?? [];
-        } catch (Throwable) {
-            return true;
-        }
-
-        return AmazonDriver::statusDoPedido($pedido) === Order::STATUS_PAID;
     }
 }

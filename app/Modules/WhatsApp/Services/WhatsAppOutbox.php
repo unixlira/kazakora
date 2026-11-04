@@ -31,7 +31,14 @@ class WhatsAppOutbox
         string $sentBy,
         ?int $userId = null,
         array $extraPayload = [],
+        ?string $replyToWaId = null,
     ): WhatsAppMessage {
+        // Responder (pedido do Lira 04/11): guarda o wamid citado para a tela
+        // mostrar a citação no balão; a Meta recebe como "context".
+        if (filled($replyToWaId)) {
+            $extraPayload['responde_a'] = $replyToWaId;
+        }
+
         $message = WhatsAppMessage::query()->create([
             'conversation_id' => $conversation->id,
             'direction' => 'outbound',
@@ -53,7 +60,7 @@ class WhatsAppOutbox
         }
 
         try {
-            $response = $this->client->paraLoja($conversation->loja)->sendText($conversation->wa_id, $body);
+            $response = $this->client->paraLoja($conversation->loja)->sendText($conversation->wa_id, $body, $replyToWaId);
 
             $message->update([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,

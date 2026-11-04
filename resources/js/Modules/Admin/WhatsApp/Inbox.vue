@@ -18,6 +18,8 @@ const props = defineProps({
     conversations: { type: Array, required: true },
     serverTime: { type: String, required: true },
     status: { type: Object, required: true },
+    // Emojis do seletor "+" da barra de reações, por aba (o servidor só aceita estes).
+    reactionGroups: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -52,8 +54,33 @@ const toggling = ref(new Set());
 // Reação com emoji (pedido do Lira 04/11): reações rápidas do WhatsApp e
 // o balão com o seletor aberto (id da mensagem).
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-const reactPickerFor = ref(null);
 const reacting = ref(null);
+
+// Menu da mensagem igual ao WhatsApp Web (pedido do Lira 04/11): a carinha
+// ao lado do balão abre a barra de reações, a setinha ▾ dentro do balão abre
+// a barra + o menu, e o "+" da barra abre o seletor com todos os emojis.
+// Uma camada só, posicionada na tela (fixed), pra não ser cortada pela
+// rolagem das mensagens. kind: 'bar' | 'menu' | 'emoji'.
+const floating = ref(null);
+const emojiScroll = ref(null);
+const emojiTab = ref(null);
+// Responder: mensagem citada acima do campo de texto (vai como "context" na Meta).
+const replyTo = ref(null);
+const toast = ref(null);
+let toastTimer = null;
+
+const MSG_MENU = [
+    { key: 'responder', label: 'Responder', icon: 'fas fa-reply' },
+    { key: 'copiar', label: 'Copiar', icon: 'far fa-copy' },
+    { key: 'reagir', label: 'Reagir', icon: 'far fa-face-smile' },
+    { key: 'encaminhar', label: 'Encaminhar', icon: 'fas fa-share' },
+    { key: 'transmissao', label: 'Nova transmissão comercial', icon: 'far fa-comment-dots' },
+    { key: 'fixar', label: 'Fixar', icon: 'fas fa-thumbtack' },
+    { key: 'favoritar', label: 'Favoritar', icon: 'far fa-star' },
+    { key: 'notas', label: 'Adicionar texto às notas', icon: 'fas fa-plus' },
+    { key: 'denunciar', label: 'Denunciar', icon: 'far fa-thumbs-down', separator: true },
+    { key: 'apagar', label: 'Apagar', icon: 'far fa-trash-can' },
+];
 
 // Nova conversa (botão +, pedido do Lira 2026-10-23): busca por telefone ou
 // pelo número do pedido e já mostra o cliente e a loja dele.
@@ -163,14 +190,158 @@ function canReact(message) {
     return can('pedidos.edit') && message.direction === 'inbound' && message.type !== 'reaction';
 }
 
-function toggleReactPicker(message) {
-    reactPickerFor.value = reactPickerFor.value === message.id ? null : message.id;
+// Tamanho aproximado de cada camada, para abrir pra cima quando não cabe embaixo.
+const FLOATING_SIZE = { bar: [312, 52], menu: [312, 500], emoji: [340, 380] };
+
+function openFloating(kind, message, event, { above = false } = {}) {
+    const anchor = event?.currentTarget?.getBoundingClientRect?.() ?? floating.value?.anchor;
+    if (!anchor) return;
+    if (floating.value && floating.value.kind === kind && floating.value.message.id === message.id && event) {
+        closeFloating();
+        return;
+    }
+    floating.value = { kind, message, anchor, alignRight: message.direction === 'outbound', above };
+    if (kind === 'emoji') {
+        emojiTab.value = reactionGroups.value[0]?.key ?? null;
+        nextTick(() => { if (emojiScroll.value) emojiScroll.value.scrollTop = 0; });
+    }
+}
+
+function closeFloating() {
+    floating.value = null;
+}
+
+const reactionGroups = computed(() => (props.reactionGroups.length
+    ? props.reactionGroups
+    : [{ key: 'todos', label: 'Emojis', icon: '😀', emojis: REACTIONS }]));
+
+const floatingStyle = computed(() => {
+    const f = floating.value;
+    if (!f) return {};
+    const [width, height] = FLOATING_SIZE[f.kind];
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 6;
+    const fitsBelow = f.anchor.bottom + gap + height <= vh - 8;
+    const fitsAbove = f.anchor.top - gap - height >= 8;
+    let top;
+    if (f.above && fitsAbove) top = f.anchor.top - gap - height;
+    else if (fitsBelow) top = f.anchor.bottom + gap;
+    else if (fitsAbove) top = f.anchor.top - gap - height;
+    else top = Math.max(8, vh - height - 8);
+    let left = f.alignRight ? f.anchor.right - width : f.anchor.left;
+    left = Math.min(Math.max(8, left), vw - width - 8);
+    return { top: `${Math.round(top)}px`, left: `${Math.round(left)}px`, width: `${width}px` };
+});
+
+function scrollEmojiTab(key) {
+    emojiTab.value = key;
+    const el = emojiScroll.value?.querySelector(`[data-group="${key}"]`);
+    if (el && emojiScroll.value) emojiScroll.value.scrollTop = el.offsetTop - emojiScroll.value.offsetTop;
+}
+
+function onEmojiScroll() {
+    const box = emojiScroll.value;
+    if (!box) return;
+    let current = emojiTab.value;
+    for (const el of box.querySelectorAll('[data-group]')) {
+        if (el.offsetTop - box.offsetTop <= box.scrollTop + 8) current = el.dataset.group;
+    }
+    emojiTab.value = current;
+}
+
+function showToast(text) {
+    clearTimeout(toastTimer);
+    toast.value = text;
+    toastTimer = setTimeout(() => { toast.value = null; }, 1800);
+}
+
+// Só dá pra citar mensagem que a Meta conhece (tem wamid): a do cliente ou a nossa já enviada.
+function canQuote(message) {
+    return message.direction === 'inbound' || ['sent', 'delivered', 'read'].includes(message.status);
+}
+
+function quoteAuthor(message) {
+    if (!message?.direction) return '';
+    if (message.direction === 'inbound') return displayName(active.value);
+    if (message.sentBy === 'manuela') return attendant;
+    return 'Você';
+}
+
+function quoteText(message) {
+    if (!message) return 'Mensagem';
+    if (message.body) return message.body;
+    return {
+        image: '📷 Foto',
+        sticker: '🏷️ Figurinha',
+        audio: '🎤 Áudio',
+        video: '🎥 Vídeo',
+        document: `📄 ${message.fileName || 'Documento'}`,
+    }[message.type] ?? 'Mensagem';
+}
+
+function jumpToMessage(id) {
+    if (!id) return;
+    document.getElementById(`wa-msg-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function copyMessage(message) {
+    const text = message.body ?? '';
+    if (!text) {
+        showToast('Essa mensagem não tem texto para copiar');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        // Sem a API (HTTP ou permissão negada): cópia pelo jeito antigo.
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+    }
+    showToast('Copiado');
+}
+
+function onMenuItem(item, message) {
+    if (item.key === 'reagir') {
+        if (canReact(message)) openFloating('bar', message);
+        return;
+    }
+    closeFloating();
+    if (item.key === 'responder') {
+        if (!canQuote(message)) return;
+        replyTo.value = message;
+        nextTick(() => composer.value?.focus());
+    } else if (item.key === 'copiar') {
+        copyMessage(message);
+    } else {
+        // Encaminhar, transmissão, fixar, favoritar, notas, denunciar e
+        // apagar: só aparecem por enquanto (o Lira decide quais ligar).
+        showToast('Ainda não disponível aqui');
+    }
+}
+
+function menuItemDisabled(item, message) {
+    if (item.key === 'reagir') return !canReact(message);
+    if (item.key === 'responder') return !canQuote(message);
+    return false;
+}
+
+function menuItemTitle(item, message) {
+    if (item.key === 'reagir' && !canReact(message)) return 'Reação só em mensagem do cliente';
+    if (item.key === 'responder' && !canQuote(message)) return 'A mensagem ainda não chegou na Meta';
+    return undefined;
 }
 
 // Escolher o mesmo emoji de novo tira a reação (igual ao WhatsApp).
 async function react(message, emoji) {
     if (!active.value || reacting.value) return;
-    reactPickerFor.value = null;
+    closeFloating();
     const current = reactionsByTarget.value[message.id]?.outbound || null;
     const chosen = current === emoji ? '' : emoji;
 
@@ -240,12 +411,15 @@ onMounted(() => {
     if (fromUrl && conversations.value.some((c) => c.id === fromUrl)) openConversation(fromUrl);
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('keydown', onGlobalKey);
+    window.addEventListener('resize', closeFloating);
     schedulePoll(POLL_VISIBLE_MS);
 });
 
 onBeforeUnmount(() => {
     clearTimeout(pollTimer);
+    clearTimeout(toastTimer);
     stopRecording(false);
+    window.removeEventListener('resize', closeFloating);
     document.removeEventListener('visibilitychange', onVisibility);
     document.removeEventListener('keydown', onGlobalKey);
     document.title = originalTitle;
@@ -260,7 +434,8 @@ function onVisibility() {
 
 function onGlobalKey(event) {
     if (event.key !== 'Escape') return;
-    if (reactPickerFor.value) reactPickerFor.value = null;
+    if (floating.value) closeFloating();
+    else if (replyTo.value) replyTo.value = null;
     else if (emojiOpen.value) emojiOpen.value = false;
     else if (novaAberta.value) fecharNova();
     else if (menuOpen.value) menuOpen.value = false;
@@ -355,7 +530,8 @@ async function openConversation(id) {
     showNewBelow.value = false;
     menuOpen.value = false;
     emojiOpen.value = false;
-    reactPickerFor.value = null;
+    closeFloating();
+    replyTo.value = null;
     loadingMessages.value = true;
 
     const url = new URL(window.location.href);
@@ -435,10 +611,15 @@ async function send() {
     actionError.value = null;
     emojiOpen.value = false;
     const id = active.value.id;
+    const quoted = replyTo.value;
 
     try {
-        const data = await request(`/admin/whatsapp/conversas/${id}/mensagens`, { method: 'POST', body: { body } });
+        const data = await request(`/admin/whatsapp/conversas/${id}/mensagens`, {
+            method: 'POST',
+            body: quoted ? { body, reply_to: quoted.id } : { body },
+        });
         draft.value = '';
+        if (replyTo.value === quoted) replyTo.value = null;
         resizeComposer();
         mergeMessages([data.message]);
         upsertConversation(data.conversation);
@@ -757,6 +938,7 @@ async function scrollToBottom() {
 }
 
 function onMessagesScroll() {
+    if (floating.value) closeFloating();
     if (isNearBottom()) showNewBelow.value = false;
 }
 
@@ -1217,9 +1399,9 @@ function linkify(text) {
                             </div>
                             <div
                                 v-else
+                                :id="`wa-msg-${item.message.id}`"
                                 class="group flex items-center gap-1.5"
                                 :class="[item.message.direction === 'outbound' ? 'justify-end' : 'justify-start', item.first ? 'mt-3' : 'mt-[2px]', reactionsOf(item.message).length ? 'mb-[18px]' : '']"
-                                @mouseleave="reactPickerFor === item.message.id && (reactPickerFor = null)"
                             >
                                 <div
                                     class="wa-bubble relative max-w-[85%] sm:max-w-[65%]"
@@ -1239,6 +1421,32 @@ function linkify(text) {
                                     </span>
                                     <svg v-if="item.first && item.message.direction === 'inbound'" viewBox="0 0 8 13" width="8" height="13" class="wa-tail -left-2"><path d="M8 0H1.4C.3 0-.3 1.3.5 2.1L8 11.6z" /></svg>
                                     <svg v-if="item.first && item.message.direction === 'outbound'" viewBox="0 0 8 13" width="8" height="13" class="wa-tail -right-2"><path d="M0 0h6.6c1.1 0 1.7 1.3.9 2.1L0 11.6z" /></svg>
+
+                                    <!-- Setinha ▾ do WhatsApp Web: abre reações + menu da mensagem (pedido do Lira 04/11) -->
+                                    <button
+                                        type="button"
+                                        class="wa-msg-arrow absolute right-[3px] top-[3px] z-[2] flex h-[22px] w-[30px] items-start justify-end rounded-tr-md pr-[3px] pt-[1px]"
+                                        :class="{ 'wa-msg-arrow-on': floating && floating.kind !== 'bar' && floating.message.id === item.message.id }"
+                                        title="Menu da mensagem"
+                                        aria-label="Menu da mensagem"
+                                        aria-haspopup="menu"
+                                        @click.stop="openFloating('menu', item.message, $event)"
+                                    >
+                                        <svg viewBox="0 0 18 18" width="18" height="18" fill="currentColor"><path d="M3.3 4.6L9 10.3l5.7-5.7 1.7 1.7L9 13.7 1.6 6.3z" /></svg>
+                                    </button>
+
+                                    <!-- Citação do Responder -->
+                                    <button
+                                        v-if="item.message.replyTo"
+                                        type="button"
+                                        class="wa-quote mb-1 block w-full text-left"
+                                        :class="item.message.replyTo.direction === 'inbound' ? 'wa-quote-in' : 'wa-quote-out'"
+                                        :title="item.message.replyTo.id ? 'Ir para a mensagem respondida' : undefined"
+                                        @click="jumpToMessage(item.message.replyTo.id)"
+                                    >
+                                        <span class="wa-quote-author block truncate">{{ quoteAuthor(item.message.replyTo) || 'Mensagem' }}</span>
+                                        <span class="wa-quote-text block">{{ quoteText(item.message.replyTo) }}</span>
+                                    </button>
 
                                     <p
                                         v-if="item.first && item.message.direction === 'outbound' && item.message.sentBy"
@@ -1279,34 +1487,102 @@ function linkify(text) {
                                     </span>
                                 </div>
                                 <!-- Reagir à mensagem do cliente (pedido do Lira 04/11) -->
-                                <div v-if="canReact(item.message)" class="relative shrink-0">
-                                    <button
-                                        type="button"
-                                        class="wa-react-btn flex h-7 w-7 items-center justify-center rounded-full"
-                                        :class="reactPickerFor === item.message.id || reacting === item.message.id ? 'wa-react-btn-on' : ''"
-                                        :disabled="reacting === item.message.id"
-                                        :title="active.insideWindow ? 'Reagir' : 'Fora da janela de 24h: o WhatsApp não aceita reação'"
-                                        aria-label="Reagir à mensagem"
-                                        @click="toggleReactPicker(item.message)"
-                                    >
-                                        <i class="fas" :class="reacting === item.message.id ? 'fa-circle-notch fa-spin' : 'fa-face-smile'"></i>
-                                    </button>
-                                    <div v-if="reactPickerFor === item.message.id" class="wa-react-picker absolute bottom-full left-0 z-30 mb-1 flex gap-0.5 rounded-full px-1.5 py-1" role="menu">
-                                        <button
-                                            v-for="emoji in REACTIONS"
-                                            :key="emoji"
-                                            type="button"
-                                            role="menuitem"
-                                            class="flex h-9 w-9 items-center justify-center rounded-full text-[22px] transition-transform hover:scale-125"
-                                            :class="reactionsByTarget[item.message.id]?.outbound === emoji ? 'wa-react-chosen' : ''"
-                                            :title="reactionsByTarget[item.message.id]?.outbound === emoji ? 'Tirar a reação' : `Reagir com ${emoji}`"
-                                            @click="react(item.message, emoji)"
-                                        >{{ emoji }}</button>
-                                    </div>
-                                </div>
+                                <button
+                                    v-if="canReact(item.message)"
+                                    type="button"
+                                    class="wa-react-btn flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                                    :class="(floating && floating.kind !== 'menu' && floating.message.id === item.message.id) || reacting === item.message.id ? 'wa-react-btn-on' : ''"
+                                    :disabled="reacting === item.message.id"
+                                    :title="active.insideWindow ? 'Reagir' : 'Fora da janela de 24h: o WhatsApp não aceita reação'"
+                                    aria-label="Reagir à mensagem"
+                                    @click.stop="openFloating('bar', item.message, $event, { above: true })"
+                                >
+                                    <i :class="reacting === item.message.id ? 'fas fa-circle-notch fa-spin' : 'far fa-face-smile'"></i>
+                                </button>
                             </div>
                         </template>
                     </div>
+
+                    <!-- Barra de reações, menu da mensagem e seletor "+" (igual ao WhatsApp Web) -->
+                    <template v-if="floating">
+                        <div class="fixed inset-0 z-40" @click="closeFloating" @contextmenu.prevent="closeFloating"></div>
+                        <div class="fixed z-50 flex flex-col gap-1.5" :class="floating.alignRight ? 'items-end' : 'items-start'" :style="floatingStyle">
+                            <div v-if="floating.kind !== 'emoji' && canReact(floating.message)" class="wa-react-picker flex items-center gap-0.5 rounded-full px-1.5 py-1" role="menu" aria-label="Reações">
+                                <button
+                                    v-for="emoji in REACTIONS"
+                                    :key="emoji"
+                                    type="button"
+                                    role="menuitem"
+                                    class="flex h-9 w-9 items-center justify-center rounded-full text-[22px] transition-transform hover:scale-125"
+                                    :class="reactionsByTarget[floating.message.id]?.outbound === emoji ? 'wa-react-chosen' : ''"
+                                    :title="reactionsByTarget[floating.message.id]?.outbound === emoji ? 'Tirar a reação' : `Reagir com ${emoji}`"
+                                    @click="react(floating.message, emoji)"
+                                >{{ emoji }}</button>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    class="wa-react-more ml-0.5 flex h-8 w-8 items-center justify-center rounded-full"
+                                    title="Mais reações"
+                                    aria-label="Mais reações"
+                                    @click="openFloating('emoji', floating.message)"
+                                >
+                                    <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12" /></svg>
+                                </button>
+                            </div>
+
+                            <div v-if="floating.kind === 'menu'" class="wa-menu wa-msg-menu w-[244px] py-2" role="menu">
+                                <template v-for="menuItem in MSG_MENU" :key="menuItem.key">
+                                    <div v-if="menuItem.separator" class="wa-msg-menu-sep my-1.5"></div>
+                                    <button
+                                        type="button"
+                                        role="menuitem"
+                                        class="wa-menu-item wa-msg-menu-item flex items-center gap-4"
+                                        :disabled="menuItemDisabled(menuItem, floating.message)"
+                                        :title="menuItemTitle(menuItem, floating.message)"
+                                        @click="onMenuItem(menuItem, floating.message)"
+                                    >
+                                        <i class="w-5 text-center text-[17px]" :class="menuItem.icon"></i>
+                                        <span>{{ menuItem.label }}</span>
+                                    </button>
+                                </template>
+                            </div>
+
+                            <div v-if="floating.kind === 'emoji'" class="wa-emoji-picker flex h-[380px] w-full flex-col overflow-hidden rounded-xl" role="dialog" aria-label="Escolher reação">
+                                <div class="wa-emoji-tabs flex shrink-0 items-center gap-0.5 px-2 pt-2">
+                                    <button
+                                        v-for="group in reactionGroups"
+                                        :key="group.key"
+                                        type="button"
+                                        class="wa-emoji-tab flex h-9 flex-1 items-center justify-center text-[19px]"
+                                        :class="{ 'wa-emoji-tab-on': emojiTab === group.key }"
+                                        :title="group.label"
+                                        :aria-label="group.label"
+                                        @click="scrollEmojiTab(group.key)"
+                                    >{{ group.icon }}</button>
+                                </div>
+                                <div ref="emojiScroll" class="relative min-h-0 flex-1 overflow-y-auto px-2 pb-2" @scroll.passive="onEmojiScroll">
+                                    <section v-for="group in reactionGroups" :key="group.key" :data-group="group.key">
+                                        <p class="wa-emoji-group-title px-1 pb-1 pt-3">{{ group.label }}</p>
+                                        <div class="grid grid-cols-8 gap-0.5">
+                                            <button
+                                                v-for="emoji in group.emojis"
+                                                :key="group.key + emoji"
+                                                type="button"
+                                                class="flex h-9 items-center justify-center rounded-md text-[22px] hover:bg-black/5 dark:hover:bg-white/10"
+                                                :class="reactionsByTarget[floating.message.id]?.outbound === emoji ? 'wa-react-chosen' : ''"
+                                                :title="reactionsByTarget[floating.message.id]?.outbound === emoji ? 'Tirar a reação' : `Reagir com ${emoji}`"
+                                                @click="react(floating.message, emoji)"
+                                            >{{ emoji }}</button>
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <transition name="wa-toast">
+                        <div v-if="toast" class="wa-toast pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-lg px-4 py-2 text-[14px]" role="status">{{ toast }}</div>
+                    </transition>
 
                     <button
                         v-if="showNewBelow"
@@ -1340,6 +1616,16 @@ function linkify(text) {
                             <p class="wa-muted text-[12px]">{{ formatSize(attachment.size) }} · o texto digitado vai como legenda</p>
                         </div>
                         <button type="button" class="wa-icon-btn inline-flex" title="Tirar o anexo" :disabled="sending" @click="attachment = null">
+                            <i class="fas fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+                    <div v-if="replyTo && !recording" class="wa-reply-bar mb-1 mt-1 flex items-center gap-2 rounded-lg py-1.5 pl-1.5 pr-1">
+                        <button type="button" class="wa-quote min-w-0 flex-1 text-left" :class="replyTo.direction === 'inbound' ? 'wa-quote-in' : 'wa-quote-out'" title="Ir para a mensagem" @click="jumpToMessage(replyTo.id)">
+                            <span class="wa-quote-author block truncate">{{ quoteAuthor(replyTo) }}</span>
+                            <span class="wa-quote-text block">{{ quoteText(replyTo) }}</span>
+                            <span v-if="attachment" class="wa-muted block text-[12px]">A citação vai só com mensagem de texto.</span>
+                        </button>
+                        <button type="button" class="wa-icon-btn inline-flex" title="Cancelar a resposta" aria-label="Cancelar a resposta" @click="replyTo = null">
                             <i class="fas fa-xmark text-lg"></i>
                         </button>
                     </div>
@@ -1678,6 +1964,35 @@ function linkify(text) {
 @media (hover: none) { .wa-react-btn { opacity: 0.7; } }
 .wa-react-picker { background: var(--wa-panel); box-shadow: 0 2px 5px rgba(11, 20, 26, 0.26); }
 .wa-react-chosen { background: var(--wa-active); }
+/* Menu da mensagem e seletor "+" (pedido do Lira 04/11, igual aos prints do WhatsApp Web) */
+.wa-react-picker { border-radius: 9999px; }
+.wa-react-more { color: var(--wa-icon); background: var(--wa-hover); }
+.wa-react-more:hover { background: var(--wa-active); }
+.wa-msg-arrow { color: var(--wa-icon); opacity: 0; transition: opacity 0.12s; }
+.wa-bubble-in .wa-msg-arrow { background: radial-gradient(at top right, var(--wa-bubble-in) 60%, transparent 80%); }
+.wa-bubble-out .wa-msg-arrow { background: radial-gradient(at top right, var(--wa-bubble-out) 60%, transparent 80%); }
+.group:hover .wa-msg-arrow, .wa-msg-arrow:focus-visible, .wa-msg-arrow-on { opacity: 1; }
+@media (hover: none) { .wa-msg-arrow { opacity: 0.8; } }
+.wa-msg-menu { border-radius: 16px; padding-left: 6px; padding-right: 6px; }
+.wa-msg-menu-item { border-radius: 10px; padding: 8px 12px; font-size: 14.5px; }
+.wa-msg-menu-item i { color: var(--wa-icon); }
+.wa-msg-menu-item:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
+.wa-msg-menu-sep { height: 1px; background: var(--wa-border); margin-left: 12px; margin-right: 12px; }
+.wa-emoji-picker { background: var(--wa-menu); box-shadow: 0 2px 5px rgba(11, 20, 26, 0.26), 0 2px 10px rgba(11, 20, 26, 0.16); }
+.wa-emoji-tabs { border-bottom: 1px solid var(--wa-border); }
+.wa-emoji-tab { border-bottom: 3px solid transparent; opacity: 0.6; }
+.wa-emoji-tab:hover { opacity: 1; }
+.wa-emoji-tab-on { border-bottom-color: #00a884; opacity: 1; }
+.wa-emoji-group-title { font-size: 13px; color: var(--wa-muted); }
+.wa-quote { border-radius: 7px; padding: 5px 10px 6px 10px; border-left: 4px solid #06cf9c; background: rgba(11, 20, 26, 0.05); }
+.wa-quote-out { border-left-color: #53bdeb; }
+.wa-quote-author { font-size: 12.8px; font-weight: 500; color: #06a37b; }
+.wa-quote-out .wa-quote-author { color: #3b9fd1; }
+.wa-quote-text { font-size: 13.2px; line-height: 19px; color: var(--wa-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+.wa-reply-bar { background: var(--wa-panel); }
+.wa-toast { background: #3b4a54; color: #fff; box-shadow: 0 2px 6px rgba(11, 20, 26, 0.3); }
+.wa-toast-enter-active, .wa-toast-leave-active { transition: opacity 0.15s; }
+.wa-toast-enter-from, .wa-toast-leave-to { opacity: 0; }
 .wa-text :deep(.wa-link) { color: #027eb5; text-decoration: none; }
 .wa-text :deep(.wa-link:hover) { text-decoration: underline; }
 
@@ -1756,6 +2071,7 @@ function linkify(text) {
 .dark .wa-app .wa-sender-human { color: #a78bfa; }
 .dark .wa-app .wa-text .wa-link { color: #53bdeb; }
 .dark .wa-app .wa-doc { background: rgba(255, 255, 255, 0.06); }
+.dark .wa-app .wa-quote { background: rgba(255, 255, 255, 0.06); }
 .dark .wa-app .wa-switch:not(.wa-switch-on) { background: #54656f; }
 .dark .wa-app .wa-banner-warn { background: rgba(245, 158, 11, 0.12); color: #fcd34d; }
 .dark .wa-app .wa-banner-info { background: rgba(83, 189, 235, 0.12); color: #9fdcf6; }

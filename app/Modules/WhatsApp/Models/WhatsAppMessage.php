@@ -39,9 +39,34 @@ class WhatsAppMessage extends Model
         return $this->belongsTo(WhatsAppConversation::class, 'conversation_id');
     }
 
+    /**
+     * Reação com emoji a uma mensagem (pedido do Lira 04/11), do cliente ou
+     * do atendente. Emoji vazio = tirou a reação. `alvo` = wa_message_id.
+     *
+     * @return array{emoji: string, alvo: ?string}|null
+     */
+    public function reacao(): ?array
+    {
+        if ($this->type !== 'reaction') {
+            return null;
+        }
+
+        $reaction = $this->payload['reaction'] ?? [];
+
+        return ['emoji' => (string) ($reaction['emoji'] ?? ''), 'alvo' => $reaction['message_id'] ?? null];
+    }
+
     /** Texto curto pra lista de conversas (igual ao WhatsApp: "📷 Foto"). */
     public function preview(): string
     {
+        if ($reacao = $this->reacao()) {
+            if ($reacao['emoji'] === '') {
+                return 'Removeu a reação';
+            }
+
+            return ($this->direction === 'outbound' ? 'Você reagiu com ' : 'Reagiu com ').$reacao['emoji'];
+        }
+
         $label = match ($this->type) {
             'image' => '📷 Foto',
             'video' => '🎥 Vídeo',

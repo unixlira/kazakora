@@ -52,6 +52,9 @@ class WhatsAppInboxController extends Controller
 
     private const AUDIO_TYPES = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
 
+    // Reações rápidas do WhatsApp (as mesmas da tela).
+    private const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
     public function index(WhatsAppSettings $settings, ManuelaAgentClient $agent): Response
     {
         return Inertia::render('Admin/WhatsApp/Inbox', [
@@ -277,6 +280,41 @@ class WhatsAppInboxController extends Controller
         $this->humanTakesOver($conversation);
 
         $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id);
+
+        return response()->json([
+            'message' => $this->messagePayload($message),
+            'conversation' => $this->conversationPayload($conversation->fresh()),
+        ]);
+    }
+
+    /**
+     * Reação do atendente a uma mensagem do cliente (pedido do Lira 04/11),
+     * com as reações rápidas do WhatsApp. Emoji vazio tira a reação.
+     */
+    public function react(Request $request, WhatsAppConversation $conversation, WhatsAppOutbox $outbox): JsonResponse
+    {
+        $validated = Validator::make($request->all(), [
+            'message_id' => ['required', 'integer'],
+            'emoji' => ['present', 'nullable', 'string', 'in:'.implode(',', self::REACTIONS)],
+        ], [
+            'emoji.in' => 'Reação não permitida.',
+        ]);
+
+        if ($validated->fails()) {
+            return response()->json(['message' => $validated->errors()->first()], 422);
+        }
+
+        $target = WhatsAppMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('direction', 'inbound')
+            ->whereNotNull('wa_message_id')
+            ->find((int) $request->input('message_id'));
+
+        if (! $target || $target->type === 'reaction') {
+            return response()->json(['message' => 'Mensagem não encontrada nesta conversa.'], 422);
+        }
+
+        $message = $outbox->sendReaction($conversation, $target, (string) $request->input('emoji', ''), $request->user()->name, $request->user()->id);
 
         return response()->json([
             'message' => $this->messagePayload($message),
@@ -520,6 +558,28 @@ class WhatsAppInboxController extends Controller
             'fileName' => $payload['document']['filename'] ?? null,
             'transcription' => $payload['transcription'] ?? null,
             'error' => $m->status === 'failed' ? ($payload['error'] ?? null) : null,
+            'reaction' => $this->reacaoPayload($m),
+        ];
+    }
+
+    /**
+     * Emoji e a mensagem reagida (id local), para a tela grudar o emoji no
+     * balão certo em vez de mostrar a reação como mensagem própria.
+     */
+    private function reacaoPayload(WhatsAppMessage $m): ?array
+    {
+        $reacao = $m->reacao();
+        if (! $reacao) {
+            return null;
+        }
+
+        $alvoId = filled($reacao['alvo'])
+            ? WhatsAppMessage::query()->where('conversation_id', $m->conversation_id)->where('wa_message_id', $reacao['alvo'])->value('id')
+            : null;
+
+        return [
+            'emoji' => $reacao['emoji'],
+            'targetId' => $alvoId,
         ];
     }
 }

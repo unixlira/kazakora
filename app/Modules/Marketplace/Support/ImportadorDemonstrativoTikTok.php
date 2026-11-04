@@ -183,8 +183,13 @@ class ImportadorDemonstrativoTikTok
 
         $restantes = $linhas->reject(fn ($l) => isset($remover[$l->id]));
         $outraImportacao = fn ($a, $b) => $a->source_file !== $b->source_file || (string) $a->updated_at !== (string) $b->updated_at;
+        // Pedido sem venda (só frete) compara também o valor: o TikTok cobra o
+        // frete (−21,90) e semanas depois devolve (+21,90) no mesmo pedido, e a
+        // devolução pendente saía como cópia da cobrança paga (04/11/2026:
+        // 10 linhas, R$ 84,80 no demonstrativo de 03/11).
         $chave = fn ($l) => $l->transaction_type === 'Pedido'
             ? $l->external_order_id.'|Pedido|'.$sku($l).'|'.round((float) $l->product_net_sales, 2)
+                .(round((float) $l->product_net_sales, 2) == 0 ? '|'.round((float) $l->payout_amount, 2) : '')
             : $l->external_order_id.'|'.$l->transaction_type.'|'.$sku($l).'|'.$l->settlement_date.'|'.round((float) $l->payout_amount, 2);
 
         foreach ($restantes->groupBy($chave) as $iguais) {

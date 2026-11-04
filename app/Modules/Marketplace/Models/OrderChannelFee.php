@@ -25,6 +25,12 @@ class OrderChannelFee extends Model
     // dado real; a tela marca a margem do canal como estimada.
     public const SOURCE_ESTIMATE = 'estimate';
 
+    // Valor PREVISTO pelo próprio canal para pedido ainda não liquidado
+    // (TikTok Shop › Finanças › Em espera: vendas líquidas, taxas e frete
+    // estimados e o valor a receber) — 04/11/2026. Vale no lugar da nossa
+    // estimativa; o extrato real sobrescreve quando o pedido liquida.
+    public const SOURCE_PREVISTO = 'previsto';
+
     protected $fillable = [
         'order_id',
         'channel',

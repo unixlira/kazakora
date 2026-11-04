@@ -49,9 +49,12 @@ class ContributionMargin
         // TikTok (2026-10-11): o subtotal é o preço CHEIO, antes do desconto
         // que a própria loja financia (ex.: R$ 239,90 com R$ 150 de desconto
         // do vendedor). Receita real = "Vendas líquidas dos produtos" do
-        // demonstrativo; enquanto ele não chega, o valor que o cliente pagou.
+        // demonstrativo; enquanto ele não chega, as vendas líquidas que o
+        // TikTok prevê na tela Em espera (EmEsperaTikTok, 04/11/2026); sem
+        // nenhum dos dois, o valor que o cliente pagou.
         $tiktok = "COALESCE((SELECT SUM(msd.product_net_sales) FROM marketplace_settlement_details msd"
             ." WHERE msd.channel = 'tiktok_shop' AND msd.transaction_type = 'Pedido' AND msd.external_order_id = {$orders}.external_order_id),"
+            ." (SELECT MAX(ocf.gross_amount) FROM order_channel_fees ocf WHERE ocf.order_id = {$orders}.id AND ocf.source = '".OrderChannelFee::SOURCE_PREVISTO."'),"
             ." CASE WHEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) > 0 THEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
 
         // Site (2026-10-12): os descontos são da própria loja (cupom, Pix e o

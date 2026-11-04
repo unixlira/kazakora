@@ -188,6 +188,20 @@ class WhatsAppReacaoTest extends TestCase
         $this->assertSame('Oi', $conversation->fresh()->last_message_preview);
     }
 
+    public function test_atendente_reage_com_emoji_do_seletor_mais(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUTR3']]])]);
+        [$conversation, $alvo] = $this->conversaComMensagem();
+
+        $this->actingAs($this->admin())
+            ->postJson("/admin/whatsapp/conversas/{$conversation->id}/reagir", ['message_id' => $alvo->id, 'emoji' => '🔥'])
+            ->assertOk()
+            ->assertJsonPath('message.reaction.emoji', '🔥');
+
+        Http::assertSent(fn ($request) => $request['type'] === 'reaction'
+            && $request['reaction'] === ['message_id' => 'wamid.IN1', 'emoji' => '🔥']);
+    }
+
     public function test_reagir_recusa_emoji_fora_da_lista_e_mensagem_de_outra_conversa(): void
     {
         Http::fake();

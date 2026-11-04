@@ -30,9 +30,13 @@ class WhatsAppCloudApiClient
         return $this->loja;
     }
 
-    public function sendText(string $to, string $message): array
+    /**
+     * @param  string|null  $replyToWaId  wamid da mensagem citada (Responder,
+     *                                    pedido do Lira 04/11): vira o "context" da Cloud API
+     */
+    public function sendText(string $to, string $message, ?string $replyToWaId = null): array
     {
-        return $this->postMessage([
+        $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
             'to' => $to,
@@ -41,7 +45,13 @@ class WhatsAppCloudApiClient
                 'preview_url' => false,
                 'body' => $message,
             ],
-        ]);
+        ];
+
+        if (filled($replyToWaId)) {
+            $payload['context'] = ['message_id' => $replyToWaId];
+        }
+
+        return $this->postMessage($payload);
     }
 
     /**

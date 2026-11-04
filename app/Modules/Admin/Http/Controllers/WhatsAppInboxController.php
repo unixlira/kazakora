@@ -55,11 +55,53 @@ class WhatsAppInboxController extends Controller
     // Reações rápidas do WhatsApp (as mesmas da tela).
     private const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
+    // Seletor do "+" da barra de reações (pedido do Lira 04/11): a tela
+    // recebe esta lista e o servidor só aceita reação que esteja nela.
+    private const REACTION_GROUPS = [
+        ['key' => 'carinhas', 'label' => 'Carinhas', 'icon' => '😀', 'emojis' => [
+            '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩',
+            '😘', '😗', '😚', '😙', '🥲', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐',
+            '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕',
+            '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '😮', '😯', '😲',
+            '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫',
+            '🥱', '😤', '😡', '😠', '🤬', '😈', '🤡', '👻', '👽', '🤖', '😺', '😸', '😹', '😻', '🙈', '🙉', '🙊',
+        ]],
+        ['key' => 'gestos', 'label' => 'Gestos', 'icon' => '👍', 'emojis' => [
+            '👍', '👎', '👌', '🤌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚',
+            '🖐️', '🖖', '👋', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪', '👀', '🫶', '🫡', '🙋', '🤷',
+            '🤦', '🙇', '💁', '🙆', '🙅',
+        ]],
+        ['key' => 'coracoes', 'label' => 'Corações', 'icon' => '❤️', 'emojis' => [
+            '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖',
+            '💘', '💝', '💟', '💋', '🌹', '🌷', '🌸', '🌻',
+        ]],
+        ['key' => 'objetos', 'label' => 'Objetos', 'icon' => '📦', 'emojis' => [
+            '🎉', '🎊', '🎁', '🎈', '🏆', '🥇', '⭐', '🌟', '✨', '🔥', '💯', '💥', '⚡', '☀️', '🌈', '☕',
+            '🍕', '🍔', '🍰', '🍫', '🍻', '🥂', '📦', '🚚', '🛒', '🛍️', '💳', '💰', '💸', '🏷️', '📍', '📞',
+            '📱', '💻', '📷', '📸', '🔧', '🔨', '🪛', '🧰', '🏠', '⏰', '📅', '✏️', '📝', '🔔', '💡', '🚀',
+        ]],
+        ['key' => 'simbolos', 'label' => 'Símbolos', 'icon' => '✅', 'emojis' => [
+            '✅', '☑️', '✔️', '❌', '❎', '⚠️', '❗', '❓', '‼️', '⁉️', '🆗', '🆕', '🆓', '🔝', '🔴', '🟢',
+            '🟡', '🔵', '⬆️', '⬇️', '➡️', '⬅️', '🔄', '♻️', '➕', '➖', '💤', '👑', '🇧🇷',
+        ]],
+    ];
+
+    /**
+     * Toda reação aceita: as rápidas e as do seletor "+", sem repetir.
+     *
+     * @return list<string>
+     */
+    private static function reacoesPermitidas(): array
+    {
+        return array_values(array_unique(array_merge(self::REACTIONS, ...array_column(self::REACTION_GROUPS, 'emojis'))));
+    }
+
     public function index(WhatsAppSettings $settings, ManuelaAgentClient $agent): Response
     {
         return Inertia::render('Admin/WhatsApp/Inbox', [
             'conversations' => $this->conversationQuery()->limit(self::CONVERSATION_PAGE)->get()->map(fn ($c) => $this->conversationPayload($c)),
             'serverTime' => now()->toISOString(),
+            'reactionGroups' => self::REACTION_GROUPS,
             'status' => [
                 'readyToSend' => $settings->isReadyToSend(),
                 'enabled' => $settings->bool('enabled'),
@@ -275,11 +317,27 @@ class WhatsAppInboxController extends Controller
     {
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:4096'],
+            'reply_to' => ['nullable', 'integer'],
         ]);
+
+        // Responder (pedido do Lira 04/11): a mensagem citada tem que ser
+        // desta conversa e ter o wamid da Meta (sem ele não há "context").
+        $citada = null;
+        if (! empty($validated['reply_to'])) {
+            $citada = WhatsAppMessage::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('type', '!=', 'reaction')
+                ->whereNotNull('wa_message_id')
+                ->find((int) $validated['reply_to']);
+
+            if (! $citada) {
+                return response()->json(['message' => 'A mensagem respondida não foi encontrada nesta conversa.'], 422);
+            }
+        }
 
         $this->humanTakesOver($conversation);
 
-        $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id);
+        $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id, [], $citada?->wa_message_id);
 
         return response()->json([
             'message' => $this->messagePayload($message),
@@ -295,7 +353,7 @@ class WhatsAppInboxController extends Controller
     {
         $validated = Validator::make($request->all(), [
             'message_id' => ['required', 'integer'],
-            'emoji' => ['present', 'nullable', 'string', 'in:'.implode(',', self::REACTIONS)],
+            'emoji' => ['present', 'nullable', 'string', 'in:'.implode(',', self::reacoesPermitidas())],
         ], [
             'emoji.in' => 'Reação não permitida.',
         ]);
@@ -559,6 +617,32 @@ class WhatsAppInboxController extends Controller
             'transcription' => $payload['transcription'] ?? null,
             'error' => $m->status === 'failed' ? ($payload['error'] ?? null) : null,
             'reaction' => $this->reacaoPayload($m),
+            'replyTo' => $this->citacaoPayload($m),
+        ];
+    }
+
+    /**
+     * Mensagem citada pelo Responder (pedido do Lira 04/11), para a tela
+     * mostrar a citação no balão enviado.
+     */
+    private function citacaoPayload(WhatsAppMessage $m): ?array
+    {
+        $wamid = $m->payload['responde_a'] ?? null;
+        if (! is_string($wamid) || $wamid === '') {
+            return null;
+        }
+
+        $citada = WhatsAppMessage::query()->where('conversation_id', $m->conversation_id)->where('wa_message_id', $wamid)->first();
+        if (! $citada) {
+            return ['id' => null, 'direction' => null, 'sentBy' => null, 'type' => null, 'body' => null];
+        }
+
+        return [
+            'id' => $citada->id,
+            'direction' => $citada->direction,
+            'sentBy' => $citada->sent_by,
+            'type' => $citada->type,
+            'body' => $citada->body !== null ? mb_substr($citada->body, 0, 300) : null,
         ];
     }
 

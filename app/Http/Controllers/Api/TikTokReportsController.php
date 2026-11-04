@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Http\Controllers\DevolucoesController;
+use App\Modules\Marketplace\Support\EmEsperaTikTok;
 use App\Modules\Marketplace\Support\RelatoriosTikTok;
 use App\Modules\Marketplace\Support\ReturnsSyncService;
 use Illuminate\Http\JsonResponse;
@@ -102,5 +103,21 @@ class TikTokReportsController extends Controller
         DevolucoesController::limparContagem();
 
         return response()->json(['ok' => true, 'recebidos' => count($cartoes), 'gravados' => $gravados]);
+    }
+
+    /**
+     * Pedidos ainda não liquidados com os valores previstos pelo TikTok
+     * (Finanças › Em espera), lidos pelo agente do TikTok (04/11/2026).
+     */
+    public function emEspera(Request $request, EmEsperaTikTok $emEspera): JsonResponse
+    {
+        $esperado = (string) config('services.tiktok_reports.token');
+        if ($esperado === '' || ! hash_equals($esperado, (string) Str::after((string) $request->header('Authorization'), 'Bearer '))) {
+            return response()->json(['ok' => false, 'erro' => 'Token inválido.'], 401);
+        }
+
+        $pedidos = $request->validate(['pedidos' => ['present', 'array', 'max:2000']])['pedidos'];
+
+        return response()->json(['ok' => true, ...$emEspera->aplicar(array_values($pedidos))]);
     }
 }

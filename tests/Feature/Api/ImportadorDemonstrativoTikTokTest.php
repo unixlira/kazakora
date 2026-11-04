@@ -137,6 +137,26 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
         $this->assertSame(37.99, (float) DB::table('orders')->where('id', $pedido->id)->value(DB::raw(\App\Modules\Marketplace\Support\ContributionMargin::receitaSql())));
     }
 
+    /**
+     * Produção 04/11: o TikTok cobrou o frete do pedido (−21,90, pago em 10/10)
+     * e devolveu em 03/11 (+21,90, pendente). A devolução não é cópia da cobrança.
+     */
+    public function test_devolucao_de_frete_pendente_nao_sai_como_copia_da_cobranca(): void
+    {
+        $frete = ['external_order_id' => '585843784962901509', 'product_net_sales' => 0];
+        $cobranca = $this->linha([...$frete, 'statement_id' => '7694571046925879060', 'status' => 'Pagos', 'payment_id' => 'PG1', 'settlement_date' => '2026-10-10', 'payout_amount' => -21.90, 'source_file' => 'b.xlsx']);
+        $devolucao = $this->linha([...$frete, 'statement_id' => '3752110925243516238', 'settlement_date' => '2026-11-03', 'payout_amount' => 21.90]);
+        // Frete pendente que só trocou de ID ao ser pago continua saindo.
+        $provisoria = $this->linha([...$frete, 'external_order_id' => '586025577681356517', 'statement_id' => '374', 'payout_amount' => -14.30]);
+        $paga = $this->linha([...$frete, 'external_order_id' => '586025577681356517', 'statement_id' => '770', 'status' => 'Pagos', 'payout_amount' => -14.30, 'source_file' => 'b.xlsx']);
+
+        app(ImportadorDemonstrativoTikTok::class)->removerLinhasSuperadas();
+
+        $ficaram = DB::table('marketplace_settlement_details')->pluck('id')->sort()->values()->all();
+        $this->assertSame([$cobranca, $devolucao, $paga], $ficaram);
+        $this->assertNotContains($provisoria, $ficaram);
+    }
+
     /** Produção 02/11: 38 linhas repetidas somavam acima do que o TikTok pagou. */
     public function test_extrato_acima_do_valor_pago_abre_alerta_e_some_quando_bate(): void
     {

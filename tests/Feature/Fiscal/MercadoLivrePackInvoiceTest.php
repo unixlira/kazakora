@@ -10,6 +10,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Support\MercadoLivreFull;
 use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\MercadoLivre\MercadoLivreClient;
@@ -93,8 +94,17 @@ class MercadoLivrePackInvoiceTest extends TestCase
     {
         $orderImport = Mockery::mock(OrderImportService::class);
         $orderImport->shouldReceive('refreshBuyerInfo')->andReturnNull();
+        $this->app->instance(MercadoLivreFull::class, $this->naoFull());
 
         (new GenerateInvoiceJob($orderId))->handle(app(InvoiceService::class), app(OrderFulfillmentTimeline::class), $orderImport);
+    }
+
+    private function naoFull(): MercadoLivreFull
+    {
+        $full = Mockery::mock(MercadoLivreFull::class);
+        $full->shouldReceive('ehFull')->andReturnFalse();
+
+        return $full;
     }
 
     private function gateQueConfirmaCarrinhoCompleto(): void

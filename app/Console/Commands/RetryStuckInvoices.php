@@ -11,6 +11,7 @@ use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Support\MercadoLivreFull;
 use App\Modules\Marketplace\Support\OrderImportService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -83,6 +84,9 @@ class RetryStuckInvoices extends Command
             ->where('status', Order::STATUS_PAID)
             ->whereNotIn('origin', array_merge($delegadosAoBling, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE]))
             ->when($canal, fn ($query) => $query->where('origin', $canal))
+            // Full do Mercado Livre: a nota é do ML, não está travada (ver
+            // MercadoLivreFull). Sem isto voltaria à fila a cada 15 min.
+            ->whereDoesntHave('channelShipment', fn ($q) => $q->where('shipping_method', MercadoLivreFull::LOGISTIC_TYPE))
             ->where(function ($query) {
                 $query->whereDoesntHave('invoice')
                     ->orWhereHas('invoice', fn ($q) => $q->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED]));

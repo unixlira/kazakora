@@ -14,6 +14,7 @@ use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\MercadoLivreFull;
 use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Marketplace\Support\PagamentoAmazon;
@@ -146,6 +147,20 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                 OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
                 OrderFulfillmentEvent::STATUS_SUCCESS,
                 'TikTok Shop: emissão automática de NF-e no KazaKora bloqueada para evitar duplicidade fiscal; a emissão deste canal é tratada fora deste pipeline.',
+            );
+
+            return;
+        }
+
+        // Regra do Lira (2026-11-04): no Full quem emite a NF-e é o Mercado
+        // Livre. Nota nossa é recusada lá e duplica a venda. Ver
+        // MercadoLivreFull.
+        if (app(MercadoLivreFull::class)->ehFull($order)) {
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                'Mercado Livre Full: a NF-e é emitida pelo próprio Mercado Livre; o KazaKora não emite para não duplicar.',
             );
 
             return;

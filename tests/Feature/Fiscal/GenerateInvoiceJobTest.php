@@ -12,6 +12,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\MercadoLivreFull;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Contracts\Queue\Job as QueueJobContract;
@@ -103,6 +104,9 @@ class GenerateInvoiceJobTest extends TestCase
         $order = $this->makeOrder();
         $order->update(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1']);
         $invoice = Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_EXTERNAL, 'serie' => 0, 'numero' => $order->id]);
+        $full = Mockery::mock(MercadoLivreFull::class);
+        $full->shouldReceive('ehFull')->andReturnFalse();
+        $this->app->instance(MercadoLivreFull::class, $full);
 
         $invoices = Mockery::mock(InvoiceService::class);
         $invoices->shouldReceive('issue')->once()->andReturn($invoice);

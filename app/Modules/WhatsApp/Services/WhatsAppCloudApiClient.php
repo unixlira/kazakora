@@ -177,6 +177,24 @@ class WhatsAppCloudApiClient
         ]);
     }
 
+    /**
+     * Reação com emoji a uma mensagem (pedido do Lira 04/11). Emoji vazio
+     * tira a reação, igual ao WhatsApp.
+     */
+    public function sendReaction(string $to, string $waMessageId, string $emoji): array
+    {
+        return $this->postMessage([
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => $to,
+            'type' => 'reaction',
+            'reaction' => [
+                'message_id' => $waMessageId,
+                'emoji' => $emoji,
+            ],
+        ]);
+    }
+
     private function postMessage(array $payload): array
     {
         $this->garantirPronto();

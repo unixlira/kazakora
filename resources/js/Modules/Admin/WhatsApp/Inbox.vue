@@ -49,6 +49,11 @@ const drawerOpen = ref(false);
 const menuOpen = ref(false);
 const emojiOpen = ref(false);
 const toggling = ref(new Set());
+// Reação com emoji (pedido do Lira 04/11): reações rápidas do WhatsApp e
+// o balão com o seletor aberto (id da mensagem).
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const reactPickerFor = ref(null);
+const reacting = ref(null);
 
 // Nova conversa (botão +, pedido do Lira 2026-10-23): busca por telefone ou
 // pelo número do pedido e já mostra o cliente e a loja dele.
@@ -124,6 +129,68 @@ const visibleConversations = computed(() => {
 
 const totalUnread = computed(() => conversations.value.filter((c) => c.unread > 0).length);
 
+// Reações (pedido do Lira 04/11): a mensagem "reaction" não vira balão;
+// o emoji gruda no balão reagido. Vale a última de cada lado (cliente e
+// nós); emoji vazio = tirou. Reação nossa recusada pela Meta não aparece.
+const reactionsByTarget = computed(() => {
+    const map = {};
+    for (const message of messages.value) {
+        const targetId = message.reaction?.targetId;
+        if (message.type !== 'reaction' || !targetId) continue;
+        if (message.direction === 'outbound' && message.status === 'failed') continue;
+        map[targetId] = { ...map[targetId], [message.direction]: message.reaction.emoji || null };
+    }
+    return map;
+});
+
+// Lista das reações do balão (cliente e nós); emoji igual aparece uma vez.
+function reactionsOf(message) {
+    const r = reactionsByTarget.value[message.id];
+    if (!r) return [];
+    return [r.inbound, r.outbound].filter(Boolean);
+}
+
+function uniqueReactions(message) {
+    return [...new Set(reactionsOf(message))];
+}
+
+function reactionTitle(message) {
+    const r = reactionsByTarget.value[message.id] || {};
+    return [r.inbound && `Cliente: ${r.inbound}`, r.outbound && `Você: ${r.outbound}`].filter(Boolean).join(' · ');
+}
+
+function canReact(message) {
+    return can('pedidos.edit') && message.direction === 'inbound' && message.type !== 'reaction';
+}
+
+function toggleReactPicker(message) {
+    reactPickerFor.value = reactPickerFor.value === message.id ? null : message.id;
+}
+
+// Escolher o mesmo emoji de novo tira a reação (igual ao WhatsApp).
+async function react(message, emoji) {
+    if (!active.value || reacting.value) return;
+    reactPickerFor.value = null;
+    const current = reactionsByTarget.value[message.id]?.outbound || null;
+    const chosen = current === emoji ? '' : emoji;
+
+    reacting.value = message.id;
+    actionError.value = null;
+    try {
+        const data = await request(`/admin/whatsapp/conversas/${active.value.id}/reagir`, {
+            method: 'POST',
+            body: { message_id: message.id, emoji: chosen },
+        });
+        mergeMessages([data.message]);
+        upsertConversation(data.conversation);
+        if (data.message.status === 'failed') actionError.value = 'A Meta recusou a reação. Fora da janela de 24h o WhatsApp não aceita reação.';
+    } catch (error) {
+        actionError.value = error.message || 'Não foi possível reagir.';
+    } finally {
+        reacting.value = null;
+    }
+}
+
 // Mensagens agrupadas por dia (chip de data) e em sequência do mesmo
 // remetente: só a primeira da sequência tem o "rabinho", igual ao WhatsApp.
 const timeline = computed(() => {
@@ -132,6 +199,7 @@ const timeline = computed(() => {
     let previous = null;
 
     for (const message of messages.value) {
+        if (message.type === 'reaction') continue;
         const day = message.at ? new Date(message.at).toDateString() : null;
         if (day && day !== lastDay) {
             items.push({ kind: 'day', key: `d-${message.id}`, label: dayLabel(message.at) });
@@ -192,7 +260,8 @@ function onVisibility() {
 
 function onGlobalKey(event) {
     if (event.key !== 'Escape') return;
-    if (emojiOpen.value) emojiOpen.value = false;
+    if (reactPickerFor.value) reactPickerFor.value = null;
+    else if (emojiOpen.value) emojiOpen.value = false;
     else if (novaAberta.value) fecharNova();
     else if (menuOpen.value) menuOpen.value = false;
     else if (drawerOpen.value) drawerOpen.value = false;
@@ -286,6 +355,7 @@ async function openConversation(id) {
     showNewBelow.value = false;
     menuOpen.value = false;
     emojiOpen.value = false;
+    reactPickerFor.value = null;
     loadingMessages.value = true;
 
     const url = new URL(window.location.href);
@@ -1147,8 +1217,9 @@ function linkify(text) {
                             </div>
                             <div
                                 v-else
-                                class="flex"
-                                :class="[item.message.direction === 'outbound' ? 'justify-end' : 'justify-start', item.first ? 'mt-3' : 'mt-[2px]']"
+                                class="group flex items-center gap-1.5"
+                                :class="[item.message.direction === 'outbound' ? 'justify-end' : 'justify-start', item.first ? 'mt-3' : 'mt-[2px]', reactionsOf(item.message).length ? 'mb-[18px]' : '']"
+                                @mouseleave="reactPickerFor === item.message.id && (reactPickerFor = null)"
                             >
                                 <div
                                     class="wa-bubble relative max-w-[85%] sm:max-w-[65%]"
@@ -1157,6 +1228,15 @@ function linkify(text) {
                                         item.first && (item.message.direction === 'outbound' ? 'rounded-tr-none' : 'rounded-tl-none'),
                                     ]"
                                 >
+                                    <span
+                                        v-if="reactionsOf(item.message).length"
+                                        class="wa-reaction absolute -bottom-[18px] z-[1] inline-flex items-center gap-0.5"
+                                        :class="item.message.direction === 'outbound' ? 'right-2' : 'left-2'"
+                                        :title="reactionTitle(item.message)"
+                                        :aria-label="`Reações: ${reactionTitle(item.message)}`"
+                                    >
+                                        <span v-for="emoji in uniqueReactions(item.message)" :key="emoji">{{ emoji }}</span><span v-if="reactionsOf(item.message).length > 1" class="wa-reaction-count">{{ reactionsOf(item.message).length }}</span>
+                                    </span>
                                     <svg v-if="item.first && item.message.direction === 'inbound'" viewBox="0 0 8 13" width="8" height="13" class="wa-tail -left-2"><path d="M8 0H1.4C.3 0-.3 1.3.5 2.1L8 11.6z" /></svg>
                                     <svg v-if="item.first && item.message.direction === 'outbound'" viewBox="0 0 8 13" width="8" height="13" class="wa-tail -right-2"><path d="M0 0h6.6c1.1 0 1.7 1.3.9 2.1L0 11.6z" /></svg>
 
@@ -1197,6 +1277,32 @@ function linkify(text) {
                                             <svg v-else viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" :class="item.message.status === 'draft_no_token' ? 'text-amber-500' : 'wa-tick'"><circle cx="8" cy="8" r="6.3" /><path d="M8 4.6V8l2.3 1.5" /></svg>
                                         </span>
                                     </span>
+                                </div>
+                                <!-- Reagir à mensagem do cliente (pedido do Lira 04/11) -->
+                                <div v-if="canReact(item.message)" class="relative shrink-0">
+                                    <button
+                                        type="button"
+                                        class="wa-react-btn flex h-7 w-7 items-center justify-center rounded-full"
+                                        :class="reactPickerFor === item.message.id || reacting === item.message.id ? 'wa-react-btn-on' : ''"
+                                        :disabled="reacting === item.message.id"
+                                        :title="active.insideWindow ? 'Reagir' : 'Fora da janela de 24h: o WhatsApp não aceita reação'"
+                                        aria-label="Reagir à mensagem"
+                                        @click="toggleReactPicker(item.message)"
+                                    >
+                                        <i class="fas" :class="reacting === item.message.id ? 'fa-circle-notch fa-spin' : 'fa-face-smile'"></i>
+                                    </button>
+                                    <div v-if="reactPickerFor === item.message.id" class="wa-react-picker absolute bottom-full left-0 z-30 mb-1 flex gap-0.5 rounded-full px-1.5 py-1" role="menu">
+                                        <button
+                                            v-for="emoji in REACTIONS"
+                                            :key="emoji"
+                                            type="button"
+                                            role="menuitem"
+                                            class="flex h-9 w-9 items-center justify-center rounded-full text-[22px] transition-transform hover:scale-125"
+                                            :class="reactionsByTarget[item.message.id]?.outbound === emoji ? 'wa-react-chosen' : ''"
+                                            :title="reactionsByTarget[item.message.id]?.outbound === emoji ? 'Tirar a reação' : `Reagir com ${emoji}`"
+                                            @click="react(item.message, emoji)"
+                                        >{{ emoji }}</button>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -1565,6 +1671,13 @@ function linkify(text) {
 .wa-meta { font-size: 11px; line-height: 15px; color: var(--wa-muted); white-space: nowrap; }
 .wa-tick { color: #8696a0; }
 .wa-doc { background: rgba(11, 20, 26, 0.05); }
+.wa-reaction { border-radius: 9999px; background: var(--wa-bubble-in); padding: 1px 6px; font-size: 14px; line-height: 20px; box-shadow: 0 1px 2px rgba(11, 20, 26, 0.18); border: 1px solid var(--wa-border); }
+.wa-reaction-count { margin-left: 2px; font-size: 12px; color: var(--wa-muted); }
+.wa-react-btn { color: var(--wa-icon); background: var(--wa-panel); opacity: 0; transition: opacity 0.15s; box-shadow: var(--wa-shadow); }
+.group:hover .wa-react-btn, .wa-react-btn:focus-visible, .wa-react-btn-on { opacity: 1; }
+@media (hover: none) { .wa-react-btn { opacity: 0.7; } }
+.wa-react-picker { background: var(--wa-panel); box-shadow: 0 2px 5px rgba(11, 20, 26, 0.26); }
+.wa-react-chosen { background: var(--wa-active); }
 .wa-text :deep(.wa-link) { color: #027eb5; text-decoration: none; }
 .wa-text :deep(.wa-link:hover) { text-decoration: underline; }
 

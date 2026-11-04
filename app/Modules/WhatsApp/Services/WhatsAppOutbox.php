@@ -73,6 +73,63 @@ class WhatsAppOutbox
     }
 
     /**
+     * Reação do atendente a uma mensagem do cliente (pedido do Lira 04/11).
+     * Fica gravada como mensagem do tipo "reaction" (igual à que chega pelo
+     * webhook); a tela junta no balão da mensagem reagida. Emoji vazio = tirou.
+     */
+    public function sendReaction(
+        WhatsAppConversation $conversation,
+        WhatsAppMessage $target,
+        string $emoji,
+        string $sentBy,
+        ?int $userId = null,
+    ): WhatsAppMessage {
+        $basePayload = ['reaction' => ['message_id' => $target->wa_message_id, 'emoji' => $emoji]];
+
+        $message = WhatsAppMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => 'outbound',
+            'type' => 'reaction',
+            'body' => null,
+            'status' => 'pending',
+            'sent_by' => $sentBy,
+            'user_id' => $userId,
+            'payload' => $basePayload,
+            'sent_at' => now(),
+        ]);
+
+        // Tirar a reação não muda a prévia da lista (o WhatsApp também não mostra).
+        if ($emoji !== '') {
+            $conversation->registerMessage($message);
+        }
+
+        if (! $this->settings->isReadyToSend($conversation->loja)) {
+            $message->update(['status' => 'draft_no_token']);
+
+            return $message;
+        }
+
+        try {
+            $response = $this->client->paraLoja($conversation->loja)->sendReaction($conversation->wa_id, (string) $target->wa_message_id, $emoji);
+
+            $message->update([
+                'wa_message_id' => $response['messages'][0]['id'] ?? null,
+                'status' => 'sent',
+                'payload' => array_merge($basePayload, ['meta_response' => $response]),
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp_reaction_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+
+            $message->update([
+                'status' => 'failed',
+                'payload' => array_merge($basePayload, ['error' => $exception->getMessage()]),
+            ]);
+        }
+
+        return $message;
+    }
+
+    /**
      * Arquivo mandado pelo atendente na tela de Conversas (nota de voz gravada
      * ou anexo). A cópia fica em storage/app/private/whatsapp/enviadas para a
      * tela tocar/abrir sem depender da Meta (lá a mídia expira em 30 dias).

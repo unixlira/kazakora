@@ -81,6 +81,13 @@ class WhatsAppWebhookController extends Controller
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings, $loja);
                     $handled++;
 
+                    // Reação com emoji (pedido do Lira 04/11): vai para o
+                    // balão da mensagem reagida na tela; a Manuela não
+                    // responde reação como se fosse mensagem.
+                    if (($message['type'] ?? null) === 'reaction') {
+                        continue;
+                    }
+
                     // Botão "Falar com Atendente" do aviso de pedido enviado.
                     if (ChamarAtendentePedido::interpretar($message['button']['payload'] ?? null)) {
                         if ($stored->wasRecentlyCreated) {
@@ -200,7 +207,9 @@ class WhatsAppWebhookController extends Controller
             ],
         );
 
-        if ($stored->wasRecentlyCreated) {
+        // Reação tirada pelo cliente não vira prévia nem "não lida" (igual ao WhatsApp).
+        $reacaoTirada = $type === 'reaction' && ($message['reaction']['emoji'] ?? '') === '';
+        if ($stored->wasRecentlyCreated && ! $reacaoTirada) {
             $conversation->registerMessage($stored);
         }
 

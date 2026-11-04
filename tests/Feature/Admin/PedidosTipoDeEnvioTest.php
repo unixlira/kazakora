@@ -62,7 +62,7 @@ class PedidosTipoDeEnvioTest extends TestCase
             $this->pedido(Order::ORIGIN_SHOPEE, 'Retirada pelo Comprador')->id => ['retirada', 'Retirada'],
             $this->pedido(Order::ORIGIN_TIKTOK_SHOP, 'LSV-Standard-BR PICKUP')->id => ['express_coleta', null],
             $this->pedido(Order::ORIGIN_AMAZON, 'Correios SEDEX (contrato)')->id => ['correios_sedex', 'Correios - SEDEX'],
-            $this->pedido(Order::ORIGIN_AMAZON, null)->id => ['outro', 'Amazon DBA'],
+            $this->pedido(Order::ORIGIN_AMAZON, null)->id => ['correios', 'Correios'],
             $this->pedido(Order::ORIGIN_STORE, null, ['shipping_carrier_name' => 'SEDEX (TURBO)'])->id => ['correios_sedex', 'Correios - SEDEX'],
             $this->pedido(Order::ORIGIN_STORE, null, ['shipping_carrier_name' => 'Frete Grátis'])->id => ['outro', 'Frete Grátis'],
         ];

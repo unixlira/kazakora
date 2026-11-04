@@ -178,10 +178,10 @@ class AmazonNotificacoesTest extends TestCase
         $this->assertSame(AmazonNotificacao::STATUS_PROCESSADA, $aviso->fresh()->status);
     }
 
-    public function test_falha_passageira_da_amazon_tenta_de_novo(): void
+    public function test_pedido_que_o_bling_ainda_nao_tem_tenta_de_novo(): void
     {
         $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')->once()->andThrow(new RuntimeException('Erro na API da Amazon (HTTP 503).'));
+        $importer->shouldReceive('import')->once()->andThrow(new RuntimeException('Pedido não encontrado na loja do canal amazon conectada ao Bling.'));
         $this->app->instance(OrderImportService::class, $importer);
         $aviso = AmazonNotificacao::registrar($this->aviso('Unshipped'));
 
@@ -190,48 +190,6 @@ class AmazonNotificacoesTest extends TestCase
         $aviso->refresh();
         $this->assertSame(AmazonNotificacao::STATUS_RECEBIDA, $aviso->status);
         $this->assertStringContainsString('Tentativa 1', $aviso->resultado);
-    }
-
-    public function test_aviso_de_venda_paga_cria_o_pedido_direto_da_sp_api_sem_bling(): void
-    {
-        // Caso real 702-5237402-7354626 (04/11/2026): o aviso chegou e a
-        // importação foi procurar o pedido no Bling, que não tem a Amazon.
-        Queue::fake();
-        config(['services.bling.amazon_loja_id' => 206308488, 'services.amazon.marketplace_id' => 'A2Q3Y263D00KWC']);
-        MarketplaceAccount::create([
-            'channel' => MarketplaceAccount::CHANNEL_AMAZON, 'status' => MarketplaceAccount::STATUS_CONNECTED,
-            'access_token' => 'lwa-token', 'refresh_token' => 'rt', 'token_expires_at' => now()->addHour(),
-        ]);
-        $base = 'https://sellingpartnerapi.test/orders/v0/orders/'.self::NUMERO;
-        Http::fake([
-            $base.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
-                ['OrderItemId' => '1', 'SellerSKU' => '264-ALICATE-BOMBADAGUA-8POL', 'Title' => 'Alicate Bomba D\'água 8"', 'QuantityOrdered' => 1, 'ItemPrice' => ['Amount' => '22.71']],
-            ]]]),
-            $base.'/address' => Http::response(['payload' => ['ShippingAddress' => [
-                'Name' => 'Cliente', 'City' => 'São Paulo', 'StateOrRegion' => 'SP', 'PostalCode' => '01001-000',
-                'ExtendedFields' => ['StreetName' => 'Praça da Sé', 'StreetNumber' => '100', 'Neighborhood' => 'Sé'],
-            ]]]),
-            $base.'/buyerInfo' => Http::response(['payload' => ['BuyerName' => 'Cliente Teste']]),
-            $base => Http::response(['payload' => [
-                'AmazonOrderId' => self::NUMERO, 'OrderStatus' => 'Unshipped', 'OrderTotal' => ['Amount' => '22.71'],
-                'PurchaseDate' => '2026-11-04T20:07:00Z', 'EasyShipShipmentStatus' => 'PendingSchedule',
-            ]]),
-            'https://sellingpartnerapi.test/tokens/*' => Http::response(['restrictedDataToken' => 'rdt']),
-        ]);
-        $aviso = AmazonNotificacao::registrar($this->aviso('Unshipped'));
-
-        // Queue::fake() seguraria o dispatch_sync: roda o job direto.
-        (new ProcessarNotificacaoAmazon($aviso->id))->handle(app(OrderImportService::class));
-
-        $this->assertNotNull(Order::query()->where('external_order_id', self::NUMERO)->first(), (string) $aviso->fresh()->resultado);
-        $order = Order::query()->where('external_order_id', self::NUMERO)->firstOrFail();
-        $this->assertSame(Order::ORIGIN_AMAZON, $order->origin);
-        $this->assertSame(Order::STATUS_PAID, $order->status);
-        $this->assertEquals(22.71, (float) $order->total);
-        $this->assertSame('Praça da Sé', $order->shipping_street);
-        $this->assertSame('100', $order->shipping_number);
-        $this->assertSame(AmazonNotificacao::STATUS_PROCESSADA, $aviso->fresh()->status);
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'bling'));
     }
 
     public function test_pedido_que_nem_existe_e_ja_veio_cancelado_nao_importa(): void

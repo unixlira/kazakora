@@ -9,23 +9,23 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Exceptions\MarketplaceNotConfiguredException;
-use App\Modules\Marketplace\Models\CorreiosPrePostagem;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Amazon\Exceptions\AmazonException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
 /**
- * AmazonDriver pela SP-API (o Bling não entra na Amazon desde 04/11/2026):
- * importação de pedido (Orders API + RDT), mapa de status, NF-e para a
- * Amazon, envio DBA (Ponto de Envio) com a etiqueta da Amazon, confirmação
- * de envio e os stubs de anúncio.
+ * AmazonDriver pelo caminho SP-API (sem loja Amazon no Bling): importação
+ * de pedido (Orders API + RDT), mapa de status, nota, envio MFN, etiqueta,
+ * confirmação de envio e os stubs de anúncio. O caminho via Bling já é
+ * coberto em tests/Feature/Marketplace/Amazon*.
  */
 class AmazonDriverSpApiTest extends TestCase
 {
@@ -88,22 +88,13 @@ class AmazonDriverSpApiTest extends TestCase
         ]);
     }
 
-    public function test_amazon_never_goes_through_bling_even_with_the_bling_store_id(): void
+    public function test_channel_and_via_bling_follow_the_bling_store(): void
     {
         $this->assertSame('amazon', $this->driver()->channel());
-
-        config(['services.bling.amazon_loja_id' => 206308488]);
         $this->assertFalse($this->driver()->viaBling());
-    }
 
-    public function test_import_goes_to_sp_api_even_with_the_bling_store_id(): void
-    {
         config(['services.bling.amazon_loja_id' => 206308488]);
-        $this->conectar();
-        $this->fakePedido();
-
-        $this->assertSame(self::PEDIDO, $this->driver()->importOrder(self::PEDIDO)['external_order_id']);
-        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'bling'));
+        $this->assertTrue($this->driver()->viaBling());
     }
 
     public function test_import_order_maps_the_sp_api_order(): void
@@ -137,10 +128,10 @@ class AmazonDriverSpApiTest extends TestCase
 
         $dados = $this->driver()->importOrder(self::PEDIDO);
 
-        // RDT recusado: lê na chamada comum (caso real do DBA em 03/11).
-        $this->assertSame('Maria Silva', $dados['buyer_name']);
-        $this->assertSame('12345678909', $dados['buyer_document']);
-        $this->assertSame('13010000', $dados['shipping_zip']);
+        $this->assertSame('Comprador Amazon', $dados['buyer_name']);
+        $this->assertNull($dados['buyer_document']);
+        $this->assertSame('00000000', $dados['shipping_zip']);
+        $this->assertSame('NA', $dados['shipping_state']);
         $this->assertCount(1, $dados['items']);
     }
 
@@ -213,6 +204,29 @@ class AmazonDriverSpApiTest extends TestCase
         $this->assertSame($uf, $this->driver()->importOrder(self::PEDIDO)['shipping_state']);
     }
 
+    public function test_invoice_is_not_sent_by_sp_api_but_goes_with_the_package_via_bling(): void
+    {
+        $order = Order::create($this->dadosPedido());
+        $nota = new Invoice;
+
+        $this->expectException(MarketplaceNotConfiguredException::class);
+        try {
+            $this->driver()->submitInvoice($order, $nota);
+        } finally {
+            config(['services.bling.amazon_loja_id' => 206308488]);
+            $this->assertSame('sent', $this->driver()->submitInvoice($order, $nota)['status']);
+
+            config(['services.bling.amazon_loja_id' => null]);
+            $this->conectar();
+            try {
+                $this->driver()->submitInvoice($order, $nota);
+                $this->fail('SP-API não tem endpoint de NF-e pra MFN');
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('não implementado', $e->getMessage());
+            }
+        }
+    }
+
     public function test_listing_methods_are_explicit_stubs(): void
     {
         $produto = Product::factory()->create();
@@ -268,115 +282,99 @@ class AmazonDriverSpApiTest extends TestCase
         return $order;
     }
 
-    private function pedidoComNota(): Order
+    public function test_mfn_shipping_buys_the_cheapest_service_and_caches_the_label(): void
     {
+        $this->conectar();
         $order = $this->pedidoComProduto();
-        Storage::fake('local');
-        Storage::disk('local')->put('nfe/3467.xml', '<nfeProc>xml</nfeProc>');
-        Invoice::create([
-            'order_id' => $order->id, 'company_id' => Company::first()->id, 'status' => Invoice::STATUS_AUTHORIZED,
-            'chave_acesso' => '35261165604590000107550020000034671065750212', 'xml_path' => 'nfe/3467.xml',
-            'numero' => 3467, 'serie' => 2, 'valor_total' => 100,
-        ]);
-
-        return $order->fresh();
-    }
-
-    public function test_invoice_goes_to_amazon_by_the_delivery_api_for_dba(): void
-    {
-        $this->conectar();
-        $order = $this->pedidoComNota();
         Http::fake([
-            self::BASE.'/delivery/2022-07-01/invoice/status*' => Http::response(['invoices' => []]),
-            self::BASE.'/delivery/2022-07-01/invoice*' => Http::response([]),
-        ]);
-
-        $resultado = $this->driver()->submitInvoice($order, $order->invoice);
-
-        $this->assertSame('sent', $resultado['status']);
-        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
-            && str_contains($request->url(), '/delivery/2022-07-01/invoice?orderId='.self::PEDIDO)
-            && $request['programType'] === 'EasyShip'
-            && base64_decode($request['invoiceContent']) === '<nfeProc>xml</nfeProc>');
-    }
-
-    public function test_shipping_schedules_dba_drop_off_and_keeps_the_amazon_label_never_correios(): void
-    {
-        $this->conectar();
-        $order = $this->pedidoComNota();
-        $zip = tempnam(sys_get_temp_dir(), 'z');
-        $arquivo = new \ZipArchive;
-        $arquivo->open($zip, \ZipArchive::OVERWRITE);
-        $arquivo->addFromString('label.pdf', '%PDF-etiqueta-tbr');
-        $arquivo->close();
-
-        Http::fake([
-            self::BASE.'/orders/v0/orders/'.self::PEDIDO => Http::response(['payload' => ['AmazonOrderId' => self::PEDIDO, 'OrderStatus' => 'Unshipped']]),
-            self::BASE.'/delivery/2022-07-01/invoice/status*' => Http::response(['orderInvoicingStatus' => 'Accepted']),
-            self::BASE.'/easyShip/2022-03-23/timeSlot' => Http::response(['timeSlots' => [
-                ['slotId' => 'COLETA', 'handoverMethod' => 'PICKUP', 'startTime' => '2026-11-05T12:00:00Z'],
-                ['slotId' => 'PONTO', 'handoverMethod' => 'DROPOFF', 'startTime' => '2026-11-05T17:00:00Z', 'endTime' => '2026-11-05T21:00:00Z'],
+            self::BASE.'/orders/v0/orders/'.self::PEDIDO.'/orderItems' => Http::response($this->itens()),
+            self::BASE.'/mfn/v0/eligibleShippingServices' => Http::response(['payload' => ['ShippingServiceList' => [
+                ['ShippingServiceId' => 'CARO', 'Rate' => ['Amount' => 30]],
+                ['ShippingServiceId' => 'BARATO', 'ShippingServiceOfferId' => 'OF1', 'Rate' => ['Amount' => 12]],
+            ]]]),
+            self::BASE.'/mfn/v0/shipments' => Http::response(['payload' => [
+                'ShipmentId' => 'SH1', 'TrackingId' => 'BR123', 'ShippingService' => ['CarrierName' => 'Correios'],
+                'Label' => ['FileContents' => ['Contents' => base64_encode('%PDF-etiqueta'), 'FileType' => 'application/pdf']],
             ]]),
-            self::BASE.'/easyShip/2022-03-23/packages/bulk' => Http::response([
-                'scheduledPackages' => [['scheduledPackageId' => ['amazonOrderId' => self::PEDIDO, 'packageId' => 'P1'], 'trackingDetails' => ['trackingId' => 'TBR123']]],
-                'printableDocumentsUrl' => 'https://docs.amazon.test/lote.zip',
-            ]),
-            self::BASE.'/easyShip/2022-03-23/package*' => Http::sequence()->push([], 404)->whenEmpty(Http::response(['scheduledPackageId' => ['amazonOrderId' => self::PEDIDO, 'packageId' => 'P1'], 'trackingDetails' => ['trackingId' => 'TBR123']])),
-            'https://docs.amazon.test/*' => Http::response(file_get_contents($zip)),
         ]);
-        @unlink($zip);
 
         $envio = $this->driver()->confirmShipping($order);
 
-        $this->assertSame('TBR123', $envio['tracking_code']);
-        $this->assertSame('Amazon DBA (Ponto de Envio)', $envio['shipping_method']);
-        Http::assertSent(fn (Request $request) => str_contains($request->url(), '/packages/bulk')
-            && $request['orderScheduleDetailsList'][0]['packageDetails']['packageTimeSlot']['slotId'] === 'PONTO', 'lote com o horário de Ponto de Envio');
-        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'correios') || str_contains($request->url(), '/mfn/'), 'sem Correios nem MFN');
-        $this->assertSame(0, CorreiosPrePostagem::count());
+        $this->assertSame(['external_shipment_id' => 'SH1', 'tracking_code' => 'BR123', 'shipping_method' => 'Correios', 'status' => 'confirmed'], $envio);
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/mfn/v0/shipments')
+            && $r['ShippingServiceId'] === 'BARATO' && $r['ShippingServiceOfferId'] === 'OF1'
+            && $r['ShipmentRequestDetails']['Weight'] === ['Value' => 400.0, 'Unit' => 'g']
+            && $r['ShipmentRequestDetails']['PackageDimensions'] === ['Length' => 30.0, 'Width' => 10.0, 'Height' => 5.0, 'Unit' => 'centimeters']
+            && $r['ShipmentRequestDetails']['ShipFromAddress']['PostalCode'] === '03187040'
+            && count($r['ShipmentRequestDetails']['ItemList']) === 2);
+
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => 'amazon', 'status' => ChannelShipment::STATUS_CONFIRMED, 'external_shipment_id' => 'SH1']);
+        Http::fake();
 
         $etiqueta = $this->driver()->fetchLabel($order);
-        $this->assertTrue($etiqueta['ready'], 'etiqueta pronta');
-        $this->assertSame('%PDF-etiqueta-tbr', $etiqueta['contents']);
-        $this->assertSame('application/pdf', $etiqueta['content_type']);
+
+        $this->assertSame(['ready' => true, 'contents' => '%PDF-etiqueta', 'content_type' => 'application/pdf'], $etiqueta);
+        Http::assertNothingSent();
     }
 
-    public function test_shipping_waits_for_amazon_to_accept_the_invoice(): void
+    public function test_label_after_cache_expired_is_fetched_again_from_amazon(): void
     {
         $this->conectar();
-        $order = $this->pedidoComNota();
-        Http::fake([
-            self::BASE.'/orders/v0/orders/'.self::PEDIDO => Http::response(['payload' => ['AmazonOrderId' => self::PEDIDO, 'OrderStatus' => 'Unshipped']]),
-            self::BASE.'/easyShip/2022-03-23/package*' => Http::response([], 404),
-            self::BASE.'/delivery/2022-07-01/invoice/status*' => Http::response(['orderInvoicingStatus' => 'Processing']),
+        $order = Order::create($this->dadosPedido());
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => 'amazon', 'status' => ChannelShipment::STATUS_CONFIRMED, 'external_shipment_id' => 'SH2']);
+        Cache::flush();
+        Http::fake([self::BASE.'/mfn/v0/shipments/SH2' => Http::sequence()
+            ->push(['payload' => ['Label' => ['FileContents' => ['Contents' => base64_encode('PNGDATA'), 'FileType' => 'image/png']]]])
+            ->push(['payload' => ['Label' => ['FileContents' => ['Contents' => '']]]]),
         ]);
 
-        try {
-            $this->driver()->confirmShipping($order);
-            $this->fail('Não pode agendar o DBA antes de a Amazon aceitar a nota.');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('não aceita pela Amazon', $e->getMessage());
-        }
-
-        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), '/timeSlot'));
+        $this->assertSame(['ready' => true, 'contents' => 'PNGDATA', 'content_type' => 'application/octet-stream'], $this->driver()->fetchLabel($order));
         $this->assertFalse($this->driver()->fetchLabel($order)['ready']);
     }
 
-    public function test_without_drop_off_slot_it_never_falls_back_to_pickup(): void
+    public function test_label_without_shipment_id_raises(): void
     {
         $this->conectar();
-        $order = $this->pedidoComNota();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('shipment_id');
+
+        $this->driver()->fetchLabel(Order::create($this->dadosPedido()));
+    }
+
+    public function test_mfn_shipping_refuses_to_guess_missing_data(): void
+    {
+        $this->conectar();
+        $order = $this->pedidoComProduto(comMedidas: false);
+        Http::fake([self::BASE.'/orders/v0/orders/*' => Http::response($this->itens())]);
+
+        try {
+            $this->driver()->confirmShipping($order);
+            $this->fail('Sem medidas deveria parar');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('sem peso/dimensões', $e->getMessage());
+        }
+
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/mfn/'));
+    }
+
+    public function test_mfn_shipping_without_eligible_service_or_items_raises(): void
+    {
+        $this->conectar();
+        $order = $this->pedidoComProduto();
         Http::fake([
-            self::BASE.'/orders/v0/orders/'.self::PEDIDO => Http::response(['payload' => ['AmazonOrderId' => self::PEDIDO, 'OrderStatus' => 'Unshipped']]),
-            self::BASE.'/easyShip/2022-03-23/package*' => Http::response([], 404),
-            self::BASE.'/delivery/2022-07-01/invoice/status*' => Http::response(['orderInvoicingStatus' => 'Accepted']),
-            self::BASE.'/easyShip/2022-03-23/timeSlot' => Http::response(['timeSlots' => [
-                ['slotId' => 'COLETA', 'handoverMethod' => 'PICKUP', 'startTime' => '2026-11-05T12:00:00Z'],
-            ]]),
+            self::BASE.'/orders/v0/orders/*' => Http::sequence()->push($this->itens())->push(['payload' => ['OrderItems' => []]]),
+            self::BASE.'/mfn/v0/eligibleShippingServices' => Http::response(['payload' => ['ShippingServiceList' => []]]),
         ]);
 
-        $this->expectExceptionMessage('Ponto de Envio');
-        $this->driver()->confirmShipping($order);
+        foreach (['Nenhum serviço de envio elegível', 'não tem itens retornados'] as $mensagem) {
+            try {
+                $this->driver()->confirmShipping($order);
+                $this->fail("Deveria lançar: {$mensagem}");
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString($mensagem, $e->getMessage());
+            }
+        }
     }
 
     public function test_confirmar_envio_sends_correios_tracking_to_amazon(): void

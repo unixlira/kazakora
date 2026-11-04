@@ -214,6 +214,10 @@ Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status']
 Route::post('/tiktok/devolucoes', [TikTokReportsController::class, 'devolucoes'])
     ->middleware('throttle:30,1')
     ->name('api.tiktok.devolucoes');
+// Pedidos em espera com os valores previstos pelo TikTok (04/11/2026).
+Route::post('/tiktok/em-espera', [TikTokReportsController::class, 'emEspera'])
+    ->middleware('throttle:30,1')
+    ->name('api.tiktok.em-espera');
 
 // Falha na coleta financeira (TikTok/Amazon): a Manuela avisa o Lira no
 // WhatsApp na hora (2026-10-16). Bearer do agente do TikTok ou da Amazon.

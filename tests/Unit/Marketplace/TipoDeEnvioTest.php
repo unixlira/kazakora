@@ -87,10 +87,16 @@ class TipoDeEnvioTest extends TestCase
         $this->assertSame(TipoDeEnvio::CORREIOS_SEDEX, $sedex['tipo']);
         $this->assertSame('Correios - SEDEX', $sedex['curto']);
 
-        // Nota ainda saindo: já sabe que é Correios, o serviço ainda não.
-        $antes = TipoDeEnvio::montar('amazon', null);
-        $this->assertSame(TipoDeEnvio::CORREIOS, $antes['tipo']);
-        $this->assertSame('Correios', $antes['curto']);
+    }
+
+    /** DBA (Lira, 03/11/2026): pedido Amazon novo vai ao Ponto de Envio, inclusive antes do agendamento. */
+    public function test_amazon_dba_mostra_ponto_de_envio(): void
+    {
+        foreach (['Amazon DBA (Ponto de Envio)', null] as $metodo) {
+            $dba = TipoDeEnvio::montar('amazon', $metodo);
+            $this->assertSame(TipoDeEnvio::OUTRO, $dba['tipo']);
+            $this->assertSame('Amazon DBA', $dba['curto']);
+        }
     }
 
     public function test_loja_usa_a_transportadora_do_pedido(): void

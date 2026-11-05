@@ -194,6 +194,29 @@ class Order extends Model
     }
 
     /**
+     * Endereço escondido pelo canal ("XXXXXXX"). Caso real 2026-11-05,
+     * pedido #3838: o Mercado Livre devolveu rua, número, complemento e CEP
+     * assim nos primeiros minutos da venda, a NF-e 2-3489 saiu com isso e o
+     * ML recusou ("NFe receiver zipcode must be the same as the sale
+     * zipcode"); a etiqueta não saiu.
+     */
+    public static function textoMascarado(?string $texto): bool
+    {
+        return (bool) preg_match('/X{4,}/', (string) $texto);
+    }
+
+    public function enderecoMascarado(): bool
+    {
+        foreach (['shipping_zip', 'shipping_street', 'shipping_number', 'shipping_complement'] as $campo) {
+            if (self::textoMascarado($this->{$campo})) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * TikTok Shop é operado fiscalmente fora do pipeline automático do
      * KazaKora: a venda entra para separação/estoque, mas a NF-e da venda é
      * tratada na plataforma/Bling pelo operador. Se o KazaKora também emitir

@@ -261,7 +261,8 @@ const setOverride = (key, value) => {
                 </span>
 
                 <div class="p-5">
-                    <div class="flex items-center gap-2">
+                    <!-- Espaço para o selo "Melhor margem" não cobrir o nome do canal. -->
+                    <div class="flex items-center gap-2" :class="{ 'pr-28': bestKey === marketplace.key }">
                         <span class="flex h-9 w-9 items-center justify-center rounded-full text-base" :style="{ background: marketplace.theme.chipBg }">
                             <svg
                                 v-if="marketplace.logoSvg"

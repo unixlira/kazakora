@@ -7,12 +7,80 @@
  * plataformas cobraram de verdade nos pedidos da loja (escrow da Shopee,
  * `sale_fee` e custo de envio do ML) e contra a API oficial de tarifas do
  * ML (`sites/MLB/listing_prices`) nas categorias dos anúncios ativos.
- * Amazon, Stripe e TikTok Shop seguem como checados em ago/2026. Comissão por categoria varia MUITO (ex.: Mercado Livre vai de
+ * Em 06/11/2026 (pedido do Lira) conferido contra as três páginas oficiais
+ * que ele mandou: comissão da Shopee 2026, custo dos Envios do Mercado Livre
+ * (desde 24/08/2026, por peso e preço) e tarifas do TikTok Shop (comissão +
+ * Programa de taxa de envio de 6%, até R$ 50 por item).
+ * Amazon e Stripe seguem como checados em ago/2026. Comissão por categoria varia MUITO (ex.: Mercado Livre vai de
  * 10% a 19%) — o valor default aqui é uma média realista para o nicho da
  * loja (eletrônicos, casa e cozinha), sempre editável na tela via "Ajustar
  * taxas". Isso não substitui o simulador oficial de cada marketplace na
  * hora de bater o preço final de uma categoria específica.
  */
+
+// Custo dos Envios no Mercado Livre desde 24/08/2026 (reputação verde, sem
+// reputação e MercadoLíderes; produto novo, Full, Coleta e Agências).
+// Cobrado em TODA venda, mesmo quando o comprador paga o frete.
+// Fonte: mercadolivre.com.br/ajuda/custos-envio-reputacao-verde-sem-reputacao_48392
+// Colunas = faixas de preço do anúncio; linhas = faixas de peso (kg).
+const ML_ENVIO_FAIXAS_PRECO = [19, 49, 79, 100, 120, 150, 200]; // limites inferiores das colunas 2 a 8
+const ML_ENVIO_TABELA = [
+    // [peso até (kg), R$0-18,99, R$19-48,99, R$49-78,99, R$79-99,99, R$100-119,99, R$120-149,99, R$150-199,99, R$200+]
+    [0.3, 5.65, 6.85, 8.15, 12.95, 14.95, 16.95, 19.05, 21.65],
+    [0.5, 5.95, 6.95, 8.25, 13.85, 16.15, 18.15, 20.45, 23.25],
+    [1, 6.05, 7.15, 8.45, 14.45, 16.85, 19.05, 21.35, 24.45],
+    [1.5, 6.15, 7.35, 8.65, 14.75, 17.15, 19.45, 21.75, 25.45],
+    [2, 6.25, 7.45, 8.75, 15.05, 17.65, 19.85, 22.25, 25.55],
+    [3, 6.35, 8.65, 9.15, 16.45, 19.15, 21.65, 24.35, 27.05],
+    [4, 6.45, 8.75, 9.75, 17.85, 20.75, 23.35, 26.35, 29.25],
+    [5, 6.55, 8.85, 10.25, 19.75, 22.85, 26.05, 29.25, 32.45],
+    [6, 6.65, 8.95, 10.35, 25.95, 29.15, 33.35, 36.45, 40.85],
+    [7, 6.75, 9.05, 10.45, 27.55, 31.65, 36.75, 40.85, 45.25],
+    [8, 6.85, 9.25, 10.55, 29.45, 34.35, 39.25, 44.15, 49.35],
+    [9, 6.95, 9.35, 10.65, 30.25, 35.25, 40.35, 45.35, 50.75],
+    [10, 7.05, 9.45, 10.85, 38.25, 45.05, 51.95, 58.75, 65.85],
+    [11, 7.05, 9.65, 11.05, 41.65, 48.55, 55.45, 62.35, 69.35],
+    [13, 7.15, 10.05, 11.45, 42.55, 49.75, 56.85, 63.85, 70.95],
+    [15, 7.25, 10.25, 11.65, 45.55, 52.95, 60.55, 68.15, 75.65],
+    [17, 7.35, 10.45, 11.85, 48.95, 56.55, 64.05, 71.35, 79.35],
+    [20, 7.45, 10.65, 12.05, 55.15, 64.35, 73.55, 82.75, 91.95],
+    [25, 7.65, 11.05, 12.25, 64.55, 75.75, 85.45, 96.25, 106.85],
+    [30, 7.75, 11.25, 12.45, 66.45, 76.05, 86.25, 97.15, 107.85],
+    [40, 7.85, 11.45, 12.65, 68.35, 79.65, 89.75, 100.05, 107.95],
+    [50, 7.95, 11.65, 12.85, 70.95, 81.85, 92.85, 103.45, 111.65],
+    [60, 8.05, 11.85, 13.05, 75.55, 87.25, 99.05, 110.25, 119.05],
+    [70, 8.15, 12.05, 13.25, 80.95, 93.75, 105.95, 118.05, 127.45],
+    [80, 8.25, 12.25, 13.45, 84.65, 97.95, 110.75, 123.35, 133.15],
+    [90, 8.35, 12.45, 13.65, 94.05, 108.35, 122.95, 136.95, 147.85],
+    [100, 8.45, 12.65, 13.85, 107.45, 124.85, 140.45, 156.45, 168.85],
+    [125, 8.55, 12.85, 14.05, 120.15, 138.95, 156.95, 174.85, 188.85],
+    [150, 8.65, 12.85, 14.25, 127.45, 147.05, 166.55, 185.55, 200.35],
+    [Infinity, 8.75, 12.85, 14.45, 167.05, 193.35, 218.45, 243.45, 262.85],
+];
+
+const ML_ENVIO_FAIXAS_PESO = ['até 0,3 kg', '0,3 a 0,5 kg', '0,5 a 1 kg', '1 a 1,5 kg', '1,5 a 2 kg', '2 a 3 kg', '3 a 4 kg', '4 a 5 kg', '5 a 6 kg', '6 a 7 kg', '7 a 8 kg', '8 a 9 kg', '9 a 10 kg', '10 a 11 kg', '11 a 13 kg', '13 a 15 kg', '15 a 17 kg', '17 a 20 kg', '20 a 25 kg', '25 a 30 kg', '30 a 40 kg', '40 a 50 kg', '50 a 60 kg', '60 a 70 kg', '70 a 80 kg', '80 a 90 kg', '90 a 100 kg', '100 a 125 kg', '125 a 150 kg', 'mais de 150 kg'];
+
+/** Custo dos Envios do ML para o preço e o peso; null sem peso informado. */
+export function custoEnvioMercadoLivre(price, weightKg) {
+    if (!(weightKg > 0)) return null;
+    const linha = ML_ENVIO_TABELA.findIndex(([ate]) => weightKg <= ate);
+    const coluna = 1 + ML_ENVIO_FAIXAS_PRECO.filter((limite) => price >= limite).length;
+    let valor = ML_ENVIO_TABELA[linha][coluna];
+    // "Os produtos de menos de R$ 19 pagam no máximo metade do preço do produto."
+    if (price < 19) valor = Math.min(valor, price / 2);
+    return { valor, faixaPeso: ML_ENVIO_FAIXAS_PESO[linha] };
+}
+
+const mlExtras = (price, { weightKg }) => {
+    const envio = custoEnvioMercadoLivre(price, weightKg);
+    return envio ? [{ label: `Envio do ML (${envio.faixaPeso})`, fixed: envio.valor }] : [];
+};
+
+// Programa de taxa de envio do TikTok Shop: todo vendedor do Brasil entra
+// automaticamente; 6% por item, no máximo R$ 50 (seller.tiktok.com/br/seller-fees).
+const tiktokExtras = (price) => (price * 0.06 <= 50
+    ? [{ label: 'Programa de frete (6%)', pct: 6 }]
+    : [{ label: 'Programa de frete (teto)', fixed: 50 }]);
 
 // Cartão de crédito nacional via Stripe — já confirmado funcionando de
 // verdade no checkout do site (ver histórico do projeto).
@@ -58,12 +126,12 @@ export const MARKETPLACES = [
         defaultCommissionPct: 12,
         defaultFixedFee: 0,
         commissionLabel: 'Comissão (Clássico)',
-        // Desde mar/2026 o ML não cobra mais taxa fixa por venda no
-        // Mercado Envios: abaixo de R$79 o custo virou frete pago pelo
-        // vendedor (por peso), que entra no campo de frete da tela.
+        // Sem taxa fixa por venda: o custo dos Envios (por peso e preço,
+        // desde 24/08/2026) entra como custo à parte em `extraCosts`.
         resolveFee: (price, commissionPct) => ({ pct: commissionPct, fixed: 0 }),
-        note: 'Comissão do Clássico de 10% a 14% conforme a categoria (anúncios ativos da loja: 11,5% a 13%). Sem taxa fixa por venda no Mercado Envios: abaixo de R$79 o vendedor paga o frete (nas vendas da loja em out/2026, R$7 a R$14 conforme o peso) e acima de R$79 paga o frete grátis com desconto. Informe esse valor em "Frete que você paga". No Flex o ML cobra custo por unidade abaixo de R$79 (R$7,75 nas vendas de R$49 a R$78,99). Em algumas categorias a comissão cai em preços mais altos; confira a da sua categoria no simulador do ML.',
-        source: 'API oficial do ML (listing_prices) e vendas reais da loja, checado 16/10/2026',
+        extraCosts: mlExtras,
+        note: 'Comissão do Clássico de 10% a 14% conforme a categoria (anúncios ativos da loja: 11,5% a 13%). Desde 24/08/2026 toda venda paga o custo dos Envios do ML, pela tabela de peso e preço (ex.: até 0,3 kg, R$ 6,85 de R$ 19 a R$ 48,99; R$ 8,15 de R$ 49 a R$ 78,99; R$ 12,95 de R$ 79 a R$ 99,99). Informe o peso lá em cima: o card soma esse custo sozinho, não repita no frete. Abaixo de R$ 19 paga no máximo metade do preço. Frete grátis e rápido abaixo de R$ 79 é opcional e mais caro (não incluído).',
+        source: 'mercadolivre.com.br/ajuda (custos de envio, reputação verde) e API do ML, checado 06/11/2026',
     },
     {
         key: 'mercado_livre_premium',
@@ -82,8 +150,9 @@ export const MARKETPLACES = [
         defaultFixedFee: 0,
         commissionLabel: 'Comissão (Premium)',
         resolveFee: (price, commissionPct) => ({ pct: commissionPct, fixed: 0 }),
-        note: 'Comissão do Premium de 15% a 19% conforme a categoria (anúncios ativos da loja: 16,5% a 18%). Sem taxa fixa por venda no Mercado Envios: abaixo de R$79 o vendedor paga o frete (nas vendas da loja em out/2026, R$7 a R$14 conforme o peso) e acima de R$79 paga o frete grátis com desconto. Informe esse valor em "Frete que você paga". No Flex o ML cobra custo por unidade abaixo de R$79 (R$7,75 nas vendas de R$49 a R$78,99). Em algumas categorias a comissão cai em preços mais altos; confira a da sua categoria no simulador do ML.',
-        source: 'API oficial do ML (listing_prices) e vendas reais da loja, checado 16/10/2026',
+        extraCosts: mlExtras,
+        note: 'Comissão do Premium de 15% a 19% conforme a categoria (anúncios ativos da loja: 16,5% a 18%). Desde 24/08/2026 toda venda paga o custo dos Envios do ML, pela tabela de peso e preço (ex.: até 0,3 kg, R$ 6,85 de R$ 19 a R$ 48,99; R$ 8,15 de R$ 49 a R$ 78,99; R$ 12,95 de R$ 79 a R$ 99,99). Informe o peso lá em cima: o card soma esse custo sozinho, não repita no frete. Abaixo de R$ 19 paga no máximo metade do preço. Frete grátis e rápido abaixo de R$ 79 é opcional e mais caro (não incluído).',
+        source: 'mercadolivre.com.br/ajuda (custos de envio, reputação verde) e API do ML, checado 06/11/2026',
     },
     {
         key: 'shopee',
@@ -112,13 +181,15 @@ export const MARKETPLACES = [
         // primeira faixa subiu de R$4,00 para R$4,50. Faixas conferidas no
         // escrow dos pedidos da loja (set e out/2026).
         resolveFee: (price) => {
+            // Abaixo de R$ 9 o adicional por item é metade do preço.
+            if (price < 9) return { pct: 20, fixed: price / 2 };
             if (price < 80) return { pct: 20, fixed: 4.5 };
             if (price < 100) return { pct: 14, fixed: 16 };
             if (price < 200) return { pct: 14, fixed: 20 };
             return { pct: 14, fixed: 26 };
         },
-        note: 'Comissão por faixa de preço do item, sem teto: 20%+R$4,50 até R$79,99 (era R$4,00 até 30/09/2026), 14%+R$16 de R$80 a R$99,99, 14%+R$20 de R$100 a R$199,99 e 14%+R$26 a partir de R$200. O frete grátis já está incluído. Vendedor pessoa física com mais de 450 pedidos em 90 dias paga +R$3 por item, não incluído aqui.',
-        source: 'Escrow real dos pedidos da loja (set e out/2026), checado 16/10/2026',
+        note: 'Comissão por faixa de preço do item, sem teto (já inclui a taxa de transação): 20%+R$4,50 até R$79,99, 14%+R$16 de R$80 a R$99,99, 14%+R$20 de R$100 a R$199,99 e 14%+R$26 a partir de R$200. Abaixo de R$9 o adicional por item é metade do preço. O frete grátis já está incluído. Vendedor pessoa física com mais de 450 pedidos em 90 dias paga +R$3 por item, não incluído aqui.',
+        source: 'seller.shopee.com.br/edu (Comissão CNPJ e CPF 2026) e escrow da loja, checado 06/11/2026',
     },
     {
         key: 'amazon',
@@ -147,7 +218,7 @@ export const MARKETPLACES = [
     {
         key: 'tiktok_shop',
         label: 'TikTok Shop',
-        sublabel: 'Ainda sem venda real na loja',
+        sublabel: 'Comissão + Programa de taxa de envio',
         // Logo oficial do TikTok (Simple Icons) — mesma marca real usada
         // pela plataforma, em vez do ícone estilizado do FontAwesome.
         logoSvg: {
@@ -161,13 +232,14 @@ export const MARKETPLACES = [
             accent2: '#FE2C55',
             chipBg: 'rgba(255,255,255,0.12)',
         },
-        estimated: true,
+        estimated: false,
         defaultCommissionPct: 8,
         defaultFixedFee: 5,
         commissionLabel: 'Comissão da plataforma',
         resolveFee: (price) => (price < 50 ? { pct: 10, fixed: 4 } : { pct: 6, fixed: 6 }),
-        note: 'Canal ainda não tem integração real na loja (nenhuma venda passou por aqui até hoje) — taxas de referência da documentação pública: 10%+R$4 abaixo de R$50, 6%+R$6 a partir de R$50 (vigente desde jul/2026). Trate como estimativa até conectarmos o canal de verdade.',
-        source: 'seller-br.tiktok.com/university, checado ago/2026',
+        extraCosts: tiktokExtras,
+        note: 'Comissão sobre o preço depois do desconto do vendedor: 10%+R$4 abaixo de R$50 e 6%+R$6 a partir de R$50. Mais o Programa de taxa de envio, em que todo vendedor entra automaticamente: 6% por item, no máximo R$50. O frete do pedido é estimado pelas medidas da embalagem e sai do repasse; se a loja pagar, informe em "Outro frete que você paga".',
+        source: 'seller.tiktok.com/br/seller-fees, checado 06/11/2026',
     },
 ];
 
@@ -177,51 +249,76 @@ export const MARKETPLACES = [
  * padrão de precificação de varejo: margem = lucro / preço de venda — não
  * markup sobre o custo).
  *
- * Fórmula: P = (custo + taxa_fixa + frete) / (1 - comissão% - imposto% - margem%)
+ * Fórmula: P = (custo + taxa_fixa + custos_fixos_extras + frete) / (1 - comissão% - extras% - imposto% - margem%)
+ *
+ * Custos extras (`extraCosts`) são cobranças à parte da comissão, mostradas
+ * em linha própria: custo dos Envios do ML (por peso e preço) e Programa de
+ * taxa de envio do TikTok (6%, até R$ 50).
  *
  * Para marketplaces com taxa por faixa de preço (Mercado Livre, Shopee,
  * TikTok Shop) o resultado é resolvido por ponto fixo: a faixa depende do
- * preço final, que é justamente o que estamos calculando — poucas
- * iterações bastam pois a função é monótona e limitada.
+ * preço final, que é justamente o que estamos calculando. Perto da virada
+ * de uma faixa a conta pode não fechar exato; por isso as taxas do
+ * detalhamento são sempre recalculadas no preço final e o lucro mostrado é
+ * o real nesse preço (a "margem real" pode ficar um pouco diferente da
+ * pedida).
  */
-export function computePricing(marketplace, { cost, marginPct, taxPct = 0, freight = 0, commissionPctOverride = null }) {
+export function computePricing(marketplace, { cost, marginPct, taxPct = 0, freight = 0, weightKg = 0, commissionPctOverride = null }) {
     const margin = marginPct / 100;
     const tax = taxPct / 100;
+    const ctx = { weightKg };
 
-    let pct = commissionPctOverride ?? marketplace.defaultCommissionPct;
-    let fixed = marketplace.defaultFixedFee;
-    let price = (cost + fixed + freight) / Math.max(0.01, 1 - pct / 100 - tax - margin);
-
-    for (let i = 0; i < 6; i++) {
+    const feesAt = (price) => {
         const resolved = marketplace.resolveFee(price, commissionPctOverride ?? marketplace.defaultCommissionPct);
-        const nextPct = commissionPctOverride ?? resolved.pct;
-        const nextFixed = resolved.fixed;
-        const denominator = 1 - nextPct / 100 - tax - margin;
+        const pct = commissionPctOverride ?? resolved.pct;
+        const extras = (marketplace.extraCosts?.(price, ctx) ?? []).map((extra) => ({
+            label: extra.label,
+            pct: extra.pct ?? 0,
+            fixed: extra.fixed ?? 0,
+            value: price * ((extra.pct ?? 0) / 100) + (extra.fixed ?? 0),
+        }));
+        return {
+            pct,
+            fixed: resolved.fixed,
+            extras,
+            totalPct: pct + extras.reduce((sum, e) => sum + e.pct, 0),
+            totalFixed: resolved.fixed + extras.reduce((sum, e) => sum + e.fixed, 0),
+        };
+    };
+
+    let fees = feesAt(0);
+    let price = (cost + fees.totalFixed + freight) / Math.max(0.01, 1 - fees.totalPct / 100 - tax - margin);
+
+    for (let i = 0; i < 8; i++) {
+        fees = feesAt(price);
+        const denominator = 1 - fees.totalPct / 100 - tax - margin;
 
         if (denominator <= 0.01) {
-            return { invalid: true, pct: nextPct, fixed: nextFixed };
+            return { invalid: true, pct: fees.pct, fixed: fees.fixed, extras: [] };
         }
 
-        const nextPrice = (cost + nextFixed + freight) / denominator;
-        const converged = Math.abs(nextPrice - price) < 0.005 && pct === nextPct && fixed === nextFixed;
-
+        const nextPrice = (cost + fees.totalFixed + freight) / denominator;
+        const converged = Math.abs(nextPrice - price) < 0.005;
         price = nextPrice;
-        pct = nextPct;
-        fixed = nextFixed;
 
         if (converged) break;
     }
 
-    const commissionValue = price * (pct / 100);
+    // Detalhamento sempre com as taxas da faixa do preço final.
+    fees = feesAt(price);
+
+    const commissionValue = price * (fees.pct / 100);
+    const extrasValue = fees.extras.reduce((sum, e) => sum + e.value, 0);
     const taxValue = price * tax;
-    const netReceived = price - commissionValue - fixed - taxValue;
+    const netReceived = price - commissionValue - fees.fixed - extrasValue - taxValue;
     const profit = netReceived - cost - freight;
 
     return {
         invalid: false,
         price,
-        pct,
-        fixed,
+        pct: fees.pct,
+        fixed: fees.fixed,
+        extras: fees.extras,
         commissionValue,
         taxValue,
         netReceived,

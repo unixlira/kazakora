@@ -15,13 +15,23 @@ class PricingCalculatorController extends Controller
      * já que mudam com frequência e a fonte de verdade é a documentação de
      * cada marketplace, não o banco). Só entrega a lista de produtos reais
      * para o preenchimento rápido do custo a partir de um produto existente.
+     * O peso bruto (kg, dados fiscais) preenche o peso usado no custo de
+     * envio do Mercado Livre, que depende do peso e do preço (06/11/2026).
      */
     public function index(): Response
     {
         return Inertia::render('Admin/PricingCalculator/Index', [
             'products' => Product::query()
-                ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'price', 'cost_price']),
+                ->leftJoin('product_fiscal_data', 'product_fiscal_data.product_id', '=', 'products.id')
+                ->orderBy('products.name')
+                ->get([
+                    'products.id',
+                    'products.name',
+                    'products.sku',
+                    'products.price',
+                    'products.cost_price',
+                    'product_fiscal_data.peso_bruto as peso_kg',
+                ]),
         ]);
     }
 }

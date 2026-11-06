@@ -17,6 +17,7 @@ const marginPct = ref(30);
 const showAdvanced = ref(false);
 const taxPct = ref(0);
 const freight = ref(0);
+const weight = ref('');
 const overrides = ref({});
 const expandedKey = ref(null);
 
@@ -40,6 +41,9 @@ const pickProduct = (product) => {
     if (product.cost_price != null) {
         cost.value = product.cost_price;
     }
+    if (Number(product.peso_kg) > 0) {
+        weight.value = Number(product.peso_kg);
+    }
     productQuery.value = `${product.name} — ${product.sku}`;
     showSuggestions.value = false;
 };
@@ -48,6 +52,9 @@ const costNum = computed(() => Number(cost.value) || 0);
 const marginNum = computed(() => Number(marginPct.value) || 0);
 const taxNum = computed(() => Number(taxPct.value) || 0);
 const freightNum = computed(() => Number(freight.value) || 0);
+const weightNum = computed(() => Number(weight.value) || 0);
+
+const hideSuggestions = () => setTimeout(() => (showSuggestions.value = false), 150);
 const hasCost = computed(() => costNum.value > 0);
 
 const results = computed(() =>
@@ -58,6 +65,7 @@ const results = computed(() =>
             marginPct: marginNum.value,
             taxPct: taxNum.value,
             freight: freightNum.value,
+            weightKg: weightNum.value,
             commissionPctOverride: overrides.value[marketplace.key] ?? null,
         }),
     })),
@@ -100,7 +108,7 @@ const setOverride = (key, value) => {
 
         <!-- Inputs principais -->
         <div class="mt-6 rounded-2xl bg-white p-6 shadow-lg dark:bg-slate-800">
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_0.8fr]">
                 <div>
                     <label for="cost" class="block text-sm font-semibold text-slate-600 dark:text-slate-300">Preço de custo (R$)</label>
                     <div class="relative mt-1">
@@ -125,7 +133,7 @@ const setOverride = (key, value) => {
                             class="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900"
                             @focus="showSuggestions = true"
                             @input="showSuggestions = true"
-                            @blur="() => setTimeout(() => (showSuggestions = false), 150)"
+                            @blur="hideSuggestions"
                         >
                         <ul
                             v-if="showSuggestions && filteredProducts.length"
@@ -176,6 +184,28 @@ const setOverride = (key, value) => {
                         </button>
                     </div>
                 </div>
+
+                <div>
+                    <label for="weight" class="block text-sm font-semibold text-slate-600 dark:text-slate-300">
+                        Peso com embalagem (kg)
+                        <FieldTooltip text="Usado no custo dos Envios do Mercado Livre, que depende do peso e do preço. Ao escolher um produto do catálogo, vem do peso bruto cadastrado." />
+                    </label>
+                    <div class="relative mt-1">
+                        <input
+                            id="weight"
+                            v-model="weight"
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            placeholder="0,000"
+                            class="w-full rounded-lg border border-slate-300 py-3 pl-3 pr-10 text-lg font-semibold dark:border-slate-600 dark:bg-slate-900"
+                        >
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">kg</span>
+                    </div>
+                    <p v-if="!weightNum" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                        Sem peso, os cards do Mercado Livre ficam sem o custo de envio.
+                    </p>
+                </div>
             </div>
 
             <button
@@ -189,7 +219,10 @@ const setOverride = (key, value) => {
 
             <div v-if="showAdvanced" class="mt-3 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2 dark:border-slate-700">
                 <div>
-                    <label for="freight" class="block text-xs font-medium uppercase text-slate-400">Frete que você paga (R$)</label>
+                    <label for="freight" class="block text-xs font-medium uppercase text-slate-400">
+                        Outro frete que você paga (R$)
+                        <FieldTooltip text="Entra em todos os canais. O envio do Mercado Livre e o Programa de frete do TikTok já são calculados no card; não repita aqui." />
+                    </label>
                     <input
                         id="freight" v-model="freight" type="number" step="0.01" min="0" placeholder="0,00"
                         class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
@@ -270,21 +303,39 @@ const setOverride = (key, value) => {
                         <p class="text-3xl font-extrabold leading-tight">{{ formatPrice(result.price) }}</p>
 
                         <div class="mt-4 space-y-1.5 border-t pt-3 text-xs" :style="{ borderColor: marketplace.theme.chipBg }">
-                            <div class="flex items-center justify-between opacity-90">
+                            <div class="flex items-start justify-between gap-3 opacity-90">
                                 <span>{{ marketplace.commissionLabel }} ({{ result.pct.toFixed(1) }}%)</span>
-                                <span>− {{ formatPrice(result.commissionValue) }}</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(result.commissionValue) }}</span>
                             </div>
-                            <div v-if="result.fixed > 0" class="flex items-center justify-between opacity-90">
-                                <span>Taxa fixa</span>
-                                <span>− {{ formatPrice(result.fixed) }}</span>
+                            <div v-if="result.fixed > 0" class="flex items-start justify-between gap-3 opacity-90">
+                                <span>Taxa fixa por item</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(result.fixed) }}</span>
                             </div>
-                            <div v-if="taxNum > 0" class="flex items-center justify-between opacity-90">
+                            <div
+                                v-for="extra in result.extras"
+                                :key="extra.label"
+                                class="flex items-start justify-between gap-3 opacity-90"
+                            >
+                                <span>{{ extra.label }}</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(extra.value) }}</span>
+                            </div>
+                            <p
+                                v-if="marketplace.key.startsWith('mercado_livre') && !weightNum"
+                                class="text-[11px] italic opacity-80"
+                            >
+                                Informe o peso para somar o envio do ML.
+                            </p>
+                            <div v-if="taxNum > 0" class="flex items-start justify-between gap-3 opacity-90">
                                 <span>Imposto ({{ taxNum }}%)</span>
-                                <span>− {{ formatPrice(result.taxValue) }}</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(result.taxValue) }}</span>
                             </div>
-                            <div v-if="freightNum > 0" class="flex items-center justify-between opacity-90">
-                                <span>Frete</span>
-                                <span>− {{ formatPrice(freightNum) }}</span>
+                            <div v-if="freightNum > 0" class="flex items-start justify-between gap-3 opacity-90">
+                                <span>Outro frete</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(freightNum) }}</span>
+                            </div>
+                            <div class="flex items-start justify-between gap-3 opacity-90">
+                                <span>Custo do produto</span>
+                                <span class="shrink-0 tabular-nums">− {{ formatPrice(costNum) }}</span>
                             </div>
                         </div>
 

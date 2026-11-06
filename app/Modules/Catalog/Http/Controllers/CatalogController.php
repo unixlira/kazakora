@@ -341,80 +341,45 @@ class CatalogController extends Controller
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
 
-        // Vendidos de verdade (pedido 2026-10-23, volta só na página do produto):
-        // unidades em pedidos pagos, enviados ou entregues de todos os canais,
-        // somando as variações e só venda efetiva (sem estorno nem nota avulsa).
-        // A página só mostra a partir de 50.
-        $salesCount = (int) OrderItem::query()
-            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
-            ->whereHas('order', fn ($query) => $query->vendaEfetiva()->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
-            ->sum('quantity');
+        // Página de produto v2 (layout de loja com box de compra fixo, pedido
+        // 2026-10-09). A v1 continua no código: ?v=1 mostra a antiga, e pra
+        // voltar de vez é só trocar PRODUCT_PAGE_VERSION para 1. A v1 segue
+        // recebendo a lista inteira de avaliações.
+        $version = in_array($request->query('v'), ['1', '2'], true)
+            ? (int) $request->query('v')
+            : self::PRODUCT_PAGE_VERSION;
+
+        // Lentidão da página de produto (tarefa 3878, 06/11): vendidos, resumo
+        // e primeira página de avaliações ficam 10 min em cache por produto.
+        // Preço, estoque e variações nunca entram no cache: saem do banco a
+        // cada abertura. Avaliação nova limpa o cache (Review::booted()).
+        $publico = Cache::remember(self::chaveCacheDoProduto($product->id), now()->addMinutes(10), fn () => [
+            'vendidos' => $this->vendidos($product),
+            'resumo' => $this->resumoDasAvaliacoes($product),
+            'avaliacoes' => $this->paginaDeAvaliacoes($product, 0, self::AVALIACOES_NA_PAGINA)->toArray(),
+        ]);
+        $salesCount = $publico['vendidos'];
 
         // Avaliações (pedido 2026-10-11): do produto E das variações dele (a
         // avaliação importada fica na variação vendida — Power Bank Rosa…).
-        // Ordem (pedido 2026-10-20): as com foto/vídeo primeiro e, dentro de
-        // cada grupo, da mais recente para a mais antiga. A tela mostra 20 e
-        // carrega o resto de 12 em 12.
-        $reviews = Review::query()
-            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
-            ->with(['user:id,name', 'images'])
-            ->withCount('images')
-            ->orderByRaw('images_count > 0 desc')
-            ->latest()
-            ->orderByDesc('id')
-            ->get()
-            // Nome oculto: o usuário não vai no JSON da página.
-            ->each(function (Review $review) {
-                if ($review->ocultar_nome) {
-                    $review->setRelation('user', null);
-                }
-                // Importada de outra loja com o campo zerado (3.963 em 02/11): o selo
-                // "Comprado em outra loja" de 21/10 aparece. Só na tela: o banco não muda,
-                // então os carrosséis do checkout seguem iguais.
-                if ($review->channel === 'outra_loja') {
-                    $review->setAttribute('outra_loja', true);
-                }
-            });
+        // A tela mostra 20 e o "Carregar mais" busca de 12 em 12 em
+        // /produtos/{slug}/avaliacoes (antes iam todas: 700 KB na árvore).
+        $reviews = $version === 1
+            ? $this->paginaDeAvaliacoes($product, 0, null)
+            : $publico['avaliacoes'];
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
-        $product->setAttribute('reviews_count', $reviews->count());
+        $product->setAttribute('reviews_count', $publico['resumo']['total']);
         // Ficha técnica (pedido 2026-10-24): sem SKU, categoria e variação.
         $product->setAttribute('ficha_tecnica', FichaTecnica::linhas($product));
         $product->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($product));
-        $product->setAttribute('reviews_avg_rating', $reviews->count() ? round((float) $reviews->avg('rating'), 4) : null);
+        $product->setAttribute('reviews_avg_rating', $publico['resumo']['media']);
 
         $user = $request->user();
 
         // "Você também pode gostar" virou carrossel (pedido 2026-10-20):
         // 12 sugestões para ter o que passar para o lado no computador.
-        $totalRelacionados = 12;
-
-        $relatedProducts = Product::query()
-            ->forCard()
-            ->naKazaKora()
-            ->comEstoque()
-            ->whereNull('parent_product_id')
-            ->where('id', '!=', $product->id)
-            ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
-            ->inRandomOrder()
-            ->take($totalRelacionados)
-            ->get();
-
-        if ($relatedProducts->count() < $totalRelacionados) {
-            $excludeIds = $relatedProducts->pluck('id')->push($product->id);
-
-            $relatedProducts = $relatedProducts->concat(
-                Product::query()
-                    ->forCard()
-                    ->naKazaKora()
-                    ->comEstoque()
-                    ->whereNull('parent_product_id')
-                    ->whereNotIn('id', $excludeIds)
-                    ->latest()
-                    ->take($totalRelacionados - $relatedProducts->count())
-                    ->get()
-            );
-        }
+        $relatedProducts = $this->relacionados($product, 12);
 
         $relatedIds = $relatedProducts->pluck('id');
 
@@ -492,13 +457,6 @@ class CatalogController extends Controller
             }
         }
 
-        // Página de produto v2 (layout de loja com box de compra fixo, pedido
-        // 2026-10-09). A v1 continua no código: ?v=1 mostra a antiga, e pra
-        // voltar de vez é só trocar PRODUCT_PAGE_VERSION para 1.
-        $version = in_array($request->query('v'), ['1', '2'], true)
-            ? (int) $request->query('v')
-            : self::PRODUCT_PAGE_VERSION;
-
         // Quadros do sorteio e dos livros (Entregáveis) com a chave, a imagem
         // e os produtos de Vender › Promoções (2026-10-21), em cache.
         $promocoes = PromocoesDoProduto::paraPagina($product);
@@ -511,6 +469,8 @@ class CatalogController extends Controller
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),
             'reviews' => $reviews,
+            // Barras por estrela e total, contados no servidor (a lista vem em partes).
+            'reviewsResumo' => $publico['resumo'],
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')
@@ -562,6 +522,162 @@ class CatalogController extends Controller
                 : [],
             'salesCount' => $salesCount,
         ]);
+    }
+
+    /** Avaliações que a página do produto já traz; o resto vem de 12 em 12. */
+    private const AVALIACOES_NA_PAGINA = 20;
+
+    private const AVALIACOES_POR_VEZ = 12;
+
+    /** Cache dos dados públicos da página (vendidos e avaliações), por produto. */
+    public static function chaveCacheDoProduto(int $productId): string
+    {
+        return "pagina-produto:{$productId}:avaliacoes";
+    }
+
+    /**
+     * "Carregar mais avaliações" da página do produto (tarefa 3878, 06/11):
+     * a página traz as 20 primeiras e o botão busca as próximas aqui, na
+     * mesma ordem.
+     */
+    public function avaliacoes(Request $request, Product $product): JsonResponse
+    {
+        abort_unless($product->naKazaKora(), 404);
+
+        $pular = max(0, (int) $request->query('pular', 0));
+
+        return response()->json([
+            'avaliacoes' => $this->paginaDeAvaliacoes($product, $pular, self::AVALIACOES_POR_VEZ),
+        ]);
+    }
+
+    /** Produto e variações dele: as avaliações e as vendas somam o grupo. */
+    private static function idsDoGrupo(Product $product)
+    {
+        return Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id');
+    }
+
+    /**
+     * Vendidos de verdade (pedido 2026-10-23, volta só na página do produto):
+     * unidades em pedidos pagos, enviados ou entregues de todos os canais,
+     * somando as variações e só venda efetiva (sem estorno nem nota avulsa).
+     * A página só mostra a partir de 50.
+     */
+    private function vendidos(Product $product): int
+    {
+        return (int) OrderItem::query()
+            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->whereHas('order', fn ($query) => $query->vendaEfetiva()->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
+            ->sum('quantity');
+    }
+
+    /**
+     * Total, média e quantidade por estrela de todas as avaliações do grupo,
+     * contados no banco: a lista chega em partes e não serve mais para isso.
+     *
+     * @return array{total: int, media: float|null, estrelas: array<int, int>}
+     */
+    private function resumoDasAvaliacoes(Product $product): array
+    {
+        $porNota = Review::query()
+            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->selectRaw('rating, count(*) as total')
+            ->groupBy('rating')
+            ->pluck('total', 'rating');
+
+        $estrelas = [];
+        foreach ([5, 4, 3, 2, 1] as $nota) {
+            $estrelas[$nota] = (int) ($porNota[$nota] ?? 0);
+        }
+
+        $total = (int) $porNota->sum();
+        $soma = $porNota->reduce(fn ($carry, $quantidade, $nota) => $carry + $nota * $quantidade, 0);
+
+        return [
+            'total' => $total,
+            'media' => $total ? round($soma / $total, 4) : null,
+            'estrelas' => $estrelas,
+        ];
+    }
+
+    /**
+     * Avaliações do grupo na ordem da página (pedido 2026-10-20): as com
+     * foto/vídeo primeiro e, dentro de cada grupo, da mais recente para a
+     * mais antiga. `$quantidade` null traz todas (página v1).
+     */
+    private function paginaDeAvaliacoes(Product $product, int $pular, ?int $quantidade)
+    {
+        return Review::query()
+            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->latest()
+            ->orderByDesc('id')
+            ->when($quantidade !== null, fn ($query) => $query->skip($pular)->take($quantidade))
+            ->get()
+            // Nome oculto: o usuário não vai no JSON da página.
+            ->each(function (Review $review) {
+                if ($review->ocultar_nome) {
+                    $review->setRelation('user', null);
+                }
+                // Importada de outra loja com o campo zerado (3.963 em 02/11): o selo
+                // "Comprado em outra loja" de 21/10 aparece. Só na tela: o banco não muda,
+                // então os carrosséis do checkout seguem iguais.
+                if ($review->channel === 'outra_loja') {
+                    $review->setAttribute('outra_loja', true);
+                }
+            })
+            ->values();
+    }
+
+    /**
+     * "Você também pode gostar": da mesma categoria, sorteados; faltando,
+     * completa com os mais novos da loja.
+     *
+     * Tarefa 3878 (06/11): o sorteio era ORDER BY RAND() no banco, que
+     * calculava a nota de todos os produtos da categoria para ficar com 12.
+     * Agora os ids candidatos ficam 10 min em cache, o sorteio é em PHP a
+     * cada abertura e só os escolhidos passam pelo forCard (que confere de
+     * novo se seguem ativos e com estoque).
+     */
+    private function relacionados(Product $product, int $total)
+    {
+        $candidatos = Cache::remember("pagina-produto:{$product->id}:relacionados", now()->addMinutes(10), function () use ($product, $total) {
+            $base = fn () => Product::query()
+                ->naKazaKora()
+                ->comEstoque()
+                ->whereNull('parent_product_id')
+                ->where('id', '!=', $product->id);
+
+            return [
+                'categoria' => $base()
+                    ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
+                    ->pluck('id')
+                    ->all(),
+                'recentes' => $base()->latest()->take($total * 2)->pluck('id')->all(),
+            ];
+        });
+
+        $escolhidos = collect($candidatos['categoria'])->shuffle()->take($total);
+        $escolhidos = $escolhidos
+            ->concat(collect($candidatos['recentes'])->diff($escolhidos)->take($total - $escolhidos->count()))
+            ->values();
+
+        if ($escolhidos->isEmpty()) {
+            return collect();
+        }
+
+        $ordem = $escolhidos->flip();
+
+        return Product::query()
+            ->forCard()
+            ->naKazaKora()
+            ->comEstoque()
+            ->whereIn('id', $escolhidos)
+            ->get()
+            ->sortBy(fn (Product $relacionado) => $ordem[$relacionado->id])
+            ->values();
     }
 
     /**

@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
@@ -411,19 +413,30 @@ class Product extends Model
             // Quantidade de avaliações ao lado das estrelas (pedido 2026-10-22),
             // pela mesma regra, para bater com o número da página do produto.
             ->addSelect([
-                'reviews_avg_rating' => self::avaliacoesDoGrupo()->selectRaw('avg(reviews.rating)'),
-                'reviews_count' => self::avaliacoesDoGrupo()->selectRaw('count(*)'),
+                'reviews_avg_rating' => self::avaliacoesDoGrupo('avg(reviews.rating)'),
+                'reviews_count' => self::avaliacoesDoGrupo('count(*)'),
             ]);
     }
 
-    /** Avaliações do produto e das variações dele (subconsulta do card). */
-    private static function avaliacoesDoGrupo(): Builder
+    /**
+     * Avaliações do produto e das variações dele (subconsulta do card).
+     *
+     * Lentidão da página de produto (tarefa 3878, 06/11): partindo de reviews,
+     * o MariaDB lia as 9 mil avaliações para cada card (347 ms nos 95 produtos
+     * da loja). Partindo do grupo de produtos e só depois juntando as
+     * avaliações pelo índice (STRAIGHT_JOIN fixa essa ordem) dá o mesmo
+     * resultado em 19 ms. O SQLite dos testes não conhece STRAIGHT_JOIN.
+     */
+    private static function avaliacoesDoGrupo(string $agregado): QueryBuilder
     {
-        return Review::query()
-            ->join('products as grupo_avaliado', 'grupo_avaliado.id', '=', 'reviews.product_id')
+        $ordemFixa = in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true) ? 'straight_join ' : '';
+
+        return DB::table('products as grupo_avaliado')
+            ->join('reviews', 'reviews.product_id', '=', 'grupo_avaliado.id')
             ->whereNull('grupo_avaliado.deleted_at')
             ->where(fn ($grupo) => $grupo->whereColumn('grupo_avaliado.id', 'products.id')
-                ->orWhereColumn('grupo_avaliado.parent_product_id', 'products.id'));
+                ->orWhereColumn('grupo_avaliado.parent_product_id', 'products.id'))
+            ->selectRaw($ordemFixa.$agregado);
     }
 
     public function images(): HasMany

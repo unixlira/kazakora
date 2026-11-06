@@ -342,47 +342,19 @@ const cupomEstado = computed(() => {
 });
 
 // ---------- Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06) ----------
-// No lugar do pop-up do BEMVINDO: faixa compacta com o código e "Copiar
-// cupom". Copiar NÃO aplica: o cliente cola no campo e aplica. Se o
-// navegador bloquear a cópia, o código fica selecionado para copiar à mão.
-const faixaCopia = ref('pronto'); // pronto | copiado | falhou
-const codigoFaixaEl = ref(null);
-let faixaTimer = null;
+// No lugar do pop-up do BEMVINDO: faixa compacta com o código e "Aplicar"
+// (antes "Copiar cupom", troca pedida pelo Lira em 2026-11-06). O clique põe
+// o código no campo do cupom e aplica pelo mesmo caminho do campo, com as
+// mesmas regras (um cupom por vez, servidor confere). Nunca aplica sozinho.
+const faixaTentou = ref(false);
 const faixaAplicada = computed(() => !!props.cupomFaixa && normalizarCupom(cupomAplicado.value) === normalizarCupom(props.cupomFaixa.code));
-const copiarComTextarea = (texto) => {
-    const area = document.createElement('textarea');
-    area.value = texto;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
-};
-const copiarCupomFaixa = async () => {
+const aplicarCupomFaixa = async () => {
     const codigo = props.cupomFaixa?.code;
-    if (!codigo) return;
-    let ok = false;
-    try {
-        await navigator.clipboard.writeText(codigo);
-        ok = true;
-    } catch {
-        try { ok = copiarComTextarea(codigo); } catch { ok = false; }
-    }
-    faixaCopia.value = ok ? 'copiado' : 'falhou';
-    if (!ok && codigoFaixaEl.value) {
-        const selecao = window.getSelection();
-        const faixa = document.createRange();
-        faixa.selectNodeContents(codigoFaixaEl.value);
-        selecao?.removeAllRanges();
-        selecao?.addRange(faixa);
-    }
-    clearTimeout(faixaTimer);
-    faixaTimer = setTimeout(() => { faixaCopia.value = 'pronto'; }, 4000);
+    if (!codigo || cupomCarregando.value) return;
+    faixaTentou.value = true;
+    cupom.value = codigo;
+    await aplicarCupom();
 };
-onUnmounted(() => clearTimeout(faixaTimer));
 
 // Celular x computador (2026-11-06): o campo do cupom fica num lugar só da
 // página, no topo no celular (o resumo nasce recolhido) e no resumo no computador.
@@ -980,27 +952,26 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
     <CheckoutLayout :sem-relogio="!!props.order">
         <!-- Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06), no celular e no computador, no lugar do
-             pop-up do BEMVINDO. "Copiar cupom" só copia: o cliente cola no campo e aplica. -->
+             pop-up do BEMVINDO. "Aplicar" põe o código no campo do cupom e aplica. -->
         <div v-if="cupomFaixa && !order" data-faixa-cupom class="bg-[#141414] text-white">
             <div class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5">
                 <p class="min-w-0 text-[13px] leading-snug sm:text-sm">
                     <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>
                     {{ cupomFaixa.descricao }} com o cupom
-                    <span ref="codigoFaixaEl" class="select-all whitespace-nowrap rounded-md border border-dashed border-white/60 px-1.5 py-px font-mono font-bold tracking-wider">{{ cupomFaixa.code }}</span>
+                    <span class="select-all whitespace-nowrap rounded-md border border-dashed border-white/60 px-1.5 py-px font-mono font-bold tracking-wider">{{ cupomFaixa.code }}</span>
                 </p>
                 <span v-if="faixaAplicada" class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#00843f] px-3 py-1.5 text-xs font-bold">
                     <i class="fa-solid fa-circle-check" aria-hidden="true"></i>Aplicado
                 </span>
-                <button v-else type="button" data-copiar-cupom
-                    class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition"
-                    :class="faixaCopia === 'copiado' ? 'bg-[#00843f] text-white' : 'bg-white text-slate-900 hover:bg-slate-100'"
-                    @click="copiarCupomFaixa">
-                    <i :class="faixaCopia === 'copiado' ? 'fa-solid fa-check' : 'fa-regular fa-copy'" aria-hidden="true"></i>
-                    {{ faixaCopia === 'copiado' ? 'Copiado' : 'Copiar cupom' }}
+                <button v-else type="button" data-aplicar-cupom-faixa :disabled="cupomCarregando"
+                    class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-slate-900 transition hover:bg-slate-100 disabled:opacity-70"
+                    @click="aplicarCupomFaixa">
+                    <i :class="cupomCarregando && faixaTentou ? 'fa-solid fa-spinner animate-spin' : 'fa-solid fa-tag'" aria-hidden="true"></i>
+                    {{ cupomCarregando && faixaTentou ? 'Aplicando' : 'Aplicar' }}
                 </button>
             </div>
-            <p v-if="faixaCopia !== 'pronto' && !faixaAplicada" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
-                {{ faixaCopia === 'copiado' ? 'Cole no campo do cupom e toque em Aplicar.' : 'Não deu para copiar sozinho: o código está selecionado, copie e cole no campo do cupom.' }}
+            <p v-if="faixaTentou && cupomErro && !faixaAplicada" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
+                {{ cupomErro }}
             </p>
         </div>
 
@@ -1025,7 +996,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
         <!-- Campo do cupom: um só na página, levado para o topo no celular ou para o resumo no computador. -->
         <Teleport defer :to="ehComputador ? '#cupom-computador' : '#cupom-celular'">
-            <form class="flex gap-2" data-cupom-form @submit.prevent="aplicarCupom">
+            <form class="flex gap-2" data-cupom-form @submit.prevent="faixaTentou = false; aplicarCupom()">
                 <label class="relative min-w-0 flex-1">
                     <span class="sr-only">Cupom de desconto</span>
                     <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom de desconto" autocapitalize="characters" enterkeyhint="go"

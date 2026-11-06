@@ -2078,7 +2078,7 @@ class CheckoutController extends Controller
     /**
      * Cupom da faixa do checkout da KazaKora (config loja.cupom_faixa,
      * BLACKFRIDAY de 5%, pedido 2026-11-06): no lugar do pop-up do BEMVINDO,
-     * a faixa mostra o código com "Copiar cupom" e nunca aplica sozinho.
+     * a faixa mostra o código com "Aplicar" (põe no campo e aplica no clique) e nunca aplica sozinho.
      * Null (sem faixa) quando não há código, o cupom não existe ou não vale
      * para este carrinho e cliente. Nunca cria cupom.
      *

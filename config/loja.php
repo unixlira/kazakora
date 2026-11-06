@@ -89,7 +89,7 @@ return [
 
     /*
     | Faixa do cupom no checkout da KazaKora (pedido 2026-11-06): no lugar do
-    | pop-up acima, uma faixa com o código e o botão "Copiar cupom", sem
+    | pop-up acima, uma faixa com o código e o botão "Aplicar" (só no clique), sem
     | aplicar sozinho. Código de um cupom JÁ cadastrado (a migração
     | 2026_11_06_100000 cria o BLACKFRIDAY de 5%, só KazaKora). Inexistente,
     | inativo ou que não vale para o carrinho: a faixa não aparece. Vazio desliga.

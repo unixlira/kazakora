@@ -60,6 +60,9 @@ class LeadsDoCheckout
             $email = self::email($user?->email);
             $cpf = self::cpf($user?->cpf);
 
+            // Leads digitados (2026-11-06): o mesmo pedido converte a tela Leads.
+            app(LeadsDigitados::class)->converter($order, $sessionId, $email, $cpf);
+
             if (! $sessionId && ! $email && ! $cpf) {
                 return 0;
             }
@@ -158,7 +161,7 @@ class LeadsDoCheckout
     }
 
     /** @return list<array<string, mixed>> */
-    private function itensDoCarrinho(): array
+    public function itensDoCarrinho(): array
     {
         return $this->cart->items()
             ->filter(fn ($item) => $item['quantity'] > 0)
@@ -176,7 +179,7 @@ class LeadsDoCheckout
     }
 
     /** Origem e UTM da visita (log de visitas das últimas 24 h), quando houver. */
-    private function origem(?string $visitante): array
+    public function origem(?string $visitante): array
     {
         if (! $visitante) {
             return [];

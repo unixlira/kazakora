@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Checkout\Models\Lead;
 use App\Modules\Checkout\Models\LeadCheckout;
 use Illuminate\Console\Command;
 
@@ -15,6 +16,9 @@ use Illuminate\Console\Command;
  * itens, valores), então guardar o lead só repetiria dado pessoal. Apagar é
  * mais simples e seguro do que anonimizar: não sobra nenhum campo para
  * esquecer de limpar.
+ *
+ * Leads digitados (tabela leads, tela Admin > Leads, 2026-11-06): mesmo prazo
+ * e mesma regra.
  */
 class LimparLeadsDoCheckout extends Command
 {
@@ -32,14 +36,16 @@ class LimparLeadsDoCheckout extends Command
         $convertidos = (clone $vencidos)->where('status', '!=', LeadCheckout::STATUS_ABERTO)->count();
 
         if ($this->option('dry-run')) {
-            $this->info("Simulação (prazo {$dias} dias, antes de {$corte->format('d/m/Y H:i')}): apagaria {$abertos} abertos e {$convertidos} convertidos. Nada foi apagado.");
+            $digitados = Lead::query()->where('updated_at', '<', $corte)->count();
+            $this->info("Simulação (prazo {$dias} dias, antes de {$corte->format('d/m/Y H:i')}): apagaria {$abertos} abertos e {$convertidos} convertidos, mais {$digitados} da tela Leads. Nada foi apagado.");
 
             return self::SUCCESS;
         }
 
         $apagados = $vencidos->delete();
+        $digitados = Lead::query()->where('updated_at', '<', $corte)->delete();
 
-        $this->info("Prazo {$dias} dias: {$apagados} leads apagados ({$abertos} abertos, {$convertidos} convertidos).");
+        $this->info("Prazo {$dias} dias: {$apagados} leads apagados ({$abertos} abertos, {$convertidos} convertidos) e {$digitados} da tela Leads.");
 
         return self::SUCCESS;
     }

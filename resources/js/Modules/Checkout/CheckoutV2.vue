@@ -668,6 +668,45 @@ const gravarLead = () => {
     }
 };
 
+// Leads (pedido do Lira 2026-11-06): cada campo preenchido (nome, e-mail,
+// CPF, telefone, CEP) vai ao servidor por ajax, 800 ms depois de parar de
+// digitar, para a tela Admin > Leads. Sem esperar resposta; falha não
+// aparece para o cliente e não atrapalha a compra.
+const camposDoLead = () => ({
+    nome: pessoa.name, email: pessoa.email, cpf: pessoa.cpf, telefone: pessoa.phone, cep: cepEfetivo.value,
+});
+let ultimoLeadEnviado = '';
+let esperaLead = null;
+const enviarCampoDoLead = (campo) => {
+    clearTimeout(esperaLead);
+    esperaLead = setTimeout(() => {
+        const campos = camposDoLead();
+        const assinatura = JSON.stringify(campos);
+        if (assinatura === ultimoLeadEnviado || !Object.values(campos).some((v) => String(v ?? '').trim())) return;
+        ultimoLeadEnviado = assinatura;
+        try {
+            fetch('/finalizacao/lead-campo', {
+                method: 'POST',
+                credentials: 'same-origin',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                body: JSON.stringify({ ...campos, campo }),
+            }).catch(() => {});
+        } catch {
+            // nunca atrapalha o checkout
+        }
+    }, 800);
+};
+if (!props.order) {
+    watch(() => pessoa.name, () => enviarCampoDoLead('nome'));
+    watch(() => pessoa.email, () => enviarCampoDoLead('email'));
+    watch(() => pessoa.cpf, () => enviarCampoDoLead('cpf'));
+    watch(() => pessoa.phone, () => enviarCampoDoLead('telefone'));
+    watch(cepEfetivo, () => enviarCampoDoLead('cep'));
+    // Já veio preenchido (cliente logado ou voltou para a tela): manda uma vez ao abrir.
+    onMounted(() => enviarCampoDoLead(null));
+}
+
 const irParaEntrega = () => {
     tentouAqui.value = true;
     erroGeral.value = null;

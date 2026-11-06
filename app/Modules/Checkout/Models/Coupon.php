@@ -40,6 +40,7 @@ class Coupon extends Model
         'starts_at',
         'expires_at',
         'is_active',
+        'so_kazakora',
     ];
 
     protected function casts(): array
@@ -52,6 +53,8 @@ class Coupon extends Model
             'starts_at' => 'datetime',
             'expires_at' => 'datetime',
             'is_active' => 'boolean',
+            // Só no checkout da KazaKora (BLACKFRIDAY, 2026-11-06): FerraKora e Beauty Kora recusam.
+            'so_kazakora' => 'boolean',
         ];
     }
 

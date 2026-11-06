@@ -87,6 +87,15 @@ return [
     */
     'cupom_primeira_compra' => env('LOJA_CUPOM_PRIMEIRA_COMPRA'),
 
+    /*
+    | Faixa do cupom no checkout da KazaKora (pedido 2026-11-06): no lugar do
+    | pop-up acima, uma faixa com o código e o botão "Aplicar" (só no clique), sem
+    | aplicar sozinho. Código de um cupom JÁ cadastrado (a migração
+    | 2026_11_06_100000 cria o BLACKFRIDAY de 5%, só KazaKora). Inexistente,
+    | inativo ou que não vale para o carrinho: a faixa não aparece. Vazio desliga.
+    */
+    'cupom_faixa' => env('LOJA_CUPOM_FAIXA', 'BLACKFRIDAY'),
+
     'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
     'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
 

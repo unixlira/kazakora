@@ -289,7 +289,8 @@ abstract class CheckoutOutroSite
 
         $email = filled($email) ? trim($email) : null;
         $cupom = Coupon::buscar($codigo);
-        if (! $cupom) {
+        // Cupom só da KazaKora (BLACKFRIDAY, 2026-11-06) não existe para a FerraKora nem a Beauty Kora.
+        if (! $cupom || $cupom->so_kazakora) {
             return [null, 'Cupom não encontrado. Confira o código.'];
         }
 

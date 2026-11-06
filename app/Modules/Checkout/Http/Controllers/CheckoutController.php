@@ -41,7 +41,6 @@ use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
-use App\Support\CupomAutomatico;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
 use App\Support\Privacidade\Cookies;
@@ -2047,10 +2046,10 @@ class CheckoutController extends Controller
             'draft' => $draft ?: null,
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
-            // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais e
-            // pop-up do cupom de boas-vindas (só com cupom cadastrado e válido).
+            // Modelo Yampi (pedido 2026-10-23): carrossel de avaliações reais.
             'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos($cartItems->map(fn ($item) => data_get($item, 'product.id'))),
-            'cupomPrimeiraCompra' => fn () => $coupon || $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomPrimeiraCompra($subtotal, $user),
+            // Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06) no lugar do pop-up do BEMVINDO.
+            'cupomFaixa' => fn () => $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomFaixa($subtotal, $user, $draft),
         ];
     }
 
@@ -2074,27 +2073,20 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Cupom do pop-up de boas-vindas (config loja.cupom_primeira_compra; sem
-     * ela, o BEMVINDO de loja.cupom_automatico, pedido do Lira 2026-10-24:
-     * o cupom deixou de entrar sozinho e passou a ser oferecido aqui). Null
-     * (sem pop-up) quando não há código, o cupom não existe, não vale para
-     * este carrinho ou o cliente já usou (BEMVINDO, pelo CPF) ou já comprou
-     * (cupom próprio de primeira compra). Nunca cria cupom.
+     * Cupom da faixa do checkout da KazaKora (config loja.cupom_faixa,
+     * BLACKFRIDAY de 5%, pedido 2026-11-06): no lugar do pop-up do BEMVINDO,
+     * a faixa mostra o código com "Aplicar" (põe no campo e aplica no clique) e nunca aplica sozinho.
+     * Null (sem faixa) quando não há código, o cupom não existe ou não vale
+     * para este carrinho e cliente. Nunca cria cupom.
      *
      * @return array{code: string, descricao: string}|null
      */
-    private function cupomPrimeiraCompra(float $subtotal, ?User $user): ?array
+    private function cupomFaixa(float $subtotal, ?User $user, array $draft): ?array
     {
-        $codigo = (string) config('loja.cupom_primeira_compra') ?: CupomAutomatico::codigo();
+        $codigo = Coupon::normalizar((string) config('loja.cupom_faixa'));
         $coupon = $codigo !== '' ? Coupon::buscar($codigo) : null;
 
-        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, $user?->email, $user?->cpf)) {
-            return null;
-        }
-        // BEMVINDO vale para todo cliente que ainda não usou (2026-10-25):
-        // quem já usou cai no motivoInvalido pelo CPF. Cupom próprio de
-        // primeira compra continua só para quem nunca comprou.
-        if ($user && ! CupomAutomatico::eh($coupon->code) && $user->orders()->whereIn('status', Coupon::STATUS_USO)->exists()) {
+        if (! $coupon || $coupon->motivoInvalido($subtotal, $user, ...$this->identidadeDoRascunho($draft, $user))) {
             return null;
         }
 

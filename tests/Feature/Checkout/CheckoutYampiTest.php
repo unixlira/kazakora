@@ -177,28 +177,27 @@ class CheckoutYampiTest extends TestCase
         $this->assertSame('PE', Review::query()->where('user_id', $cliente->id)->value('uf'));
     }
 
-    public function test_popup_de_cupom_so_aparece_com_cupom_cadastrado_e_valido(): void
+    public function test_faixa_de_cupom_so_aparece_com_cupom_cadastrado_e_valido(): void
     {
         $product = $this->produto();
         $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
 
-        // Sem chave: nada de pop-up.
-        config(['loja.cupom_primeira_compra' => null]);
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
+        // Sem chave: nada de faixa.
+        config(['loja.cupom_faixa' => null]);
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomFaixa', null)->missing('cupomPrimeiraCompra'));
 
-        // Chave com cupom que não existe: nada de pop-up (e nada é criado).
-        config(['loja.cupom_primeira_compra' => 'BEMVINDO3']);
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
-        // Só o BEMVINDO, que a migração cria (cupom automático, 2026-10-24).
-        $this->assertSame(0, Coupon::query()->where('code', '<>', 'BEMVINDO')->count());
+        // Chave com cupom que não existe: nada de faixa (e nada é criado).
+        config(['loja.cupom_faixa' => 'BLACK10']);
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomFaixa', null));
+        $this->assertSame(0, Coupon::query()->whereNotIn('code', ['BEMVINDO', 'BLACKFRIDAY'])->count());
 
-        // Cupom inativo: nada de pop-up.
-        $coupon = Coupon::create(['code' => 'BEMVINDO3', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 3, 'is_active' => false]);
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
+        // Cupom inativo: nada de faixa.
+        $coupon = Coupon::create(['code' => 'BLACK10', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 10, 'is_active' => false]);
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomFaixa', null));
 
         $coupon->update(['is_active' => true]);
         $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('cupomPrimeiraCompra.code', 'BEMVINDO3')
-            ->where('cupomPrimeiraCompra.descricao', $coupon->descricaoDesconto()));
+            ->where('cupomFaixa.code', 'BLACK10')
+            ->where('cupomFaixa.descricao', $coupon->descricaoDesconto()));
     }
 }

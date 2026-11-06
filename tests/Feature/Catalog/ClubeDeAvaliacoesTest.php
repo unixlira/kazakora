@@ -40,10 +40,10 @@ class ClubeDeAvaliacoesTest extends TestCase
 
         $this->avaliar($user, $this->entregue($user)); // 20
         // Fora o BEMVINDO, que a migração cria (cupom automático, 2026-10-24).
-        $this->assertSame(0, Coupon::where('code', '<>', 'BEMVINDO')->count());
+        $this->assertSame(0, Coupon::whereNotIn('code', ['BEMVINDO', 'BLACKFRIDAY'])->count());
 
         $this->avaliar($user, $this->entregue($user), 'ok'); // 30
-        $cupom = Coupon::where('code', '<>', 'BEMVINDO')->sole();
+        $cupom = Coupon::whereNotIn('code', ['BEMVINDO', 'BLACKFRIDAY'])->sole();
         $this->assertSame($user->id, $cupom->user_id);
         $this->assertSame(5.0, (float) $cupom->discount_value);
         $this->assertSame(1, $cupom->max_uses);
@@ -51,7 +51,7 @@ class ClubeDeAvaliacoesTest extends TestCase
 
         // Editar a mesma avaliação não gera outro cupom.
         $this->avaliar($user, Product::find(Order::latest('id')->first()->items->first()->product_id), 'ok de novo');
-        $this->assertSame(1, Coupon::where('code', '<>', 'BEMVINDO')->count());
+        $this->assertSame(1, Coupon::whereNotIn('code', ['BEMVINDO', 'BLACKFRIDAY'])->count());
 
         $this->actingAs($user)->get('/avaliar')->assertInertia(fn ($page) => $page
             ->where('clube.pontos', 30)

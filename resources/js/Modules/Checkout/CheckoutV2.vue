@@ -999,7 +999,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                     {{ faixaCopia === 'copiado' ? 'Copiado' : 'Copiar cupom' }}
                 </button>
             </div>
-            <p v-if="faixaCopia !== 'pronto'" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
+            <p v-if="faixaCopia !== 'pronto' && !faixaAplicada" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
                 {{ faixaCopia === 'copiado' ? 'Cole no campo do cupom e toque em Aplicar.' : 'Não deu para copiar sozinho: o código está selecionado, copie e cole no campo do cupom.' }}
             </p>
         </div>

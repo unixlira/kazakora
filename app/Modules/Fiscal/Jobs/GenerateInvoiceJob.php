@@ -209,6 +209,15 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         $orderImport->refreshBuyerInfo($order);
         $order->refresh();
 
+        // Endereço "XXXXXXX" do canal (ver Order::enderecoMascarado()): nota
+        // com ele é recusada pelo ML e a etiqueta não sai. Não emite; o
+        // refreshBuyerInfo() acima busca de novo a cada tentativa.
+        if ($order->enderecoMascarado()) {
+            $this->aguardarEnderecoMascarado($order, $timeline);
+
+            return;
+        }
+
         $travaDoCarrinho = null;
 
         try {
@@ -390,6 +399,34 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
 
         if (Cache::add("nfe:sem-numero-avisado:{$order->id}", true, now()->addDay())) {
             $motivo = "endereço sem número ({$endereco}). Corrija o número no pedido e emita a nota de novo; a etiqueta só sai depois.";
+            $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "NF-e não emitida: {$motivo}");
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $motivo));
+            }
+        }
+    }
+
+    /**
+     * Mesmo esquema do aguardarNumeroDoEndereco(): nova busca a cada 10 min
+     * por até 6h desde a entrada do pedido; passou disso, avisa os admins.
+     */
+    private function aguardarEnderecoMascarado(Order $order, OrderFulfillmentTimeline $timeline): void
+    {
+        if ($order->created_at && $order->created_at->gt(now()->subHours(6))) {
+            if (Cache::add("nfe:aguardando-endereco:{$order->id}", true, now()->addHours(7))) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, 'Endereço do comprador ainda escondido pelo canal (XXXXXXX). NF-e e etiqueta aguardando o endereço real; nova busca a cada 10 min.');
+            }
+
+            $orderId = $order->id;
+            dispatch(static fn () => self::dispatch($orderId))->delay(now()->addMinutes(10))->onQueue('nfe');
+
+            return;
+        }
+
+        if (Cache::add("nfe:endereco-mascarado-avisado:{$order->id}", true, now()->addDay())) {
+            $motivo = 'o canal não liberou o endereço do comprador (veio XXXXXXX) em 6h. Corrija o endereço no pedido e emita a nota de novo; a etiqueta só sai depois.';
             $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "NF-e não emitida: {$motivo}");
 
             $admins = User::query()->where('role', User::ROLE_ADMIN)->get();

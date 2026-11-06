@@ -869,6 +869,27 @@ class OrderImportService
             $fields['channel_buyer_nickname'] = $newNickname;
         }
 
+        // Endereço "XXXXXXX" (ver Order::enderecoMascarado()): troca o
+        // endereço inteiro de uma vez, e só quando o novo já veio completo,
+        // pra não misturar rua de um com CEP do outro.
+        if ($existing->enderecoMascarado()) {
+            $endereco = [
+                'shipping_zip' => (string) ($data['shipping_zip'] ?? ''),
+                'shipping_street' => (string) ($data['shipping_street'] ?? ''),
+                'shipping_number' => (string) ($data['shipping_number'] ?? ''),
+                'shipping_complement' => $data['shipping_complement'] ?? null,
+                'shipping_neighborhood' => (string) ($data['shipping_neighborhood'] ?? ''),
+                'shipping_city' => (string) ($data['shipping_city'] ?? ''),
+                'shipping_state' => (string) ($data['shipping_state'] ?? ''),
+            ];
+            $novoMascarado = (new Order($endereco))->enderecoMascarado();
+            $cepValido = preg_match('/^\d{8}$/', preg_replace('/\D/', '', $endereco['shipping_zip'])) === 1;
+
+            if (! $novoMascarado && $cepValido && $endereco['shipping_street'] !== '') {
+                $fields += $endereco;
+            }
+        }
+
         return $fields;
     }
 
@@ -895,7 +916,8 @@ class OrderImportService
         // Buscar de novo no canal é o que traz a razão social correta.
         $needsRefresh = empty($order->buyer_document)
             || str_contains((string) $order->shipping_name, '*')
-            || mb_strlen((string) $order->shipping_name) > 60;
+            || mb_strlen((string) $order->shipping_name) > 60
+            || $order->enderecoMascarado();
 
         if (! $needsRefresh) {
             return;

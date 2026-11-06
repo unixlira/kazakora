@@ -34,7 +34,7 @@ class PreloadFotoProdutoTest extends TestCase
         $this->assertStringContainsString('<link rel="preload" as="image" fetchpriority="high"', $html);
         $this->assertStringContainsString('href="'.$foto->media_url.'"', $html);
         $this->assertStringContainsString('imagesrcset="'.$foto->thumb_url.' 512w, '.$foto->media_url.' 1200w"', $html);
-        $this->assertStringContainsString('imagesizes="(max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px"', $html);
+        $this->assertStringContainsString('imagesizes="(max-width: 767px) and (min-resolution: 2.5dppx) calc((100vw - 40px) * 0.66), (max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px"', $html);
         $this->assertStringContainsString('/images/marca/logo-nav.webp', $html);
     }
 
@@ -42,6 +42,6 @@ class PreloadFotoProdutoTest extends TestCase
     {
         $html = $this->get('/')->assertOk()->getContent();
 
-        $this->assertStringNotContainsString('imagesizes="(max-width: 767px) calc(100vw - 40px)', $html);
+        $this->assertStringNotContainsString('imagesizes="(max-width: 767px) and (min-resolution: 2.5dppx)', $html);
     }
 }

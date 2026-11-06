@@ -15,6 +15,8 @@ class ProductImage extends Model
         'thumb_path',
         'medium_path',
         'mini_path',
+        'celular_path',
+        'micro_path',
         'position',
         'is_primary',
         'is_variant',
@@ -29,7 +31,7 @@ class ProductImage extends Model
      * a serialização pra JSON, o acesso em PHP (OrderImageArchiveService,
      * publicação em canal) continua igual.
      */
-    protected $hidden = ['path', 'thumb_path', 'medium_path', 'mini_path'];
+    protected $hidden = ['path', 'thumb_path', 'medium_path', 'mini_path', 'celular_path', 'micro_path'];
 
     /**
      * Performance 2026-09-03: toda foto nova nasce com miniatura, venha de
@@ -50,6 +52,12 @@ class ProductImage extends Model
             if ($image->mini_path === null && $image->path) {
                 $image->mini_path = ProductImageThumbnailer::generateMini($image->path);
             }
+            if ($image->celular_path === null && $image->path) {
+                $image->celular_path = ProductImageThumbnailer::generateCelular($image->path);
+            }
+            if ($image->micro_path === null && $image->path) {
+                $image->micro_path = ProductImageThumbnailer::generateMicro($image->path);
+            }
         });
 
         static::deleted(function (self $image) {
@@ -61,6 +69,12 @@ class ProductImage extends Model
             }
             if ($image->mini_path) {
                 Storage::disk('public')->delete($image->mini_path);
+            }
+            if ($image->celular_path) {
+                Storage::disk('public')->delete($image->celular_path);
+            }
+            if ($image->micro_path) {
+                Storage::disk('public')->delete($image->micro_path);
             }
         });
     }
@@ -116,6 +130,30 @@ class ProductImage extends Model
         }
 
         return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->mini_path), '/'));
+    }
+
+    /**
+     * Foto de 800px do celular quando existe, senão a média. Fora do
+     * `$appends` de propósito: só a página de produto usa (append() no
+     * CatalogController::show), a home e a busca não pagam o peso no JSON.
+     */
+    public function getCelularUrlAttribute(): string
+    {
+        if (! $this->celular_path) {
+            return $this->media_url;
+        }
+
+        return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->celular_path), '/'));
+    }
+
+    /** Miniatura de 160px da galeria quando existe, senão a pequena de 320px. */
+    public function getMicroUrlAttribute(): string
+    {
+        if (! $this->micro_path) {
+            return $this->mini_url;
+        }
+
+        return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->micro_path), '/'));
     }
 
     public function getUrlAttribute(): string

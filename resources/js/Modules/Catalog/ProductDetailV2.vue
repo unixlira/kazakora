@@ -89,10 +89,20 @@ const stars = (value) => Math.round(value);
 // Foto grande no celular baixa a de 512px quando ela basta (PageSpeed
 // 2026-10-21); `sizes` é a largura da área da foto. O mesmo par vai no
 // <link rel="preload"> do app.blade.php: mudar aqui, mudar lá.
-const FOTO_SIZES = '(max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px';
-const srcsetFoto = (image) => (image?.thumb_url && image.media_url && image.thumb_url !== image.media_url
-    ? `${image.thumb_url} 512w, ${image.media_url} 1200w`
-    : null);
+// Tarefa 3886 (2026-11-06): celular de tela 3x pedia a média de 1200px para
+// uma foto de ~330px; acima de 2,5x a largura vale 2/3, o que limita a
+// densidade a 2x e cai na foto de 800px (metade do peso).
+const FOTO_SIZES = '(max-width: 767px) and (min-resolution: 2.5dppx) calc((100vw - 40px) * 0.66), (max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px';
+// Fotos da descrição: 320px no computador, ~330px no celular (mesmo limite de 2x).
+const FOTO_DESC_SIZES = '(min-resolution: 2.5dppx) 214px, 320px';
+const srcsetFoto = (image) => {
+    if (!image?.thumb_url || !image.media_url || image.thumb_url === image.media_url) return null;
+    const celular = image.celular_url && image.celular_url !== image.media_url ? `, ${image.celular_url} 800w` : '';
+    return `${image.thumb_url} 512w${celular}, ${image.media_url} 1200w`;
+};
+// Miniaturas da galeria (~73px): a de 160px em qualquer tela, a de 320px se faltar.
+const MINI_SIZES = '(min-resolution: 2.5dppx) 53px, 80px';
+const srcsetMini = (item) => (item.micro && item.mini && item.micro !== item.mini ? `${item.micro} 160w, ${item.mini} 320w` : null);
 
 // Galeria: vídeo primeiro, depois as imagens em ordem. `src` é a foto média
 // (1200px; pedido 2026-10-15, página lenta) e `full` a original, só no zoom.
@@ -104,9 +114,9 @@ const mediaItems = computed(() => {
     // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
     // a foto da variação escolhida só ganha borda, não muda de lugar.
     if (props.galeria?.length) {
-        for (const image of props.galeria.filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id });
+        for (const image of props.galeria.filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, micro: image.micro_url, variantId: image.variant_id });
     } else {
-        for (const image of (props.product.images ?? []).filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url });
+        for (const image of (props.product.images ?? []).filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, micro: image.micro_url });
     }
     return items;
 });
@@ -756,7 +766,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             <video v-else v-video-preguicoso :src="item.src" muted preload="none"></video>
                                             <span class="play"><i class="fas fa-play"></i></span>
                                         </template>
-                                        <img v-else :src="item.mini || item.thumb || item.src" alt="" loading="lazy">
+                                        <img v-else :src="item.mini || item.thumb || item.src" :srcset="srcsetMini(item)" :sizes="srcsetMini(item) ? MINI_SIZES : null" alt="" loading="lazy">
                                     </button>
                                 </div>
                             </div>
@@ -924,7 +934,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                      estrutura da página do FerraKora (pedido 2026-10-19). -->
                                 <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
                                     :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
-                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? '320px' : null" :alt="bloco.titulo" loading="lazy" decoding="async">
+                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? FOTO_DESC_SIZES : null" :alt="bloco.titulo" loading="lazy" decoding="async">
                                     <div>
                                         <h3>{{ bloco.titulo }}</h3>
                                         <p>{{ bloco.texto }}</p>

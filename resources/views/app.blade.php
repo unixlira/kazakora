@@ -132,8 +132,8 @@
                 <link rel="preload" as="image" fetchpriority="high"
                     href="{{ $fotoTopo['media_url'] ?? $fotoTopo['url'] }}"
                     @if (! empty($fotoTopo['thumb_url']) && ! empty($fotoTopo['media_url']) && $fotoTopo['thumb_url'] !== $fotoTopo['media_url'])
-                        imagesrcset="{{ $fotoTopo['thumb_url'] }} 512w, {{ $fotoTopo['media_url'] }} 1200w"
-                        imagesizes="(max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px"
+                        imagesrcset="{{ $fotoTopo['thumb_url'] }} 512w{{ ! empty($fotoTopo['celular_url']) && $fotoTopo['celular_url'] !== $fotoTopo['media_url'] ? ', '.$fotoTopo['celular_url'].' 800w' : '' }}, {{ $fotoTopo['media_url'] }} 1200w"
+                        imagesizes="(max-width: 767px) and (min-resolution: 2.5dppx) calc((100vw - 40px) * 0.66), (max-width: 767px) calc(100vw - 40px), (max-width: 900px) 75vw, (max-width: 1320px) 48vw, 600px"
                     @endif>
             @endif
         @endunless

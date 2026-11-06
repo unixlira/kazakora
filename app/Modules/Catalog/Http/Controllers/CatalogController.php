@@ -340,6 +340,8 @@ class CatalogController extends Controller
         ]);
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
+        // Foto de 800px do celular e miniatura de 160px da galeria só aqui (tarefa 3886).
+        $product->images->each->append(['celular_url', 'micro_url']);
 
         // Página de produto v2 (layout de loja com box de compra fixo, pedido
         // 2026-10-09). A v1 continua no código: ?v=1 mostra a antiga, e pra
@@ -433,6 +435,8 @@ class CatalogController extends Controller
                     'thumb_url' => $image->thumb_url,
                     'media_url' => $image->media_url,
                     'mini_url' => $image->mini_url,
+                    'celular_url' => $image->celular_url,
+                    'micro_url' => $image->micro_url,
                     'variant_id' => $fotoDoPai && $image->id === $fotoDoPai->id ? $pai->id : null,
                 ])->all();
 
@@ -452,7 +456,7 @@ class CatalogController extends Controller
 
                         continue;
                     }
-                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'media_url' => $imagem->media_url, 'mini_url' => $imagem->mini_url, 'variant_id' => $irmaId];
+                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'media_url' => $imagem->media_url, 'mini_url' => $imagem->mini_url, 'celular_url' => $imagem->celular_url, 'micro_url' => $imagem->micro_url, 'variant_id' => $irmaId];
                 }
             }
         }

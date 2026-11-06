@@ -44,6 +44,32 @@ class ProductImageThumbnailer
      */
     private const MINI_DIMENSION = 320;
 
+    /**
+     * Foto do celular (pedido do Lira 2026-11-06, tarefa 3886): no celular a
+     * foto grande e as da descrição aparecem com ~330px, e a tela 3x puxava
+     * a média de 1200px (~200 KB na árvore). A página limita a densidade a
+     * 2x no celular (FOTO_SIZES), e 800px cobre 330px em 2x.
+     */
+    private const CELULAR_DIMENSION = 800;
+
+    /**
+     * Miniatura da galeria do produto (~73px na tela): 160px cobre 2x; a de
+     * 320px pesava ~20 KB cada, 16 por página na árvore (tarefa 3886).
+     */
+    private const MICRO_DIMENSION = 160;
+
+    /** @return string|null caminho relativo da foto do celular (`<pasta>/celular/`) */
+    public static function generateCelular(string $path, string $disk = 'public'): ?string
+    {
+        return self::generate($path, $disk, self::CELULAR_DIMENSION, 'celular');
+    }
+
+    /** @return string|null caminho relativo da miniatura da galeria (`<pasta>/micros/`) */
+    public static function generateMicro(string $path, string $disk = 'public'): ?string
+    {
+        return self::generate($path, $disk, self::MICRO_DIMENSION, 'micros');
+    }
+
     /** @return string|null caminho relativo da foto pequena (`<pasta>/minis/`) */
     public static function generateMini(string $path, string $disk = 'public'): ?string
     {

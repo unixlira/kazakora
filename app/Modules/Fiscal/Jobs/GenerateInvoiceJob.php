@@ -212,7 +212,13 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         // Endereço "XXXXXXX" do canal (ver Order::enderecoMascarado()): nota
         // com ele é recusada pelo ML e a etiqueta não sai. Não emite; o
         // refreshBuyerInfo() acima busca de novo a cada tentativa.
-        if ($order->enderecoMascarado()) {
+        // No Mercado Livre também CEP vazio/"00000000" ou rua "Não informado"
+        // (o /shipments não respondeu na importação): a nota sairia sem o
+        // CEP da venda e o ML recusaria (pedido #3860, NF-e 2-3500).
+        $enderecoRuim = $order->enderecoMascarado()
+            || ($order->origin === Order::ORIGIN_MERCADO_LIVRE && $order->enderecoIncompletoParaNota());
+
+        if ($enderecoRuim) {
             $this->aguardarEnderecoMascarado($order, $timeline);
 
             return;
@@ -416,7 +422,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
     {
         if ($order->created_at && $order->created_at->gt(now()->subHours(6))) {
             if (Cache::add("nfe:aguardando-endereco:{$order->id}", true, now()->addHours(7))) {
-                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, 'Endereço do comprador ainda escondido pelo canal (XXXXXXX). NF-e e etiqueta aguardando o endereço real; nova busca a cada 10 min.');
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, 'Endereço do comprador ainda escondido pelo canal (XXXXXXX) ou sem CEP/rua. NF-e e etiqueta aguardando o endereço real; nova busca a cada 10 min.');
             }
 
             $orderId = $order->id;
@@ -426,7 +432,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         }
 
         if (Cache::add("nfe:endereco-mascarado-avisado:{$order->id}", true, now()->addDay())) {
-            $motivo = 'o canal não liberou o endereço do comprador (veio XXXXXXX) em 6h. Corrija o endereço no pedido e emita a nota de novo; a etiqueta só sai depois.';
+            $motivo = 'o canal não liberou o endereço do comprador (veio XXXXXXX ou sem CEP/rua) em 6h. Corrija o endereço no pedido e emita a nota de novo; a etiqueta só sai depois.';
             $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "NF-e não emitida: {$motivo}");
 
             $admins = User::query()->where('role', User::ROLE_ADMIN)->get();

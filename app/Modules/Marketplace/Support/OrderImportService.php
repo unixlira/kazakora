@@ -869,23 +869,44 @@ class OrderImportService
             $fields['channel_buyer_nickname'] = $newNickname;
         }
 
-        // Endereço "XXXXXXX" (ver Order::enderecoMascarado()): troca o
-        // endereço inteiro de uma vez, e só quando o novo já veio completo,
-        // pra não misturar rua de um com CEP do outro.
-        if ($existing->enderecoMascarado()) {
-            $endereco = [
-                'shipping_zip' => (string) ($data['shipping_zip'] ?? ''),
-                'shipping_street' => (string) ($data['shipping_street'] ?? ''),
-                'shipping_number' => (string) ($data['shipping_number'] ?? ''),
-                'shipping_complement' => $data['shipping_complement'] ?? null,
-                'shipping_neighborhood' => (string) ($data['shipping_neighborhood'] ?? ''),
-                'shipping_city' => (string) ($data['shipping_city'] ?? ''),
-                'shipping_state' => (string) ($data['shipping_state'] ?? ''),
-            ];
-            $novoMascarado = (new Order($endereco))->enderecoMascarado();
-            $cepValido = preg_match('/^\d{8}$/', preg_replace('/\D/', '', $endereco['shipping_zip'])) === 1;
+        // Endereço "XXXXXXX" (ver Order::enderecoMascarado()) e, no Mercado
+        // Livre, QUALQUER diferença para o endereço atual da venda: o ML
+        // recusa a NF-e cujo CEP não é o da venda (pedidos #3838 e #3860,
+        // 05/11/2026), então o endereço que vale é o do /shipments agora,
+        // não o gravado na importação (comprador pode ter trocado, ou ele
+        // veio escondido/"Não informado"). Troca o endereço inteiro de uma
+        // vez, e só quando o novo veio completo, pra não misturar rua de
+        // um com CEP do outro.
+        $endereco = [
+            'shipping_zip' => (string) ($data['shipping_zip'] ?? ''),
+            'shipping_street' => (string) ($data['shipping_street'] ?? ''),
+            'shipping_number' => (string) ($data['shipping_number'] ?? ''),
+            'shipping_complement' => $data['shipping_complement'] ?? null,
+            'shipping_neighborhood' => (string) ($data['shipping_neighborhood'] ?? ''),
+            'shipping_city' => (string) ($data['shipping_city'] ?? ''),
+            'shipping_state' => (string) ($data['shipping_state'] ?? ''),
+        ];
+        $novoServe = ! Order::enderecoInvalidoParaNota($endereco);
 
-            if (! $novoMascarado && $cepValido && $endereco['shipping_street'] !== '') {
+        if ($novoServe && ($existing->enderecoMascarado() || $existing->origin === Order::ORIGIN_MERCADO_LIVRE)) {
+            $mudou = false;
+
+            foreach ($endereco as $campo => $valor) {
+                if ((string) $existing->{$campo} !== (string) $valor) {
+                    $mudou = true;
+                    break;
+                }
+            }
+
+            if ($mudou) {
+                if ($existing->origin === Order::ORIGIN_MERCADO_LIVRE && ! $existing->enderecoIncompletoParaNota()) {
+                    Log::info('marketplace.order_import.endereco_atualizado_pelo_canal', [
+                        'order_id' => $existing->id,
+                        'cep_antes' => $existing->shipping_zip,
+                        'cep_agora' => $endereco['shipping_zip'],
+                    ]);
+                }
+
                 $fields += $endereco;
             }
         }
@@ -917,7 +938,10 @@ class OrderImportService
         $needsRefresh = empty($order->buyer_document)
             || str_contains((string) $order->shipping_name, '*')
             || mb_strlen((string) $order->shipping_name) > 60
-            || $order->enderecoMascarado();
+            || $order->enderecoMascarado()
+            // Mercado Livre: sempre confere o endereço atual da venda antes
+            // da nota (ver resolveBuyerFieldUpdates()).
+            || $order->origin === Order::ORIGIN_MERCADO_LIVRE;
 
         if (! $needsRefresh) {
             return;

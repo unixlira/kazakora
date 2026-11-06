@@ -93,8 +93,8 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
         ->withoutOverlapping(30);
 }
 
-Schedule::command('orders:sync-mercadolivre')->hourly();
-Schedule::command('orders:sync-shopee')->hourly();
+Schedule::command('orders:sync-mercadolivre')->hourlyAt(3);
+Schedule::command('orders:sync-shopee')->hourlyAt(5);
 // Chat da Shopee no admin (Atendimento > Shopee): não lidas e recentes a cada 2 min.
 Schedule::command('shopee:chat-sync')->everyTwoMinutes()->withoutOverlapping(5);
 // Mensagens de comprador da Amazon (e-mail) e do TikTok Shop (API) — canal sem configuração é pulado.
@@ -111,17 +111,17 @@ Schedule::command('orders:sync-mercadolivre --desde='.now()->toDateString())->ev
 // passe do mês inteiro emitiria nota automática pra toda venda antiga que
 // o Bling já tinha antes da integração existir. Carga de período maior só
 // na mão, conferindo antes (orders:sync-amazon --desde=...).
-Schedule::command('orders:sync-amazon --desde='.now()->subDays(2)->toDateString())->hourly()->withoutOverlapping(30);
+Schedule::command('orders:sync-amazon --desde='.now()->subDays(2)->toDateString())->hourlyAt(7)->withoutOverlapping(30);
 
 // Confirmação de envio na Amazon pela SP-API (ver ConfirmAmazonShipment):
 // pega os que ficaram pendentes — principalmente os postados antes da
 // conta SP-API ser conectada. Sem conta conectada, não faz nada.
-Schedule::command('amazon:confirmar-envios')->hourly()->withoutOverlapping(30);
+Schedule::command('amazon:confirmar-envios')->hourlyAt(9)->withoutOverlapping(30);
 
 // Pagamento pendente na Amazon (boleto, regra do Lira 2026-10-16): cada
 // pedido é conferido de 24 em 24 h; pago libera NF-e e etiqueta, cancelado
 // lá cancela aqui, pendente no 8º dia cancela só no KazaKora.
-Schedule::command('amazon:pagamentos-pendentes')->hourly()->withoutOverlapping(30);
+Schedule::command('amazon:pagamentos-pendentes')->hourlyAt(11)->withoutOverlapping(30);
 
 // Taxa real das vendas da Amazon pela SP-API (Finances), no lugar da coleta
 // pela tela da Seller Central na Cora Box, desligada em 2026-10-17. De hora
@@ -159,7 +159,7 @@ Schedule::command('orders:sync-tiktok --desde='.now()->toDateString())
     ->everyTwoMinutes()
     ->withoutOverlapping(5);
 
-Schedule::command('orders:sync-tiktok')->hourly();
+Schedule::command('orders:sync-tiktok')->hourlyAt(13);
 
 // Taxa estimada do TikTok (o Bling não traz a comissão) até o extrato
 // real chegar — ver TikTokFeeEstimator. Pedido do usuário 2026-10-06.
@@ -204,7 +204,7 @@ Schedule::command('separation:close-shipped')->dailyAt('04:30')->withoutOverlapp
 // é pela imagem que o operador confere o que embalar). O auto-import já
 // busca a foto na hora da venda; esta varredura cobre o que ficou pra trás
 // e o produto cujo canal estava fora do ar naquele instante.
-Schedule::command('catalog:fill-missing-images')->hourly()->withoutOverlapping(30);
+Schedule::command('catalog:fill-missing-images')->hourlyAt(17)->withoutOverlapping(30);
 
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
@@ -241,7 +241,7 @@ Schedule::command('shopee:relampago-agendar')
 // de pedido, então precisa de várias janelas ao longo do dia pra sempre ter
 // um relativamente fresco — rodando só 1x/dia o saldo ficaria "velho" a
 // maior parte do tempo.
-Schedule::command('ads:sync-wallet-balance')->hourly();
+Schedule::command('ads:sync-wallet-balance')->hourlyAt(19);
 
 // Fechamento quinzenal do Mercado Envios Flex — pedido explícito
 // 2026-08-10. Roda todo dia (o comando mesmo decide se hoje é dia de
@@ -327,7 +327,7 @@ Schedule::command('marketplace:release-scheduled-mercadolivre')
 // O reviews:coletar NÃO é agendado (Lira 2026-10-22): ele importa à mão
 // para escolher quais avaliações aparecem na loja.
 Schedule::command('reviews:sync --canal=shopee')->cron('*/4 * * * *');
-Schedule::command('video-downloads:clean')->hourly();
+Schedule::command('video-downloads:clean')->hourlyAt(23);
 // Fechamento fiscal do mês anterior por e-mail, pro contador (pedido
 // 2026-10-09: "todo primeiro dia após o final do mês quero o email").
 Schedule::command('fiscal:fechamento-mensal')->monthlyOn(1, '07:00')->withoutOverlapping(60);
@@ -337,7 +337,7 @@ Schedule::command('fiscal:atualizar-ufesp')->dailyAt('06:10');
 // Conteúdo do anúncio da página do produto (pedido 2026-10-09): benefícios e
 // descrição em blocos gerados pelo Gemini (regra própria se ele falhar), só
 // pra produto ativo novo ou que mudou — lote pequeno pra não estourar cota.
-Schedule::command('produtos:gerar-conteudo-anuncio --limite=10')->everyFifteenMinutes()->withoutOverlapping(30);
+Schedule::command('produtos:gerar-conteudo-anuncio --limite=10')->cron('7,21,37,51 * * * *')->withoutOverlapping(30);
 
 // Métricas do Horizon (gráficos de vazão e tempo das filas), 2026-10-11.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
@@ -353,12 +353,12 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // Coleta financeira do TikTok e da Amazon parada: a Manuela avisa o Lira
 // no WhatsApp com o motivo (2026-10-16). Falha que o próprio agente relata
 // já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
-Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping(10);
+Schedule::command('financeiro:vigiar-coletas')->hourlyAt(43)->withoutOverlapping(10);
 
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.
 Schedule::command('beautykora:conciliar-pagamentos')->everyFiveMinutes()->withoutOverlapping(10);
-Schedule::command('beautykora:gerar-conteudo')->hourly()->withoutOverlapping(30);
+Schedule::command('beautykora:gerar-conteudo')->hourlyAt(27)->withoutOverlapping(30);
 
 // Diagnóstico do Cauê (Shopee) e do Diego (Mercado Livre) no dashboard
 // (2026-10-11): só leitura das APIs, a cada 3 h.
@@ -376,3 +376,11 @@ Schedule::command('geoip:atualizar')->monthlyOn(5, '04:30')->withoutOverlapping(
 // PAC/SEDEX das 4 categorias de tamanho, de novo todo mês (só agenda o job).
 // Dia 1 às 06:00 de São Paulo (pedido do Lira 2026-10-25).
 Schedule::command('frete:tabela-localidades')->monthlyOn(1, '06:00')->timezone('America/Sao_Paulo')->withoutOverlapping(60);
+
+// Lentidão da página de produto (tarefa 3878, 06/11): no minuto :00 22% das
+// páginas de produto passavam de 1 s e no :15, 38%, com as rotinas de hora em
+// hora e de 15 em 15 min rodando juntas. Elas foram espalhadas em minutos
+// próprios (sync ML :03, Shopee :05, Amazon :07/:09/:11, TikTok :13, fotos
+// :17, saldo ADS :19, vídeos :23, BeautyKora :27, coletas :43, conteúdo de
+// anúncio 7/21/37/51). Miniaturas das fotos de avaliação antigas, até zerar.
+Schedule::command('avaliacoes:miniaturas --limite=2000')->hourlyAt(29)->withoutOverlapping(60);

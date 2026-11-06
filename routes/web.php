@@ -114,6 +114,8 @@ Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
         return redirect()->route('produtos.ver', $produto->slug, 301);
     });
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
+// "Carregar mais avaliações" da página do produto, de 12 em 12 (tarefa 3878, 06/11).
+Route::get('/produtos/{product:slug}/avaliacoes', [CatalogController::class, 'avaliacoes'])->middleware('throttle:120,1')->name('produtos.avaliacoes');
 
 // Páginas institucionais/legais — públicas de propósito, precisam ser
 // rastreáveis sem login para aprovação no Google Merchant Center.

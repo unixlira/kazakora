@@ -12,13 +12,21 @@
 // bandeiras e os selos ficam sempre centralizados. Sem menu, busca e rodapé
 // da loja. Sempre claro (cores fixas). Desde 2026-11-03 (pedido do Lira) o selo
 // RA é a imagem do rodapé do site, sem QR Code; o resto do rodapé não muda.
+// Desde 2026-11-06 (pedido do Lira) a KazaKora, com o cupom da faixa
+// (BLACKFRIDAY) valendo, mostra o relógio numa faixa bem pequena no topo,
+// acima da logo, e a barra roxa sai. Sem o cupom da faixa (FerraKora,
+// BeautyKora) a barra roxa continua como antes. Relógio igual: 30 minutos.
 import { COMPANY } from '@/Shared/company.js';
+import { usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     // Pedido já criado (pagando a 2ª parte, Pix aberto): sem relógio.
     semRelogio: { type: Boolean, default: false },
 });
+
+const page = usePage();
+const faixaBlack = computed(() => !!page.props.cupomFaixa);
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
@@ -67,6 +75,16 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
             <i class="fa-solid fa-flask mr-1"></i>Modo teste do Mercado Pago: nenhum valor é cobrado
         </div>
 
+        <!-- Faixa pequena do topo com o relógio (Black Friday, pedido 2026-11-06). -->
+        <div v-if="faixaBlack && restante > 0" role="timer" aria-live="off" data-faixa-relogio
+            class="checkout-oferta flex items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1 text-[11px] font-bold text-white sm:text-xs">
+            <i class="fa-solid fa-stopwatch" aria-hidden="true"></i>
+            <span class="uppercase tracking-wide">Black Friday</span>
+            <span aria-hidden="true">·</span>
+            <span>oferta termina em</span>
+            <span class="font-mono font-extrabold tabular-nums">{{ tempo }}</span>
+        </div>
+
         <header class="bg-[#141414] px-4 py-3 text-center text-white">
             <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
             <!-- Só logo, CNPJ e endereço (os mesmos dos Termos de Uso). -->
@@ -74,7 +92,7 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
             <p class="text-[11px] leading-snug text-white/75 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
         <div class="checkout-oferta h-[3px]" aria-hidden="true"></div>
-        <div v-if="restante > 0" role="timer" aria-live="off" class="checkout-oferta-relogio flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
+        <div v-if="!faixaBlack && restante > 0" role="timer" aria-live="off" class="checkout-oferta-relogio flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
             <i class="fa-solid fa-stopwatch animate-pulse" aria-hidden="true"></i>
             <span>Oferta termina em</span>
             <span class="font-mono text-[15px] font-extrabold tabular-nums sm:text-lg">{{ tempo }}</span>

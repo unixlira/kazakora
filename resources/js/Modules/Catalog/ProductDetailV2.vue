@@ -28,6 +28,9 @@ const props = defineProps({
     // Modelos ligados (2026-10-21): anúncios separados do mesmo grupo.
     modelos: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
+    // Total, média e quantidade por estrela de todas as avaliações (a lista
+    // vem em partes desde a tarefa 3878, 06/11).
+    reviewsResumo: { type: Object, default: null },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
     canReview: { type: Boolean, default: false },
@@ -647,11 +650,16 @@ const buyNow = () => {
     });
 };
 
-// Barras por estrela (5 → 1) a partir das avaliações reais.
-const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
-    const count = props.reviews.filter((review) => Number(review.rating) === star).length;
-    return { star, count, percent: props.reviews.length ? Math.round((count / props.reviews.length) * 100) : 0 };
-}));
+// Barras por estrela (5 → 1) a partir das avaliações reais, contadas no servidor.
+const ratingRows = computed(() => {
+    const total = props.reviewsResumo?.total ?? props.reviews.length;
+    return [5, 4, 3, 2, 1].map((star) => {
+        const count = props.reviewsResumo
+            ? Number(props.reviewsResumo.estrelas?.[star] ?? 0)
+            : props.reviews.filter((review) => Number(review.rating) === star).length;
+        return { star, count, percent: total ? Math.round((count / total) * 100) : 0 };
+    });
+});
 
 const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
 
@@ -659,10 +667,37 @@ const showReviews = computed(() => props.reviews.length > 0 || (props.canReview 
 // estrelas primeiro, com foto antes). Mostra 20 no computador e 6 no celular;
 // "Carregar mais" traz de 12 em 12 até a última.
 const ehCelular = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches;
+// A página traz só as 20 primeiras (tarefa 3878, 06/11: antes iam todas, 700 KB
+// na árvore de Natal); o "Carregar mais" busca as próximas 12 no servidor.
 const avaliacoesVisiveis = ref(ehCelular ? 6 : 20);
-const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.value));
-const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
-const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
+const listaAvaliacoes = ref([...props.reviews]);
+const totalAvaliacoes = computed(() => props.reviewsResumo?.total ?? listaAvaliacoes.value.length);
+const buscandoAvaliacoes = ref(false);
+watch(() => props.reviews, (lista) => {
+    listaAvaliacoes.value = [...lista];
+    avaliacoesVisiveis.value = ehCelular ? 6 : 20;
+});
+const reviewsNaTela = computed(() => listaAvaliacoes.value.slice(0, avaliacoesVisiveis.value));
+const avaliacoesRestantes = computed(() => Math.max(0, totalAvaliacoes.value - avaliacoesVisiveis.value));
+const carregarMaisAvaliacoes = async () => {
+    if (buscandoAvaliacoes.value) return;
+    const faltam = Math.min(avaliacoesVisiveis.value + 12, totalAvaliacoes.value) - listaAvaliacoes.value.length;
+    if (faltam > 0) {
+        buscandoAvaliacoes.value = true;
+        try {
+            const response = await fetch(`/produtos/${props.product.slug}/avaliacoes?pular=${listaAvaliacoes.value.length}`, { headers: { Accept: 'application/json' } });
+            if (!response.ok) return;
+            const dados = await response.json();
+            const ids = new Set(listaAvaliacoes.value.map((review) => review.id));
+            listaAvaliacoes.value.push(...(dados.avaliacoes ?? []).filter((review) => !ids.has(review.id)));
+        } catch {
+            return;
+        } finally {
+            buscandoAvaliacoes.value = false;
+        }
+    }
+    avaliacoesVisiveis.value += 12;
+};
 
 // No celular o vídeo da avaliação não baixa nada até o toque (pedido 2026-10-23):
 // a miniatura é só o quadrado com o play; o 1º quadro custava ~2 MB por página.
@@ -1156,14 +1191,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
                                     <span v-if="ehVideo(image) && ehCelular" class="video-sem-capa"></span>
                                     <video v-else-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
-                                    <img v-else :src="miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
+                                    <img v-else :src="image.thumb_url || miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
                                 </button>
                             </div>
                         </div>
                     </div>
                     <div v-if="avaliacoesRestantes > 0" class="aval-mais">
-                        <button type="button" class="btn-sec" @click="carregarMaisAvaliacoes">
+                        <button type="button" class="btn-sec" :disabled="buscandoAvaliacoes" @click="carregarMaisAvaliacoes">
                             Carregar mais avaliações <span>({{ avaliacoesRestantes }} restantes)</span>
                         </button>
                     </div>

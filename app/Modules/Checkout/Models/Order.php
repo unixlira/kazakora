@@ -217,6 +217,35 @@ class Order extends Model
     }
 
     /**
+     * Endereço que não serve para a NF-e: escondido ("XXXXXXX"), CEP que
+     * não tem 8 dígitos ou é "00000000", ou rua vazia/"Não informado" (o
+     * que o MercadoLivreDriver grava quando o /shipments não responde).
+     * O ML recusa a nota se o CEP não for o da venda (pedidos #3838 e
+     * #3860, 05/11/2026).
+     */
+    public static function enderecoInvalidoParaNota(array $endereco): bool
+    {
+        foreach (['shipping_zip', 'shipping_street', 'shipping_number', 'shipping_complement'] as $campo) {
+            if (self::textoMascarado($endereco[$campo] ?? null)) {
+                return true;
+            }
+        }
+
+        $cep = preg_replace('/\D/', '', (string) ($endereco['shipping_zip'] ?? ''));
+        $rua = trim((string) ($endereco['shipping_street'] ?? ''));
+
+        return strlen($cep) !== 8
+            || $cep === '00000000'
+            || $rua === ''
+            || $rua === 'Não informado';
+    }
+
+    public function enderecoIncompletoParaNota(): bool
+    {
+        return self::enderecoInvalidoParaNota($this->only(['shipping_zip', 'shipping_street', 'shipping_number', 'shipping_complement']));
+    }
+
+    /**
      * TikTok Shop é operado fiscalmente fora do pipeline automático do
      * KazaKora: a venda entra para separação/estoque, mas a NF-e da venda é
      * tratada na plataforma/Bling pelo operador. Se o KazaKora também emitir

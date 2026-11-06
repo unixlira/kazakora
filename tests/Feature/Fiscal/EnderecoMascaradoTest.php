@@ -118,4 +118,80 @@ class EnderecoMascaradoTest extends TestCase
         $this->assertStringContainsString('XXXXXXX', (string) OrderFulfillmentEvent::query()->where('order_id', $order->id)->latest('id')->value('message'));
         Queue::assertPushedOn('nfe', CallQueuedClosure::class);
     }
+
+    private function pedidoComEndereco(array $endereco): Order
+    {
+        $order = $this->pedidoMascarado();
+        $order->update($endereco);
+
+        return $order->refresh();
+    }
+
+    /** Comprador trocou o endereço depois da importação: a nota usa o atual do ML. */
+    public function test_ml_endereco_trocado_no_canal_atualiza_antes_da_nota(): void
+    {
+        $atual = [
+            'shipping_zip' => '74430310',
+            'shipping_street' => 'Rua Leão XIII',
+            'shipping_number' => '238',
+            'shipping_complement' => null,
+            'shipping_neighborhood' => 'Setor Oeste',
+            'shipping_city' => 'Goiânia',
+            'shipping_state' => 'GO',
+        ];
+        $this->canalDevolve($atual);
+        $order = $this->pedidoComEndereco($this->enderecoReal());
+
+        app(OrderImportService::class)->refreshBuyerInfo($order);
+
+        $order->refresh();
+        $this->assertSame('74430310', $order->shipping_zip);
+        $this->assertSame('Rua Leão XIII', $order->shipping_street);
+        $this->assertSame('GO', $order->shipping_state);
+    }
+
+    /** /shipments fora do ar devolve o fallback: não estraga o endereço bom. */
+    public function test_ml_fallback_nao_informado_nao_sobrescreve_endereco_bom(): void
+    {
+        $this->canalDevolve([
+            'shipping_zip' => '00000000',
+            'shipping_street' => 'Não informado',
+            'shipping_number' => 'S/N',
+            'shipping_complement' => null,
+            'shipping_neighborhood' => 'Não informado',
+            'shipping_city' => 'Não informado',
+            'shipping_state' => 'NA',
+        ]);
+        $order = $this->pedidoComEndereco($this->enderecoReal());
+
+        app(OrderImportService::class)->refreshBuyerInfo($order);
+
+        $this->assertSame('89227490', $order->refresh()->shipping_zip);
+    }
+
+    public function test_cep_zerado_ou_rua_nao_informada_nao_serve_para_nota(): void
+    {
+        $this->assertTrue((new Order(['shipping_zip' => '00000000'] + $this->enderecoReal()))->enderecoIncompletoParaNota());
+        $this->assertTrue((new Order(['shipping_zip' => ''] + $this->enderecoReal()))->enderecoIncompletoParaNota());
+        $this->assertTrue((new Order(['shipping_street' => 'Não informado'] + $this->enderecoReal()))->enderecoIncompletoParaNota());
+        $this->assertFalse((new Order($this->enderecoReal()))->enderecoIncompletoParaNota());
+    }
+
+    public function test_job_ml_nao_emite_com_cep_zerado(): void
+    {
+        Queue::fake();
+        $full = Mockery::mock(MercadoLivreFull::class);
+        $full->shouldReceive('ehFull')->andReturnFalse();
+        $this->app->instance(MercadoLivreFull::class, $full);
+        $orderImport = Mockery::mock(OrderImportService::class);
+        $orderImport->shouldReceive('refreshBuyerInfo')->once();
+        $invoices = Mockery::mock(InvoiceService::class);
+        $invoices->shouldNotReceive('issue');
+
+        $order = $this->pedidoComEndereco(['shipping_zip' => '00000000', 'shipping_street' => 'Não informado', 'shipping_number' => 'S/N', 'shipping_complement' => null]);
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $orderImport);
+
+        $this->assertSame(0, Invoice::query()->count());
+        Queue::assertPushedOn('nfe', CallQueuedClosure::class);
+    }
 }

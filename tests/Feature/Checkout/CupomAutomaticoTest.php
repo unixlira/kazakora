@@ -122,22 +122,19 @@ class CupomAutomaticoTest extends TestCase
         $this->assertSame(Coupon::MSG_JA_USOU, Coupon::buscar('BEMVINDO')->motivoInvalido(100, null, null, '12345678000195'));
     }
 
-    public function test_popup_do_bemvindo_vale_para_quem_ja_comprou_sem_ele(): void
+    public function test_bemvindo_continua_uso_unico_por_cpf(): void
     {
         $ana = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '12345678909']);
         $this->pedido(['user_id' => $ana->id, 'status' => Order::STATUS_PAID, 'coupon_code' => null]);
         $this->actingAs($ana);
         $this->noCarrinho(200);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra.code', 'BEMVINDO'));
-
         CupomUso::create(['coupon_id' => Coupon::buscar('BEMVINDO')->id, 'documento' => '12345678909']);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomPrimeiraCompra', null));
         $this->postJson('/finalizacao/cupom', ['code' => 'BEMVINDO'])->assertStatus(422)->assertJsonFragment(['message' => Coupon::MSG_JA_USOU]);
     }
 
-    public function test_checkout_abre_sem_cupom_e_oferece_o_bemvindo_no_popup(): void
+    public function test_checkout_abre_sem_cupom_e_mostra_o_blackfriday_na_faixa(): void
     {
         $this->noCarrinho(200);
 
@@ -146,8 +143,9 @@ class CupomAutomaticoTest extends TestCase
             ->where('couponCode', null)
             ->where('discountAmount', 0)
             ->missing('cupomAutomatico')
-            ->where('cupomPrimeiraCompra.code', 'BEMVINDO')
-            ->where('cupomPrimeiraCompra.descricao', '3% de desconto')
+            ->missing('cupomPrimeiraCompra')
+            ->where('cupomFaixa.code', 'BLACKFRIDAY')
+            ->where('cupomFaixa.descricao', '5% de desconto')
             ->where('pixDiscountPercentage', 2));
         $this->assertNull(session('checkout_draft.coupon_code'));
     }
@@ -167,6 +165,38 @@ class CupomAutomaticoTest extends TestCase
         $this->assertEquals(4, (float) $order->pix_discount_amount);
         $this->assertEquals(10, (float) $order->discount_amount);
         $this->assertEquals(190, (float) $order->total);
+    }
+
+    public function test_migracao_cria_o_blackfriday_de_5_por_cento_so_kazakora(): void
+    {
+        $cupom = Coupon::buscar('BLACKFRIDAY');
+
+        $this->assertNotNull($cupom);
+        $this->assertSame(Coupon::TYPE_PERCENTAGE, $cupom->discount_type);
+        $this->assertEquals(5, (float) $cupom->discount_value);
+        $this->assertTrue($cupom->is_active);
+        $this->assertTrue($cupom->so_kazakora);
+        $this->assertNull($cupom->expires_at);
+    }
+
+    public function test_blackfriday_no_pix_tira_5_por_cento_e_o_pix_continua_2_sobre_o_valor_antes_do_cupom(): void
+    {
+        $this->noCarrinho(200);
+        $this->mockPix();
+
+        $this->get('/finalizacao');
+        $this->assertNull(session('checkout_draft.coupon_code'));
+        $this->postJson('/finalizacao/cupom', ['code' => ' blackfriday '])->assertOk()->assertJson(['code' => 'BLACKFRIDAY', 'discount_amount' => 10, 'descricao' => '5% de desconto']);
+        // Aplicar de novo não soma: continua um cupom só, com o mesmo desconto.
+        $this->postJson('/finalizacao/cupom', ['code' => 'BLACKFRIDAY'])->assertOk()->assertJson(['discount_amount' => 10]);
+        $this->postJson('/finalizacao/entrega', $this->entrega())->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertSame('BLACKFRIDAY', $order->coupon_code);
+        $this->assertEquals(4, (float) $order->pix_discount_amount);
+        $this->assertEquals(14, (float) $order->discount_amount);
+        $this->assertEquals(186, (float) $order->total);
     }
 
     public function test_fechou_o_popup_e_pagou_no_pix_fica_so_com_os_2_por_cento(): void
@@ -213,7 +243,7 @@ class CupomAutomaticoTest extends TestCase
             ->where('pixDiscountAmount', 4));
     }
 
-    public function test_outro_cupom_tira_o_popup(): void
+    public function test_outro_cupom_troca_o_anterior_sem_somar(): void
     {
         Coupon::create(['code' => 'DEZOFF', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 10, 'is_active' => true]);
         $this->noCarrinho(200);
@@ -221,15 +251,22 @@ class CupomAutomaticoTest extends TestCase
 
         $this->postJson('/finalizacao/cupom', ['code' => 'DEZOFF'])->assertOk()->assertJson(['discount_amount' => 20]);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF')->where('cupomPrimeiraCompra', null));
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'DEZOFF')->where('discountAmount', 20));
+
+        $this->postJson('/finalizacao/cupom', ['code' => 'BLACKFRIDAY'])->assertOk()->assertJson(['discount_amount' => 10]);
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', 'BLACKFRIDAY')->where('discountAmount', 10));
     }
 
-    public function test_cupom_desligado_nao_tem_popup(): void
+    public function test_cupom_da_faixa_desligado_nao_tem_faixa(): void
     {
-        Coupon::buscar('BEMVINDO')->update(['is_active' => false]);
+        Coupon::buscar('BLACKFRIDAY')->update(['is_active' => false]);
         $this->noCarrinho(200);
 
-        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', null)->where('cupomPrimeiraCompra', null));
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('couponCode', null)->where('cupomFaixa', null));
+
+        config(['loja.cupom_faixa' => '']);
+        Coupon::buscar('BLACKFRIDAY')->update(['is_active' => true]);
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page->where('cupomFaixa', null));
     }
 
     public function test_pix_nao_passa_do_que_sobra_depois_do_cupom(): void

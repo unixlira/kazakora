@@ -253,16 +253,15 @@ const setOverride = (key, value) => {
                 class="relative flex flex-col overflow-hidden rounded-2xl shadow-lg transition-transform hover:-translate-y-0.5"
                 :style="{ background: marketplace.theme.cardBg, color: marketplace.theme.fg }"
             >
-                <span
-                    v-if="bestKey === marketplace.key"
-                    class="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow"
-                >
-                    <i class="fas fa-trophy mr-1 text-amber-500"></i>Melhor margem
-                </span>
-
                 <div class="p-5">
-                    <!-- Espaço para o selo "Melhor margem" não cobrir o nome do canal. -->
-                    <div class="flex items-center gap-2" :class="{ 'pr-28': bestKey === marketplace.key }">
+                    <!-- Selo no fluxo (não absoluto) para não cobrir o nome do canal no celular. -->
+                    <span
+                        v-if="bestKey === marketplace.key"
+                        class="mb-2 inline-block rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-700 shadow"
+                    >
+                        <i class="fas fa-trophy mr-1 text-amber-500"></i>Melhor margem
+                    </span>
+                    <div class="flex items-center gap-2">
                         <span class="flex h-9 w-9 items-center justify-center rounded-full text-base" :style="{ background: marketplace.theme.chipBg }">
                             <svg
                                 v-if="marketplace.logoSvg"

@@ -192,6 +192,8 @@ export const sidebarSections = [
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos', alertaNoTitulo: true },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },
+            // Leads (2026-11-06): o que o cliente digita no checkout, campo a campo, em tempo real.
+            { label: 'Leads', href: '/admin/leads', icon: 'fas fa-user-clock', cor: 'laranja', permission: 'pedidos.view' },
         ],
     },
     {

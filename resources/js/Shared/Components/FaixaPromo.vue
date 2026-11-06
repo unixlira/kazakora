@@ -9,7 +9,9 @@ const page = usePage();
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
 const CHAVE = `kazakora_faixa_black_fechada_${new Date().getFullYear()}${mes}`;
 
-const desconto = computed(() => page.props.menuLoja?.maiorDesconto ?? 0);
+// Teto de 30% na faixa (pedido do Lira 06/11: trocar o 32% por 30%); abaixo
+// disso segue o maior desconto real.
+const desconto = computed(() => Math.min(page.props.menuLoja?.maiorDesconto ?? 0, 30));
 
 // Lê o "fechada" já na criação (sem SSR, o window existe): a faixa nasce no
 // primeiro desenho, junto com a tarja corrida, e não entra depois empurrando

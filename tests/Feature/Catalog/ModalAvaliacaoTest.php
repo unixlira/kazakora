@@ -241,7 +241,10 @@ class ModalAvaliacaoTest extends TestCase
         $this->assertSame(5, $review->rating);
         $this->assertCount(2, $review->images);
         $this->assertStringContainsString("/storage/avaliacoes/{$review->id}/", $review->images[0]->image_url);
-        $this->assertCount(2, Storage::disk('public')->allFiles("avaliacoes/{$review->id}"));
+        $this->assertCount(2, Storage::disk('public')->files("avaliacoes/{$review->id}"));
+        // Miniatura de cada foto em minis/ (tarefa 3878, 06/11).
+        $this->assertCount(2, Storage::disk('public')->files("avaliacoes/{$review->id}/minis"));
+        $this->assertStringContainsString("/storage/avaliacoes/{$review->id}/minis/", $review->images[0]->thumb_url);
     }
 
     public function test_rejeita_foto_invalida_grande_ou_demais(): void

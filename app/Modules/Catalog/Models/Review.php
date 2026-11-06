@@ -3,10 +3,12 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Models\User;
+use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Support\NomeBrasileiro;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Review extends Model
 {
@@ -54,6 +56,24 @@ class Review extends Model
     ];
 
     protected $appends = ['reviewer_display_name'];
+
+    /**
+     * A página do produto guarda vendidos e avaliações 10 min em cache
+     * (CatalogController, tarefa 3878): avaliação nova, editada ou apagada
+     * limpa o cache do produto avaliado e do produto pai.
+     */
+    protected static function booted(): void
+    {
+        $limparCache = function (Review $review) {
+            $ids = array_filter([$review->product_id, Product::query()->whereKey($review->product_id)->value('parent_product_id')]);
+            foreach ($ids as $id) {
+                Cache::forget(CatalogController::chaveCacheDoProduto((int) $id));
+            }
+        };
+
+        static::saved($limparCache);
+        static::deleted($limparCache);
+    }
 
     protected function casts(): array
     {

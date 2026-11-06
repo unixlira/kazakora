@@ -44,9 +44,10 @@ const props = defineProps({
     // Boleto (2026-10-14): { linhaDigitavel, codigoBarras, pdfUrl, vencimento }.
     mercadoPagoBoleto: { type: Object, default: null },
     boletoDiasVencimento: { type: Number, default: 3 },
-    // Modelo Yampi (2026-10-23): avaliações reais do banco e cupom de 1ª compra cadastrado (ou null).
+    // Modelo Yampi (2026-10-23): avaliações reais do banco.
     avaliacoesCarrossel: { type: Array, default: () => [] },
-    cupomPrimeiraCompra: { type: Object, default: null },
+    // Cupom da faixa do topo (BLACKFRIDAY, 2026-11-06): { code, descricao } ou null.
+    cupomFaixa: { type: Object, default: null },
 });
 
 // Desconto Checkout em R$ fixo vira % com casas a mais: mostra no máximo 2 (2026-10-18).
@@ -272,16 +273,25 @@ const chamarCupom = (method, body) => fetch('/finalizacao/cupom', {
     body: body ? JSON.stringify(body) : undefined,
 });
 
+// Um cupom por vez (2026-11-06): com um aplicado o campo trava e o Aplicar
+// some até tirar no X; dois cliques seguidos não mandam dois pedidos. O
+// servidor confere de novo e troca o do rascunho, nunca soma.
+const normalizarCupom = (codigo) => String(codigo ?? '').replace(/\s+/g, '').toUpperCase();
 const aplicarCupom = async () => {
-    if (cupomCarregando.value || cupomAplicado.value) return;
-    if (!cupom.value.trim()) {
+    if (cupomCarregando.value) return;
+    const codigo = normalizarCupom(cupom.value);
+    if (cupomAplicado.value) {
+        if (codigo && codigo !== normalizarCupom(cupomAplicado.value)) cupomErro.value = `Só um cupom por compra. Tire o ${cupomAplicado.value} no X para usar outro.`;
+        return;
+    }
+    if (!codigo) {
         cupomErro.value = 'Digite o código do cupom.';
         return;
     }
     cupomCarregando.value = true;
     cupomErro.value = null;
     try {
-        const response = await chamarCupom('POST', { code: cupom.value });
+        const response = await chamarCupom('POST', { code: codigo });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             cupomErro.value = data.errors?.code?.[0] ?? data.message ?? 'Não foi possível aplicar o cupom agora.';
@@ -312,14 +322,75 @@ const limparCupom = async () => {
 const removerCupom = async () => {
     cupomCarregando.value = true;
     try {
-        await chamarCupom('DELETE');
+        const response = await chamarCupom('DELETE');
+        if (!response.ok) throw new Error();
         cupomAplicado.value = null;
         descontoCupom.value = 0;
         cupomDescricao.value = null;
+    } catch {
+        cupomErro.value = 'Não foi possível tirar o cupom agora. Tente de novo.';
     } finally {
         cupomCarregando.value = false;
     }
 };
+
+// Estado do cupom para a tela e para leitor de tela (2026-11-06).
+const cupomEstado = computed(() => {
+    if (cupomCarregando.value) return cupomAplicado.value ? 'removendo' : 'aplicando';
+    if (cupomAplicado.value) return 'aplicado';
+    return cupomErro.value ? 'erro' : 'vazio';
+});
+
+// ---------- Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06) ----------
+// No lugar do pop-up do BEMVINDO: faixa compacta com o código e "Copiar
+// cupom". Copiar NÃO aplica: o cliente cola no campo e aplica. Se o
+// navegador bloquear a cópia, o código fica selecionado para copiar à mão.
+const faixaCopia = ref('pronto'); // pronto | copiado | falhou
+const codigoFaixaEl = ref(null);
+let faixaTimer = null;
+const faixaAplicada = computed(() => !!props.cupomFaixa && normalizarCupom(cupomAplicado.value) === normalizarCupom(props.cupomFaixa.code));
+const copiarComTextarea = (texto) => {
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    return ok;
+};
+const copiarCupomFaixa = async () => {
+    const codigo = props.cupomFaixa?.code;
+    if (!codigo) return;
+    let ok = false;
+    try {
+        await navigator.clipboard.writeText(codigo);
+        ok = true;
+    } catch {
+        try { ok = copiarComTextarea(codigo); } catch { ok = false; }
+    }
+    faixaCopia.value = ok ? 'copiado' : 'falhou';
+    if (!ok && codigoFaixaEl.value) {
+        const selecao = window.getSelection();
+        const faixa = document.createRange();
+        faixa.selectNodeContents(codigoFaixaEl.value);
+        selecao?.removeAllRanges();
+        selecao?.addRange(faixa);
+    }
+    clearTimeout(faixaTimer);
+    faixaTimer = setTimeout(() => { faixaCopia.value = 'pronto'; }, 4000);
+};
+onUnmounted(() => clearTimeout(faixaTimer));
+
+// Celular x computador (2026-11-06): o campo do cupom fica num lugar só da
+// página, no topo no celular (o resumo nasce recolhido) e no resumo no computador.
+const consultaComputador = typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)') : null;
+const ehComputador = ref(consultaComputador?.matches ?? true);
+const acompanharTela = (evento) => { ehComputador.value = evento.matches; };
+onMounted(() => consultaComputador?.addEventListener('change', acompanharTela));
+onUnmounted(() => consultaComputador?.removeEventListener('change', acompanharTela));
 
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
@@ -860,34 +931,12 @@ watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });
 onMounted(() => { if (!props.order) medicao.iniciar(secaoDados.value); });
 onUnmounted(() => medicao.parar());
 
-// ---------- Pop-up do cupom de boas-vindas (modelo Yampi, 2026-10-23) ----------
-// Desde 2026-10-24 oferece o BEMVINDO, que não entra mais sozinho: "Aplicar
-// cupom" põe o código no campo e aplica; fechar não aplica nada. Só com cupom
-// cadastrado e válido (o servidor manda null se não houver). Desde
-// 2026-10-25 aparece toda vez que o checkout abre sem cupom (antes era uma
-// vez por navegador, por cookie, e quem já tinha visto não via mais).
-const popupCupom = ref(false);
-const botaoAplicarPopup = ref(null);
-const fecharPopupCupom = () => { popupCupom.value = false; };
-const aplicarCupomDoPopup = async () => {
-    popupCupom.value = false;
-    cupom.value = props.cupomPrimeiraCompra?.code ?? '';
-    await aplicarCupom();
-};
-const fecharComEsc = (evento) => { if (evento.key === 'Escape') fecharPopupCupom(); };
-onMounted(() => {
-    if (!props.cupomPrimeiraCompra || props.order || cupomAplicado.value) return;
-    popupCupom.value = true;
-    window.addEventListener('keydown', fecharComEsc);
-    nextTick(() => botaoAplicarPopup.value?.focus());
-});
-onUnmounted(() => window.removeEventListener('keydown', fecharComEsc));
-
 // ---------- Resumo ----------
-// Aberto no celular (pedido 2026-10-24, modelo Mavo; desfaz o de 23/10): a
-// barra "Resumo (n)" no topo recolhe e abre, e já nasce aberta com o cupom,
-// os valores e os produtos. No computador o resumo fica sempre ao lado.
-const resumoAberto = ref(true);
+// Celular (pedido 2026-11-06, desfaz o "nasce aberto" de 24/10): a barra
+// "Resumo (n)" com o total nasce recolhida para a Identificação caber na
+// primeira tela; tocar abre os valores e os produtos. O cupom fica fora,
+// logo abaixo da barra. No computador o resumo fica sempre ao lado.
+const resumoAberto = ref(false);
 const fotoDoItem = (item) => {
     const imagens = item.product?.images ?? [];
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
@@ -930,15 +979,79 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
     <Head title="Finalize sua compra" />
 
     <CheckoutLayout :sem-relogio="!!props.order">
-        <!-- Celular: resumo recolhido numa barra no topo, abre ao tocar (modelo Yampi). -->
-        <button type="button" class="flex w-full items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 text-left lg:hidden"
+        <!-- Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06), no celular e no computador, no lugar do
+             pop-up do BEMVINDO. "Copiar cupom" só copia: o cliente cola no campo e aplica. -->
+        <div v-if="cupomFaixa && !order" data-faixa-cupom class="bg-[#141414] text-white">
+            <div class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5">
+                <p class="min-w-0 text-[13px] leading-snug sm:text-sm">
+                    <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>
+                    {{ cupomFaixa.descricao }} com o cupom
+                    <span ref="codigoFaixaEl" class="select-all whitespace-nowrap rounded-md border border-dashed border-white/60 px-1.5 py-px font-mono font-bold tracking-wider">{{ cupomFaixa.code }}</span>
+                </p>
+                <span v-if="faixaAplicada" class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#00843f] px-3 py-1.5 text-xs font-bold">
+                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>Aplicado
+                </span>
+                <button v-else type="button" data-copiar-cupom
+                    class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition"
+                    :class="faixaCopia === 'copiado' ? 'bg-[#00843f] text-white' : 'bg-white text-slate-900 hover:bg-slate-100'"
+                    @click="copiarCupomFaixa">
+                    <i :class="faixaCopia === 'copiado' ? 'fa-solid fa-check' : 'fa-regular fa-copy'" aria-hidden="true"></i>
+                    {{ faixaCopia === 'copiado' ? 'Copiado' : 'Copiar cupom' }}
+                </button>
+            </div>
+            <p v-if="faixaCopia !== 'pronto'" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
+                {{ faixaCopia === 'copiado' ? 'Cole no campo do cupom e toque em Aplicar.' : 'Não deu para copiar sozinho: o código está selecionado, copie e cole no campo do cupom.' }}
+            </p>
+        </div>
+
+        <!-- Celular: resumo recolhido numa barra com o total (pedido 2026-11-06), abre ao tocar. -->
+        <button type="button" class="flex w-full items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-left lg:hidden"
             :aria-expanded="resumoAberto" aria-controls="resumo-compra" @click="resumoAberto = !resumoAberto">
-            <span class="text-sm font-bold text-slate-900">Resumo ({{ totalProdutosResumo }})</span>
-            <span class="flex items-center gap-2 text-base font-bold text-slate-900">
-                {{ formatPrice(totalAPagar) }}
+            <span class="min-w-0">
+                <span class="block text-sm font-bold text-slate-900">Resumo ({{ totalProdutosResumo }}) <span class="font-semibold text-sky-700">{{ resumoAberto ? 'fechar' : 'ver' }}</span></span>
+                <!-- Brinde digital em segundo plano: uma linha pequena; o detalhe fica no resumo aberto. -->
+                <span v-if="livrosBrinde" class="block truncate text-[11px] text-slate-500"><i class="fa-solid fa-gift mr-1 text-[#00843f]" aria-hidden="true"></i>Inclui brinde digital grátis</span>
+            </span>
+            <span class="flex shrink-0 items-center gap-2 text-right text-slate-900">
+                <span>
+                    <span class="block text-base font-extrabold">{{ formatPrice(totalAPagar) }}</span>
+                    <span v-if="!order && descontoPix > 0" class="block text-[11px] font-semibold text-[#00843f]">no Pix</span>
+                </span>
                 <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }" aria-hidden="true"></i>
             </span>
         </button>
+        <!-- Celular: o campo do cupom vem para cá (Teleport abaixo), sempre à mostra com o resumo recolhido. -->
+        <div id="cupom-celular" class="border-b border-slate-200 bg-white px-4 py-2.5 lg:hidden"></div>
+
+        <!-- Campo do cupom: um só na página, levado para o topo no celular ou para o resumo no computador. -->
+        <Teleport defer :to="ehComputador ? '#cupom-computador' : '#cupom-celular'">
+            <form class="flex gap-2" data-cupom-form @submit.prevent="aplicarCupom">
+                <label class="relative min-w-0 flex-1">
+                    <span class="sr-only">Cupom de desconto</span>
+                    <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom de desconto" autocapitalize="characters" enterkeyhint="go"
+                        :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado" :aria-invalid="cupomEstado === 'erro'" aria-describedby="cupom-status"
+                        ref="campoCupom"
+                        class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
+                        :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
+                        @input="cupom = $event.target.value; cupomErro = null">
+                    <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
+                        class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
+                        @click="limparCupom">
+                        <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
+                    </button>
+                </label>
+                <button v-if="!cupomAplicado" type="submit" :disabled="cupomCarregando || !!order"
+                    class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
+                    <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
+                    {{ cupomCarregando ? 'Aplicando' : 'Aplicar' }}
+                </button>
+            </form>
+            <p id="cupom-status" aria-live="polite" class="text-xs" :class="cupomEstado === 'erro' ? 'mt-1 text-red-600' : 'text-[#00843f]'">
+                <template v-if="cupomEstado === 'erro'"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</template>
+                <template v-else-if="cupomEstado === 'aplicado' && descontoCupom > 0"><span class="mt-1 block font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Cupom {{ cupomAplicado }} aplicado: -{{ formatPrice(descontoCupom) }}</span></template>
+                <template v-else-if="cupomEstado === 'removendo'"><span class="mt-1 block text-slate-500">Tirando o cupom…</span></template>
+            </p>
+        </Teleport>
 
         <!-- Computador, a partir de 1024px (pedido 2026-10-24, mesmo padrão nas 3 lojas): duas
              colunas. Esquerda: Identificação e Entrega lado a lado (50/50) e o Pagamento embaixo,
@@ -1227,8 +1340,9 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <i class="fa-solid fa-credit-card text-xl text-slate-700"></i>
                                     <span class="flex-1">
                                         <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Cartão de Crédito <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
-                                        <!-- Sem valor da parcela: o Mercado Pago cobra juros a partir de 2x e o valor real só sai com o cartão digitado. -->
-                                        <span class="block text-xs text-slate-500">Em até 12x</span>
+                                        <!-- Sem valor da parcela: o Mercado Pago cobra juros a partir de 2x e o valor real só sai com o cartão digitado.
+                                             Desde 2026-11-06 diz que os juros são do cliente. -->
+                                        <span class="block text-xs text-slate-500">À vista sem juros ou até 12x com juros do cartão</span>
                                     </span>
                                 </button>
                                 <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
@@ -1278,6 +1392,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 </div>
                                 <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->
                                 <p v-if="brickPronto && cartaoBin.length < 6" class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-600"><i class="fa-solid fa-credit-card mr-1"></i>Digite o número do cartão para escolher em quantas parcelas pagar (até 12x).</p>
+                                <!-- Juros pelo cliente (pedido 2026-11-06): o valor de cada parcela e o total com juros aparecem no seletor do Mercado Pago. -->
+                                <p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-900"><i class="fa-solid fa-circle-info mr-1"></i>1x no cartão sai pelo total sem juros. De 2x a 12x os juros do cartão são pagos por você e já aparecem no valor de cada parcela antes de finalizar.</p>
                                 <div id="cartao-brick-v2"></div>
                                 <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
                                 <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>
@@ -1307,32 +1423,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                     <div class="lg:rounded-[24px] lg:bg-white lg:p-6 lg:shadow-[0_4px_24px_rgba(15,23,42,0.07)]">
                         <h2 class="border-b border-slate-100 pb-3 text-base font-extrabold text-slate-900">Resumo da compra</h2>
 
-                        <!-- Cupom sempre à mostra (modelo Yampi). Desde 2026-10-24 o cupom aplicado
-                             (o BEMVINDO vem do pop-up de boas-vindas) fica dentro do campo: borda verde e X para tirar. -->
-                        <div class="mt-4">
-                            <form class="flex gap-2" @submit.prevent="aplicarCupom">
-                                <label class="relative min-w-0 flex-1">
-                                    <span class="sr-only">Cupom de desconto</span>
-                                    <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom (opcional)" autocapitalize="characters"
-                                        :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado"
-                                        ref="campoCupom"
-                                        class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
-                                        :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
-                                        @input="cupom = $event.target.value; cupomErro = null">
-                                    <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
-                                        class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
-                                        @click="limparCupom">
-                                        <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
-                                    </button>
-                                </label>
-                                <button type="submit" :disabled="!!cupomAplicado || cupomCarregando"
-                                    class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
-                                    <i v-if="cupomCarregando && !cupomAplicado" class="fa-solid fa-spinner animate-spin"></i>
-                                    {{ cupomCarregando && !cupomAplicado ? 'Buscando' : 'Aplicar' }}
-                                </button>
-                            </form>
-                            <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
-                        </div>
+                        <!-- Computador: o campo do cupom (Teleport no topo da página) fica aqui, sempre à mostra. -->
+                        <div id="cupom-computador" class="mt-4 hidden lg:block"></div>
 
                         <dl class="mt-4 space-y-2 text-sm text-slate-600">
                             <div class="flex justify-between"><dt>Produtos ({{ totalProdutosResumo }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
@@ -1345,7 +1437,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <dt class="text-base font-extrabold">Total</dt>
                                 <dd class="text-right">
                                     <span class="block text-xl font-extrabold">{{ formatPrice(totalAPagar) }}</span>
-                                    <span v-if="!order" class="block text-xs font-semibold text-slate-600">em até 12x no cartão</span>
+                                    <span v-if="!order" class="block text-xs font-semibold text-slate-600">ou até 12x com juros no cartão</span>
                                 </dd>
                             </div>
                         </dl>
@@ -1441,22 +1533,6 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                 <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
                 <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
             </aside>
-        </div>
-
-        <!-- Pop-up do cupom de boas-vindas (BEMVINDO): só com cupom cadastrado e válido, toda vez que o checkout abre sem cupom. -->
-        <div v-if="popupCupom && cupomPrimeiraCompra" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="fecharPopupCupom">
-            <div role="dialog" aria-modal="true" aria-labelledby="popup-cupom-titulo" class="relative w-full max-w-[440px] rounded-2xl bg-white px-6 pb-8 pt-10 text-center shadow-2xl">
-                <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100" aria-label="Fechar" @click="fecharPopupCupom">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
-                <i class="fa-solid fa-ticket text-5xl text-slate-800" aria-hidden="true"></i>
-                <h2 id="popup-cupom-titulo" class="mt-5 text-2xl font-extrabold leading-tight text-slate-700">Boas-vindas! Ganhe {{ cupomPrimeiraCompra.descricao }}</h2>
-                <p class="mt-3 text-sm text-slate-600">Use o cupom</p>
-                <p class="mx-auto mt-1 inline-block rounded-xl border-2 border-dashed border-[#00843f] bg-emerald-50 px-5 py-2 text-xl font-extrabold tracking-widest text-[#00843f]" data-cupom-popup>{{ cupomPrimeiraCompra.code }}</p>
-                <p v-if="pixDiscountPercentage > 0" class="mt-3 text-sm text-slate-600">Pagando no Pix, você ainda ganha mais {{ pixPercentualTexto }}% de desconto.</p>
-                <button ref="botaoAplicarPopup" type="button" class="mx-auto mt-6 block w-full max-w-[240px] rounded-full bg-[#00843f] px-6 py-3.5 text-lg font-bold text-white shadow-[0_6px_16px_rgba(0,132,63,0.3)] hover:brightness-105" @click="aplicarCupomDoPopup">Aplicar cupom</button>
-                <button type="button" class="mx-auto mt-4 block rounded-full px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100" @click="fecharPopupCupom">Agora não</button>
-            </div>
         </div>
 
         <PaymentProcessingModal

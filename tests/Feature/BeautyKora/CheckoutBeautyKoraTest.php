@@ -299,6 +299,14 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertSame('25.00', $order->shipping_cost);
     }
 
+    public function test_cupom_so_da_kazakora_e_recusado(): void
+    {
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA, 'cupom' => 'BLACKFRIDAY'])
+            ->assertOk()
+            ->assertJsonPath('cupom', null)
+            ->assertJsonPath('cupom_erro', 'Cupom não encontrado. Confira o código.');
+    }
+
     public function test_produto_que_nao_esta_no_beauty_kora_e_recusado(): void
     {
         $outro = Product::factory()->create(['is_active' => true, 'stock' => 3]);

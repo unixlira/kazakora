@@ -549,7 +549,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <span class="font-medium text-store-fg">
                                     {{ review.reviewer_display_name }}
-                                    <span v-if="review.outra_loja" class="ml-1.5 rounded-full bg-store-fg/5 px-2 py-0.5 align-middle text-[11px] font-semibold text-store-fg-muted">Comprado em outra loja</span>
                                 </span>
                                 <span class="text-xs text-store-fg-faint">{{ formatDate(review.created_at) }}</span>
                             </div>

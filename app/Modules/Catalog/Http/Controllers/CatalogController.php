@@ -621,12 +621,8 @@ class CatalogController extends Controller
                 if ($review->ocultar_nome) {
                     $review->setRelation('user', null);
                 }
-                // Importada de outra loja com o campo zerado (3.963 em 02/11): o selo
-                // "Comprado em outra loja" de 21/10 aparece. Só na tela: o banco não muda,
-                // então os carrosséis do checkout seguem iguais.
-                if ($review->channel === 'outra_loja') {
-                    $review->setAttribute('outra_loja', true);
-                }
+                // Sem selo "Comprado em outra loja" na página (pedido do Lira 07/11,
+                // tarefa 3908): o canal da avaliação não vira selo na tela.
             })
             ->values();
     }

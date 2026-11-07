@@ -72,12 +72,12 @@ class TelaProdutoBotrelTest extends TestCase
         $this->assertCount(1, LivroDigital::doProduto($casa));
     }
 
-    public function test_selo_de_outra_loja_vale_pelo_canal_sem_mudar_o_banco(): void
+    public function test_avaliacao_de_outra_loja_sem_selo_na_pagina(): void
     {
         $produto = Product::factory()->create(['is_active' => true]);
         $avaliacao = Review::query()->forceCreate(['product_id' => $produto->id, 'rating' => 5, 'comment' => 'Bom', 'channel' => 'outra_loja', 'outra_loja' => false]);
 
-        $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page->where('reviews.0.outra_loja', true));
+        $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page->where('reviews.0.outra_loja', fn ($valor) => ! $valor));
         $this->assertFalse((bool) $avaliacao->fresh()->outra_loja);
     }
 

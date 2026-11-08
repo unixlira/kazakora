@@ -264,6 +264,13 @@ abstract class CheckoutOutroSite
             }
         }
 
+        // URGENTE da FerraKora (pedido do Lira 2026-11-08): motoboy de R$ 39,00,
+        // entrega em até 3 horas, na mesma área e horário do motoboy da KazaKora
+        // (EntregaExpressa::motoboy). Só no checkout da FerraKora.
+        if ($this->site() === Order::SITE_FERRAKORA && ($motoboy = app(EntregaExpressa::class)->motoboy($cep))) {
+            $opcoes[] = ['id' => 'urgente', 'transportadora' => 'Motoboy', 'servico' => 'URGENTE', 'preco' => round((float) $motoboy['preco'], 2), 'prazo' => null, 'mensagem' => 'Entrega em até 3 horas'];
+        }
+
         return $opcoes;
     }
 

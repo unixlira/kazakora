@@ -412,6 +412,46 @@ class LogisticaProvedorTest extends TestCase
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 3);
     }
 
+    public function test_caixa_acima_do_limite_dos_correios_sai_pelo_melhor_envio_com_correios_conectados(): void
+    {
+        // Caso real #3978 (09/11): árvore de Natal em caixa de 115 cm, PPN-055 nos Correios.
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
+        $correios = Mockery::mock(CorreiosAutoShipping::class);
+        $correios->shouldReceive('geradaPara')->andReturnNull();
+        $correios->shouldNotReceive('confirm');
+        $this->app->instance(CorreiosAutoShipping::class, $correios);
+
+        $order = $this->pedidoDoSite();
+        ProductFiscalData::query()->update(['altura_cm' => 115, 'largura_cm' => 15, 'profundidade_cm' => 15, 'peso_bruto' => 5]);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order->fresh());
+
+        $this->assertSame('Melhor Envio Jadlog Package', $envio['shipping_method']);
+        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['volumes'][0]['height'] === 115);
+    }
+
+    public function test_caixa_dentro_do_limite_continua_nos_correios(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        $pre = new \App\Modules\Marketplace\Models\CorreiosPrePostagem(['correios_id' => 'PP1', 'codigo_objeto' => 'AA123BR', 'service_label' => 'PAC']);
+        $correios = Mockery::mock(CorreiosAutoShipping::class);
+        $correios->shouldReceive('geradaPara')->andReturnNull();
+        $correios->shouldReceive('confirm')->once()->andReturn($pre);
+        $this->app->instance(CorreiosAutoShipping::class, $correios);
+
+        $order = $this->pedidoDoSite();
+        ProductFiscalData::query()->update(['altura_cm' => 100, 'largura_cm' => 50, 'profundidade_cm' => 50]);
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order->fresh());
+
+        $this->assertSame('Correios PAC', $envio['shipping_method']);
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/me/cart'));
+    }
+
     private function freteDoSite(Product $produto): float
     {
         $frete = app(FreteEmbutido::class);

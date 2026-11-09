@@ -15,9 +15,9 @@ use Illuminate\Support\Facades\Cache;
  * guarda as duas, coluna provedor), as opções do checkout e a etiqueta dos
  * pedidos do site. Correios é o padrão.
  *
- * Só KazaKora: FerraKora e Beauty Kora (SiteAtual ferrakora/beautykora e
- * pedidos com site_origem) seguem nos Correios, como antes (mudança de loja
- * fica na loja). Admin, filas e comandos (sem site) usam o escolhido.
+ * KazaKora e FerraKora (pedido do Lira em 2026-11-09: "quero esse mesmo
+ * funcionamento no FerraKora") seguem o escolhido; a Beauty Kora fica nos
+ * Correios. Admin, filas e comandos (sem site) usam o escolhido.
  */
 class FreteProvedor
 {
@@ -34,9 +34,15 @@ class FreteProvedor
     /** O que está valendo nesta requisição (Correios fora da KazaKora). */
     public static function ativo(): string
     {
-        $site = app(SiteAtual::class)->atual();
+        return self::seguemOEscolhido(app(SiteAtual::class)->atual()) ? self::escolhido() : self::CORREIOS;
+    }
 
-        return $site === null || $site === SiteAtual::KAZAKORA ? self::escolhido() : self::CORREIOS;
+    /** Sites que trocam de provedor junto (null = KazaKora, admin e filas). */
+    public const SITES_QUE_SEGUEM = [SiteAtual::KAZAKORA, SiteAtual::FERRAKORA];
+
+    private static function seguemOEscolhido(?string $site): bool
+    {
+        return $site === null || in_array($site, self::SITES_QUE_SEGUEM, true);
     }
 
     /** O conectado em Logística (vale para a KazaKora). */
@@ -47,10 +53,10 @@ class FreteProvedor
         return in_array($valor, self::TODOS, true) ? $valor : self::CORREIOS;
     }
 
-    /** Provedor da etiqueta de um pedido do site: só o da KazaKora (site_origem nulo) troca. */
+    /** Provedor da etiqueta de um pedido do site: KazaKora e FerraKora trocam; Beauty Kora, Correios. */
     public static function doPedido(?string $siteOrigem): string
     {
-        return $siteOrigem === null || $siteOrigem === SiteAtual::KAZAKORA ? self::escolhido() : self::CORREIOS;
+        return self::seguemOEscolhido($siteOrigem) ? self::escolhido() : self::CORREIOS;
     }
 
     public static function melhorEnvio(): bool

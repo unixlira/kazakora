@@ -367,15 +367,18 @@ class LogisticaProvedorTest extends TestCase
         $this->getJson('/admin/logistica/fretes-por-estado/produtos-melhor-envio?uf=XX')->assertNotFound();
     }
 
-    public function test_ferrakora_continua_nos_correios(): void
+    public function test_ferrakora_segue_o_melhor_envio_e_beauty_kora_fica_nos_correios(): void
     {
+        // Pedido do Lira em 2026-11-09: "quero esse mesmo funcionamento no FerraKora".
         $this->contaMelhorEnvio();
         FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
 
         $this->assertSame(FreteProvedor::MELHOR_ENVIO, FreteProvedor::ativo());
         $site = app(SiteAtual::class);
-        $this->assertSame(FreteProvedor::CORREIOS, $site->durante(SiteAtual::FERRAKORA, fn () => FreteProvedor::ativo()));
-        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::doPedido(SiteAtual::FERRAKORA));
+        $this->assertSame(FreteProvedor::MELHOR_ENVIO, $site->durante(SiteAtual::FERRAKORA, fn () => FreteProvedor::ativo()));
+        $this->assertSame(FreteProvedor::MELHOR_ENVIO, FreteProvedor::doPedido(SiteAtual::FERRAKORA));
+        $this->assertSame(FreteProvedor::CORREIOS, $site->durante(SiteAtual::BEAUTYKORA, fn () => FreteProvedor::ativo()));
+        $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::doPedido(SiteAtual::BEAUTYKORA));
         $this->assertSame(FreteProvedor::MELHOR_ENVIO, FreteProvedor::doPedido(null));
     }
 

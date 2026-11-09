@@ -41,7 +41,12 @@ class EtiquetaMelhorEnvioComMarca
         };
     }
 
-    public function aplicar(string $pdf, ?string $servico, ?int $orderId = null): string
+    /**
+     * @param  ?string  $site  site do pedido (SiteAtual): FerraKora sai com o
+     *                         nome dela em preto (o logo é de fundo escuro e
+     *                         some na térmica); o resto, logo da KazaKora.
+     */
+    public function aplicar(string $pdf, ?string $servico, ?int $orderId = null, ?string $site = null): string
     {
         $modelo = self::modelo($servico);
         if (! $modelo || ! isset(self::AREAS[$modelo])) {
@@ -69,6 +74,15 @@ class EtiquetaMelhorEnvioComMarca
                     [$x0, $y0, $x1, $y1] = self::AREAS[$modelo];
                     $fpdi->SetFillColor(255, 255, 255);
                     $fpdi->Rect($x0 * $w, $y0 * $h, ($x1 - $x0) * $w, ($y1 - $y0) * $h, 'F');
+
+                    if ($site === \App\Support\SiteAtual::FERRAKORA) {
+                        $fpdi->SetTextColor(0, 0, 0);
+                        $fpdi->SetFont('Helvetica', 'B', ($y1 - $y0) * $h * 0.42);
+                        $texto = 'FerraKora';
+                        $fpdi->Text(($x0 + $x1) / 2 * $w - $fpdi->GetStringWidth($texto) / 2, ($y0 + $y1) / 2 * $h + ($y1 - $y0) * $h * 0.15, $texto);
+
+                        continue;
+                    }
 
                     // Logo centrado na área, ocupando 90% da largura dela.
                     [$lw, $lh] = getimagesize(public_path(self::LOGO));

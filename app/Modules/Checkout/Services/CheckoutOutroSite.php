@@ -15,6 +15,7 @@ use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Support\FreteProvedor;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\FerraKora\Services\PrecoMudouException;
 use App\Support\SiteAtual;
@@ -248,9 +249,21 @@ abstract class CheckoutOutroSite
         if ($full) {
             $opcoes[] = ['id' => 'full', 'transportadora' => 'Full', 'servico' => 'Entrega expressa', 'preco' => 0.0, 'prazo' => null, 'mensagem' => $full['mensagem'], 'local' => $full['local']];
         }
-        $opcoes[] = ['id' => 'correios', 'transportadora' => 'Correios', 'servico' => mb_strtoupper($entrega['servico'] ?? 'pac'), 'preco' => 0.0, 'prazo' => $entrega['prazo']];
+        // Melhor Envio (2026-11-09): a transportadora sai na etiqueta (a mais
+        // barata ou a do TURBO), então a tela não promete Correios. O id
+        // 'correios' fica pelo contrato com os sites.
+        $melhorEnvio = FreteProvedor::melhorEnvio();
+        $opcoes[] = $melhorEnvio
+            ? ['id' => 'correios', 'transportadora' => 'Entrega', 'servico' => 'grátis', 'preco' => 0.0, 'prazo' => $entrega['prazo']]
+            : ['id' => 'correios', 'transportadora' => 'Correios', 'servico' => mb_strtoupper($entrega['servico'] ?? 'pac'), 'preco' => 0.0, 'prazo' => $entrega['prazo']];
         if ($turbo) {
-            $opcoes[] = ['id' => 'turbo', 'transportadora' => 'Correios', 'servico' => 'SEDEX', 'preco' => round((float) $turbo['preco'], 2), 'prazo' => $turbo['prazo'], 'dias_a_menos' => $turbo['dias_a_menos']];
+            $opcoes[] = ['id' => 'turbo', 'transportadora' => $melhorEnvio ? 'Entrega' : 'Correios', 'servico' => $melhorEnvio ? 'rápida' : 'SEDEX', 'preco' => round((float) $turbo['preco'], 2), 'prazo' => $turbo['prazo'], 'dias_a_menos' => $turbo['dias_a_menos']];
+        }
+
+        // Transportadoras extras pagas comparam com o custo dos Correios; com
+        // o Melhor Envio a grátis já é a mais barata e o TURBO a rápida.
+        if ($melhorEnvio) {
+            return $opcoes;
         }
 
         $custo = isset($entrega['custo']) ? (float) $entrega['custo'] : null;

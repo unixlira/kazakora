@@ -10,6 +10,7 @@ use App\Services\MelhorEnvio\CotacaoMelhorEnvio;
 use App\Services\MelhorEnvio\Exceptions\MelhorEnvioException;
 use App\Services\MelhorEnvio\MelhorEnvioClient;
 use App\Support\FreteProvedor;
+use App\Support\SiteAtual;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -187,7 +188,7 @@ class MelhorEnvioAutoShipping
             'from' => [
                 // Remetente "KazaKora" na etiqueta (pedido do Lira 09/11, #3978):
                 // o nome fantasia do cadastro é o do dono e vai na NF-e.
-                'name' => Str::limit((string) (config('melhorenvio.remetente') ?: $empresa->nome_fantasia ?: $empresa->razao_social), 60, ''),
+                'name' => Str::limit((string) ($order->site_origem === SiteAtual::FERRAKORA ? 'FerraKora' : (config('melhorenvio.remetente') ?: $empresa->nome_fantasia ?: $empresa->razao_social)), 60, ''),
                 'phone' => self::digitos($empresa->phone),
                 'email' => $empresa->email,
                 'document' => '',

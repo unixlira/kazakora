@@ -363,4 +363,19 @@ class CheckoutFerraKoraTest extends TestCase
         $outro = $this->postJson('/api/ferrakora/cadastro', ['name' => 'Ana', 'email' => 'ana@exemplo.com', 'password' => 'segredo123'])->json('token');
         $this->withToken($outro)->getJson('/api/ferrakora/pedidos')->assertOk()->assertJsonCount(0, 'pedidos');
     }
+
+    public function test_com_melhor_envio_as_opcoes_nao_prometem_correios(): void
+    {
+        // 2026-11-09: FerraKora segue o Melhor Envio; a transportadora sai na etiqueta.
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([], 500)]);
+        \App\Support\FreteProvedor::ativar(\App\Support\FreteProvedor::MELHOR_ENVIO);
+
+        $opcoes = collect($this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $this->itens(1), 'cep' => '01310-100'])
+            ->assertOk()->json('entrega.opcoes'));
+
+        $gratis = $opcoes->firstWhere('id', 'correios');
+        $this->assertSame('Entrega', $gratis['transportadora']);
+        $this->assertSame(0, $gratis['preco']);
+        $this->assertFalse($opcoes->contains(fn ($o) => ($o['transportadora'] ?? '') === 'Correios'));
+    }
 }

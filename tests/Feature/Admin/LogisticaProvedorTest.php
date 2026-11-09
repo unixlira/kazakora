@@ -279,7 +279,10 @@ class LogisticaProvedorTest extends TestCase
         // Melhor Envio não reconhece e desistia depois de 6 tentativas.
         $this->contaMelhorEnvio();
         $tabela = app(TabelaFreteLocalidades::class);
-        [$recusado, $bom] = $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO);
+        // 29823000 (distrito, sem faixa própria) não tem CEP real alternativo.
+        $recusado = '29823000';
+        $bom = '29820000';
+        $this->assertSame([], $tabela->cepsReaisDaFaixa($recusado));
         $this->cepsRecusadosMe = [$recusado];
 
         $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
@@ -291,6 +294,24 @@ class LogisticaProvedorTest extends TestCase
         $this->assertEquals($correios->pac_preco, $linha->pac_preco);
         $this->assertStringContainsString('CEP recusado pelo Melhor Envio', $linha->erro);
         $this->assertSame('Jadlog Package', DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => $bom, 'categoria' => 'pequena'])->value('pac_servico'));
+    }
+
+    public function test_cep_de_faixa_recusado_usa_um_cep_real_da_mesma_faixa(): void
+    {
+        // ACHADO REAL 2026-11-09: São Paulo (01000-001), Osasco (06000-001)...
+        // são CEPs de faixa que o Melhor Envio não aceita; 01010-000 e
+        // 06010-000, da mesma faixa, ele aceita.
+        $this->contaMelhorEnvio();
+        $tabela = app(TabelaFreteLocalidades::class);
+        $this->assertContains('29821000', $tabela->cepsReaisDaFaixa('29820000'));
+        $this->cepsRecusadosMe = ['29820000', '29820010'];
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        $linha = DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => '29820000', 'categoria' => 'pequena'])->first();
+        $this->assertSame('Jadlog Package', $linha->pac_servico);
+        $this->assertNull($linha->erro);
     }
 
     public function test_tabela_do_melhor_envio_preenche_com_os_correios_conectados_e_o_site_nao_muda(): void

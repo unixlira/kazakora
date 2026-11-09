@@ -453,6 +453,30 @@ class TabelaFreteLocalidades
         $cotacoes = $cotador->cotar($pacotes);
         $recusados = array_flip($cotador->cepRecusado);
 
+        // CEP de faixa (XXXXX-001, cidade com CEP por rua: São Paulo, Osasco...)
+        // não existe para o Melhor Envio. Tenta CEPs reais da mesma faixa e
+        // grava o preço do primeiro aceito no CEP da localidade.
+        foreach ($ceps as $cep) {
+            if (! $categorias->every(fn ($c) => isset($recusados["{$cep}|{$c->chave}"]))) {
+                continue;
+            }
+            foreach (array_slice($this->cepsReaisDaFaixa($cep), 0, 4) as $alternativo) {
+                $tentativa = [];
+                foreach ($categorias as $c) {
+                    $tentativa["{$cep}|{$c->chave}"] = ['cep' => $alternativo] + $pacotes["{$cep}|{$c->chave}"];
+                }
+                $respostas = $cotador->cotar($tentativa);
+                if ($cotador->cepRecusado !== [] || in_array(null, $respostas, true)) {
+                    continue;
+                }
+                foreach ($respostas as $chave => $opcoes) {
+                    $cotacoes[$chave] = $opcoes;
+                    unset($recusados[$chave]);
+                }
+                break;
+            }
+        }
+
         $agora = now();
         $linhas = [];
         $gravados = 0;
@@ -514,6 +538,35 @@ class TabelaFreteLocalidades
         $this->novaVersao();
 
         return $gravados;
+    }
+
+    /**
+     * CEPs reais candidatos dentro da faixa da localidade do CEP de cotação,
+     * do mais provável ao menos (padrões que o Melhor Envio aceitou em
+     * 09/11: 01010-000 em São Paulo, 06010-000 em Osasco, 06410-000 em Barueri).
+     *
+     * @return list<string>
+     */
+    public function cepsReaisDaFaixa(string $cep): array
+    {
+        $faixas = DB::table('frete_localidades as l')
+            ->join('frete_localidade_faixas as f', 'f.frete_localidade_id', '=', 'l.id')
+            ->where('l.cep_cotacao', $cep)
+            ->get(['f.cep_inicial', 'f.cep_final']);
+
+        $padroes = [
+            substr($cep, 0, 3).'10000', substr($cep, 0, 4).'1000', substr($cep, 0, 5).'010',
+            substr($cep, 0, 5).'100', substr($cep, 0, 5).'970', substr($cep, 0, 3).'20000',
+        ];
+        foreach ($faixas as $f) {
+            $inicio = (int) $f->cep_inicial;
+            $padroes[] = str_pad((string) (intdiv($inicio, 1000) * 1000 + 1000), 8, '0', STR_PAD_LEFT);
+            $padroes[] = str_pad((string) (intdiv($inicio, 10000) * 10000 + 10000), 8, '0', STR_PAD_LEFT);
+        }
+
+        return array_values(array_unique(array_filter($padroes, fn ($c) => $c !== $cep && $faixas->contains(
+            fn ($f) => (int) $c >= (int) $f->cep_inicial && (int) $c <= (int) $f->cep_final,
+        ))));
     }
 
     private function gravar(array $linhas): void

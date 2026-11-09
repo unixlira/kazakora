@@ -70,6 +70,7 @@ class FreightQuoteService
                 'from' => ['postal_code' => $this->digitsOnly($fromZip)],
                 'to' => ['postal_code' => $this->digitsOnly($destinationZip)],
                 'products' => $products,
+                'services' => (string) config('melhorenvio.servicos'),
             ]);
         } catch (MelhorEnvioException $exception) {
             Log::channel(config('melhorenvio.log_channel'))->warning('melhorenvio.quote.failed', [

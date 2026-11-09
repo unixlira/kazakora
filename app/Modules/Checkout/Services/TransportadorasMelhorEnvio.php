@@ -70,6 +70,7 @@ class TransportadorasMelhorEnvio
                         'insurance_value' => round($valor, 2),
                         'quantity' => 1,
                     ]],
+                    'services' => (string) config('melhorenvio.servicos'),
                 ]);
         } catch (Throwable $exception) {
             Log::channel(config('melhorenvio.log_channel'))->warning('melhorenvio.checkout.cotacao_falhou', ['message' => $exception->getMessage()]);

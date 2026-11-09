@@ -143,7 +143,12 @@ const nomesCurtos = computed(() => {
     return new Set(nomes).size === nomes.length;
 });
 const nomeDaOpcao = (variant) => (nomesCurtos.value ? nomeCurtoDe(variant) : String(variant.variation || variant.name));
-const precosDiferentes = computed(() => new Set(opcoesVariacao.value.map((variant) => Number(variant.final_price))).size > 1);
+// Produto com cor (ex.: Power Bank, cores + kit): o botão mostra só o nome e o preço
+// e o % do topo trocam ao clicar (pedido do Lira 09/11, tarefa 3981). Sem cor
+// (ex.: Árvore de Natal por modelo) continua com o preço no botão.
+const temCor = computed(() => opcoesVariacao.value.some((variant) => String(variant.color ?? '').trim() !== ''));
+const precosDiferentes = computed(() => !temCor.value
+    && new Set(opcoesVariacao.value.map((variant) => Number(variant.final_price))).size > 1);
 // Antes de escolher, o preço é o da variação mais barata (pedido 2026-10-16,
 // ex.: Árvore de Natal), contando só as com estoque quando houver alguma.
 // Ficha, estoque e SKU continuam do produto da página.

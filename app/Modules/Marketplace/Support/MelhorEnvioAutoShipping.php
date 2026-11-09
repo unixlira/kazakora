@@ -154,12 +154,12 @@ class MelhorEnvioAutoShipping
         return ['pacote' => $pacote, 'volume' => $volume, 'valor' => $valor, 'opcoes' => $opcoes];
     }
 
-    /** Qualquer transportadora: a mais barata; com TURBO pago, a mais rápida. */
+    /** Qualquer transportadora: a mais barata; com TURBO pago, CotacaoMelhorEnvio::turbo() (até 1 dia da mais rápida, a mais barata). */
     private function melhorOpcao(Order $order, array $opcoes): array
     {
         $turbo = str_contains(mb_strtolower((string) $order->shipping_carrier_name), 'turbo');
 
-        return $turbo ? CotacaoMelhorEnvio::maisRapida($opcoes) : CotacaoMelhorEnvio::maisBarata($opcoes);
+        return $turbo ? CotacaoMelhorEnvio::turbo($opcoes) : CotacaoMelhorEnvio::maisBarata($opcoes);
     }
 
     private function criarCarrinho(Order $order, MelhorEnvioEnvio $envio): void

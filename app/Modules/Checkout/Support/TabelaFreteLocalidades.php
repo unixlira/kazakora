@@ -428,7 +428,7 @@ class TabelaFreteLocalidades
     /**
      * Mesma tabela pelo Melhor Envio: uma cotação por CEP e categoria (a
      * caixa de referência da categoria). "pac" fica com o serviço mais
-     * barato e "sedex" com o mais rápido, com o nome da transportadora.
+     * barato e "sedex" com o do TURBO (CotacaoMelhorEnvio::turbo), com o nome da transportadora.
      * CEP sem resposta da API continua pendente; todos sem resposta lança.
      *
      * @param  list<string>  $ceps
@@ -508,7 +508,7 @@ class TabelaFreteLocalidades
             foreach ($categorias as $c) {
                 $opcoes = $cotacoes["{$cep}|{$c->chave}"];
                 $barata = CotacaoMelhorEnvio::maisBarata($opcoes);
-                $rapida = CotacaoMelhorEnvio::maisRapida($opcoes);
+                $rapida = CotacaoMelhorEnvio::turbo($opcoes);
 
                 $linhas[] = [
                     'cep_destino' => $cep,

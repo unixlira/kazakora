@@ -449,12 +449,34 @@ class TabelaFreteLocalidades
             }
         }
 
-        $cotacoes = app(CotacaoMelhorEnvio::class)->cotar($pacotes);
+        $cotador = app(CotacaoMelhorEnvio::class);
+        $cotacoes = $cotador->cotar($pacotes);
+        $recusados = array_flip($cotador->cepRecusado);
 
         $agora = now();
         $linhas = [];
         $gravados = 0;
         foreach ($ceps as $cep) {
+            // CEP que o Melhor Envio não reconhece: grava o frete dos Correios
+            // da mesma localidade (é só o preço da vitrine; a etiqueta cota o
+            // CEP real do cliente) e a tabela segue em vez de parar nele.
+            if ($categorias->every(fn ($c) => isset($recusados["{$cep}|{$c->chave}"]))) {
+                $gravados++;
+                $correios = DB::table('frete_tabela')->where('cep_destino', $cep)->where('provedor', FreteProvedor::CORREIOS)->get()->keyBy('categoria');
+                foreach ($categorias as $c) {
+                    $r = $correios[$c->chave] ?? null;
+                    $linhas[] = [
+                        'cep_destino' => $cep, 'categoria' => $c->chave, 'categoria_versao' => (int) $c->versao,
+                        'cep_origem' => $origem, 'provedor' => FreteProvedor::MELHOR_ENVIO,
+                        'pac_preco' => $r?->pac_preco, 'pac_prazo' => $r?->pac_prazo, 'pac_servico' => $r ? 'Correios (CEP recusado pelo Melhor Envio)' : null,
+                        'sedex_preco' => $r?->sedex_preco, 'sedex_prazo' => $r?->sedex_prazo, 'sedex_servico' => $r ? 'Correios (CEP recusado pelo Melhor Envio)' : null,
+                        'erro' => 'CEP recusado pelo Melhor Envio'.($r ? ': preço dos Correios' : ''),
+                        'cotado_em' => $agora, 'created_at' => $agora, 'updated_at' => $agora,
+                    ];
+                }
+
+                continue;
+            }
             if ($categorias->contains(fn ($c) => ($cotacoes["{$cep}|{$c->chave}"] ?? null) === null)) {
                 continue; // falha da API em alguma categoria: o CEP fica pendente inteiro
             }

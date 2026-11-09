@@ -20,6 +20,16 @@ use Throwable;
  */
 class CotacaoMelhorEnvio
 {
+    /**
+     * Chaves da última cotar() que o Melhor Envio recusou por CEP inválido
+     * (422 em postal_code). Não adianta tentar de novo: ACHADO REAL
+     * 2026-11-09, CEPs que os Correios aceitam (ex.: 06730-001) e o Melhor
+     * Envio não; a tabela por localidade parava neles.
+     *
+     * @var list<string>
+     */
+    public array $cepRecusado = [];
+
     /** Pedidos ao mesmo tempo, para não estourar o limite da API. */
     private const SIMULTANEOS = 8;
 
@@ -39,6 +49,7 @@ class CotacaoMelhorEnvio
         $url = rtrim((string) config('services.melhorenvio.api_base_url'), '/').'/me/shipment/calculate';
 
         $resultado = [];
+        $this->cepRecusado = [];
         foreach (array_chunk($pacotes, self::SIMULTANEOS, true) as $grupo) {
             try {
                 $respostas = Http::pool(function (Pool $pool) use ($grupo, $token, $url) {
@@ -63,6 +74,9 @@ class CotacaoMelhorEnvio
 
             foreach (array_keys($grupo) as $chave) {
                 $resposta = $respostas[(string) $chave] ?? null;
+                if ($resposta instanceof Response && $resposta->status() === 422 && $resposta->json('errors.postal_code')) {
+                    $this->cepRecusado[] = (string) $chave;
+                }
                 if (! $resposta instanceof Response || $resposta->failed()) {
                     Log::channel(config('melhorenvio.log_channel'))->warning('melhorenvio.cotacao_falhou', [
                         'chave' => $chave,

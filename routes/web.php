@@ -1061,7 +1061,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Visitas FerraKora e Visitas Beauty Kora (2026-10-12): o mesmo log
         // para os outros sites, lido de site_visits pela coluna site
         // (gravado por /api/{site}/visita).
-        foreach (array_keys(SiteVisit::OUTROS_SITES) as $outroSite) {
+        // Visitas FerraKora (pedido do Lira 08/11/2026): a MESMA tela de Visitas
+        // Kazakora (SiteVisitLogController + Admin/VisitasSite/Index), só com
+        // site_visits.site = 'ferrakora'. Esconde equipe e robôs (robô da Meta
+        // 2a03:2880) igual à KazaKora. Beauty Kora segue na tela antiga.
+        Route::get('visitas-ferrakora', [SiteVisitLogController::class, 'index'])->defaults('site', 'ferrakora')->name('visitas-ferrakora.listar');
+        Route::get('visitas-ferrakora/visitante', [SiteVisitLogController::class, 'visitante'])->defaults('site', 'ferrakora')->name('visitas-ferrakora.visitante');
+        Route::delete('visitas-ferrakora/visitante', [SiteVisitLogController::class, 'apagar'])->defaults('site', 'ferrakora')->name('visitas-ferrakora.apagar');
+        Route::get('visitas-ferrakora/cidades', [SiteVisitLogController::class, 'cidades'])->name('visitas-ferrakora.cidades');
+
+        foreach (array_diff(array_keys(SiteVisit::OUTROS_SITES), ['ferrakora']) as $outroSite) {
             Route::get("visitas-{$outroSite}", [OutroSiteVisitLogController::class, 'index'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.listar");
             Route::get("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'visitante'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.visitante");
             Route::delete("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'apagar'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.apagar");

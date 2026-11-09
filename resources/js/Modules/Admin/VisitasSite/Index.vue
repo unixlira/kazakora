@@ -15,6 +15,8 @@ const props = defineProps({
     hoje: { type: String, default: '' },
     maxDias: { type: Number, default: 92 },
     origens: { type: Array, default: () => [] },
+    // Mesma tela para os outros sites (FerraKora, 2026-11-08): nome e endereço base das rotas.
+    site: { type: Object, default: () => ({ chave: 'kazakora', nome: 'Kazakora', base: '/admin/visitas-site' }) },
 });
 
 // Cor do selo de origem (classes inteiras para o Tailwind achar).
@@ -56,7 +58,7 @@ const filtros = reactive({
 });
 
 const buscar = () => {
-    router.get('/admin/visitas-site', {
+    router.get(props.site.base, {
         de: filtros.de || undefined,
         ate: filtros.ate || undefined,
         ip: filtros.ip || undefined,
@@ -117,7 +119,7 @@ const carregarDetalhe = async (linha, pagina = 1) => {
     Object.assign(detalhe, { carregando: true, erro: '' });
     const query = new URLSearchParams({ ...alvo(linha), ...(props.filtros.todos ? { todos: 1 } : {}), ...(pagina > 1 ? { page: pagina } : {}) });
     try {
-        const r = await fetch(`/admin/visitas-site/visitante?${query}`, {
+        const r = await fetch(`${props.site.base}/visitante?${query}`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         const dados = await r.json().catch(() => ({}));
@@ -162,7 +164,7 @@ const carregarCidades = async (pagina = 1) => {
     Object.assign(cidades, { carregando: true, erro: '' });
     const query = new URLSearchParams({ ip, ...(cidades.busca.trim() ? { busca: cidades.busca.trim() } : {}), ...(pagina > 1 ? { page: pagina } : {}) });
     try {
-        const r = await fetch(`/admin/visitas-site/cidades?${query}`, {
+        const r = await fetch(`${props.site.base}/cidades?${query}`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         const dados = await r.json().catch(() => ({}));
@@ -207,7 +209,7 @@ const paraApagar = ref(null);
 const confirmarApagar = () => {
     const linha = paraApagar.value;
     if (!linha) return;
-    router.delete('/admin/visitas-site/visitante', {
+    router.delete(`${props.site.base}/visitante`, {
         data: alvo(linha),
         preserveScroll: true,
         onStart: () => { apagando.value = true; },
@@ -220,12 +222,12 @@ const confirmarApagar = () => {
 </script>
 
 <template>
-    <Head title="Visitas Kazakora" />
+    <Head :title="`Visitas ${props.site.nome}`" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div class="max-w-3xl">
-                <h1 class="mb-1 text-2xl font-bold">Visitas Kazakora</h1>
+                <h1 class="mb-1 text-2xl font-bold">Visitas {{ props.site.nome }}</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     Quem visitou o kazakora.com, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
                     O olho mostra o histórico da pessoa, com latitude, longitude e CEP aproximados do IP, e o mapa, as cidades do estado do IP. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).

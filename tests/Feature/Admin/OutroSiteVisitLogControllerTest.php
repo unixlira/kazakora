@@ -106,21 +106,21 @@ class OutroSiteVisitLogControllerTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'name' => 'Maria Cliente']);
 
-        $this->visita('1.1.1.1', '2026-10-12 10:00:00');
-        $this->visita('1.1.1.1', '2026-10-12 11:00:00', '/contato');
-        $this->visita('2.2.2.2', '2026-10-12 12:00:00');
-        $this->visita('3.3.3.3', '2026-10-11 12:00:00');
+        $this->visita('1.1.1.1', '2026-10-12 10:00:00', '/', 'beautykora');
+        $this->visita('1.1.1.1', '2026-10-12 11:00:00', '/contato', 'beautykora');
+        $this->visita('2.2.2.2', '2026-10-12 12:00:00', '/', 'beautykora');
+        $this->visita('3.3.3.3', '2026-10-11 12:00:00', '/', 'beautykora');
         // 1.1.1.1 entrou logada no kazakora.com; 2.2.2.2 é IP da equipe.
         DB::table('site_visits')->insert([
             ['visitor_id' => 'a', 'user_id' => $cliente->id, 'path' => '/', 'ip' => '1.1.1.1', 'consentiu' => true, 'created_at' => '2026-10-01 10:00:00'],
             ['visitor_id' => 'b', 'user_id' => $admin->id, 'path' => '/', 'ip' => '2.2.2.2', 'consentiu' => true, 'created_at' => '2026-10-01 10:00:00'],
         ]);
 
-        $this->actingAs($admin)->get('/admin/visitas-ferrakora')
+        $this->actingAs($admin)->get('/admin/visitas-beautykora')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/VisitasOutroSite/Index', false)
-                ->where('site', 'ferrakora')
+                ->where('site', 'beautykora')
                 ->has('visitas.data', 2)
                 ->where('visitas.data.0.ip', '2.2.2.2')
                 ->where('visitas.data.0.cliente', null)
@@ -131,11 +131,54 @@ class OutroSiteVisitLogControllerTest extends TestCase
                 ->where('totais.visitas', 3));
 
         $this->actingAs($admin)
-            ->getJson('/admin/visitas-ferrakora/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1')
+            ->getJson('/admin/visitas-beautykora/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1')
             ->assertOk()
             ->assertJsonPath('total', 2)
             ->assertJsonPath('cliente', 'Maria Cliente')
             ->assertJsonPath('visitas.0.quando', '12/10/2026 10:00:00');
+    }
+
+    /** Visitas FerraKora = a mesma tela de Visitas Kazakora, só com site = ferrakora (pedido do Lira 08/11/2026). */
+    public function test_visitas_ferrakora_usa_a_tela_da_kazakora_so_com_o_site_ferrakora_e_sem_robo_da_meta(): void
+    {
+        $this->travelTo('2026-11-08 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('1.1.1.1', '2026-11-08 10:00:00', '/produto/kit');
+        $this->visita('1.1.1.1', '2026-11-08 10:05:00', '/carrinho');
+        $this->visita('2a03:2880:31ff:4::', '2026-11-08 11:00:00', '/produto/kit');
+        $this->visita('5.5.5.5', '2026-11-08 12:00:00', '/', 'kazakora');
+        $this->visita('7.7.7.7', '2026-11-08 12:00:00', '/', 'beautykora');
+
+        $this->actingAs($admin)->get('/admin/visitas-ferrakora')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/VisitasSite/Index', false)
+                ->where('site.chave', 'ferrakora')
+                ->where('site.nome', 'Ferrakora')
+                ->where('site.base', '/admin/visitas-ferrakora')
+                ->has('visitas.data', 1)
+                ->where('visitas.data.0.ip', '1.1.1.1')
+                ->where('visitas.data.0.paginas', 2)
+                ->where('totais.visitas', 2)
+                ->where('totais.escondidas', 1));
+
+        // "Mostrar todos" traz o robô da Meta de volta, e nunca linha de outro site.
+        $this->actingAs($admin)->get('/admin/visitas-ferrakora?todos=1')
+            ->assertInertia(fn ($page) => $page->has('visitas.data', 2)->where('totais.visitas', 3));
+
+        $this->actingAs($admin)
+            ->getJson('/admin/visitas-ferrakora/visitante?de=2026-11-08&ate=2026-11-08&ip=1.1.1.1')
+            ->assertOk()
+            ->assertJsonPath('total', 2)
+            ->assertJsonPath('rotas.distintas', 2);
+
+        // A tela da KazaKora continua só com a loja.
+        $this->actingAs($admin)->get('/admin/visitas-site?todos=1')
+            ->assertInertia(fn ($page) => $page
+                ->where('site.chave', 'kazakora')
+                ->has('visitas.data', 1)
+                ->where('visitas.data.0.ip', '5.5.5.5'));
     }
 
     public function test_lixeira_apaga_so_o_ip_no_periodo_e_registra_na_auditoria(): void

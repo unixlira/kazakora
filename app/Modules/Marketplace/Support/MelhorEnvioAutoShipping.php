@@ -108,6 +108,7 @@ class MelhorEnvioAutoShipping
             'servico_id' => $servico['servico_id'],
             'servico' => Str::limit($servico['nome'], 80, ''),
             'preco' => $servico['preco'],
+            'prazo_dias' => $servico['prazo'] ?? null,
             'peso_g' => (int) $pacote['weight_grams'],
             'volume' => $volume,
         ]);
@@ -242,6 +243,7 @@ class MelhorEnvioAutoShipping
             'servico_id' => $servico['servico_id'],
             'servico' => Str::limit($servico['nome'], 80, ''),
             'preco' => $carrinho['price'] ?? $servico['preco'],
+            'prazo_dias' => $servico['prazo'] ?? $envio->prazo_dias,
             'peso_g' => (int) $pacote['weight_grams'],
             'volume' => $volume,
             'erro' => null,

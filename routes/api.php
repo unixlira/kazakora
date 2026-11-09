@@ -93,6 +93,10 @@ Route::prefix('bling')->name('api.bling.')->group(function () {
     Route::match(['get', 'head'], '/webhook', fn () => response()->json(['status' => 'ok']))->name('webhook.verify');
 });
 
+// Webhook do Melhor Envio (2026-11-09, #3978): postado/entregue da etiqueta,
+// assinado com X-ME-Signature; sem sessão nem CSRF.
+Route::post('melhorenvio/webhook', \App\Http\Controllers\Api\MelhorEnvioWebhookController::class)->name('api.melhorenvio.webhook');
+
 Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web'])->group(function () {
     Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->middleware(['auth', 'admin'])->name('auth');
     // Volta da autorização (2026-11-09, #3978): sem login no admin. Quem

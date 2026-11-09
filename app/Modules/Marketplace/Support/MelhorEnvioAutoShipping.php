@@ -74,6 +74,8 @@ class MelhorEnvioAutoShipping
                 $this->comprar($envio);
             }
             $this->gerar($envio);
+            // Onde levar o pacote, para o card do KoraSync (2026-11-09).
+            app(PontoDePostagemMelhorEnvio::class)->gravar($envio);
         } catch (Throwable $e) {
             $envio->erro = Str::limit($e->getMessage(), 500, '');
             if ($envio->status !== MelhorEnvioEnvio::STATUS_PAGA && $envio->status !== MelhorEnvioEnvio::STATUS_CARRINHO) {

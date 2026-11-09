@@ -1211,6 +1211,10 @@ class DashboardAgentController extends Controller
             // pedido de 2026-09-25 ("por que não saiu a confirmação na
             // Amazon"): sem isto não havia onde ver se a etapa rodou.
             'channel_update' => $order->origin === Order::ORIGIN_AMAZON ? $this->avisoDeEnvioAoCanal($order) : null,
+            // Etiqueta do Melhor Envio: onde levar o pacote (2026-11-09).
+            'ponto_postagem' => $order->origin === Order::ORIGIN_STORE
+                ? \App\Modules\Marketplace\Models\MelhorEnvioEnvio::query()->where('order_id', $order->id)->first(['postagem'])?->postagem
+                : null,
             'shipping_type' => $envio['tipo'],
             'shipping_type_label' => $envio['label'],
             'shipping_type_short' => $envio['curto'],

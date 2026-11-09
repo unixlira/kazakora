@@ -25,7 +25,7 @@ class MelhorEnvioEnvio extends Model
     protected $fillable = [
         'order_id', 'status', 'me_order_id', 'protocolo', 'servico_id', 'servico', 'preco', 'rastreio',
         'peso_g', 'volume', 'erro', 'resposta', 'paga_em', 'gerada_em',
-        'situacao', 'prazo_dias', 'postada_em', 'entregue_em', 'cancelada_em',
+        'situacao', 'prazo_dias', 'postada_em', 'entregue_em', 'cancelada_em', 'postagem',
     ];
 
     protected function casts(): array
@@ -39,6 +39,7 @@ class MelhorEnvioEnvio extends Model
             'postada_em' => 'datetime',
             'entregue_em' => 'datetime',
             'cancelada_em' => 'datetime',
+            'postagem' => 'array',
         ];
     }
 

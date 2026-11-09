@@ -49,6 +49,9 @@ class LogisticaProvedorTest extends TestCase
     /** Token do Melhor Envio que não renova (o caso da produção em 03/11). */
     private bool $refreshRecusado = false;
 
+    /** @var list<string> CEPs que o Melhor Envio recusa (422 postal_code), como o 06730-001 em 09/11. */
+    private array $cepsRecusadosMe = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -95,6 +98,9 @@ class LogisticaProvedorTest extends TestCase
                 ])->all());
             }
             if (str_contains($url, '/me/shipment/calculate')) {
+                if (in_array($request['to']['postal_code'] ?? null, $this->cepsRecusadosMe, true)) {
+                    return Http::response(['errors' => ['postal_code' => ['O campo cep_destino está invalido']], 'message' => 'The given data was invalid.'], 422);
+                }
                 $kg = (float) $request['package']['weight'];
 
                 return Http::response([
@@ -265,6 +271,26 @@ class LogisticaProvedorTest extends TestCase
 
         $this->assertSame(FreteProvedor::CORREIOS, FreteProvedor::escolhido());
         $this->assertTrue(session('frete.conectar_melhor_envio'));
+    }
+
+    public function test_cep_recusado_pelo_melhor_envio_grava_o_preco_dos_correios_e_a_tabela_segue(): void
+    {
+        // ACHADO REAL 2026-11-09: a tabela parava no primeiro lote de CEPs que o
+        // Melhor Envio não reconhece e desistia depois de 6 tentativas.
+        $this->contaMelhorEnvio();
+        $tabela = app(TabelaFreteLocalidades::class);
+        [$recusado, $bom] = $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO);
+        $this->cepsRecusadosMe = [$recusado];
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        $this->assertSame([], $tabela->cepsPendentes(10, FreteProvedor::MELHOR_ENVIO));
+        $linha = DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => $recusado, 'categoria' => 'pequena'])->first();
+        $correios = DB::table('frete_tabela')->where(['provedor' => 'correios', 'cep_destino' => $recusado, 'categoria' => 'pequena'])->first();
+        $this->assertEquals($correios->pac_preco, $linha->pac_preco);
+        $this->assertStringContainsString('CEP recusado pelo Melhor Envio', $linha->erro);
+        $this->assertSame('Jadlog Package', DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => $bom, 'categoria' => 'pequena'])->value('pac_servico'));
     }
 
     public function test_tabela_do_melhor_envio_preenche_com_os_correios_conectados_e_o_site_nao_muda(): void

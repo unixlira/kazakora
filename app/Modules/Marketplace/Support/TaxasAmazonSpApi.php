@@ -24,6 +24,13 @@ use Illuminate\Support\Sleep;
  * Decisões (2026-10-17):
  * - Só transações "Shipment" (vira linha Order) e "Refund" (linha Refund,
  *   guardada para conferência). Transfer/ServiceFee não têm pedido.
+ * - 2026-11-09 (Amazon com prejuízo escondido): a tarifa do DBA/Easy Ship
+ *   vem numa transação própria, ServiceFee "MfnPostageFee", com ORDER_ID;
+ *   ela entra na linha Order do pedido como frete cobrado da loja
+ *   (shipping_cost), e a taxa do pedido sobe junto. A reclamação A-to-z
+ *   ("GuaranteeClaimRefund") é um reembolso como outro qualquer: linha
+ *   Refund e aviso de que o pedido ainda conta como venda. ServiceFee sem
+ *   pedido (assinatura) continua de fora.
  * - Status: DEFERRED (venda enviada, dinheiro retido até a entrega) já tem
  *   a taxa definitiva e conta. Quando a Amazon libera, ela lança OUTRA
  *   transação (DEFERRED_RELEASED + RELEASED, com DEFERRED_TRANSACTION_ID
@@ -96,11 +103,7 @@ class TaxasAmazonSpApi
     {
         $lancamentos = [];
         foreach ($transacoes as $t) {
-            $tipo = match ($t['transactionType'] ?? '') {
-                'Shipment' => 'Order',
-                'Refund' => 'Refund',
-                default => null,
-            };
+            $tipo = self::tipoDaLinha($t);
             $ids = $this->identificadores($t);
             if ($tipo === null || empty($ids['ORDER_ID'])) {
                 continue;
@@ -131,7 +134,7 @@ class TaxasAmazonSpApi
                 continue;
             }
             $ids = $this->identificadores($t);
-            $tipo = ($t['transactionType'] ?? '') === 'Refund' ? 'Refund' : 'Order';
+            $tipo = self::tipoDaLinha($t);
             $chave = $ids['ORDER_ID'].'|'.$tipo;
             $linha = $linhas[$chave] ??= [
                 'channel' => Order::ORIGIN_AMAZON, 'statement_id' => '', 'external_order_id' => $ids['ORDER_ID'], 'external_sku_id' => '',
@@ -141,7 +144,10 @@ class TaxasAmazonSpApi
 
             $componentes = 0.0;
             foreach ($t['items'] ?? [] as $item) {
-                $linha['product_name'] ??= isset($item['description']) ? mb_substr((string) $item['description'], 0, 500) : null;
+                // A tarifa do DBA tem itens "Amazon Easy Ship Charges": não é nome de produto.
+                if (($t['transactionType'] ?? '') !== 'ServiceFee') {
+                    $linha['product_name'] ??= isset($item['description']) ? mb_substr((string) $item['description'], 0, 500) : null;
+                }
                 foreach ($item['contexts'] ?? [] as $contexto) {
                     if ($tipo === 'Order') {
                         $linha['quantity'] += (int) ($contexto['quantityShipped'] ?? 0);
@@ -341,7 +347,7 @@ class TaxasAmazonSpApi
                 $subValor = (float) ($sub['breakdownAmount']['currencyAmount'] ?? 0);
                 $coluna = match (true) {
                     str_contains($subNome, 'commission') => 'platform_commission_fee',
-                    str_contains($subNome, 'shipping') => 'shipping_cost',
+                    str_contains($subNome, 'shipping'), str_contains($subNome, 'postage') => 'shipping_cost',
                     default => 'service_fees',
                 };
                 $partes[$coluna] = ($partes[$coluna] ?? 0) + $subValor;
@@ -365,6 +371,17 @@ class TaxasAmazonSpApi
             str_contains($n, 'tax') => 'taxes',
             default => 'adjustment_amount',
         } => $valor];
+    }
+
+    /** Linha em que a transação entra: Order, Refund ou nenhuma (null). */
+    private static function tipoDaLinha(array $t): ?string
+    {
+        return match ($t['transactionType'] ?? '') {
+            'Shipment' => 'Order',
+            'Refund', 'GuaranteeClaimRefund' => 'Refund',
+            'ServiceFee' => ($t['description'] ?? '') === 'MfnPostageFee' ? 'Order' : null,
+            default => null,
+        };
     }
 
     /** @return array<string, string> nome => valor */

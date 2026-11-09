@@ -91,13 +91,14 @@ class SiteVisitLogController extends Controller
 
         [$de, $ate, $fim] = $this->periodo($validated);
         $hoje = Carbon::today();
+        $site = $this->site($request);
 
         $ip = trim((string) ($validated['ip'] ?? ''));
         $pagina = trim((string) ($validated['pagina'] ?? ''));
         $origem = (string) ($validated['origem'] ?? '');
         $esconder = ! (bool) ($validated['todos'] ?? false);
 
-        $periodo = fn (): Builder => SiteVisit::query()->daLoja()
+        $periodo = fn (): Builder => $this->doSite($site)
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim);
 
@@ -137,7 +138,7 @@ class SiteVisitLogController extends Controller
 
         $nomes = User::query()->whereIn('id', $linhas->pluck('user_id')->filter()->unique()->all())->pluck('name', 'id');
         $equipe = $this->equipe();
-        $apagaveis = $this->contarApagaveis($linhas, $de, $fim);
+        $apagaveis = $this->contarApagaveis($site, $linhas, $de, $fim);
         $origens = $this->origensDeEntrada(clone $query, $linhas);
 
         $visitas = (new LengthAwarePaginator(
@@ -177,6 +178,11 @@ class SiteVisitLogController extends Controller
             'origens' => collect(self::filtrosDeOrigem())->map(fn ($rotulo, $chave) => ['valor' => $chave, 'rotulo' => $rotulo])->values(),
             'hoje' => $hoje->toDateString(),
             'maxDias' => self::MAX_DIAS,
+            'site' => [
+                'chave' => $site,
+                'nome' => $site === SiteVisit::SITE_LOJA ? 'Kazakora' : SiteVisit::OUTROS_SITES[$site],
+                'base' => $site === SiteVisit::SITE_LOJA ? '/admin/visitas-site' : "/admin/visitas-{$site}",
+            ],
         ]);
     }
 
@@ -197,8 +203,9 @@ class SiteVisitLogController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         [$de, $ate, $fim] = $this->periodo($validated);
+        $doSite = $this->site($request);
 
-        $periodo = fn (): Builder => SiteVisit::query()->daLoja()
+        $periodo = fn (): Builder => $this->doSite($doSite)
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim);
 
@@ -212,7 +219,7 @@ class SiteVisitLogController extends Controller
         $paginaAtual = min((int) ($validated['page'] ?? 1), $paginas);
         $cookies = $this->cookiesDoVisitante($query);
         $equipe = $this->equipe();
-        $site = rtrim((string) config('app.url'), '/');
+        $site = $this->enderecoDoSite($doSite);
 
         $visitas = (clone $query)
             ->with('user:id,name,cpf')
@@ -421,7 +428,7 @@ class SiteVisitLogController extends Controller
         [$de, $ate, $fim] = $this->periodo($validated);
 
         $query = $this->doVisitante(
-            SiteVisit::query()->daLoja()->where('created_at', '>=', $de)->where('created_at', '<', $fim),
+            $this->doSite($this->site($request))->where('created_at', '>=', $de)->where('created_at', '<', $fim),
             $validated,
         );
 
@@ -487,7 +494,7 @@ class SiteVisitLogController extends Controller
      *
      * @return array<string, int>
      */
-    private function contarApagaveis(Collection $linhas, Carbon $de, Carbon $fim): array
+    private function contarApagaveis(string $site, Collection $linhas, Carbon $de, Carbon $fim): array
     {
         if ($linhas->isEmpty()) {
             return [];
@@ -496,7 +503,7 @@ class SiteVisitLogController extends Controller
         $ips = $linhas->pluck('ip')->filter()->unique()->values()->all();
         $anonimos = $linhas->whereNull('ip')->pluck('anonimo')->filter()->unique()->values()->all();
 
-        return SiteVisit::query()->daLoja()->toBase()
+        return $this->doSite($site)->toBase()
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->where(fn ($q) => $q
@@ -583,6 +590,34 @@ class SiteVisitLogController extends Controller
                 });
             }
         });
+    }
+
+    /**
+     * Site da tela (2026-11-08): Visitas Kazakora não passa nada e lê o site
+     * da loja; Visitas FerraKora/Beauty Kora usam esta mesma tela com o site
+     * na rota (defaults('site', ...)) e só leem site_visits.site = esse site.
+     */
+    private function site(Request $request): string
+    {
+        $site = (string) ($request->route('site') ?? SiteVisit::SITE_LOJA);
+        abort_unless($site === SiteVisit::SITE_LOJA || array_key_exists($site, SiteVisit::OUTROS_SITES), 404);
+
+        return $site;
+    }
+
+    private function doSite(string $site): Builder
+    {
+        return SiteVisit::query()->where('site_visits.site', $site);
+    }
+
+    /** Endereço público para o link das páginas: a loja usa app.url; os outros, o 1º domínio de services.{site}.origens. */
+    private function enderecoDoSite(string $site): string
+    {
+        if ($site === SiteVisit::SITE_LOJA) {
+            return rtrim((string) config('app.url'), '/');
+        }
+
+        return 'https://'.trim(explode(',', (string) config("services.{$site}.origens"))[0]);
     }
 
     private function like(string $texto): string

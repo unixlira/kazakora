@@ -27,6 +27,9 @@ return [
     // ou com o motivo da recusa. IDs de GET me/shipment/services.
     'servicos' => env('MELHORENVIO_SERVICOS', '1,2,3,4,12,15,16,17,22,27,31,32,33,34,35'),
 
+    // Nome do remetente na etiqueta (CNPJ e endereço continuam os da empresa).
+    'remetente' => env('MELHORENVIO_REMETENTE', 'KazaKora'),
+
     'log_channel' => env('MELHORENVIO_LOG_CHANNEL', 'melhorenvio'),
 
     // Melhor Envio exige um User-Agent identificando a aplicação + um

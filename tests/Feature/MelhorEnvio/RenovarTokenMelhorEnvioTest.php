@@ -57,4 +57,30 @@ class RenovarTokenMelhorEnvioTest extends TestCase
 
         $this->assertTrue(AlertaAdmin::query()->where('tipo', AlertasAdmin::MELHOR_ENVIO_CONEXAO)->exists());
     }
+
+    public function test_volta_da_autorizacao_sem_login_conecta_com_state_valido_e_recusa_sem(): void
+    {
+        Http::fake([
+            'me.test/oauth/token' => Http::response(['access_token' => 'novo', 'refresh_token' => 'r9', 'expires_in' => 2592000]),
+            '*' => Http::response(['firstname' => 'Kaza', 'lastname' => 'Kora', 'email' => 'x@example.com']),
+        ]);
+        $this->token(-60);
+
+        $this->get('/api/melhorenvio/callback?code=abc&state=inventado')->assertRedirect('/admin/logistica');
+        $this->assertSame('r1', MelhorEnvioToken::current()->refresh_token);
+
+        parse_str(parse_url(app(\App\Services\MelhorEnvio\MelhorEnvioAuthService::class)->getAuthorizationUrl(), PHP_URL_QUERY), $q);
+        $this->get('/api/melhorenvio/callback?code=abc&state='.$q['state'])->assertRedirect('/admin/logistica');
+        $this->assertSame('r9', MelhorEnvioToken::current()->refresh_token);
+        $this->assertSame(\App\Support\FreteProvedor::CORREIOS, \App\Support\FreteProvedor::escolhido());
+
+        // State é de uso único.
+        $this->get('/api/melhorenvio/callback?code=abc&state='.$q['state']);
+        $this->assertSame(1, MelhorEnvioToken::query()->count());
+    }
+
+    public function test_link_de_autorizacao_continua_exigindo_admin(): void
+    {
+        $this->get('/api/melhorenvio/auth')->assertStatus(401);
+    }
 }

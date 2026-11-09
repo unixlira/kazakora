@@ -1201,6 +1201,9 @@ class DashboardAgentController extends Controller
             'id' => $order->id,
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
+            // Site do pedido da loja (2026-11-09): o KoraSync separa a
+            // FerraKora do KazaKora no filtro e no logo; channel segue 'loja'.
+            'site_origem' => $order->site_origem,
             'shipping_method' => $order->channelShipment?->shipping_method,
             // Código de rastreio do envio (na Amazon, o código de postagem
             // dos Correios) — pedido de 2026-09-25: copiar direto do card

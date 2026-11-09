@@ -181,4 +181,15 @@ class FilaFullEEntreguesTest extends TestCase
         $this->assertContains($represado->id, $fila['ids'], 'trabalho pendente não some com o tempo');
         $this->assertSame(1, $fila['faltaSeparar']);
     }
+
+    public function test_pedido_da_ferrakora_vai_com_o_site_de_origem_para_o_korasync(): void
+    {
+        // 2026-11-09: o KoraSync separa a FerraKora do KazaKora no filtro.
+        $pedido = $this->pedido(['origin' => Order::ORIGIN_STORE, 'site_origem' => 'ferrakora']);
+
+        $card = collect($this->getJson('/api/print-agent/dashboard/queue', ['Authorization' => 'Bearer test-print-agent-token'])->json('queue'))->firstWhere('id', $pedido->id);
+
+        $this->assertSame('loja', $card['channel']);
+        $this->assertSame('ferrakora', $card['site_origem']);
+    }
 }

@@ -107,6 +107,27 @@ class CotacaoMelhorEnvio
         return $opcoes[0] ?? null;
     }
 
+    /**
+     * Opção do TURBO (escolha do Lira em 2026-11-09): a mais barata entre as
+     * que chegam em até 1 dia a mais que a mais rápida (desempate: a que
+     * chega antes). Na tabela de 09/11 a "mais rápida a qualquer preço"
+     * pegava a Azul Expresso em 13% dos CEPs, R$ 185 e 4,2 dias, pior que
+     * o SEDEX; assim o cliente paga o SEDEX ou a J&T de 4 dias por R$ 79.
+     */
+    public static function turbo(array $opcoes): ?array
+    {
+        $comPrazo = array_values(array_filter($opcoes, fn ($o) => isset($o['prazo'])));
+        if ($comPrazo === []) {
+            return self::maisBarata($opcoes);
+        }
+        $limite = min(array_column($comPrazo, 'prazo')) + self::TURBO_FOLGA_DIAS;
+
+        return self::maisBarata(array_values(array_filter($comPrazo, fn ($o) => $o['prazo'] <= $limite)));
+    }
+
+    /** Dias a mais que o TURBO aceita em troca de um frete mais barato. */
+    public const TURBO_FOLGA_DIAS = 1;
+
     /** A que chega antes (desempate: a mais barata). */
     public static function maisRapida(array $opcoes): ?array
     {

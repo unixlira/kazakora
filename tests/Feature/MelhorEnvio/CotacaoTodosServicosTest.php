@@ -37,4 +37,16 @@ class CotacaoTodosServicosTest extends TestCase
         $this->assertSame(33, $opcoes[0]['servico_id']);
         $this->assertSame(39.4, $opcoes[0]['preco']);
     }
+
+    public function test_turbo_e_a_mais_barata_ate_um_dia_da_mais_rapida(): void
+    {
+        $o = fn ($id, $preco, $prazo) => ['servico_id' => $id, 'nome' => "s{$id}", 'preco' => $preco, 'prazo' => $prazo];
+
+        // SEDEX 3 dias R$ 97, J&T 4 dias R$ 79, Azul 4 dias R$ 185, PAC 9 dias R$ 47.
+        $this->assertSame(33, CotacaoMelhorEnvio::turbo([$o(2, 97.0, 3), $o(33, 79.0, 4), $o(15, 185.0, 4), $o(1, 47.0, 9)])['servico_id']);
+        // Sem SEDEX: Azul 4 dias R$ 185 x J&T 5 dias R$ 79 -> J&T (dentro de 1 dia).
+        $this->assertSame(33, CotacaoMelhorEnvio::turbo([$o(15, 185.0, 4), $o(33, 79.0, 5), $o(1, 47.0, 9)])['servico_id']);
+        // Só a rápida dentro da folga: ela.
+        $this->assertSame(2, CotacaoMelhorEnvio::turbo([$o(2, 97.0, 3), $o(1, 47.0, 9)])['servico_id']);
+    }
 }

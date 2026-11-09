@@ -741,7 +741,7 @@ class FreteEmbutido
         foreach ($faixas as $peso) {
             $opcoes = $cotacoes[(string) $peso] ?? null;
             $barata = $opcoes ? CotacaoMelhorEnvio::maisBarata($opcoes) : null;
-            $rapida = $opcoes ? CotacaoMelhorEnvio::maisRapida($opcoes) : null;
+            $rapida = $opcoes ? CotacaoMelhorEnvio::turbo($opcoes) : null;
             $tabela[$peso] = [
                 'pac' => $barata['preco'] ?? null,
                 'sedex' => $rapida['preco'] ?? null,

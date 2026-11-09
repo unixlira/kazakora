@@ -90,7 +90,7 @@ class MelhorEnvioTabelaPorEstado
                 $pedidos[$uf] = $pool->as($uf)->withToken($token)
                     ->withHeaders(['User-Agent' => config('melhorenvio.user_agent')])
                     ->acceptJson()->timeout(20)
-                    ->post($url, ['from' => ['postal_code' => $origem], 'to' => ['postal_code' => $cep], 'products' => [$produto]]);
+                    ->post($url, ['from' => ['postal_code' => $origem], 'to' => ['postal_code' => $cep], 'products' => [$produto], 'services' => (string) config('melhorenvio.servicos')]);
             }
 
             return $pedidos;

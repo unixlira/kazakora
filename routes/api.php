@@ -93,8 +93,11 @@ Route::prefix('bling')->name('api.bling.')->group(function () {
     Route::match(['get', 'head'], '/webhook', fn () => response()->json(['status' => 'ok']))->name('webhook.verify');
 });
 
-Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {
-    Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->name('auth');
+Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web'])->group(function () {
+    Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->middleware(['auth', 'admin'])->name('auth');
+    // Volta da autorização (2026-11-09, #3978): sem login no admin. Quem
+    // protege é o state de uso único gerado por /auth ou pelo
+    // melhorenvio:link-autorizacao (vale 10 min); sem state válido, recusa.
     Route::get('/callback', [MelhorEnvioController::class, 'callback'])->name('callback');
 });
 

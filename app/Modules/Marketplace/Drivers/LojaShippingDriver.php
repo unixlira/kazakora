@@ -11,7 +11,9 @@ use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\J3FlexLabel;
 use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
+use App\Modules\Marketplace\Support\PackageDataResolver;
 use App\Support\FreteProvedor;
+use App\Support\SiteAtual;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -44,6 +46,11 @@ use RuntimeException;
 class LojaShippingDriver implements MarketplaceChannelDriver
 {
     public const METODO_J3 = 'J3 Flex';
+
+    /** Limites de caixa dos Correios (PAC/SEDEX), em cm. */
+    public const CORREIOS_MAIOR_LADO_CM = 100;
+
+    public const CORREIOS_SOMA_LADOS_CM = 200;
 
     public function channel(): string
     {
@@ -145,8 +152,37 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             return true;
         }
 
+        if (app(CorreiosAutoShipping::class)->geradaPara($order)) {
+            return false;
+        }
+
         return FreteProvedor::doPedido($order->site_origem) === FreteProvedor::MELHOR_ENVIO
-            && ! app(CorreiosAutoShipping::class)->geradaPara($order);
+            || $this->caixaForaDosCorreios($order);
+    }
+
+    /**
+     * ACHADO REAL 2026-11-09 (#3978, árvore de Natal com caixa de 115 cm):
+     * os Correios recusam a pré-postagem (PPN-055) e a etiqueta nunca saía.
+     * Pedido da KazaKora com caixa acima do limite dos Correios (um lado
+     * maior que 100 cm ou soma dos lados maior que 200 cm) vai sozinho para
+     * o Melhor Envio, mesmo com os Correios conectados em Logística. O frete
+     * do resto do site continua no provedor escolhido.
+     */
+    private function caixaForaDosCorreios(Order $order): bool
+    {
+        if ($order->site_origem !== null && $order->site_origem !== SiteAtual::KAZAKORA) {
+            return false;
+        }
+
+        // Sem medida cadastrada segue o caminho de sempre (os Correios dizem o que falta).
+        try {
+            $pacote = app(PackageDataResolver::class)->forOrder($order, consultarCanais: false);
+        } catch (\Throwable) {
+            return false;
+        }
+        $lados = array_map('floatval', [$pacote['height'] ?? 0, $pacote['width'] ?? 0, $pacote['length'] ?? 0]);
+
+        return max($lados) > self::CORREIOS_MAIOR_LADO_CM || array_sum($lados) > self::CORREIOS_SOMA_LADOS_CM;
     }
 
     public function publishProduct(Product $product, ProductChannelListing $listing): string

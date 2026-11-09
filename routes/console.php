@@ -9,6 +9,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
+// Melhor Envio (2026-11-09, #3978): renova o token antes de vencer mesmo sem uso; falha vai ao sino.
+Schedule::command('melhorenvio:renovar-token')->dailyAt('06:10')->withoutOverlapping(10);
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
 // Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.
 Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->withoutOverlapping(25);

@@ -143,9 +143,9 @@ const nomesCurtos = computed(() => {
     return new Set(nomes).size === nomes.length;
 });
 const nomeDaOpcao = (variant) => (nomesCurtos.value ? nomeCurtoDe(variant) : String(variant.variation || variant.name));
-// Produto com cor (ex.: Power Bank, cores + kit): o botão mostra só o nome e o preço
-// e o % do topo trocam ao clicar (pedido do Lira 09/11, tarefa 3981). Sem cor
-// (ex.: Árvore de Natal por modelo) continua com o preço no botão.
+// Botão de variação só com o nome, em todos os produtos (pedido do Lira 09/11,
+// tarefas 3981 e 3983, inclusive a Árvore de Natal): o preço e o % do topo trocam
+// ao clicar. Sem cor e com preços diferentes (ex.: Árvore) só mantém a grade de 2 colunas.
 const temCor = computed(() => opcoesVariacao.value.some((variant) => String(variant.color ?? '').trim() !== ''));
 const precosDiferentes = computed(() => !temCor.value
     && new Set(opcoesVariacao.value.map((variant) => Number(variant.final_price))).size > 1);
@@ -829,7 +829,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         class="opcao" :class="{ atual: variant.id === escolhida?.id, esgotada: variant.stock < 1 }"
                                         :aria-pressed="variant.id === escolhida?.id" @click="escolherVariacao(variant)">
                                         <span>{{ nomeDaOpcao(variant) }}</span>
-                                        <b v-if="precosDiferentes" class="opcao-preco">{{ formatPrice(variant.final_price) }}</b>
                                     </button>
                                 </div>
                             </div>
@@ -1693,7 +1692,6 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .dark .pd2 .compra .parc-total { color: var(--text); }
 .pd2 .opcoes.em-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pd2 .opcoes.em-grade .opcao { flex-direction: column; align-items: flex-start; gap: 2px; }
-.pd2 .opcao-preco { font-weight: 700; }
 .pd2 .pontos, .pd2 .ver-descricao { display: none; }
 @media (max-width: 767px) {
     /* A faixa laranja repete as faixas de cima e empurra a foto; miniaturas viram pontos. */

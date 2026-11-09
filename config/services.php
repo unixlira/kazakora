@@ -464,19 +464,6 @@ return [
         // Com o template preenchido, a NF-e do pedido do site espera o "Tudo
         // Certo" ou 30 min sem resposta (FaturarPedidoSemResposta). O template
         // confirmacao_pedido_kazakora_v3 traz a frase dos 30 minutos.
-        // Falha na coleta financeira da Amazon/TikTok: a Manuela avisa o Lira
-        // (2026-10-16, ver AlertaColetaFinanceira). Ligado só no kazakora.com:
-        // o homolog também roda com APP_ENV=production e o mesmo WhatsApp, e
-        // não pode mandar aviso repetido. Template opcional para
-        // fora da janela de 24 h: corpo {{1}} = canal, {{2}} = motivo.
-        'alerta_coleta' => [
-            'ativo' => (bool) env('ALERTA_COLETA_WHATSAPP', parse_url((string) env('APP_URL'), PHP_URL_HOST) === 'kazakora.com'),
-            'para' => env('ALERTA_COLETA_WHATSAPP_PARA', '5511990253050'),
-            'template' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE'),
-            'template_idioma' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE_IDIOMA', 'pt_BR'),
-            'intervalo_minutos' => (int) env('ALERTA_COLETA_WHATSAPP_INTERVALO', 60),
-        ],
-
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),

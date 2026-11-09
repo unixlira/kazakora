@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
  * - Amazon: venda de mais de 4 dias sem taxa real (a coleta pela SP-API,
  *   amazon:taxas-reais, não trouxe a taxa; desde 2026-10-17 não é mais a
  *   tela da Seller Central na Cora Box).
- * Falha vira WhatsApp da Manuela ao Lira; o mesmo problema repete a cada 6 h.
+ * Falha vira alerta no painel do admin (sem WhatsApp desde 09/11, tarefa 3965).
  */
 class VigiarColetasFinanceiras extends Command
 {
@@ -25,7 +25,7 @@ class VigiarColetasFinanceiras extends Command
         {--horas-tiktok=26 : Horas sem relatório do TikTok antes de avisar}
         {--dias-amazon=4 : Dias que uma venda da Amazon pode ficar sem taxa real}';
 
-    protected $description = 'Avisa o Lira no WhatsApp (Manuela) se a coleta financeira do TikTok ou da Amazon parou';
+    protected $description = 'Abre alerta no painel do admin se a coleta financeira do TikTok ou da Amazon parou';
 
     private const REPETIR_MINUTOS = 360;
 
@@ -39,7 +39,7 @@ class VigiarColetasFinanceiras extends Command
             }
 
             $status = $alerta->avisar($canal, $motivo, 'vigia-'.mb_strtolower($canal), self::REPETIR_MINUTOS);
-            $this->warn("{$canal}: {$motivo} (WhatsApp: {$status})");
+            $this->warn("{$canal}: {$motivo} (alerta: {$status})");
         }
 
         return self::SUCCESS;

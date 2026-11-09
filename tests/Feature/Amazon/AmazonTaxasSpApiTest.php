@@ -221,6 +221,58 @@ class AmazonTaxasSpApiTest extends TestCase
         $this->assertSame(1, DB::table('marketplace_settlement_details')->where('transaction_type', 'Refund')->count());
     }
 
+    /** Tarifa do DBA como a Finances API mandou em 09/11 (pedido 701-4956888-4787408, R$ 24,20). */
+    private function tarifaDba(string $pedido, float $valor, string $data = '2026-10-15T15:43:09Z'): array
+    {
+        $ids = ['SETTLEMENT_ID' => '27869557161', 'ORDER_ID' => $pedido, 'SHIPMENT_ID' => '26658760022025'];
+
+        return [
+            'transactionType' => 'ServiceFee', 'transactionStatus' => 'RELEASED', 'description' => 'MfnPostageFee', 'postedDate' => $data,
+            'relatedIdentifiers' => array_map(fn ($n, $v) => ['relatedIdentifierName' => $n, 'relatedIdentifierValue' => $v], array_keys($ids), $ids),
+            'totalAmount' => $this->valor(-$valor),
+            'items' => [
+                ['description' => 'Amazon Easy Ship shipping chargeback', 'totalAmount' => $this->valor(0), 'relatedIdentifiers' => [], 'breakdowns' => [], 'contexts' => []],
+                ['description' => 'Amazon Easy Ship Charges', 'totalAmount' => $this->valor(-$valor), 'relatedIdentifiers' => [], 'contexts' => [], 'breakdowns' => [
+                    ['breakdownType' => 'AmazonFees', 'breakdownAmount' => $this->valor(-$valor), 'breakdowns' => [
+                        ['breakdownType' => 'MFNPostageFee', 'breakdownAmount' => $this->valor(-$valor), 'breakdowns' => []],
+                    ]],
+                ]],
+            ],
+        ];
+    }
+
+    public function test_tarifa_do_dba_entra_na_taxa_do_pedido_e_a_to_z_conta_como_reembolso(): void
+    {
+        $dba = $this->pedido('701-4956888-4787408');
+        $atoz = $this->pedido('701-3772868-9799425');
+        $garantia = $this->transacao('Refund', 'RELEASED', '701-3772868-9799425', 'tx-g', 111.80, 18.05, 0, 0, ['REFUND_ID' => 'amzn1:crow:X9b']);
+        $garantia['transactionType'] = 'GuaranteeClaimRefund';
+        $this->fakeApi([[
+            $this->tarifaDba('701-4956888-4787408', 24.20),
+            $this->transacao('Shipment', 'RELEASED', '701-4956888-4787408', 'tx-a', 156.90, 0, 18.83, 0),
+            $this->transacao('Shipment', 'RELEASED', '701-3772868-9799425', 'tx-b', 111.80, 18.05, 15.10, 0),
+            $garantia,
+            // Assinatura: ServiceFee sem pedido, fica de fora.
+            ['transactionType' => 'ServiceFee', 'transactionStatus' => 'RELEASED', 'description' => 'Subscription', 'relatedIdentifiers' => [], 'totalAmount' => $this->valor(0), 'items' => []],
+        ]]);
+
+        $this->artisan('amazon:taxas-reais')
+            ->expectsOutputToContain('Reembolsados na Amazon que ainda contam como venda')
+            ->assertSuccessful();
+
+        // Comissão 18,83 + DBA 24,20 = 43,03; o DBA aparece como frete cobrado da loja.
+        $this->assertDatabaseHas('order_channel_fees', ['order_id' => $dba->id, 'fee_amount' => 43.03, 'commission_fee' => 18.83, 'shipping_fee' => 24.20, 'payout_amount' => 113.87]);
+        $this->assertDatabaseHas('marketplace_settlement_details', [
+            'external_order_id' => '701-4956888-4787408', 'transaction_type' => 'Order', 'shipping_cost' => -24.20,
+            'product_name' => 'Carregador portátil Mini Power Bank 10000mAh',
+        ]);
+        $this->assertDatabaseHas('marketplace_settlement_details', [
+            'external_order_id' => '701-3772868-9799425', 'transaction_type' => 'Refund', 'product_refunds' => -111.80, 'payout_amount' => -129.85,
+        ]);
+        $this->assertDatabaseHas('order_channel_fees', ['order_id' => $atoz->id, 'fee_amount' => 15.10]);
+        $this->assertSame(3, DB::table('marketplace_settlement_details')->count());
+    }
+
     public function test_pedido_fora_da_janela_ou_com_liquidacao_oficial_nao_e_tocado(): void
     {
         $antigo = $this->pedido('701-0000000-0000001', 40);

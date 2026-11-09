@@ -18,23 +18,16 @@ class AlertasAdminTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        // WhatsApp desligado: a faixa do painel tem que aparecer mesmo assim.
-        config(['services.whatsapp.alerta_coleta' => ['ativo' => false, 'para' => '']]);
-    }
-
     private function admin(): User
     {
         return User::factory()->create(['role' => User::ROLE_ADMIN]);
     }
 
-    public function test_falha_da_coleta_abre_alerta_no_painel_mesmo_com_whatsapp_desligado(): void
+    public function test_falha_da_coleta_abre_alerta_no_painel(): void
     {
         $status = app(AlertaColetaFinanceira::class)->avisar('Amazon', 'Seller Central pediu login de novo.');
 
-        $this->assertSame('desligado', $status);
+        $this->assertSame('painel', $status);
         $this->assertDatabaseHas('admin_alertas', [
             'tipo' => AlertasAdmin::COLETA_FINANCEIRA, 'chave' => 'amazon',
             'mensagem' => 'Seller Central pediu login de novo.', 'ocorrencias' => 1, 'resolvido_em' => null,

@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 /**
  * Os agentes da coleta financeira (TikTok e Amazon, na Cora Box) avisam aqui
  * quando não conseguem tirar os dados: resposta com erro, sessão caída,
- * tela mudou. A Manuela manda o motivo ao WhatsApp do Lira (2026-10-16).
+ * tela mudou. Vira alerta no painel do admin (sem WhatsApp desde 09/11, tarefa 3965).
  * POST /api/financeiro/coletas/falha com Bearer do agente (TikTok ou Amazon).
  */
 class ColetaFinanceiraController extends Controller

@@ -30,6 +30,14 @@ return [
     // Nome do remetente na etiqueta (CNPJ e endereço continuam os da empresa).
     'remetente' => env('MELHORENVIO_REMETENTE', 'KazaKora'),
 
+    // Onde levar os pacotes (2026-11-09): ponto que aceita quase todas as
+    // transportadoras, a 200 m da loja (Pegaki DISTRIBUE, Rua Florianópolis,
+    // 198A). Transportadora que ele não aceita vai na agência mais próxima
+    // dela; distância medida a partir da loja (lat/lon abaixo).
+    'ponto_padrao' => (int) env('MELHORENVIO_PONTO_PADRAO', 41970),
+    'loja_lat' => (float) env('MELHORENVIO_LOJA_LAT', -23.5606),
+    'loja_lon' => (float) env('MELHORENVIO_LOJA_LON', -46.5826),
+
     'log_channel' => env('MELHORENVIO_LOG_CHANNEL', 'melhorenvio'),
 
     // Melhor Envio exige um User-Agent identificando a aplicação + um

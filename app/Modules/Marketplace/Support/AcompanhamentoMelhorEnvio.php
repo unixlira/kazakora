@@ -39,6 +39,7 @@ class AcompanhamentoMelhorEnvio
         $entregueEm = $data($info['delivered_at'] ?? null);
         $canceladoEm = $data($info['canceled_at'] ?? null) ?? $data($info['expired_at'] ?? null);
         $rastreio = $info['tracking'] ?? null;
+        app(PontoDePostagemMelhorEnvio::class)->gravar($envio);
 
         $envio->fill(array_filter([
             'situacao' => $info['status'] ?? null,

@@ -29,6 +29,8 @@ class AlertasAdmin
 
     public const NFE_CANCELAMENTO = 'nfe_cancelamento';
 
+    public const MELHOR_ENVIO_CONEXAO = 'melhor_envio_conexao';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -42,6 +44,10 @@ class AlertasAdmin
         self::NFE_CANCELAMENTO => [
             'nome' => 'NF-e de pedido cancelado que não foi cancelada',
             'descricao' => 'O canal cancelou o pedido e o cancelamento automático da nota na SEFAZ deu erro ou não é possível (nota do Bling sem protocolo). Precisa cancelar dentro das 24h. Some sozinho quando a nota é cancelada pela rotina.',
+        ],
+        self::MELHOR_ENVIO_CONEXAO => [
+            'nome' => 'Conexão do Melhor Envio caiu',
+            'descricao' => 'A renovação diária do token da API do Melhor Envio falhou: sem ela não sai etiqueta nem cotação pelo Melhor Envio. Some sozinho quando a renovação volta a funcionar.',
         ],
     ];
 

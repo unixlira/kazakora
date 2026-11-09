@@ -382,7 +382,7 @@ class LogisticaProvedorTest extends TestCase
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart')
             && $r['service'] === 3
             && $r['options']['invoice']['key'] === '35261065604590000107550020000031181569237956'
-            && $r['from']['company_document'] === '65604590000107'
+            && $r['from']['company_document'] === '65604590000107' && $r['from']['name'] === 'KazaKora'
             && $r['to']['document'] === '12345678909');
 
         // Nova tentativa não compra de novo.

@@ -9,7 +9,9 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
+use App\Modules\Marketplace\Support\EtiquetaMelhorEnvioComMarca;
 use App\Modules\Marketplace\Support\J3FlexLabel;
+use App\Modules\Marketplace\Support\LabelProcessingService;
 use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
 use App\Modules\Marketplace\Support\PackageDataResolver;
 use App\Support\FreteProvedor;
@@ -119,6 +121,18 @@ class LojaShippingDriver implements MarketplaceChannelDriver
 
         if ($envio = app(MelhorEnvioAutoShipping::class)->geradaPara($order)) {
             $pdf = app(MelhorEnvioAutoShipping::class)->pdf($envio);
+
+            // ACHADO REAL 2026-11-09 (#3978): a etiqueta do Melhor Envio vem
+            // numa folha de 204 x 287 mm; a térmica 10x15 recebeu, marcou
+            // impresso e não saiu nada. Encaixa no papel como a do TikTok.
+            if ($pdf) {
+                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($pdf, $envio->servico, $order->id);
+                try {
+                    $pdf = app(LabelProcessingService::class)->encaixarNaFolha($pdf);
+                } catch (\Throwable $e) {
+                    Log::warning('melhorenvio.etiqueta_encaixe_falhou', ['order_id' => $order->id, 'message' => $e->getMessage()]);
+                }
+            }
 
             return $pdf
                 ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf']

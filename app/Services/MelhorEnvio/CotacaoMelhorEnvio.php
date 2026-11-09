@@ -113,6 +113,7 @@ class CotacaoMelhorEnvio
                 'weight' => round(max(1, (int) $p['peso_g']) / 1000, 3),
             ],
             'options' => ['insurance_value' => round((float) ($p['valor'] ?? 0), 2), 'receipt' => false, 'own_hand' => false],
+            'services' => (string) config('melhorenvio.servicos'),
         ];
     }
 
@@ -120,6 +121,10 @@ class CotacaoMelhorEnvio
     private static function opcoes(array $resposta): array
     {
         $opcoes = [];
+        // Um serviço só vem como objeto, não como lista.
+        if (isset($resposta['id'])) {
+            $resposta = [$resposta];
+        }
         foreach ($resposta as $q) {
             if (! is_array($q) || ! empty($q['error']) || ! isset($q['id']) || ! isset($q['price']) && ! isset($q['custom_price'])) {
                 continue;

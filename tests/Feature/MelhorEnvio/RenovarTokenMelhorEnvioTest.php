@@ -79,6 +79,23 @@ class RenovarTokenMelhorEnvioTest extends TestCase
         $this->assertSame(1, MelhorEnvioToken::query()->count());
     }
 
+    public function test_callback_na_loja_mostra_pagina_em_vez_de_404_do_admin(): void
+    {
+        // 2026-11-09: a volta caía em kazakora.com/admin/logistica (404 no nginx).
+        $this->get('http://kazakora.com/api/melhorenvio/callback?error=invalid_scope&error_description=escopo+cortado')
+            ->assertStatus(422)
+            ->assertSee('escopo cortado');
+
+        parse_str(parse_url(app(\App\Services\MelhorEnvio\MelhorEnvioAuthService::class)->getAuthorizationUrl(), PHP_URL_QUERY), $q);
+        \Illuminate\Support\Facades\Http::fake([
+            '*oauth/token*' => \Illuminate\Support\Facades\Http::response(['access_token' => 'a2', 'refresh_token' => 'r2', 'expires_in' => 2592000]),
+            '*' => \Illuminate\Support\Facades\Http::response(['firstname' => 'Kaza', 'lastname' => 'Kora', 'email' => 'x@y.z']),
+        ]);
+        $this->get('http://kazakora.com/api/melhorenvio/callback?code=abc&state='.$q['state'])
+            ->assertOk()
+            ->assertSee('Melhor Envio conectado');
+    }
+
     public function test_link_de_autorizacao_continua_exigindo_admin(): void
     {
         $this->get('/api/melhorenvio/auth')->assertStatus(401);

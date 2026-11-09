@@ -126,7 +126,7 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             // numa folha de 204 x 287 mm; a térmica 10x15 recebeu, marcou
             // impresso e não saiu nada. Encaixa no papel como a do TikTok.
             if ($pdf) {
-                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($pdf, $envio->servico, $order->id);
+                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($pdf, $envio->servico, $order->id, $order->site_origem);
                 try {
                     $pdf = app(LabelProcessingService::class)->encaixarNaFolha($pdf);
                 } catch (\Throwable $e) {
@@ -184,7 +184,7 @@ class LojaShippingDriver implements MarketplaceChannelDriver
      */
     private function caixaForaDosCorreios(Order $order): bool
     {
-        if ($order->site_origem !== null && $order->site_origem !== SiteAtual::KAZAKORA) {
+        if ($order->site_origem !== null && ! in_array($order->site_origem, FreteProvedor::SITES_QUE_SEGUEM, true)) {
             return false;
         }
 

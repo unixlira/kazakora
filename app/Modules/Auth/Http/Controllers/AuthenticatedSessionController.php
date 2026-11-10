@@ -94,19 +94,13 @@ class AuthenticatedSessionController extends Controller
     }
 
     /**
-     * Pedido explícito 2026-08-16: alerta de estoque baixo em modal "toda vez
-     * que logar" — só pra admin (mesma regra de quem já recebe
-     * OversellDetectedNotification/etc, ver HandleInertiaRequests
-     * ::ADMIN_ONLY_NOTIFICATION_TYPES). Flash de sessão: aparece uma vez por
-     * login. Roda no endereço onde o painel abre, senão o flash se perde.
+     * Estoque baixo no login, só pra admin (pedido 2026-08-16): vira aviso no
+     * sino de notificações. O modal que abria ao entrar no painel saiu a
+     * pedido do Lira em 2026-11-10; a notificação continua.
      */
     private function alertarEstoqueBaixo(Request $request, User $user, LowStockAlertService $lowStockAlert): void
     {
-        $lowStockProducts = $lowStockAlert->checkAndNotify($user);
-
-        if ($lowStockProducts !== []) {
-            $request->session()->flash('lowStockProducts', $lowStockProducts);
-        }
+        $lowStockAlert->checkAndNotify($user);
     }
 
     public function destroy(Request $request): RedirectResponse

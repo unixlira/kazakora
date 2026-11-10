@@ -7,7 +7,6 @@ import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { secoesComEquipes } from '@/Shared/adminSidebarItems';
 import { iniciarContadorCliques } from '@/Shared/contadorCliques';
-import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 import PerguntasMarketplaceToasts from '@/Shared/Components/PerguntasMarketplaceToasts.vue';
 
@@ -600,7 +599,6 @@ watch(
             </footer>
         </div>
 
-        <LowStockAlertModal />
         <WhatsAppToasts v-if="can('pedidos.view')" />
         <PerguntasMarketplaceToasts v-if="can('pedidos.view')" />
     </div>

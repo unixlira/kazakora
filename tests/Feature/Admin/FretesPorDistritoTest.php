@@ -187,6 +187,8 @@ class FretesPorDistritoTest extends TestCase
 
     public function test_cada_distrito_tem_o_seu_preco_e_prazo_e_a_sede_segue_a_cidade(): void
     {
+        // Confere a tabela, não o teto do frete somado (2026-11-10): teto desligado aqui.
+        config(['frete_embutido.teto_embutido' => 0]);
         $produto = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
         $this->regra(FreteRegiao::FIXO, 10, []);                                                                      // cidade: R$ 10
         $this->regra(FreteRegiao::FIXO, 0, ['distrito' => 'Serra Pelada', 'cep_inicio' => '29603000', 'cep_fim' => '29603000'], 4); // grátis, 4 dias

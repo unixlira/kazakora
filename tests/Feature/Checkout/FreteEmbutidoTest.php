@@ -118,6 +118,27 @@ class FreteEmbutidoTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
     }
 
+    public function test_teto_do_frete_somado_vale_para_caixa_pequena_e_media_e_nao_para_grande(): void
+    {
+        // Pedido do Lira em 2026-11-10: frete alto em lugar longe. Ceará: PAC R$ 20.
+        $this->comCorreios();
+        config(['frete_embutido.teto_embutido' => 15]);
+        $pequeno = $this->produto(100);
+        $grande = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true, 'categoria_frete' => 'grande']);
+
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$pequeno->id)->assertOk()->assertJsonPath('final_price', 115);
+        $this->get("/produtos/{$pequeno->slug}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 115));
+        // Caixa grande fica de fora: o frete dela para longe passa de R$ 100.
+        $this->get("/produtos/{$grande->slug}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+
+        // O custo real da caixa continua o do destino: a loja paga a diferença.
+        $frete = app(\App\Modules\Checkout\Support\FreteEmbutido::class)->paraProduto(Product::find($pequeno->id));
+        $this->assertSame(15.0, $frete['embutido']);
+        $this->assertEquals(20.0, $frete['correios']);
+    }
+
     public function test_cep_no_produto_mostra_rua_e_turbo_fora_do_full(): void
     {
         Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Rua Pedro Pereira', 'bairro' => 'Centro', 'localidade' => 'Fortaleza', 'uf' => 'CE'])]);

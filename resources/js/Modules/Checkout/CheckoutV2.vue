@@ -939,7 +939,10 @@ watch(metodo, (novo) => medicao.registrar('pagamento', { campo: NOME_PAGAMENTO[n
 watch(erros, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
 watch(serverErrors, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
 watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });
-onMounted(() => { if (!props.order) medicao.iniciar(secaoDados.value); });
+// "Viu o formulário" (2026-11-10): observa a etapa que abriu, não só a Identificação.
+// Quem volta com os dados já preenchidos cai na Entrega ou no Pagamento, a
+// Identificação fica escondida e a medição contava essa pessoa como "não viu".
+onMounted(() => { if (!props.order) medicao.iniciar(document.getElementById(`etapa-${etapa.value}`) ?? secaoDados.value); });
 onUnmounted(() => medicao.parar());
 
 // ---------- Resumo ----------

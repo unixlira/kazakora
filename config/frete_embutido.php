@@ -27,6 +27,12 @@ return [
     // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
     'turbo_max' => 60.0,
 
+    // Teto do frete somado ao preço (pedido do Lira em 2026-11-10): acima
+    // disto a loja paga a diferença. 0 desliga. Caixa grande e extra grande
+    // ficam de fora (frete delas para o Norte passa de R$ 100).
+    'teto_embutido' => (float) env('FRETE_EMBUTIDO_TETO', 30),
+    'teto_fora' => ['grande', 'extra_grande'],
+
     // Trava do frete (pedido do Lira em 2026-10-24): depois que o visitante
     // calcula o frete de um produto (CEP na página do produto ou no checkout),
     // o valor fica guardado pelo IP e pela hash do aparelho. Voltando ao site

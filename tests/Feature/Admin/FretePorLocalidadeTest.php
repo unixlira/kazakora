@@ -174,6 +174,8 @@ class FretePorLocalidadeTest extends TestCase
 
     public function test_frete_embutido_usa_a_tabela_salva_sem_chamar_os_correios(): void
     {
+        // Confere a tabela, não o teto do frete somado (2026-11-10): teto desligado aqui.
+        config(['frete_embutido.teto_embutido' => 0]);
         $tabela = app(TabelaFreteLocalidades::class);
         $tabela->importarUf('ES');
         $tabela->cotar($tabela->cepsPendentes(100));

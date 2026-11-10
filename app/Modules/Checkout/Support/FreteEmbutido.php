@@ -190,7 +190,30 @@ class FreteEmbutido
     {
         $frete = $this->freteDoProduto($product);
 
-        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->fixoNaNavegacao($product, $frete);
+        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->comTeto($product, $this->fixoNaNavegacao($product, $frete));
+    }
+
+    /**
+     * Teto do frete somado ao preço (pedido do Lira em 2026-11-10: "fretes
+     * altos em lugares mais longe"). Com o Melhor Envio a parafusadeira
+     * somava R$ 19 em SP e R$ 49 no Norte; acima do teto a loja paga a
+     * diferença (o custo real fica em "correios"). Caixa grande e extra
+     * grande ficam de fora: o frete delas para o Norte passa de R$ 100 e o
+     * teto comeria a margem inteira (frete_embutido.teto_categorias).
+     */
+    private function comTeto(Product $product, array $frete): array
+    {
+        $teto = (float) config('frete_embutido.teto_embutido', 0);
+        if ($teto <= 0 || $frete['embutido'] <= $teto) {
+            return $frete;
+        }
+
+        $fora = (array) config('frete_embutido.teto_fora', ['grande', 'extra_grande']);
+        if (in_array($this->categoria($product), $fora, true)) {
+            return $frete;
+        }
+
+        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => $teto, 'teto' => true];
     }
 
     /**

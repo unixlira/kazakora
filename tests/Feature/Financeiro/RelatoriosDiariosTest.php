@@ -4,9 +4,13 @@ namespace Tests\Feature\Financeiro;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Financeiro\Mail\ResultadoDoDia;
 use App\Modules\Financeiro\Support\ResultadoDiario;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Operacional\Mail\CanceladosSeparados;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -92,6 +96,24 @@ class RelatoriosDiariosTest extends TestCase
 
         Mail::assertSent(CanceladosSeparados::class, 1);
         Mail::assertSent(CanceladosSeparados::class, fn ($mail) => count($mail->pedidos) === 1 && $mail->pedidos[0]['external_order_id'] === 'SHP1');
+    }
+
+    public function test_alerta_ignora_pacote_que_ja_saiu(): void
+    {
+        Mail::fake();
+        $base = ['origin' => 'shopee', 'status' => 'cancelled', 'packed_at' => now()->subDays(4)];
+        $this->pedido([...$base, 'external_order_id' => 'NA_EXPEDICAO']);
+        $devolucao = $this->pedido([...$base, 'external_order_id' => 'TO_RETURN']);
+        MarketplaceClaim::create(['order_id' => $devolucao->id, 'channel' => 'shopee', 'external_claim_id' => 'TO_RETURN', 'type' => 'return', 'stage' => 'to_return', 'status' => 'to_return', 'claim_created_at' => now()]);
+        $coletado = $this->pedido([...$base, 'external_order_id' => 'COLETADO']);
+        app(OrderFulfillmentTimeline::class)->record($coletado, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Pedido saiu da fila de preparação do KoraSync — shopee confirmou "shipped" (coleta/despacho real do pacote).');
+        $emRota = $this->pedido([...$base, 'origin' => 'mercado_livre', 'external_order_id' => 'EM_ROTA']);
+        ChannelShipment::create(['order_id' => $emRota->id, 'channel' => 'mercado_livre', 'channel_shipped_at' => now()->subDays(3)]);
+        $this->pedido([...$base, 'origin' => 'mercado_livre', 'external_order_id' => 'FLEX', 'collected_at' => now()->subDays(3)]);
+
+        $this->artisan('loja:cancelados-separados')->assertSuccessful();
+
+        Mail::assertSent(CanceladosSeparados::class, fn ($mail) => array_column($mail->pedidos, 'external_order_id') === ['NA_EXPEDICAO']);
     }
 
     public function test_estao_na_agenda(): void

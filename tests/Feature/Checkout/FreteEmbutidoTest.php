@@ -118,23 +118,26 @@ class FreteEmbutidoTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
     }
 
-    public function test_teto_do_frete_somado_vale_para_caixa_pequena_e_media_e_nao_para_grande(): void
+    public function test_teto_do_frete_somado_so_ate_sobrar_a_margem_minima(): void
     {
-        // Pedido do Lira em 2026-11-10: frete alto em lugar longe. Ceará: PAC R$ 20.
+        // Pedido do Lira em 2026-11-10: frete alto em lugar longe, em todos os
+        // produtos. Ceará: PAC R$ 20; teto de R$ 15 só neste teste.
         $this->comCorreios();
         config(['frete_embutido.teto_embutido' => 15]);
-        $pequeno = $this->produto(100);
-        $grande = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true, 'categoria_frete' => 'grande']);
+        // Margem folgada (custo R$ 10, grande inclusive): a loja paga os R$ 5 acima do teto.
+        $folgado = Product::factory()->create(['price' => 100, 'cost_price' => 10, 'stock' => 5, 'is_active' => true, 'categoria_frete' => 'grande']);
+        // Margem apertada (custo R$ 75): pagar R$ 5 deixaria menos de 10% de margem.
+        $apertado = Product::factory()->create(['price' => 100, 'cost_price' => 75, 'stock' => 5, 'is_active' => true]);
+        // Sem custo cadastrado: não dá para conferir a margem, fica sem teto.
+        $semCusto = Product::factory()->create(['price' => 100, 'cost_price' => null, 'stock' => 5, 'is_active' => true]);
 
-        $this->getJson('/frete/prazo?cep=60025000&produto='.$pequeno->id)->assertOk()->assertJsonPath('final_price', 115);
-        $this->get("/produtos/{$pequeno->slug}")
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 115));
-        // Caixa grande fica de fora: o frete dela para longe passa de R$ 100.
-        $this->get("/produtos/{$grande->slug}")
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$folgado->id)->assertOk()->assertJsonPath('final_price', 115);
+        $this->get("/produtos/{$folgado->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 115));
+        $this->get("/produtos/{$apertado->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+        $this->get("/produtos/{$semCusto->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
 
         // O custo real da caixa continua o do destino: a loja paga a diferença.
-        $frete = app(\App\Modules\Checkout\Support\FreteEmbutido::class)->paraProduto(Product::find($pequeno->id));
+        $frete = app(\App\Modules\Checkout\Support\FreteEmbutido::class)->paraProduto(Product::find($folgado->id));
         $this->assertSame(15.0, $frete['embutido']);
         $this->assertEquals(20.0, $frete['correios']);
     }

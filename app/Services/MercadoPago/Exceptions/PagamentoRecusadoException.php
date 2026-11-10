@@ -13,6 +13,9 @@ use App\Modules\Checkout\Models\PagamentoRecusado;
  */
 class PagamentoRecusadoException extends MercadoPagoException
 {
+    /** O que o cliente lê na KazaKora quando o cartão volta recusado (a FerraKora já dizia isso). */
+    public const MENSAGEM_CLIENTE = 'O pagamento no cartão não foi aprovado pelo Mercado Pago. Pague no Pix (aprovação na hora) ou tente outro cartão.';
+
     private array $tentativa;
 
     public function __construct(Order $order, ?User $user, string $metodo, float $valor, array $mpOrder, array $mpPayment)

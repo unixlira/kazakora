@@ -277,14 +277,23 @@ class CheckoutFerraKoraTest extends TestCase
 
     public function test_cartao_aprovado_fica_pago(): void
     {
-        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createOrder')->once()->andReturn([
-            'id' => 'ORD2', 'transactions' => ['payments' => [['id' => 'PAY2', 'status' => 'processed', 'status_detail' => 'accredited']]],
-        ]));
+        $enviado = null;
+        $this->mercadoPago(function ($mock) use (&$enviado) {
+            $mock->shouldReceive('createOrder')->once()->andReturnUsing(function (array $corpo) use (&$enviado) {
+                $enviado = $corpo;
+
+                return ['id' => 'ORD2', 'transactions' => ['payments' => [['id' => 'PAY2', 'status' => 'processed', 'status_detail' => 'accredited']]]];
+            });
+        });
 
         $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido([
             'total_esperado' => 20000,
             'pagamento' => ['metodo' => 'card', 'mp_card_token' => 'tok', 'mp_card_installments' => 3, 'mp_payment_method_id' => 'master'],
         ]))->assertCreated()->assertJsonPath('pedido.pago', true)->assertJsonPath('pix', null);
+
+        // Antifraude do Mercado Pago (2026-11-10): endereço de entrega e itens somando o total.
+        $this->assertSame('01310100', $enviado['shipment']['address']['zip_code']);
+        $this->assertEqualsWithDelta((float) $enviado['total_amount'], collect($enviado['items'])->sum(fn ($i) => (float) $i['unit_price'] * $i['quantity']), 0.001);
     }
 
     public function test_boleto_cria_pedido_sem_desconto_do_pix_e_devolve_linha_e_pdf(): void

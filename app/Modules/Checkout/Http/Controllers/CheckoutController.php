@@ -38,6 +38,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
+use App\Services\MercadoPago\AntifraudeMercadoPago;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
@@ -882,7 +883,7 @@ class CheckoutController extends Controller
 
                 if ($useMercadoPago) {
                     $mpOrder = $this->mercadoPago->createOrder(
-                        $this->mercadoPagoOrderPayload($primaryAmount, $user, $data, ! $isSplit, "order-{$order->id}-payment-1"),
+                        AntifraudeMercadoPago::aplicar($this->mercadoPagoOrderPayload($primaryAmount, $user, $data, ! $isSplit, "order-{$order->id}-payment-1"), $order, $primaryAmount),
                         "order:{$order->id}:payment:1",
                     );
                     $mpOrderPayment = $mpOrder['transactions']['payments'][0] ?? [];
@@ -978,6 +979,13 @@ class CheckoutController extends Controller
             // CPF recusado pelo Mercado Pago (código 2067): diz o motivo.
             if (str_contains(strtolower($exception->getMessage()), 'identification')) {
                 return redirect()->route('finalizacao.entrega')->withErrors(['cpf' => 'O Mercado Pago recusou o CPF informado. Confira o CPF e tente de novo.']);
+            }
+
+            // Cartão recusado (2026-11-10): a frase genérica fazia o cliente
+            // desistir (08/11, "high_risk" duas vezes e saiu). Diz que foi o
+            // cartão e oferece o Pix, que não passa por esse antifraude.
+            if ($exception instanceof PagamentoRecusadoException) {
+                return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => PagamentoRecusadoException::MENSAGEM_CLIENTE]);
             }
 
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);

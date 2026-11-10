@@ -23,6 +23,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\CredenciaisCheckout;
+use App\Services\MercadoPago\AntifraudeMercadoPago;
 use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\CupomAutomatico;
@@ -527,7 +528,7 @@ abstract class CheckoutOutroSite
             }
 
             $cartao = $dados['pagamento'];
-            $mp = $this->mercadoPago->createOrder([
+            $mp = $this->mercadoPago->createOrder(AntifraudeMercadoPago::aplicar([
                 'type' => 'online',
                 'processing_mode' => 'automatic',
                 'capture_mode' => 'automatic',
@@ -544,7 +545,7 @@ abstract class CheckoutOutroSite
                         'installments' => (int) $cartao['mp_card_installments'],
                     ],
                 ]]],
-            ], "order:{$order->id}:payment:1");
+            ], $order, $total), "order:{$order->id}:payment:1");
             $pagamento = $mp['transactions']['payments'][0] ?? [];
 
             if (in_array($pagamento['status'] ?? null, ['failed', 'rejected'], true)) {

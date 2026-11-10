@@ -87,6 +87,44 @@ class CartaoParceladoMercadoPagoTest extends TestCase
         ], $enviado['transactions']['payments'][0]['payment_method']);
     }
 
+    public function test_cartao_vai_com_telefone_endereco_e_itens_para_o_antifraude(): void
+    {
+        // ACHADO REAL 2026-11-10: cartão "high_risk" com a Order só com valor, token, nome e CPF.
+        $enviado = null;
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) use (&$enviado) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createOrder')->once()->andReturnUsing(function (array $payload) use (&$enviado) {
+                $enviado = $payload;
+
+                return ['id' => 'ORD1', 'transactions' => ['payments' => [['id' => 'PAY1', 'status' => 'processed', 'status_detail' => 'accredited']]]];
+            });
+        });
+
+        $this->actingAs($this->user)->post('/finalizacao/pagamento', $this->cartao());
+
+        $this->assertSame(['area_code' => '11', 'number' => '999999999'], $enviado['payer']['phone']);
+        $this->assertSame('01000000', $enviado['payer']['address']['zip_code']);
+        $this->assertSame('Rua Teste', $enviado['shipment']['address']['street_name']);
+        $this->assertSame('SP', $enviado['shipment']['address']['state']);
+        // A soma dos itens tem que bater com o total (a API recusa se não bater).
+        $soma = collect($enviado['items'])->sum(fn ($i) => (float) $i['unit_price'] * $i['quantity']);
+        $this->assertEqualsWithDelta((float) $enviado['total_amount'], $soma, 0.001);
+        $this->assertSame($enviado['payer']['email'] ?? null, $this->user->email);
+    }
+
+    public function test_cartao_recusado_diz_que_foi_o_cartao_e_oferece_o_pix(): void
+    {
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createOrder')->once()->andReturn(['id' => 'ORD2', 'status' => 'failed', 'transactions' => ['payments' => [['id' => 'PAY2', 'status' => 'failed', 'status_detail' => 'high_risk']]]]);
+        });
+
+        $this->actingAs($this->user)->post('/finalizacao/pagamento', $this->cartao())
+            ->assertRedirect(route('finalizacao.pagamento'))
+            ->assertSessionHasErrors(['payment' => \App\Services\MercadoPago\Exceptions\PagamentoRecusadoException::MENSAGEM_CLIENTE]);
+        $this->assertSame(0, Order::count());
+    }
+
     public function test_emissor_numerico_nao_derruba_o_pagamento(): void
     {
         $this->mock(MercadoPagoPaymentService::class, function ($mock) {

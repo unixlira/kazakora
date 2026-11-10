@@ -39,6 +39,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'lon
 const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-box-open', 'fa-truck-fast', 'fa-house-circle-check'];
 
 // Etapa atual = a primeira que ainda não aconteceu.
+const eventos = computed(() => props.pedido?.eventos_transportadora ?? []);
+const previsao = computed(() => props.pedido?.previsao_entrega ?? null);
+const formatDia = (value) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(value));
 const etapaAtual = computed(() => props.pedido?.etapas.findIndex((etapa) => !etapa.feito) ?? -1);
 
 const copiado = ref(false);
@@ -186,9 +189,23 @@ onBeforeUnmount(() => clearInterval(consulta));
                                 :class="etapa.feito ? 'bg-emerald-500 text-white' : (index === etapaAtual ? 'border-2 border-emerald-500 text-emerald-600' : 'border border-store-border text-store-fg-faint')">
                                 <i class="fa-solid" :class="ICONES[index]"></i>
                             </span>
-                            <div class="pt-1.5">
+                            <div class="min-w-0 flex-1 pt-1.5">
                                 <p class="font-medium" :class="etapa.feito || index === etapaAtual ? '' : 'text-store-fg-faint'">{{ etapa.titulo }}</p>
                                 <p v-if="index === etapaAtual" class="text-xs text-emerald-600">Próxima etapa</p>
+                                <!-- Etapas da transportadora logo abaixo de "Pedido enviado" (pedido do Lira em 2026-11-09). -->
+                                <ol v-if="etapa.titulo === 'Pedido enviado' && eventos.length" class="mt-3 flex flex-col gap-3 border-l-2 border-dashed border-emerald-300 pl-4">
+                                    <li v-for="(evento, i) in eventos" :key="i" class="relative">
+                                        <span class="absolute -left-[23px] top-1.5 h-2.5 w-2.5 rounded-full" :class="i === 0 ? 'bg-emerald-500 ring-4 ring-emerald-100' : 'bg-emerald-300'"></span>
+                                        <p class="text-sm" :class="i === 0 ? 'font-semibold' : 'text-store-fg-muted'">{{ evento.titulo }}</p>
+                                        <p v-if="evento.descricao" class="text-xs text-store-fg-muted">{{ evento.descricao }}</p>
+                                        <p class="text-xs text-store-fg-faint">
+                                            <span v-if="evento.quando">{{ formatDate(evento.quando) }}</span><span v-if="evento.quando && evento.local"> · </span><span v-if="evento.local">{{ evento.local }}</span>
+                                        </p>
+                                    </li>
+                                </ol>
+                                <p v-if="etapa.titulo === 'Entregue' && previsao" class="mt-0.5 text-xs" :class="previsao.entregue ? 'text-emerald-600' : 'text-store-fg-muted'">
+                                    <i class="fa-regular fa-calendar mr-1"></i>{{ previsao.entregue ? 'Entregue em' : 'Previsão de entrega: até' }} {{ formatDia(previsao.data) }}
+                                </p>
                             </div>
                         </li>
                     </ol>

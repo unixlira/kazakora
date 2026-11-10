@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CaptchaRastreio;
 use App\Modules\Checkout\Support\NovoPixDoPedido;
+use App\Services\MelhorEnvio\MelhorRastreio;
 use App\Support\LinkRastreio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -132,9 +133,39 @@ class TrackingController extends Controller
                 'rastreio_correios' => LinkRastreio::correios($codigo),
                 'transportadora' => $order->transportadoraDoEnvio(),
                 'etapas' => $order->etapas(),
+                // Etapas da transportadora abaixo de "Pedido enviado" e a previsão (pedido do Lira em 2026-11-09).
+                'eventos_transportadora' => $codigo && $order->melhorEnvioEnvio ? app(MelhorRastreio::class)->eventos($codigo) : [],
+                'previsao_entrega' => $this->previsaoDeEntrega($order),
                 'pix' => $pix ? $this->dadosDoPix($ref, $pix) : null,
             ],
         ]);
+    }
+
+    /**
+     * Previsão da etiqueta do Melhor Envio: postagem (ou pagamento, antes de
+     * postar) + prazo máximo da transportadora em dias úteis. O prazo vem do
+     * serviço escolhido ou, sem ele, do delivery_max da resposta do Melhor
+     * Envio (o #3978 tinha só este: 5 a 7 dias). Entregue = a data da entrega.
+     *
+     * @return array{data: string, entregue: bool}|null
+     */
+    private function previsaoDeEntrega(Order $order): ?array
+    {
+        $envio = $order->melhorEnvioEnvio;
+        if (! $envio || $order->status === Order::STATUS_CANCELLED) {
+            return null;
+        }
+        if ($envio->entregue_em) {
+            return ['data' => $envio->entregue_em->toIso8601String(), 'entregue' => true];
+        }
+
+        $prazo = (int) ($envio->prazo_dias ?: data_get($envio->resposta, 'delivery_max'));
+        $base = $envio->postada_em ?? $envio->paga_em;
+        if ($prazo <= 0 || ! $base) {
+            return null;
+        }
+
+        return ['data' => $base->copy()->timezone(config('app.timezone'))->addWeekdays($prazo)->toIso8601String(), 'entregue' => false];
     }
 
     /**

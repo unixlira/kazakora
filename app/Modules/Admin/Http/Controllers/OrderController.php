@@ -845,9 +845,7 @@ class OrderController extends Controller
                 'servico' => $pre?->service_label,
                 'metodo_no_canal' => $shipment?->shipping_method,
                 'rastreio' => $rastreio,
-                'rastreio_url' => $rastreio && preg_match('/^[A-Z]{2}\d{9}[A-Z]{2}$/', $rastreio)
-                    ? 'https://rastreamento.correios.com.br/app/index.php?objetos='.$rastreio
-                    : null,
+                'rastreio_url' => \App\Support\LinkRastreio::url($rastreio),
                 'rastreio_cliente_url' => route('rastreio.ver', $order->trackingRef()),
                 'canal' => $shipment ? [
                     'id_no_canal' => $shipment->external_shipment_id,

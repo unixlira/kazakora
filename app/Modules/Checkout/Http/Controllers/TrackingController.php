@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CaptchaRastreio;
 use App\Modules\Checkout\Support\NovoPixDoPedido;
+use App\Support\LinkRastreio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -77,7 +78,7 @@ class TrackingController extends Controller
     {
         $order = Order::findByTrackingRef($ref);
         abort_unless($order, 404);
-        $order->load(['items', 'invoice', 'latestCorreiosPrePostagem', 'channelShipment', 'payments']);
+        $order->load(['items', 'invoice', 'latestCorreiosPrePostagem', 'channelShipment', 'melhorEnvioEnvio', 'payments']);
 
         $pix = NovoPixDoPedido::pixAberto($order);
         $user = $request->user();
@@ -113,7 +114,7 @@ class TrackingController extends Controller
             abort(403);
         }
 
-        $codigo = $order->trackingCode();
+        $codigo = LinkRastreio::codigo($order->trackingCode());
 
         return Inertia::render('Checkout/Rastreio', [
             'pedido' => [
@@ -127,7 +128,9 @@ class TrackingController extends Controller
                 'itens' => $order->items->map(fn ($item) => ['nome' => $item->product_name, 'quantidade' => $item->quantity])->values(),
                 'cidade' => trim(($order->shipping_city ?? '').'/'.($order->shipping_state ?? ''), '/'),
                 'codigo_rastreio' => $codigo,
-                'transportadora' => $order->shipping_carrier_name,
+                'rastreio_url' => LinkRastreio::url($codigo),
+                'rastreio_correios' => LinkRastreio::correios($codigo),
+                'transportadora' => $order->transportadoraDoEnvio(),
                 'etapas' => $order->etapas(),
                 'pix' => $pix ? $this->dadosDoPix($ref, $pix) : null,
             ],

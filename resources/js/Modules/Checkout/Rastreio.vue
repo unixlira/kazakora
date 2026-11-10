@@ -203,9 +203,9 @@ onBeforeUnmount(() => clearInterval(consulta));
                         <button type="button" class="rounded-lg border border-store-border-strong px-3 py-1.5 text-sm" @click="copiarCodigo">
                             <i class="fa-regular mr-1" :class="copiado ? 'fa-circle-check' : 'fa-copy'"></i>{{ copiado ? 'Copiado' : 'Copiar' }}
                         </button>
-                        <a :href="`https://rastreamento.correios.com.br/app/index.php?objetos=${pedido.codigo_rastreio}`" target="_blank" rel="noopener"
+                        <a v-if="pedido.rastreio_url" :href="pedido.rastreio_url" target="_blank" rel="noopener"
                             class="rounded-lg bg-store-accent px-3 py-1.5 text-sm font-semibold text-store-accent-contrast">
-                            <i class="fa-solid fa-truck-fast mr-1"></i> Ver nos Correios
+                            <i class="fa-solid fa-truck-fast mr-1"></i> {{ pedido.rastreio_correios ? 'Ver nos Correios' : 'Rastrear entrega' }}
                         </a>
                     </div>
                 </div>

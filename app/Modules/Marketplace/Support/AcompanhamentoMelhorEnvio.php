@@ -44,6 +44,7 @@ class AcompanhamentoMelhorEnvio
         $envio->fill(array_filter([
             'situacao' => $info['status'] ?? null,
             'rastreio' => $rastreio,
+            'rastreio_me' => $info['melhorenvio_tracking'] ?? $info['self_tracking'] ?? null,
             'postada_em' => $postadoEm,
             'entregue_em' => $entregueEm,
             'cancelada_em' => $canceladoEm,

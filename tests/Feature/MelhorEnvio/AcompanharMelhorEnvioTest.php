@@ -58,9 +58,11 @@ class AcompanharMelhorEnvioTest extends TestCase
     public function test_sem_postagem_so_grava_o_rastreio_da_transportadora(): void
     {
         $order = $this->pedido();
-        $this->situacao = ['status' => 'released', 'tracking' => '888031040957845', 'posted_at' => null];
+        $this->situacao = ['status' => 'released', 'tracking' => '888031040957845', 'melhorenvio_tracking' => 'ME262FTSE99BR', 'posted_at' => null];
 
         $this->artisan('melhorenvio:acompanhar')->assertSuccessful();
+
+        $this->assertSame('ME262FTSE99BR', MelhorEnvioEnvio::first()->rastreio_me);
 
         $this->assertSame('888031040957845', $order->channelShipment()->value('tracking_code'));
         $this->assertSame('released', MelhorEnvioEnvio::first()->situacao);

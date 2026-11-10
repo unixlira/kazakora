@@ -86,6 +86,17 @@ class CatalogoFerraKoraTest extends TestCase
         $this->getJson('/api/ferrakora/produtos/nao-existe')->assertNotFound();
     }
 
+    public function test_emoji_da_descricao_nao_quebra_no_meio(): void
+    {
+        [$pai] = $this->grupo();
+        $pai->update(['description' => "POR QUE LEVAR O KIT:\n✅ Um pedido só\n🔹 Torque: 35Nm"]);
+        $this->enviar([['sku' => 'FER-TRE-5M', 'categoria' => 'Trenas', 'ordem' => 1]])->assertOk();
+
+        $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id)
+            ->assertOk()
+            ->assertJsonPath('product.description', '<p>POR QUE LEVAR O KIT:</p><p>✅ Um pedido só</p><p>🔹 Torque: 35Nm</p>');
+    }
+
     public function test_foto_leva_a_miniatura_leve_e_a_media(): void
     {
         [$pai] = $this->grupo();

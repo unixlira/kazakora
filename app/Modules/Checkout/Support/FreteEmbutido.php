@@ -190,7 +190,7 @@ class FreteEmbutido
     {
         $frete = $this->freteDoProduto($product);
 
-        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->comTeto($product, $this->fixoNaNavegacao($product, $frete));
+        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->comPiso($product, $this->comTeto($product, $this->fixoNaNavegacao($product, $frete)));
     }
 
     /**
@@ -222,17 +222,52 @@ class FreteEmbutido
         return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => round($frete['embutido'] - $absorver, 2), 'teto' => true];
     }
 
+    /**
+     * Piso de margem (pedido do Lira em 2026-11-10, "aumenta a margem nessas
+     * regiões, pois temos que vender"): onde o frete real deixa a venda no
+     * prejuízo (cerca de 30 produtos baratos em estados longe, ex. bomba de ar
+     * de R$ 60,49 no AM perdia R$ 4,55), o frete somado sobe até sobrar a
+     * margem mínima. Só onde daria prejuízo: produto com lucro, mesmo abaixo
+     * de 10%, não muda. Produto sem custo cadastrado fica como está.
+     */
+    private function comPiso(Product $product, array $frete): array
+    {
+        if (! config('frete_embutido.piso_margem', true)) {
+            return $frete;
+        }
+
+        $conta = $this->contaDaMargem($product, $frete);
+        if ($conta === null || $conta['preco'] >= $conta['minimo_sem_lucro']) {
+            return $frete;
+        }
+
+        $novo = ceil(($conta['minimo'] - $conta['base']) * 100) / 100;
+
+        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => max($frete['embutido'], $novo), 'piso' => true];
+    }
+
     /** @var array<int, ?float> custo do produto pai, por id */
     private array $custosDosPais = [];
 
     /**
      * Quanto do frete a loja pode pagar mantendo a margem mínima
-     * (frete_embutido.teto_margem_minima, % do preço). Preço = base + frete
-     * somado − x; margem = preço × (1 − imposto − taxa do pagamento) − custo −
-     * frete real − insumos. x máximo: base + frete somado − (custo + frete
-     * real + insumos) / (1 − imposto − taxa − margem mínima).
+     * (frete_embutido.teto_margem_minima, % do preço).
      */
     private function folgaParaAbsorver(Product $product, array $frete): float
+    {
+        $conta = $this->contaDaMargem($product, $frete);
+
+        return $conta === null ? 0.0 : max(0.0, round($conta['preco'] - $conta['minimo'], 2));
+    }
+
+    /**
+     * Preço sem frete (base), preço com o frete somado, e os preços que deixam
+     * margem zero e a margem mínima. Margem = preço × (1 − imposto − taxa do
+     * pagamento) − custo − frete real − insumos. null: produto sem custo.
+     *
+     * @return array{base: float, preco: float, minimo: float, minimo_sem_lucro: float}|null
+     */
+    private function contaDaMargem(Product $product, array $frete): ?array
     {
         $custo = (float) ($product->cost_price ?: 0);
         if ($custo <= 0 && $product->parent_product_id) {
@@ -241,20 +276,19 @@ class FreteEmbutido
             $custo = (float) ($this->custosDosPais[$pai] ?? 0);
         }
         if ($custo <= 0) {
-            return 0.0;
+            return null;
         }
 
         $promocional = $product->precoPromocional();
         $base = $promocional !== null ? min($product->precoSemOferta(), $promocional) : $product->precoSemOferta();
-        $real = (float) ($frete['correios'] ?? $frete['embutido']);
-        $fatia = 1 - ((float) config('loja.simples.aliquota', 4.5) + (float) config('frete_embutido.teto_taxa_pagamento', 5) + (float) config('frete_embutido.teto_margem_minima', 10)) / 100;
-        if ($fatia <= 0) {
-            return 0.0;
+        $gastos = $custo + (float) ($frete['correios'] ?? $frete['embutido']) + (float) config('frete_embutido.teto_insumos', 2);
+        $taxas = ((float) config('loja.simples.aliquota', 4.5) + (float) config('frete_embutido.teto_taxa_pagamento', 5)) / 100;
+        $fatia = 1 - $taxas - (float) config('frete_embutido.teto_margem_minima', 10) / 100;
+        if ($fatia <= 0 || $taxas >= 1) {
+            return null;
         }
 
-        $precoMinimo = ($custo + $real + (float) config('frete_embutido.teto_insumos', 2)) / $fatia;
-
-        return max(0.0, round($base + $frete['embutido'] - $precoMinimo, 2));
+        return ['base' => $base, 'preco' => $base + $frete['embutido'], 'minimo' => $gastos / $fatia, 'minimo_sem_lucro' => $gastos / (1 - $taxas)];
     }
 
     /**

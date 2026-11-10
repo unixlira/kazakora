@@ -37,6 +37,10 @@ return [
     'teto_insumos' => 2.0,
     'teto_fora' => [],
 
+    // Piso (pedido do Lira em 2026-11-10): onde o frete real deixaria a venda
+    // no prejuízo, o frete somado sobe até a mesma margem mínima do teto.
+    'piso_margem' => (bool) env('FRETE_EMBUTIDO_PISO', true),
+
     // Trava do frete (pedido do Lira em 2026-10-24): depois que o visitante
     // calcula o frete de um produto (CEP na página do produto ou no checkout),
     // o valor fica guardado pelo IP e pela hash do aparelho. Voltando ao site

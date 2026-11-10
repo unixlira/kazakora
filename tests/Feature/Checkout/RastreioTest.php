@@ -5,7 +5,9 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
+use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia;
@@ -105,7 +107,38 @@ class RastreioTest extends TestCase
                 ->where('pedido.etapas.3.feito', true)
                 ->where('pedido.etapas.4.feito', true)
                 ->where('pedido.etapas.5.feito', false)
-                ->where('pedido.itens.0.nome', 'Organizador'));
+                ->where('pedido.itens.0.nome', 'Organizador')
+                ->where('pedido.rastreio_correios', true)
+                ->where('pedido.rastreio_url', 'https://rastreamento.correios.com.br/app/index.php?objetos=AB123456789BR'));
+    }
+
+    public function test_etiqueta_da_jt_pelo_melhor_envio_leva_ao_melhor_rastreio(): void
+    {
+        // ACHADO REAL 2026-11-09: o #3978 saiu pela J&T (888031040957845) e a
+        // tela mandava o cliente para os Correios, com "Frete Grátis" como transportadora.
+        $order = $this->pedido(['shipping_carrier_name' => 'Frete Grátis']);
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_STORE, 'tracking_code' => '888031040957845', 'status' => 'label_ready']);
+        MelhorEnvioEnvio::create(['order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_GERADA, 'servico' => 'JeT Standard', 'rastreio' => '888031040957845']);
+
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('pedido.codigo_rastreio', '888031040957845')
+                ->where('pedido.transportadora', 'JeT Standard')
+                ->where('pedido.rastreio_correios', false)
+                ->where('pedido.rastreio_url', 'https://www.melhorrastreio.com.br/rastreio/888031040957845'));
+    }
+
+    public function test_protocolo_do_melhor_envio_nao_aparece_como_rastreio(): void
+    {
+        $order = $this->pedido();
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_STORE, 'tracking_code' => 'ORD-202611147516417', 'status' => 'label_ready']);
+
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('pedido.codigo_rastreio', null)
+                ->where('pedido.rastreio_url', null));
     }
 
     public function test_meus_pedidos_traz_o_link_de_rastreio(): void

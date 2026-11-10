@@ -324,8 +324,8 @@ abstract class CheckoutOutroSiteController extends Controller
                 'quantidade' => $item->quantity,
                 'imagem' => $item->product?->images->first()?->url ?? $item->product?->parent?->images->first()?->url,
             ])->values(),
-            'transportadora' => $order->shipping_carrier_name,
-            'codigo_rastreio' => $order->trackingCode(),
+            'transportadora' => $order->transportadoraDoEnvio(),
+            'codigo_rastreio' => \App\Support\LinkRastreio::codigo($order->trackingCode()),
             'etapas' => $etapas,
         ];
     }

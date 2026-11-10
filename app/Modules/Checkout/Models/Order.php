@@ -454,6 +454,18 @@ class Order extends Model
         return $this->hasOne(ChannelShipment::class);
     }
 
+    /** Etiqueta do Melhor Envio mais recente (pedido do site). */
+    public function melhorEnvioEnvio(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Marketplace\Models\MelhorEnvioEnvio::class)->latestOfMany();
+    }
+
+    /** Transportadora que leva o pacote: a do Melhor Envio quando houver, senão a do checkout. */
+    public function transportadoraDoEnvio(): ?string
+    {
+        return $this->melhorEnvioEnvio?->servico ?: $this->shipping_carrier_name;
+    }
+
     /** Comprovante da entrega ao entregador do Flex (KoraFlex), quando houve. */
     public function pickupReceipt(): BelongsTo
     {

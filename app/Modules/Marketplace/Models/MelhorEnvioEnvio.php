@@ -23,7 +23,7 @@ class MelhorEnvioEnvio extends Model
     protected $table = 'melhor_envio_envios';
 
     protected $fillable = [
-        'order_id', 'status', 'me_order_id', 'protocolo', 'servico_id', 'servico', 'preco', 'rastreio',
+        'order_id', 'status', 'me_order_id', 'protocolo', 'servico_id', 'servico', 'preco', 'rastreio', 'rastreio_me',
         'peso_g', 'volume', 'erro', 'resposta', 'paga_em', 'gerada_em',
         'situacao', 'prazo_dias', 'postada_em', 'entregue_em', 'cancelada_em', 'postagem',
     ];

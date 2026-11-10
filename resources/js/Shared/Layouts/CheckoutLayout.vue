@@ -2,62 +2,25 @@
 // Layout do checkout no modelo Yampi (pedido 2026-10-23, referência
 // seguro.mavoloja.com.br). Desde 2026-10-24 o topo segue o print da Mavo:
 // uma faixa escura só, com a logo, o CNPJ e o endereço (sem nome nem razão
-// social, ajuste de 2026-10-24), e abaixo a barra roxa "Oferta termina em".
-// O relógio é sempre de 30 minutos a partir da primeira visita ao checkout
-// (pedido do Lira 2026-10-24, modelo Mavo), guardados no navegador para não
-// recomeçar ao atualizar. Zerou na tela, a barra some; na próxima visita recomeça. Desde 2026-10-25 não usa mais o
-// fim da Oferta Relâmpago do carrinho: mostrava 568:47:51 (oferta de 23 dias).
+// social, ajuste de 2026-10-24). A barra roxa "Oferta termina em" (relógio de
+// 30 minutos que recomeçava para cada visitante) saiu em 2026-11-10, pedido do
+// Lira: não era uma oferta de verdade e passava cara de truque (urgência
+// enganosa, art. 37 do CDC).
 // Rodapé TOTALMENTE estático desde 2026-10-25 (pedido do Lira): só texto e
 // imagens, sem link nem sanfona, igual em todas as telas. No celular as
 // bandeiras e os selos ficam sempre centralizados. Sem menu, busca e rodapé
 // da loja. Sempre claro (cores fixas). Desde 2026-11-03 (pedido do Lira) o selo
 // RA é a imagem do rodapé do site, sem QR Code; o resto do rodapé não muda.
 import { COMPANY } from '@/Shared/company.js';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
-const props = defineProps({
-    // Pedido já criado (pagando a 2ª parte, Pix aberto): sem relógio.
+defineProps({
+    // Sem efeito desde 2026-11-10 (o relógio saiu); fica para não quebrar quem passa.
     semRelogio: { type: Boolean, default: false },
 });
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
 const ano = new Date().getFullYear();
 
-const RELOGIO_MINUTOS = 30;
-const RELOGIO_CHAVE = 'kz_checkout_relogio_fim';
-const agora = ref(Date.now());
-const fimDoRelogio = ref(NaN);
-let relogio = null;
-onMounted(() => {
-    let fim = NaN;
-    try {
-        fim = Number(localStorage.getItem(RELOGIO_CHAVE));
-        // Relógio anterior já zerou: começa outros 30 minutos (2026-10-25: antes
-        // esperava um dia, e quem voltou ao checkout ficava sem a barra até lá).
-        // Fim além de 30 minutos à frente (valor estranho guardado) também recomeça.
-        if (!Number.isFinite(fim) || fim <= Date.now()
-            || fim - Date.now() > RELOGIO_MINUTOS * 60000) {
-            fim = Date.now() + RELOGIO_MINUTOS * 60000;
-            localStorage.setItem(RELOGIO_CHAVE, String(fim));
-        }
-    } catch {
-        fim = Date.now() + RELOGIO_MINUTOS * 60000;
-    }
-    fimDoRelogio.value = fim;
-    relogio = setInterval(() => { agora.value = Date.now(); }, 1000);
-});
-onBeforeUnmount(() => clearInterval(relogio));
-
-const restante = computed(() => {
-    if (props.semRelogio) return 0;
-    const fim = fimDoRelogio.value;
-
-    return Number.isFinite(fim) ? Math.max(0, Math.floor((fim - agora.value) / 1000)) : 0;
-});
-// MM:SS (o relógio nunca passa de 30 minutos).
-const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 60]
-    .map((parte) => String(parte).padStart(2, '0'))
-    .join(':'));
 </script>
 
 <template>
@@ -74,11 +37,6 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
             <p class="text-[11px] leading-snug text-white/75 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
         <div class="checkout-oferta h-[3px]" aria-hidden="true"></div>
-        <div v-if="restante > 0" role="timer" aria-live="off" class="checkout-oferta-relogio flex items-center justify-center gap-2 whitespace-nowrap px-3 py-2 text-[13px] font-semibold text-white sm:text-[15px]">
-            <i class="fa-solid fa-stopwatch animate-pulse" aria-hidden="true"></i>
-            <span>Oferta termina em</span>
-            <span class="font-mono text-[15px] font-extrabold tabular-nums sm:text-lg">{{ tempo }}</span>
-        </div>
 
         <slot />
 
@@ -117,10 +75,6 @@ const tempo = computed(() => [Math.floor(restante.value / 60), restante.value % 
 </template>
 
 <style scoped>
-/* Barra do relógio: roxa (pedido 2026-10-24). */
-.checkout-oferta-relogio {
-    background: #6D28D9;
-}
 /* Linha colorida do topo (modelo Mavo, nas cores da KazaKora). */
 .checkout-oferta {
     background: linear-gradient(90deg, #F44D00 0%, #E0247A 55%, #6D28D9 100%);

@@ -18,7 +18,7 @@ class SeoDoProdutoTest extends TestCase
 
         $html = $this->get("/produtos/{$product->slug}")->assertOk()->getContent();
 
-        $this->assertStringContainsString('KazaKora - Furadeira X</title>', $html);
+        $this->assertStringContainsString('Furadeira X | KazaKora</title>', $html);
         $this->assertStringContainsString('content="Descrição comum do produto."', $html);
         $this->assertStringNotContainsString('name="keywords"', $html);
         $this->assertStringNotContainsString('"keywords"', $html);
@@ -37,7 +37,7 @@ class SeoDoProdutoTest extends TestCase
 
         $html = $this->get("/produtos/{$product->slug}")->assertOk()->getContent();
 
-        $this->assertStringContainsString('KazaKora - Furadeira X Amarela com Maleta</title>', $html);
+        $this->assertStringContainsString('Furadeira X Amarela com Maleta | KazaKora</title>', $html);
         $this->assertStringContainsString('<meta name="description" content="Meta própria do site.">', $html);
         $this->assertStringContainsString('<meta name="keywords" content="furadeira amarela, kit com maleta">', $html);
         $this->assertStringContainsString('"keywords":"furadeira amarela, kit com maleta"', $html);

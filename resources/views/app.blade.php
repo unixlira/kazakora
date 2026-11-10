@@ -13,8 +13,15 @@
             $seoProduto = str_starts_with($page['component'] ?? '', 'Catalog/ProductDetail') ? ($page['props']['product'] ?? null) : null;
             $seoProduto = $seoProduto !== null ? json_decode(json_encode($seoProduto), true) : null;
             $seoProduto = is_array($seoProduto) && filled($seoProduto['name'] ?? null) ? $seoProduto : null;
+            // Departamento (/?categoria=slug, só com esse filtro): página própria para o Google (tarefa 4037, 10/11).
+            $seoHome = ($page['component'] ?? '') === 'Catalog/Home';
+            $seoDepartamento = $seoHome && array_keys(request()->query()) === ['categoria']
+                ? \App\Modules\Catalog\Support\SeoDaLoja::departamento((string) request()->query('categoria'))
+                : null;
+            $seoHomeLimpa = $seoHome && request()->query() === [];
         @endphp
-        <title inertia>{{ config('app.name', 'KazaKora').($seoProduto ? ' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : '') }}</title>
+        {{-- Título com o nome da página antes da marca (tarefa 4037, 10/11), igual ao <Head> do Vue (resources/js/app.js). --}}
+        <title inertia>{{ $seoProduto ? \App\Modules\Catalog\Support\SeoDaLoja::tituloDoProduto($seoProduto) : ($seoDepartamento ? $seoDepartamento['name'].' | KazaKora' : ($seoHomeLimpa ? 'KazaKora — eletrônicos, gadgets e cozinha' : config('app.name', 'KazaKora'))) }}</title>
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
@@ -26,11 +33,15 @@
                     $slugPai = \App\Modules\Catalog\Models\Product::query()->whereKey($seoProduto['parent_product_id'])->value('slug');
                     $canonical = $slugPai ? rtrim(config('app.url'), '/').'/produtos/'.$slugPai : $canonical;
                 }
-                $descricao = $seoProduto && filled($seoProduto['seo_description'] ?? null)
-                    ? trim($seoProduto['seo_description'])
-                    : ($seoProduto && filled($seoProduto['description'] ?? null)
-                    ? \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($seoProduto['description'])))), 155)
-                    : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.');
+                if ($seoDepartamento) {
+                    $canonical = rtrim(config('app.url'), '/').'/?categoria='.rawurlencode($seoDepartamento['slug']);
+                }
+                // Descrição sem emoji e sem o título em maiúsculas do cadastro (tarefa 4037, 10/11).
+                $descricao = $seoProduto
+                    ? \App\Modules\Catalog\Support\SeoDaLoja::descricaoDoProduto($seoProduto)
+                    : ($seoDepartamento
+                    ? $seoDepartamento['name'].' na KazaKora: '.$seoDepartamento['total'].' '.($seoDepartamento['total'] === 1 ? 'produto' : 'produtos').' com frete rápido e compra segura.'
+                    : \App\Modules\Catalog\Support\SeoDaLoja::DESCRICAO_PADRAO);
                 // Tags do produto (só do site): meta keywords e keywords do JSON-LD.
                 $tagsSeo = collect($seoProduto['tags'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
@@ -77,8 +88,27 @@
                         'price' => number_format((float) ($seoProduto['final_price'] ?? $seoProduto['price'] ?? 0), 2, '.', ''),
                         'availability' => ((int) ($seoProduto['stock'] ?? 0)) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
                         'itemCondition' => 'https://schema.org/NewCondition',
+                        // Devolução por arrependimento em 7 dias (página Trocas e devoluções, art. 49 do CDC).
+                        'hasMerchantReturnPolicy' => [
+                            '@type' => 'MerchantReturnPolicy',
+                            'applicableCountry' => 'BR',
+                            'returnPolicyCategory' => 'https://schema.org/MerchantReturnFiniteReturnWindow',
+                            'merchantReturnDays' => 7,
+                            'returnMethod' => 'https://schema.org/ReturnByMail',
+                        ],
                     ],
                 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+                {{-- Trilha Início > Departamento > Produto no resultado do Google (tarefa 4037, 10/11). --}}
+                @php($seoCategoria = $seoProduto['category'] ?? null)
+                <script type="application/ld+json">{!! json_encode([
+                    '@context' => 'https://schema.org',
+                    '@type' => 'BreadcrumbList',
+                    'itemListElement' => array_values(array_filter([
+                        ['@type' => 'ListItem', 'position' => 1, 'name' => 'Início', 'item' => rtrim(config('app.url'), '/').'/'],
+                        filled($seoCategoria['slug'] ?? null) ? ['@type' => 'ListItem', 'position' => 2, 'name' => $seoCategoria['name'], 'item' => rtrim(config('app.url'), '/').'/?categoria='.rawurlencode($seoCategoria['slug'])] : null,
+                        ['@type' => 'ListItem', 'position' => filled($seoCategoria['slug'] ?? null) ? 3 : 2, 'name' => $seoProduto['name'], 'item' => $canonical],
+                    ])),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
                 {{-- Vídeo com miniatura (pedido 2026-10-15: Search Console, "Nenhum URL de miniatura enviado"). --}}
                 @php($video = \App\Modules\Catalog\Support\VideoParaGoogle::dados($seoProduto['video_path'] ?? null, $seoProduto['video_duration_seconds'] ?? null, $seoProduto['name'], $seoProduto['description'] ?? null, $seoProduto['images'][0]['media_url'] ?? $imagens[0] ?? null, $seoProduto['created_at'] ?? null))
                 @if ($video)
@@ -88,7 +118,7 @@
             @else
                 {{-- Link da loja compartilhado no WhatsApp/Instagram/Facebook saía sem logo
                      (pedido 2026-10-23): fora da página de produto vai a logo oficial 1200x630. --}}
-                <meta property="og:title" content="{{ config('app.name', 'KazaKora') }}">
+                <meta property="og:title" content="{{ $seoDepartamento ? $seoDepartamento['name'].' | KazaKora' : config('app.name', 'KazaKora') }}">
                 <meta property="og:description" content="{{ $descricao }}">
                 <meta property="og:image" content="{{ url('/images/marca/og-kazakora.png') }}">
                 <meta property="og:image:type" content="image/png">
@@ -96,6 +126,17 @@
                 <meta property="og:image:height" content="630">
                 <meta property="og:image:alt" content="Logo KazaKora">
                 <meta name="twitter:card" content="summary_large_image">
+                @if ($seoHomeLimpa)
+                    {{-- Loja e busca do site para o Google (tarefa 4037, 10/11). --}}
+                    <script type="application/ld+json">{!! json_encode([
+                        '@context' => 'https://schema.org',
+                        '@graph' => [
+                            ['@type' => 'Organization', '@id' => rtrim(config('app.url'), '/').'/#loja', 'name' => 'KazaKora', 'url' => rtrim(config('app.url'), '/').'/', 'logo' => url('/images/marca/favicon-180.png')],
+                            ['@type' => 'WebSite', 'name' => 'KazaKora', 'url' => rtrim(config('app.url'), '/').'/', 'inLanguage' => 'pt-BR', 'publisher' => ['@id' => rtrim(config('app.url'), '/').'/#loja'],
+                                'potentialAction' => ['@type' => 'SearchAction', 'target' => rtrim(config('app.url'), '/').'/?search={search_term_string}', 'query-input' => 'required name=search_term_string']],
+                        ],
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+                @endif
             @endif
         @endunless
 
@@ -163,6 +204,12 @@
                 setTimeout(function () { var t = document.getElementById('tela-abertura'); if (t) t.classList.add('saindo'); }, 8000);
             </script>
         @endunless
-        @inertia
+        @if (request()->is('admin*'))
+            @inertia
+        @else
+            {{-- Mesmo HTML do @inertia, com o conteúdo para o Google dentro do <div id="app"> (tarefa 4037, 10/11):
+                 h1, texto e links. O Vue limpa o div ao montar e desenha a página de sempre. --}}
+            <script data-page="app" type="application/json">{!! json_encode($page) !!}</script><div id="app">@include('partials.seo-conteudo')</div>
+        @endif
     </body>
 </html>

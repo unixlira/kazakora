@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Http\Controllers;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VideoParaGoogle;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
@@ -24,6 +25,7 @@ class SitemapController
         '/politica-de-cookies',
         '/termos-de-uso',
         '/fale-conosco',
+        '/quem-somos',
     ];
 
     public function __invoke(): Response
@@ -35,6 +37,13 @@ class SitemapController
             $linhas = ['<?xml version="1.0" encoding="UTF-8"?>',
                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">',
                 '  <url><loc>'.$esc($base.'/').'</loc><changefreq>daily</changefreq><priority>1.0</priority></url>'];
+
+            // Departamentos e ofertas (tarefa 4037, 10/11): /?categoria=slug tem título,
+            // descrição e canônica próprios (app.blade.php).
+            $linhas[] = '  <url><loc>'.$esc($base.'/ofertas').'</loc><changefreq>daily</changefreq><priority>0.7</priority></url>';
+            foreach (MenuDaLoja::departamentos() as $departamento) {
+                $linhas[] = '  <url><loc>'.$esc($base.'/?categoria='.rawurlencode($departamento['slug'])).'</loc><changefreq>daily</changefreq><priority>0.7</priority></url>';
+            }
 
             foreach (self::PAGINAS as $caminho) {
                 $linhas[] = '  <url><loc>'.$esc($base.$caminho).'</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>';

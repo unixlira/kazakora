@@ -142,6 +142,30 @@ class FreteEmbutidoTest extends TestCase
         $this->assertEquals(20.0, $frete['correios']);
     }
 
+    public function test_piso_sobe_o_preco_so_onde_a_venda_daria_prejuizo(): void
+    {
+        // Pedido do Lira em 2026-11-10: "aumenta a margem nessas regiões". Ceará: PAC R$ 20.
+        $this->comCorreios();
+        // R$ 30 + R$ 20 de frete = R$ 50; custo 25 + frete 20 + insumos 2 = 47; com imposto
+        // e taxa (9,5%) sobram R$ 45,25: prejuízo. Sobe até 10% de margem: 47 / 0,805 = 58,39.
+        $prejuizo = Product::factory()->create(['price' => 30, 'cost_price' => 25, 'stock' => 5, 'is_active' => true]);
+        // Lucro baixo mas positivo (R$ 1,60): não mexe.
+        $apertado = Product::factory()->create(['price' => 100, 'cost_price' => 85, 'stock' => 5, 'is_active' => true]);
+
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$prejuizo->id)->assertOk()->assertJsonPath('final_price', 58.39);
+        $this->get("/produtos/{$prejuizo->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 58.39));
+        $this->get("/produtos/{$apertado->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
+
+        $frete = app(\App\Modules\Checkout\Support\FreteEmbutido::class)->paraProduto(Product::find($prejuizo->id));
+        $this->assertTrue($frete['piso']);
+        $this->assertEquals(20.0, $frete['correios']);
+
+        // Desligado pela configuração: volta ao frete puro.
+        config(['frete_embutido.piso_margem' => false]);
+        app()->forgetScopedInstances();
+        $this->get("/produtos/{$prejuizo->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 50));
+    }
+
     public function test_cep_no_produto_mostra_rua_e_turbo_fora_do_full(): void
     {
         Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Rua Pedro Pereira', 'bairro' => 'Centro', 'localidade' => 'Fortaleza', 'uf' => 'CE'])]);

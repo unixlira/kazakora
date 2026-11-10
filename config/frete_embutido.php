@@ -78,7 +78,9 @@ return [
 
     // Produtos com preço fixo na tela (pedido do Lira em 2026-10-25): o card,
     // a página, o carrinho e o checkout mostram o preço do cadastro, sem frete
-    // somado, para qualquer CEP. A loja paga o frete da caixa. 262 =
-    // parafusadeira leve 18V (riscado 179,34, venda 143,47).
-    'produtos_sem_frete' => [262],
+    // somado, para qualquer CEP. A loja paga o frete da caixa. O 262
+    // (parafusadeira leve 18V) saiu em 2026-11-10, pedido do Lira: a R$ 108,75
+    // fixos ela perdia R$ 5,73 no CE e R$ 27,87 no AM; agora segue o frete da
+    // região com teto e piso de margem, como os outros.
+    'produtos_sem_frete' => [],
 ];

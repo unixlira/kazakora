@@ -2,6 +2,7 @@
 
 namespace App\Services\MelhorEnvio;
 
+use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -31,46 +32,100 @@ class MelhorRastreio
     private const QUERY = 'mutation searchParcel($tracker: TrackerSearchInput!) { result: searchParcel(tracker: $tracker) { id lastStatus trackingEvents { createdAt title description location { city state } } } }';
 
     /**
+     * Eventos da etiqueta do Melhor Envio. ACHADO REAL 2026-11-10: o tipo
+     * tem que bater com o código. O do próprio Melhor Envio (ME262FTSE99BR)
+     * vai com "melhorenvio" e serve para qualquer transportadora; o da
+     * transportadora vai com o tipo dela (888031040957845 + "jet"). O
+     * 888031040957845 com "melhorenvio" dá "Bad Request" e a tela ficava
+     * sem os eventos.
+     *
      * @return list<array{titulo: string, descricao: ?string, quando: ?string, local: ?string}>  do mais novo ao mais antigo
      */
-    public function eventos(?string $codigo): array
+    public function eventosDoEnvio(MelhorEnvioEnvio $envio): array
+    {
+        $tentativas = array_filter([
+            $envio->rastreio_me ? [$envio->rastreio_me, 'melhorenvio'] : null,
+            $envio->rastreio && ($tipo = self::tipoDaTransportadora($envio->servico)) ? [$envio->rastreio, $tipo] : null,
+        ]);
+
+        foreach ($tentativas as [$codigo, $tipo]) {
+            if ($eventos = $this->eventos($codigo, $tipo)) {
+                return $eventos;
+            }
+        }
+
+        return [];
+    }
+
+    /** Tipo do Melhor Rastreio pelo nome do serviço da etiqueta (só "jet" conferido ao vivo). */
+    public static function tipoDaTransportadora(?string $servico): ?string
+    {
+        $s = mb_strtolower((string) $servico);
+
+        return match (true) {
+            str_contains($s, 'jet') || str_contains($s, 'j&t') => 'jet',
+            str_contains($s, 'jadlog') => 'jadlog',
+            str_contains($s, 'loggi') => 'loggi',
+            str_contains($s, 'correios') => 'correios',
+            default => null,
+        };
+    }
+
+    /**
+     * @return list<array{titulo: string, descricao: ?string, quando: ?string, local: ?string}>  do mais novo ao mais antigo
+     */
+    public function eventos(?string $codigo, string $tipo = 'melhorenvio'): array
     {
         $codigo = trim((string) $codigo);
         if ($codigo === '') {
             return [];
         }
 
-        return Cache::remember('melhor-rastreio:'.$codigo, now()->addMinutes(self::CACHE_MINUTOS), function () use ($codigo) {
-            try {
-                $resposta = Http::acceptJson()->asJson()->timeout(8)->connectTimeout(4)
-                    ->withHeaders(['Origin' => 'https://www.melhorrastreio.com.br'])
-                    ->post(self::URL, [
-                        'query' => self::QUERY,
-                        'variables' => ['tracker' => ['trackingCode' => $codigo, 'type' => 'melhorenvio']],
-                    ]);
-            } catch (Throwable $e) {
-                Log::channel(config('melhorenvio.log_channel'))->info('melhorrastreio.falhou', ['codigo' => $codigo, 'message' => $e->getMessage()]);
+        $chave = "melhor-rastreio:{$tipo}:{$codigo}";
+        if (is_array($salvo = Cache::get($chave))) {
+            return $salvo;
+        }
 
-                return [];
-            }
+        $eventos = $this->buscar($codigo, $tipo);
+        // Vazio fica pouco tempo: o pacote pode ganhar o primeiro evento logo.
+        Cache::put($chave, $eventos, now()->addMinutes($eventos === [] ? 2 : self::CACHE_MINUTOS));
 
-            $eventos = $resposta->successful() ? $resposta->json('data.result.trackingEvents') : null;
-            if (! is_array($eventos)) {
-                return [];
-            }
+        return $eventos;
+    }
 
-            return collect($eventos)
-                ->filter(fn ($e) => is_array($e) && filled($e['title'] ?? null))
-                ->map(fn ($e) => [
-                    'titulo' => (string) $e['title'],
-                    'descricao' => filled($e['description'] ?? null) ? (string) $e['description'] : null,
-                    'quando' => self::hora($e['createdAt'] ?? null),
-                    'local' => self::local($e['location'] ?? null),
-                ])
-                ->sortByDesc('quando')
-                ->values()
-                ->all();
-        });
+    private function buscar(string $codigo, string $tipo): array
+    {
+        try {
+            $resposta = Http::acceptJson()->asJson()->timeout(8)->connectTimeout(4)
+                ->withHeaders(['Origin' => 'https://www.melhorrastreio.com.br'])
+                ->post(self::URL, [
+                    'query' => self::QUERY,
+                    'variables' => ['tracker' => ['trackingCode' => $codigo, 'type' => $tipo]],
+                ]);
+        } catch (Throwable $e) {
+            Log::channel(config('melhorenvio.log_channel'))->info('melhorrastreio.falhou', ['codigo' => $codigo, 'message' => $e->getMessage()]);
+
+            return [];
+        }
+
+        $eventos = $resposta->successful() ? $resposta->json('data.result.trackingEvents') : null;
+        if (! is_array($eventos)) {
+            Log::channel(config('melhorenvio.log_channel'))->info('melhorrastreio.sem_eventos', ['codigo' => $codigo, 'tipo' => $tipo, 'erro' => $resposta->json('errors.0.message')]);
+
+            return [];
+        }
+
+        return collect($eventos)
+            ->filter(fn ($e) => is_array($e) && filled($e['title'] ?? null))
+            ->map(fn ($e) => [
+                'titulo' => (string) $e['title'],
+                'descricao' => filled($e['description'] ?? null) ? (string) $e['description'] : null,
+                'quando' => self::hora($e['createdAt'] ?? null),
+                'local' => self::local($e['location'] ?? null),
+            ])
+            ->sortByDesc('quando')
+            ->values()
+            ->all();
     }
 
     private static function hora(mixed $valor): ?string

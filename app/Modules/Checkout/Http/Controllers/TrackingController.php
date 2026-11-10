@@ -134,7 +134,7 @@ class TrackingController extends Controller
                 'transportadora' => $order->transportadoraDoEnvio(),
                 'etapas' => $order->etapas(),
                 // Etapas da transportadora abaixo de "Pedido enviado" e a previsão (pedido do Lira em 2026-11-09).
-                'eventos_transportadora' => $codigo && $order->melhorEnvioEnvio ? app(MelhorRastreio::class)->eventos($codigo) : [],
+                'eventos_transportadora' => $order->melhorEnvioEnvio ? app(MelhorRastreio::class)->eventosDoEnvio($order->melhorEnvioEnvio) : [],
                 'previsao_entrega' => $this->previsaoDeEntrega($order),
                 'pix' => $pix ? $this->dadosDoPix($ref, $pix) : null,
             ],

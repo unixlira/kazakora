@@ -297,7 +297,7 @@ class MelhorEnvioAutoShipping
             $info = $this->client->post('me/shipment/tracking', ['orders' => [$envio->me_order_id]])[$envio->me_order_id] ?? [];
             $rastreio = $info['tracking'] ?? $info['melhorenvio_tracking'] ?? null;
             if ($rastreio) {
-                $envio->forceFill(['rastreio' => $rastreio])->save();
+                $envio->forceFill(['rastreio' => $rastreio, 'rastreio_me' => $info['melhorenvio_tracking'] ?? null])->save();
             }
         } catch (Throwable $e) {
             Log::channel(config('melhorenvio.log_channel'))->info('melhorenvio.rastreio_indisponivel', ['envio' => $envio->id, 'message' => $e->getMessage()]);

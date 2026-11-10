@@ -49,8 +49,11 @@ class LogisticaProvedorTest extends TestCase
     /** Token do Melhor Envio que não renova (o caso da produção em 03/11). */
     private bool $refreshRecusado = false;
 
-    /** @var list<string> CEPs que o Melhor Envio recusa (422 postal_code), como o 06730-001 em 09/11. */
+    /** @var list<string> CEPs (ou começos de CEP) que o Melhor Envio recusa (422 postal_code), como o 06730-001 em 09/11. */
     private array $cepsRecusadosMe = [];
+
+    /** @var list<array<string, string>> Resposta do ViaCEP na busca de ruas. */
+    private array $ruasViaCep = [];
 
     protected function setUp(): void
     {
@@ -98,7 +101,8 @@ class LogisticaProvedorTest extends TestCase
                 ])->all());
             }
             if (str_contains($url, '/me/shipment/calculate')) {
-                if (in_array($request['to']['postal_code'] ?? null, $this->cepsRecusadosMe, true)) {
+                $destino = (string) ($request['to']['postal_code'] ?? '');
+                if (collect($this->cepsRecusadosMe)->contains(fn ($r) => str_starts_with($destino, $r))) {
                     return Http::response(['errors' => ['postal_code' => ['O campo cep_destino está invalido']], 'message' => 'The given data was invalid.'], 422);
                 }
                 $kg = (float) $request['package']['weight'];
@@ -108,6 +112,9 @@ class LogisticaProvedorTest extends TestCase
                     ['id' => 31, 'name' => 'Express', 'price' => number_format($kg * 12, 2, '.', ''), 'delivery_time' => 2, 'company' => ['name' => 'Loggi']],
                     ['id' => 17, 'name' => 'Mini Envios', 'error' => 'Dimensões acima do limite', 'company' => ['name' => 'Correios']],
                 ]);
+            }
+            if (str_contains($url, 'viacep.com.br/ws/ES/')) {
+                return Http::response($this->ruasViaCep);
             }
             if (str_contains($url, '/me/cart')) {
                 return Http::response(['id' => self::ME_ID, 'protocol' => 'ORD-2026110300001', 'price' => 3.6, 'status' => 'pending'], 201);
@@ -279,11 +286,9 @@ class LogisticaProvedorTest extends TestCase
         // Melhor Envio não reconhece e desistia depois de 6 tentativas.
         $this->contaMelhorEnvio();
         $tabela = app(TabelaFreteLocalidades::class);
-        // 29823000 (distrito, sem faixa própria) não tem CEP real alternativo.
+        // Toda a região recusada e o ViaCEP sem rua: sobra o preço dos Correios.
         $recusado = '29823000';
-        $bom = '29820000';
-        $this->assertSame([], $tabela->cepsReaisDaFaixa($recusado));
-        $this->cepsRecusadosMe = [$recusado];
+        $this->cepsRecusadosMe = ['2982'];
 
         $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
             ->assertSuccessful();
@@ -293,7 +298,65 @@ class LogisticaProvedorTest extends TestCase
         $correios = DB::table('frete_tabela')->where(['provedor' => 'correios', 'cep_destino' => $recusado, 'categoria' => 'pequena'])->first();
         $this->assertEquals($correios->pac_preco, $linha->pac_preco);
         $this->assertStringContainsString('CEP recusado pelo Melhor Envio', $linha->erro);
-        $this->assertSame('Jadlog Package', DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => $bom, 'categoria' => 'pequena'])->value('pac_servico'));
+        $this->assertSame(['29820000', '29823000'], $tabela->cepsRecusadosMelhorEnvio());
+    }
+
+    public function test_distrito_recusado_usa_o_cep_da_sede_do_municipio(): void
+    {
+        // ACHADO REAL 2026-11-09: Serrinha do Rosário (97844-700) recusado pelo
+        // Melhor Envio; Rolador (97843-000), a sede, aceito.
+        $this->contaMelhorEnvio();
+        $tabela = app(TabelaFreteLocalidades::class);
+        $this->assertSame([], $tabela->cepsReaisDaFaixa('29823000'));
+        $this->assertContains('29820000', $tabela->cepsAlternativos('29823000'));
+        $this->cepsRecusadosMe = ['29823000'];
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        $linha = DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => '29823000', 'categoria' => 'pequena'])->first();
+        $this->assertSame('Jadlog Package', $linha->pac_servico);
+        $this->assertNull($linha->erro);
+    }
+
+    public function test_cidade_com_padroes_recusados_usa_cep_de_rua_do_viacep(): void
+    {
+        // ACHADO REAL 2026-11-09: BH 30000-001 e os padrões 30010-000,
+        // 30020-000... recusados; 31744-805, rua real do ViaCEP, aceito.
+        $this->contaMelhorEnvio();
+        $tabela = app(TabelaFreteLocalidades::class);
+        $padroes = $tabela->cepsReaisDaFaixa('29820000');
+        $this->cepsRecusadosMe = ['29820000', '29823000', ...$padroes];
+        $this->ruasViaCep = [['cep' => '29825-123', 'logradouro' => 'Rua Real', 'localidade' => 'Água Doce do Norte', 'uf' => 'ES']];
+        $this->assertContains('29825123', $tabela->cepsAlternativos('29820000'));
+
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+
+        foreach (['29820000', '29823000'] as $cep) {
+            $linha = DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => $cep, 'categoria' => 'pequena'])->first();
+            $this->assertSame('Jadlog Package', $linha->pac_servico, $cep);
+            $this->assertNull($linha->erro, $cep);
+        }
+    }
+
+    public function test_opcao_recusados_cota_de_novo_so_os_recusados(): void
+    {
+        $this->contaMelhorEnvio();
+        $tabela = app(TabelaFreteLocalidades::class);
+        $this->cepsRecusadosMe = ['2982'];
+        $this->artisan('frete:tabela-localidades', ['--sem-importar' => true, '--agora' => true, '--provedor' => 'melhor_envio'])
+            ->assertSuccessful();
+        $this->assertCount(2, $tabela->cepsRecusadosMelhorEnvio());
+
+        // O Melhor Envio passa a aceitar a sede: as duas localidades saem da lista.
+        $this->cepsRecusadosMe = ['29823000'];
+        $this->artisan('frete:tabela-localidades', ['--recusados' => true])
+            ->expectsOutputToContain('2 resolvidos, 0 seguem')
+            ->assertSuccessful();
+
+        $this->assertSame([], $tabela->cepsRecusadosMelhorEnvio());
+        $this->assertNull(DB::table('frete_tabela')->where(['provedor' => 'melhor_envio', 'cep_destino' => '29823000', 'categoria' => 'pequena'])->value('erro'));
     }
 
     public function test_cep_de_faixa_recusado_usa_um_cep_real_da_mesma_faixa(): void

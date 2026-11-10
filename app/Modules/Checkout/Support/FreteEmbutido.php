@@ -195,11 +195,13 @@ class FreteEmbutido
 
     /**
      * Teto do frete somado ao preço (pedido do Lira em 2026-11-10: "fretes
-     * altos em lugares mais longe"). Com o Melhor Envio a parafusadeira
-     * somava R$ 19 em SP e R$ 49 no Norte; acima do teto a loja paga a
-     * diferença (o custo real fica em "correios"). Caixa grande e extra
-     * grande ficam de fora: o frete delas para o Norte passa de R$ 100 e o
-     * teto comeria a margem inteira (frete_embutido.teto_categorias).
+     * altos em lugares mais longe"; no mesmo dia, "aplica em todos os
+     * produtos", bike e árvore incluídas). Com o Melhor Envio a parafusadeira
+     * somava R$ 19 em SP e R$ 49 no Norte. Acima do teto a loja paga a
+     * diferença (o custo real fica em "correios"), MAS só até onde sobra a
+     * margem mínima: ACHADO REAL 2026-11-10, com o teto puro 18 produtos
+     * baratos davam prejuízo no Norte (bomba de ar de R$ 44,56 no AM perdia
+     * R$ 18,52). Produto sem custo cadastrado não ganha teto.
      */
     private function comTeto(Product $product, array $frete): array
     {
@@ -208,12 +210,51 @@ class FreteEmbutido
             return $frete;
         }
 
-        $fora = (array) config('frete_embutido.teto_fora', ['grande', 'extra_grande']);
-        if (in_array($this->categoria($product), $fora, true)) {
+        if (in_array($this->categoria($product), (array) config('frete_embutido.teto_fora', []), true)) {
             return $frete;
         }
 
-        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => $teto, 'teto' => true];
+        $absorver = min($frete['embutido'] - $teto, $this->folgaParaAbsorver($product, $frete));
+        if ($absorver < 0.01) {
+            return $frete;
+        }
+
+        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => round($frete['embutido'] - $absorver, 2), 'teto' => true];
+    }
+
+    /** @var array<int, ?float> custo do produto pai, por id */
+    private array $custosDosPais = [];
+
+    /**
+     * Quanto do frete a loja pode pagar mantendo a margem mínima
+     * (frete_embutido.teto_margem_minima, % do preço). Preço = base + frete
+     * somado − x; margem = preço × (1 − imposto − taxa do pagamento) − custo −
+     * frete real − insumos. x máximo: base + frete somado − (custo + frete
+     * real + insumos) / (1 − imposto − taxa − margem mínima).
+     */
+    private function folgaParaAbsorver(Product $product, array $frete): float
+    {
+        $custo = (float) ($product->cost_price ?: 0);
+        if ($custo <= 0 && $product->parent_product_id) {
+            $pai = $product->parent_product_id;
+            $this->custosDosPais[$pai] ??= Product::query()->whereKey($pai)->value('cost_price');
+            $custo = (float) ($this->custosDosPais[$pai] ?? 0);
+        }
+        if ($custo <= 0) {
+            return 0.0;
+        }
+
+        $promocional = $product->precoPromocional();
+        $base = $promocional !== null ? min($product->precoSemOferta(), $promocional) : $product->precoSemOferta();
+        $real = (float) ($frete['correios'] ?? $frete['embutido']);
+        $fatia = 1 - ((float) config('loja.simples.aliquota', 4.5) + (float) config('frete_embutido.teto_taxa_pagamento', 5) + (float) config('frete_embutido.teto_margem_minima', 10)) / 100;
+        if ($fatia <= 0) {
+            return 0.0;
+        }
+
+        $precoMinimo = ($custo + $real + (float) config('frete_embutido.teto_insumos', 2)) / $fatia;
+
+        return max(0.0, round($base + $frete['embutido'] - $precoMinimo, 2));
     }
 
     /**

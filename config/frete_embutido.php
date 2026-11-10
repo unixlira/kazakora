@@ -28,10 +28,14 @@ return [
     'turbo_max' => 60.0,
 
     // Teto do frete somado ao preço (pedido do Lira em 2026-11-10): acima
-    // disto a loja paga a diferença. 0 desliga. Caixa grande e extra grande
-    // ficam de fora (frete delas para o Norte passa de R$ 100).
+    // disto a loja paga a diferença, mas só até sobrar a margem mínima (% do
+    // preço, depois de imposto, taxa do pagamento, frete real e insumos).
+    // 0 desliga. teto_fora: categorias de caixa que não ganham teto.
     'teto_embutido' => (float) env('FRETE_EMBUTIDO_TETO', 30),
-    'teto_fora' => ['grande', 'extra_grande'],
+    'teto_margem_minima' => (float) env('FRETE_EMBUTIDO_TETO_MARGEM', 10),
+    'teto_taxa_pagamento' => 5.0,
+    'teto_insumos' => 2.0,
+    'teto_fora' => [],
 
     // Trava do frete (pedido do Lira em 2026-10-24): depois que o visitante
     // calcula o frete de um produto (CEP na página do produto ou no checkout),

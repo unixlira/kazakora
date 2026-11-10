@@ -156,10 +156,6 @@ class HandleInertiaRequests extends Middleware
                 'warning' => $request->session()->get('warning'),
                 // Resultado de cada etapa do botão "Cancelar pedido" (Orders/Show.vue).
                 'cancelamento' => $request->session()->get('cancelamento'),
-                // Estoque baixo no login (pedido explícito 2026-08-16) —
-                // ver AuthenticatedSessionController::store() e
-                // LowStockAlertModal.vue.
-                'lowStockProducts' => $request->session()->get('lowStockProducts'),
             ],
         ];
     }

@@ -454,13 +454,13 @@ class TabelaFreteLocalidades
         $recusados = array_flip($cotador->cepRecusado);
 
         // CEP de faixa (XXXXX-001, cidade com CEP por rua: São Paulo, Osasco...)
-        // não existe para o Melhor Envio. Tenta CEPs reais da mesma faixa e
-        // grava o preço do primeiro aceito no CEP da localidade.
+        // não existe para o Melhor Envio. Tenta outros CEPs (cepsAlternativos)
+        // e grava o preço do primeiro aceito no CEP da localidade.
         foreach ($ceps as $cep) {
             if (! $categorias->every(fn ($c) => isset($recusados["{$cep}|{$c->chave}"]))) {
                 continue;
             }
-            foreach (array_slice($this->cepsReaisDaFaixa($cep), 0, 4) as $alternativo) {
+            foreach ($this->cepsAlternativos($cep) as $alternativo) {
                 $tentativa = [];
                 foreach ($categorias as $c) {
                     $tentativa["{$cep}|{$c->chave}"] = ['cep' => $alternativo] + $pacotes["{$cep}|{$c->chave}"];
@@ -538,6 +538,80 @@ class TabelaFreteLocalidades
         $this->novaVersao();
 
         return $gravados;
+    }
+
+    /** Até quantos CEPs alternativos tentar por CEP recusado (cada um = 1 cotação por categoria). */
+    private const ALTERNATIVOS_MAX = 8;
+
+    /**
+     * CEPs para cotar no lugar de um que o Melhor Envio recusa, na ordem:
+     * 1. padrões da mesma faixa (cepsReaisDaFaixa, até 4);
+     * 2. o CEP da sede do município, para distrito e povoado (ACHADO REAL
+     *    09/11: Serrinha do Rosário 97844-700 recusado, Rolador 97843-000 aceito);
+     * 3. CEPs de rua reais do município pelo ViaCEP, primeiro os de dentro
+     *    da faixa (ACHADO REAL 09/11: BH 30000-001 e todos os padrões
+     *    30010-000, 30020-000... recusados; 31744-805 e 30660-250, do
+     *    ViaCEP, aceitos).
+     *
+     * @return list<string>
+     */
+    public function cepsAlternativos(string $cep): array
+    {
+        $candidatos = array_slice($this->cepsReaisDaFaixa($cep), 0, 4);
+
+        $localidades = DB::table('frete_localidades')->where('cep_cotacao', $cep)->get();
+        $sede = DB::table('frete_localidades')->where('tipo', 'M')
+            ->whereIn('municipio_id', $localidades->pluck('municipio_id')->filter()->unique())
+            ->whereNotNull('cep_cotacao')
+            ->pluck('cep_cotacao');
+        array_push($candidatos, ...$sede->all());
+
+        $municipio = $localidades->first(fn ($l) => $l->municipio_nome);
+        if ($municipio) {
+            $faixas = DB::table('frete_localidade_faixas')->whereIn('frete_localidade_id', $localidades->pluck('id'))->get();
+            $naFaixa = fn (string $c) => $faixas->contains(fn ($f) => (int) $c >= (int) $f->cep_inicial && (int) $c <= (int) $f->cep_final);
+            $deRua = collect($this->cepsDeRua($municipio->uf, $municipio->municipio_nome))
+                ->sortBy(fn ($c) => $naFaixa($c) ? 0 : 1)
+                ->take(3);
+            array_push($candidatos, ...$deRua->all());
+        }
+
+        return array_slice(array_values(array_unique(array_filter($candidatos, fn ($c) => $c && $c !== $cep))), 0, self::ALTERNATIVOS_MAX);
+    }
+
+    /**
+     * CEPs de logradouro do município no ViaCEP (busca por "Rua"). Vazio se
+     * o ViaCEP falhar ou a cidade tiver CEP único.
+     *
+     * @return list<string>
+     */
+    private function cepsDeRua(string $uf, string $municipio): array
+    {
+        if (mb_strlen($municipio) < 3) {
+            return [];
+        }
+
+        $resposta = rescue(fn () => Http::acceptJson()->timeout(8)->connectTimeout(4)
+            ->get('https://viacep.com.br/ws/'.rawurlencode($uf).'/'.rawurlencode($municipio).'/Rua/json/'), null, false);
+
+        if (! $resposta instanceof Response || $resposta->failed() || ! is_array($resposta->json())) {
+            return [];
+        }
+
+        return collect($resposta->json())
+            ->filter(fn ($i) => is_array($i) && empty($i['erro']))
+            ->map(fn ($i) => self::cep($i['cep'] ?? null))
+            ->filter()->unique()->values()->all();
+    }
+
+    /** CEPs de cotação que o Melhor Envio recusou e ficaram com o preço dos Correios. */
+    public function cepsRecusadosMelhorEnvio(): array
+    {
+        return DB::table('frete_tabela')
+            ->where('provedor', FreteProvedor::MELHOR_ENVIO)
+            ->where('erro', 'like', 'CEP recusado pelo Melhor Envio%')
+            ->distinct()->orderBy('cep_destino')
+            ->pluck('cep_destino')->all();
     }
 
     /**

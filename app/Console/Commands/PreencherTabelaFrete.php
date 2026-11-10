@@ -18,6 +18,10 @@ use Throwable;
  * --provedor=melhor_envio (pedido do Lira em 2026-11-03) preenche as linhas
  * do Melhor Envio com os Correios conectados: o site continua nos Correios
  * e a tabela do Melhor Envio fica pronta para quando ele for conectado.
+ *
+ * --recusados (pedido do Lira em 2026-11-09): os 319 CEPs que o Melhor
+ * Envio recusou na 1ª tabela (BH, Santo Ângelo...) cotam de novo, agora
+ * tentando a sede do município e CEPs de rua do ViaCEP.
  */
 class PreencherTabelaFrete extends Command
 {
@@ -26,7 +30,8 @@ class PreencherTabelaFrete extends Command
         {--sem-importar : Não baixa as localidades de novo, só cota o que está pendente}
         {--agora : Roda neste processo em vez da fila}
         {--limite=0 : Com --agora, para depois de N CEPs cotados}
-        {--provedor= : correios ou melhor_envio (padrão: o conectado em Logística)}';
+        {--provedor= : correios ou melhor_envio (padrão: o conectado em Logística)}
+        {--recusados : Cota de novo só os CEPs que o Melhor Envio recusou (ficaram com o preço dos Correios)}';
 
     protected $description = 'Preenche a tabela de frete por localidade (PAC e SEDEX por categoria de tamanho)';
 
@@ -40,6 +45,10 @@ class PreencherTabelaFrete extends Command
             return self::INVALID;
         }
 
+        if ($this->option('recusados')) {
+            return $this->recotarRecusados($tabela);
+        }
+
         try {
             return $this->executar($tabela, $ufs, $provedor);
         } catch (Throwable $e) {
@@ -48,6 +57,25 @@ class PreencherTabelaFrete extends Command
 
             return self::FAILURE;
         }
+    }
+
+    private function recotarRecusados(TabelaFreteLocalidades $tabela): int
+    {
+        $ceps = $tabela->cepsRecusadosMelhorEnvio();
+        $this->line(count($ceps).' CEPs recusados pelo Melhor Envio.');
+
+        foreach (array_chunk($ceps, 10) as $lote) {
+            try {
+                $tabela->cotar($lote, FreteProvedor::MELHOR_ENVIO);
+            } catch (Throwable $e) {
+                $this->warn($e->getMessage());
+            }
+        }
+
+        $restantes = count($tabela->cepsRecusadosMelhorEnvio());
+        $this->info('Pronto: '.(count($ceps) - $restantes)." resolvidos, {$restantes} seguem com o preço dos Correios.");
+
+        return self::SUCCESS;
     }
 
     /** @param  list<string>|null  $ufs */

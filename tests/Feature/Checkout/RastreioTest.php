@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -116,6 +117,7 @@ class RastreioTest extends TestCase
     {
         // ACHADO REAL 2026-11-09: o #3978 saiu pela J&T (888031040957845) e a
         // tela mandava o cliente para os Correios, com "Frete Grátis" como transportadora.
+        Http::fake(['melhor-rastreio-api.melhorrastreio.com.br/*' => Http::response(['data' => ['result' => null]])]);
         $order = $this->pedido(['shipping_carrier_name' => 'Frete Grátis']);
         ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_STORE, 'tracking_code' => '888031040957845', 'status' => 'label_ready']);
         MelhorEnvioEnvio::create(['order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_GERADA, 'servico' => 'JeT Standard', 'rastreio' => '888031040957845']);
@@ -126,6 +128,53 @@ class RastreioTest extends TestCase
                 ->where('pedido.codigo_rastreio', '888031040957845')
                 ->where('pedido.transportadora', 'JeT Standard')
                 ->where('pedido.rastreio_correios', false)
+                ->where('pedido.rastreio_url', 'https://www.melhorrastreio.com.br/rastreio/888031040957845'));
+    }
+
+    public function test_etapas_da_transportadora_e_previsao_aparecem_abaixo_de_pedido_enviado(): void
+    {
+        // Resposta real do Melhor Rastreio para o #3978 (J&T) em 2026-11-09:
+        // a hora vem com "Z" mas é a de Brasília.
+        Http::fake(['melhor-rastreio-api.melhorrastreio.com.br/*' => Http::response(['data' => ['result' => [
+            'id' => 'me-logistic:888031040957845', 'lastStatus' => 'POSTED',
+            'trackingEvents' => [
+                ['createdAt' => '2026-11-09T12:26:42.000Z', 'title' => 'Seu pacote foi coletado pela transportadora', 'description' => 'Seu pacote já está com a transportadora', 'location' => ['city' => 'São Paulo', 'state' => 'SP']],
+                ['createdAt' => '2026-11-09T16:52:44.000Z', 'title' => 'Seu pacote foi transferido para outra unidade', 'description' => 'Seu pacote seguirá trajeto em breve', 'location' => ['city' => 'São Paulo', 'state' => 'SP']],
+                ['createdAt' => '2026-11-09T11:21:41.273Z', 'title' => 'Adicionado no sistema', 'description' => null, 'location' => null],
+            ],
+        ]]])]);
+        $order = $this->pedido(['status' => Order::STATUS_SHIPPED]);
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_STORE, 'tracking_code' => '888031040957845', 'status' => 'label_ready']);
+        MelhorEnvioEnvio::create([
+            'order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_GERADA, 'servico' => 'JeT Standard', 'rastreio' => '888031040957845',
+            'postada_em' => '2026-11-09 12:55:53', 'resposta' => ['delivery_min' => 5, 'delivery_max' => 7],
+        ]);
+
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('pedido.eventos_transportadora', 3)
+                ->where('pedido.eventos_transportadora.0.titulo', 'Seu pacote foi transferido para outra unidade')
+                ->where('pedido.eventos_transportadora.0.quando', '2026-11-09T16:52:44-03:00')
+                ->where('pedido.eventos_transportadora.0.local', 'São Paulo/SP')
+                ->where('pedido.eventos_transportadora.2.titulo', 'Adicionado no sistema')
+                // Postado segunda 09/11 + 7 dias úteis = quarta 18/11.
+                ->where('pedido.previsao_entrega.entregue', false)
+                ->where('pedido.previsao_entrega.data', fn ($d) => str_starts_with($d, '2026-11-18')));
+    }
+
+    public function test_melhor_rastreio_fora_do_ar_nao_quebra_a_tela(): void
+    {
+        Http::fake(['melhor-rastreio-api.melhorrastreio.com.br/*' => Http::response('erro', 500)]);
+        $order = $this->pedido();
+        ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_STORE, 'tracking_code' => '888031040957845', 'status' => 'label_ready']);
+        MelhorEnvioEnvio::create(['order_id' => $order->id, 'status' => MelhorEnvioEnvio::STATUS_GERADA, 'servico' => 'JeT Standard', 'rastreio' => '888031040957845']);
+
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('pedido.eventos_transportadora', [])
+                ->where('pedido.previsao_entrega', null)
                 ->where('pedido.rastreio_url', 'https://www.melhorrastreio.com.br/rastreio/888031040957845'));
     }
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -56,7 +57,7 @@ class SitemapTest extends TestCase
         ]);
 
         $this->get('/produtos/ring-light-10')->assertOk()
-            ->assertSee('<title inertia>KazaKora - Ring Light 10 Polegadas</title>', false)
+            ->assertSee('<title inertia>Ring Light 10 Polegadas | KazaKora</title>', false)
             ->assertSee('<meta name="description" content="Iluminação para vídeos">', false)
             ->assertSee('"@type":"Product"', false)
             ->assertSee('"priceCurrency":"BRL"', false);
@@ -158,5 +159,46 @@ class SitemapTest extends TestCase
             ->assertSee('<meta property="og:image" content="'.url('/storage/products/medias/pesada.webp').'">', false);
         $this->get('/produtos/sem-foto')->assertOk()
             ->assertSee('<meta property="og:image" content="'.url('/images/marca/og-kazakora.png').'">', false);
+    }
+
+    public function test_descricao_do_produto_sai_sem_emoji_e_sem_o_titulo_em_maiusculas(): void
+    {
+        Product::factory()->create([
+            'slug' => 'extensao-5-tomadas',
+            'name' => 'Extensão Elétrica 5 Tomadas',
+            'description' => '<p>✨ EXTENSÃO ELÉTRICA 5 TOMADAS + 3 USB BIVOLT</p><p>Organize sua estação de trabalho ✅ com segurança.</p>',
+            'is_active' => true,
+        ]);
+
+        $this->get('/produtos/extensao-5-tomadas')->assertOk()
+            ->assertSee('<meta name="description" content="Organize sua estação de trabalho com segurança.">', false)
+            ->assertSee('"@type":"MerchantReturnPolicy"', false)
+            ->assertSee('"merchantReturnDays":7', false)
+            ->assertSee('"@type":"BreadcrumbList"', false)
+            // Conteúdo para o Google dentro do div da loja.
+            ->assertSee('<div id="app"><', false)
+            ->assertSee('<h1>Extensão Elétrica 5 Tomadas</h1>', false);
+    }
+
+    public function test_departamento_tem_titulo_canonica_conteudo_e_entra_no_sitemap(): void
+    {
+        Cache::flush();
+        $categoria = Category::factory()->create(['name' => 'Ferramentas', 'slug' => 'ferramentas']);
+        Product::factory()->create(['slug' => 'martelo', 'name' => 'Martelo Unha', 'is_active' => true, 'category_id' => $categoria->id, 'stock' => 5]);
+
+        $this->get('/?categoria=ferramentas')->assertOk()
+            ->assertSee('<title inertia>Ferramentas | KazaKora</title>', false)
+            ->assertSee('<link rel="canonical" href="'.rtrim(config('app.url'), '/').'/?categoria=ferramentas">', false)
+            ->assertSee('<h1>Ferramentas</h1>', false)
+            ->assertSee('<a href="/produtos/martelo">Martelo Unha</a>', false);
+
+        $this->get('/')->assertOk()
+            ->assertSee('"@type":"WebSite"', false)
+            ->assertSee('<a href="/?categoria=ferramentas">Ferramentas</a>', false)
+            ->assertSee('<a href="/produtos/martelo">Martelo Unha</a>', false);
+
+        $this->get('/sitemap.xml')->assertOk()
+            ->assertSee('/?categoria=ferramentas', false)
+            ->assertSee('/ofertas', false);
     }
 }

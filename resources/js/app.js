@@ -8,7 +8,9 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
 
 createInertiaApp({
-    title: (title) => (title ? `${appName} - ${title}` : appName),
+    // SEO (tarefa 4037, 10/11): o nome da página vem antes da marca, como o Google prefere.
+    // Título que já cita a loja ("KazaKora — eletrônicos...") fica como está.
+    title: (title) => (!title ? appName : title.includes(appName) ? title : `${title} | ${appName}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Modules/${name}.vue`,

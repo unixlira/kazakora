@@ -361,7 +361,9 @@ abstract class CatalogoOutroSite
             return $texto;
         }
 
-        return collect(preg_split('/\R/', $texto))
+        // Com /u: sem ele o \R pega o byte 0x85 do meio de emoji como o ✅
+        // (E2 9C 85) e quebra a linha no meio, virando "�" no site (tarefa 3997).
+        return collect(preg_split('/\R/u', $texto))
             ->map(fn ($linha) => trim($linha))
             ->filter()
             ->map(fn ($linha) => '<p>'.e($linha).'</p>')

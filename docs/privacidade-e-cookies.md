@@ -162,6 +162,18 @@ pedido 2026-10-11), sem repetir a mesma pessoa/IP:
 - Visita sem OK de um IP que no mesmo dia deu OK entra no cookie dele (quem
   navegou antes de dar OK não conta duas vezes). A página do OK já conta.
 
+#### Visitas da FerraKora e da Beauty Kora (`/api/{site}/visita`, 2026-11-11)
+O site avisa cada página (`OutroSiteVisitaController`). Desde 11/11/2026 o
+aviso da FerraKora leva também, para a tela Visitas FerraKora mostrar de onde
+veio e se o pixel rodou (as visitas dos anúncios apareciam todas "Interno"):
+- 1ª página da aba (`e=1`): site de onde veio (`ref`, sem o `?...`), `utm_*` e
+  o parâmetro de clique (fbclid, gclid...). Valor do clique só do fbclid,
+  mesma regra da loja. Páginas seguintes (`e=0`) são Interno.
+- `_fbp` e `_fbc` do Pixel da Meta, em `site_visits.cookies`. A FerraKora
+  não tem aviso de cookies e roda o Pixel desde 28/10/2026 (decisão do Lira);
+  a Política dela cita os dois cookies. Guardar o valor aqui é medir os
+  anúncios, a mesma finalidade. Prazo: o mesmo das visitas.
+
 ### Localização no pedido (pedido 2026-10-12)
 O pedido do site grava `orders.visitante_latitude` e `visitante_longitude`,
 aproximadas pelo IP, dos cabeçalhos `CF-IPLatitude`/`CF-IPLongitude` da

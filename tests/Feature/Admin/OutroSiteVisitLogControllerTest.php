@@ -87,6 +87,43 @@ class OutroSiteVisitLogControllerTest extends TestCase
                 ->where('visitas.data.0.ip', '7.7.7.7'));
     }
 
+    public function test_primeira_pagina_do_anuncio_grava_origem_clique_e_cookies_do_pixel(): void
+    {
+        // Clique no anúncio da campanha da parafusadeira (2026-11-11): antes tudo saía "Interno" e sem pixel.
+        $url = '/api/ferrakora/visita?'.http_build_query([
+            'p' => '/produto/parafusadeira/', 'e' => '1', 'ref' => 'https://m.facebook.com/',
+            'utm_campaign' => 'fk_parafusadeira_ugc_bf26', 'fbclid' => 'IwAR123abcDEF',
+            'fbp' => 'fb.1.1794404276145.544132532494356382', 'fbc' => 'fb.1.1794404272470.IwAR123abcDEF',
+        ]);
+        $this->withHeaders(['Origin' => 'https://ferrakora.devlira.com.br', 'User-Agent' => self::NAVEGADOR])
+            ->post($url)->assertNoContent();
+
+        $visita = SiteVisit::query()->sole();
+        $this->assertSame('facebook', $visita->origem);
+        $this->assertSame('https://m.facebook.com/', $visita->referer);
+        $this->assertSame('fk_parafusadeira_ugc_bf26', $visita->utm_campaign);
+        $this->assertSame(['fbclid', 'IwAR123abcDEF'], [$visita->click_id_param, $visita->click_id]);
+        $this->assertSame([
+            '_fbc' => 'fb.1.1794404272470.IwAR123abcDEF',
+            '_fbp' => 'fb.1.1794404276145.544132532494356382',
+        ], $visita->cookies);
+        $this->assertSame('computador', $visita->dispositivo);
+    }
+
+    public function test_paginas_seguintes_sao_internas_e_o_proprio_site_nao_e_origem(): void
+    {
+        $cabecalhos = ['Origin' => 'https://ferrakora.devlira.com.br', 'User-Agent' => self::NAVEGADOR];
+        $this->withHeaders($cabecalhos)->post('/api/ferrakora/visita?p=/checkout&e=0&fbp=lixo')->assertNoContent();
+        $this->withHeaders($cabecalhos)->post('/api/ferrakora/visita?p=/&e=1&ref='.urlencode('https://ferrakora.devlira.com.br/produtos'))->assertNoContent();
+        // Versão antiga do site (sem "e"): grava como antes.
+        $this->withHeaders($cabecalhos)->post('/api/ferrakora/visita?p=/velho')->assertNoContent();
+
+        $origens = SiteVisit::query()->orderBy('id')->get(['origem', 'referer', 'cookies']);
+        $this->assertSame(['interno', 'direto', null], $origens->pluck('origem')->all());
+        $this->assertNull($origens[0]->cookies);
+        $this->assertNull($origens[1]->referer);
+    }
+
     public function test_recusa_outro_dominio_e_ignora_robo(): void
     {
         $this->withHeaders(['Origin' => 'https://outro-site.com', 'User-Agent' => self::NAVEGADOR])

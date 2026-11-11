@@ -3,12 +3,14 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\Publicidade\CampanhasMetaPorLoja;
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\MetaAdsCampanhaHistorico;
 use App\Services\Meta\MetaAdsCrescimento;
 use App\Services\Meta\MetaAdsException;
 use App\Services\Meta\MetaAdsService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -26,9 +28,9 @@ use Inertia\Response;
  */
 class PublicidadePlataformaController extends Controller
 {
-    public function metaAds(): Response
+    public function metaAds(Request $request): Response
     {
-        return $this->exibir(PlataformaDeAnuncio::META);
+        return $this->exibir(PlataformaDeAnuncio::META, $request);
     }
 
     /**
@@ -52,7 +54,7 @@ class PublicidadePlataformaController extends Controller
         return $this->exibir(PlataformaDeAnuncio::GOOGLE);
     }
 
-    private function exibir(string $canal): Response
+    private function exibir(string $canal, ?Request $request = null): Response
     {
         $hoje = Carbon::now();
         $inicioMes = $hoje->copy()->startOfMonth();
@@ -74,6 +76,19 @@ class PublicidadePlataformaController extends Controller
         // continua igual.
         if ($metaConectada) {
             $extras['resumoMeta'] = Inertia::defer(fn () => $this->resumoMeta($inicioMes, $hoje, $inicioAnterior, $fimAnterior));
+
+            // Lira 2026-11-11: campanhas por loja (KazaKora, FerraKora ou as
+            // duas), lidas ao vivo, em grupo próprio para não atrasar o resto.
+            $porLoja = app(CampanhasMetaPorLoja::class);
+            $loja = $porLoja->loja($request?->query('loja'));
+            $periodoLojas = CampanhasMetaPorLoja::periodo($request?->query('periodo_lojas'));
+            $extras['lojasMeta'] = [
+                'lojas' => $porLoja->lojas(),
+                'loja' => $loja,
+                'periodo' => $periodoLojas,
+                'periodos' => CampanhasMetaPorLoja::PERIODOS,
+            ];
+            $extras['campanhasLojas'] = Inertia::defer(fn () => $porLoja->montar($loja, $periodoLojas), 'lojas');
         }
 
         // Lira 2026-10-27: histórico das campanhas excluídas, da nossa base,

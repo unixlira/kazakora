@@ -1042,6 +1042,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('whatsapp/conversas/nova', [WhatsAppInboxController::class, 'iniciar'])->name('whatsapp.conversas.nova');
         Route::post('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'send'])->whereNumber('conversation')->name('whatsapp.conversas.enviar');
         Route::post('whatsapp/conversas/{conversation}/midia', [WhatsAppInboxController::class, 'sendMedia'])->whereNumber('conversation')->name('whatsapp.conversas.enviar-midia');
+        // Modelo aprovado direto da conversa, fora da janela de 24h (Lira 11/11/2026).
+        Route::get('whatsapp/conversas/{conversation}/modelos', [WhatsAppInboxController::class, 'modelos'])->whereNumber('conversation')->name('whatsapp.conversas.modelos');
+        Route::post('whatsapp/conversas/{conversation}/modelo', [WhatsAppInboxController::class, 'sendTemplate'])->whereNumber('conversation')->name('whatsapp.conversas.enviar-modelo');
         Route::post('whatsapp/conversas/{conversation}/reagir', [WhatsAppInboxController::class, 'react'])->whereNumber('conversation')->name('whatsapp.conversas.reagir');
         Route::post('whatsapp/conversas/{conversation}/manuela', [WhatsAppInboxController::class, 'toggleManuela'])->whereNumber('conversation')->name('whatsapp.conversas.manuela');
         Route::post('whatsapp/conversas/{conversation}/status', [WhatsAppInboxController::class, 'updateStatus'])->whereNumber('conversation')->name('whatsapp.conversas.status');

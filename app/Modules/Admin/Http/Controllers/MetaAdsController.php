@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Models\CriativoValidacao;
+use App\Modules\Admin\Support\Publicidade\CampanhasMetaPorLoja;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
 use App\Modules\Marketplace\Jobs\TrocarCriativoMetaAds;
@@ -55,8 +56,14 @@ class MetaAdsController extends Controller
     {
         $periodo = $this->periodo($request);
         $status = $this->filtroStatus($request);
+        // Loja (Lira 2026-11-11): FerraKora lê a conta de anúncios dela, só o
+        // espelho; "Montadas no KazaKora" e criar campanha seguem na KazaKora.
+        $porLoja = app(CampanhasMetaPorLoja::class);
+        $loja = $porLoja->umaLoja($request->query('loja'));
+        $daLoja = $porLoja->servicoDa($loja);
+        $ehKazaKora = $loja === CampanhasMetaPorLoja::KAZAKORA;
 
-        $campanhas = MetaAdsCampanha::query()
+        $campanhas = ! $ehKazaKora ? collect() : MetaAdsCampanha::query()
             ->with('user:id,name')
             ->withCount(['videos', 'conjuntos'])
             ->latest()
@@ -85,7 +92,8 @@ class MetaAdsController extends Controller
             // Filtro de status (pedido do Lira 2026-10-21), abre em "Ativos".
             'status' => $status,
             'statusFiltros' => array_map(fn (array $f) => $f[0], MetaAdsService::FILTROS_STATUS),
-            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora(), $status)),
+            'espelho' => Inertia::defer(fn () => $this->espelho($daLoja, $periodo, null, $ehKazaKora ? $this->noKazaKora() : [], $status)),
+            'lojasMeta' => ['lojas' => $porLoja->lojas(), 'loja' => $loja],
             // Editar anúncio pelo espelho (2026-10-19).
             'produtos' => $this->listaDeProdutos(),
             'chamadas' => MetaAdsCampanha::CHAMADAS,

@@ -7,6 +7,7 @@ use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\GeoDoVisitante;
 use App\Modules\Analytics\Support\LocalizacaoDaVisita;
+use App\Modules\Analytics\Support\OrigemVisita;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
@@ -26,6 +27,15 @@ use Illuminate\Support\Str;
  * mandar Origin). Robô e programa que não é navegador ficam de fora (mesma
  * regra da loja). Grava IP, data/hora, página e navegador; responde 204
  * sempre que aceita.
+ *
+ * Origem e Pixel (2026-11-11: as visitas dos anúncios da FerraKora apareciam
+ * todas como "Interno" e sem pixel). O site manda junto:
+ *  - e=1 na 1ª página da aba, com ref (document.referrer), utm_* e o
+ *    parâmetro de clique (fbclid, gclid...): vira a origem, igual à loja;
+ *  - e=0 nas páginas seguintes: origem Interno;
+ *  - fbp/fbc: os cookies _fbp e _fbc do Pixel da Meta, que o site carrega
+ *    sem aviso de cookies (docs/privacidade-e-cookies.md, "FerraKora").
+ * Sem "e" (versão antiga do site em cache) grava como antes, sem origem.
  */
 class OutroSiteVisitaController extends Controller
 {
@@ -45,6 +55,15 @@ class OutroSiteVisitaController extends Controller
             }
 
             $ip = $request->ip();
+            [$clickParam, $clickValor] = OrigemVisita::clickId($request->query());
+            $entrada = $request->query('e');
+            $utm = [
+                'utm_source' => $this->texto($request, 'utm_source', 80),
+                'utm_medium' => $this->texto($request, 'utm_medium', 80),
+                'utm_campaign' => $this->texto($request, 'utm_campaign', 120),
+            ];
+            $referer = $entrada === '1' ? $this->refererDeFora($request, $site) : null;
+
             SiteVisit::query()->create([
                 'site' => $site,
                 // Sem cookie em outro domínio: o visitante é o IP.
@@ -54,7 +73,19 @@ class OutroSiteVisitaController extends Controller
                 ...LocalizacaoDaVisita::doRequest($request),
                 'path' => Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
                 'user_agent' => Str::limit($userAgent, 250, ''),
+                'dispositivo' => TrackSiteVisit::dispositivo($userAgent),
                 'consentiu' => false,
+                ...$utm,
+                'referer' => $referer !== null ? Str::limit(preg_replace('/[?#].*$/', '', $referer), 250, '') : null,
+                'origem' => match ($entrada) {
+                    '1' => OrigemVisita::classificar($referer, $utm, $clickParam),
+                    '0' => 'interno',
+                    default => null,
+                },
+                'click_id_param' => $clickParam,
+                // Mesma regra da loja: só o fbclid tem o valor guardado sem aceite.
+                'click_id' => $clickParam === 'fbclid' ? $clickValor : null,
+                'cookies' => $this->cookiesDoPixel($request),
             ]);
 
             // Lugar aproximado do IP, igual à loja (2026-10-24); a "sessão" é o visitante.
@@ -67,17 +98,54 @@ class OutroSiteVisitaController extends Controller
         return response('', 204);
     }
 
+    private function texto(Request $request, string $campo, int $limite): ?string
+    {
+        $valor = $request->query($campo);
+
+        return is_string($valor) && trim($valor) !== '' ? Str::limit(strip_tags(trim($valor)), $limite, '') : null;
+    }
+
+    /** Site de onde veio a 1ª página; o próprio site não conta (vira Direto). */
+    private function refererDeFora(Request $request, string $site): ?string
+    {
+        $ref = $request->query('ref');
+        if (! is_string($ref) || ! preg_match('#^(https?|android-app)://#i', $ref)) {
+            return null;
+        }
+        $host = preg_replace('/^www\./', '', strtolower((string) parse_url($ref, PHP_URL_HOST)));
+
+        return in_array($host, $this->dominios($site), true) ? null : Str::limit($ref, 500, '');
+    }
+
+    /** _fbp e _fbc do Pixel da Meta, no formato fb.1.<hora>.<valor>. */
+    private function cookiesDoPixel(Request $request): ?array
+    {
+        $cookies = [];
+        foreach (['fbc' => '_fbc', 'fbp' => '_fbp'] as $campo => $nome) {
+            $valor = $request->query($campo);
+            if (is_string($valor) && preg_match('/^fb\.\d\.\d{10,13}\.[A-Za-z0-9._\-]{1,500}$/', $valor) === 1) {
+                $cookies[$nome] = $valor;
+            }
+        }
+
+        return $cookies === [] ? null : $cookies;
+    }
+
+    /** @return list<string> */
+    private function dominios(string $site): array
+    {
+        return array_values(array_filter(array_map(
+            fn ($d) => preg_replace('/^www\./', '', strtolower(trim($d))),
+            explode(',', (string) config("services.{$site}.origens")),
+        )));
+    }
+
     /** O CORS de /api/* já é liberado pelo Laravel (config padrão); a trava é aqui. */
     private function origemPermitida(Request $request, string $site): bool
     {
         $url = (string) ($request->headers->get('origin') ?: $request->headers->get('referer'));
         $host = preg_replace('/^www\./', '', strtolower((string) parse_url($url, PHP_URL_HOST)));
 
-        $permitidos = array_filter(array_map(
-            fn ($d) => strtolower(trim($d)),
-            explode(',', (string) config("services.{$site}.origens")),
-        ));
-
-        return $host !== '' && in_array($host, $permitidos, true);
+        return $host !== '' && in_array($host, $this->dominios($site), true);
     }
 }

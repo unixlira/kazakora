@@ -114,6 +114,24 @@ class CatalogoFerraKoraTest extends TestCase
         $this->assertStringEndsWith('/medias/foto.webp', $produto['images'][0]['media_url']);
     }
 
+    public function test_video_do_anuncio_vai_na_frente_das_fotos_da_galeria(): void
+    {
+        [$pai] = $this->grupo();
+        $pai->update(['video_path' => 'products/videos/furadeira.mp4']);
+        ProductImage::query()->create(['product_id' => $pai->id, 'path' => 'products/'.$pai->id.'/foto.jpg', 'position' => 0, 'is_primary' => true]);
+        $this->enviar([['sku' => 'FER-TRE-5M', 'categoria' => 'Trenas']])->assertOk();
+
+        $produto = $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id)->assertOk()->json();
+        $produto = $produto['product'] ?? $produto;
+
+        $this->assertSame('video', $produto['media'][0]['type']);
+        $this->assertStringEndsWith('/storage/products/videos/furadeira.mp4', $produto['media'][0]['url']);
+        $this->assertSame('image', $produto['media'][1]['type']);
+        // Capa e "images" continuam sendo a foto.
+        $this->assertStringEndsWith('/foto.jpg', $produto['thumbnail']);
+        $this->assertCount(1, $produto['images']);
+    }
+
     public function test_sem_categoria_sai_null_e_nao_aparece_no_beauty_kora(): void
     {
         $this->grupo();

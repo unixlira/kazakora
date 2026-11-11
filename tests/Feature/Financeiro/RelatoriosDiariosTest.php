@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** Resultado do dia (23:50) e alerta de separados cancelados (pedido 2026-10-10). */
+/** Resultado do dia (06:30, dia anterior fechado) e alerta de separados cancelados (pedido 2026-10-10). */
 class RelatoriosDiariosTest extends TestCase
 {
     use RefreshDatabase;
@@ -79,6 +79,44 @@ class RelatoriosDiariosTest extends TestCase
         Mail::assertSent(ResultadoDoDia::class, 1);
         Mail::assertSent(ResultadoDoDia::class, fn ($mail) => $mail->hasTo('dono@exemplo.com'));
         $this->assertStringContainsString('Lucro líquido do dia', (new ResultadoDoDia(app(ResultadoDiario::class)->calcular(now())))->render());
+    }
+
+    public function test_manda_de_manha_o_dia_anterior_e_lista_os_dias_que_mudaram(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow('2026-10-11 06:30:00');
+        $dia10 = $this->pedido();
+        $dia10->forceFill(['created_at' => '2026-10-10 15:00:00'])->save();
+        $dia9 = $this->pedido();
+        $dia9->forceFill(['created_at' => '2026-10-09 15:00:00'])->save();
+        // 09/10 saiu às 23:50 com 80,00; depois chegaram anúncio/taxa e hoje vale 55,50.
+        Storage::disk('local')->put('automation/kazakora_margin_daily_email_state.json', json_encode([
+            '2026-10-09' => ['sent_at' => '2026-10-09T23:50:00-03:00', 'lucro' => 80.0],
+            '2026-10-10' => ['sent_at' => '2026-10-10T23:50:00-03:00', 'lucro' => 10.0],
+        ]));
+
+        $this->artisan('loja:resultado-diario')->assertSuccessful();
+
+        Mail::assertSent(ResultadoDoDia::class, function (ResultadoDoDia $mail) {
+            $r = $mail->resultado;
+            $this->assertSame('2026-10-10', $r['data']->toDateString());
+            $this->assertEqualsWithDelta(55.5, $r['dia']['lucro'], 0.001);
+            $this->assertCount(1, $r['revisoes']);
+            $this->assertSame('2026-10-09', $r['revisoes'][0]['data']->toDateString());
+            $this->assertEqualsWithDelta(-24.5, $r['revisoes'][0]['diferenca'], 0.001);
+            $html = $mail->render();
+            $this->assertStringContainsString('Dias que mudaram desde o último e-mail', $html);
+            $this->assertStringContainsString('− R$ 24,50', $html);
+
+            return true;
+        });
+
+        // Base nova: o dia 09 passa a valer o que foi mostrado; o 10 fica fechado e não repete.
+        $controle = json_decode(Storage::disk('local')->get('automation/kazakora_margin_daily_email_state.json'), true);
+        $this->assertEqualsWithDelta(55.5, $controle['2026-10-09']['lucro'], 0.001);
+        $this->assertTrue($controle['2026-10-10']['fechado']);
+        $this->artisan('loja:resultado-diario')->assertSuccessful();
+        Mail::assertSent(ResultadoDoDia::class, 1);
     }
 
     public function test_alerta_de_separado_cancelado_sem_repetir(): void

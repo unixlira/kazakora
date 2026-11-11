@@ -645,6 +645,10 @@ return [
         'instagram_actor_id' => env('META_ADS_INSTAGRAM_ACTOR_ID'),
         'pixel_id' => env('META_ADS_PIXEL_ID'),
         'graph_url' => env('META_ADS_GRAPH_URL', 'https://graph.facebook.com/v23.0'),
+        // Conta de anúncios da FerraKora (painel por loja, 2026-11-11), lida
+        // com o MESMO access_token. Só leitura. Vazio = a tela de campanhas
+        // mostra só a KazaKora.
+        'ferrakora_ad_account_id' => env('FERRAKORA_META_ADS_AD_ACCOUNT_ID'),
         // Endereço público da loja usado nos links e imagens do anúncio.
         // Fixo (sem env) de propósito: nem o homolog pode gerar anúncio
         // apontando para devlira ou kazakora.com.br.

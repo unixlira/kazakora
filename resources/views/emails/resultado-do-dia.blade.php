@@ -37,7 +37,7 @@
                         <td width="50%" style="padding-right: 5px; vertical-align: top;">
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px;">
                                 <tr><td style="padding: 14px 16px;">
-                                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5563;">Lucro líquido do mês</div>
+                                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5563;">Lucro líquido do mês até {{ $resultado['data']->format('d/m') }}</div>
                                     <div style="font-size: 20px; font-weight: 800; color: {{ $cor($mes['lucro']) }};">{{ $brl($mes['lucro']) }}</div>
                                     <div style="font-size: 11px; color: #6b7280;">{{ $mes['pedidos'] }} pedidos · receita {{ $brl($mes['receita']) }}<br>margem {{ $margem($mes['lucro'], $mes['receita']) }}</div>
                                 </td></tr>
@@ -91,6 +91,33 @@
         </p>
     @endif
 
+    {{-- Dias que mudaram depois de enviados (anúncio, taxa real, cancelamento, devolução) --}}
+    @php($revisoes = $resultado['revisoes'] ?? [])
+    @if ($revisoes !== [])
+        @php($totalRevisto = round(array_sum(array_column($revisoes, 'diferenca')), 2))
+        <p style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #111827;">Dias que mudaram desde o último e-mail</p>
+        <p style="margin: 0 0 8px; font-size: 12px; color: #6b7280;">
+            Chegaram depois: gasto de anúncio, taxa real dos canais, cancelamentos e devoluções. O mês acima já está com os valores novos
+            ({{ $totalRevisto >= 0 ? '+' : '−' }} R$ {{ number_format(abs($totalRevisto), 2, ',', '.') }} no total).
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 12px; color: #374151; border-collapse: collapse; margin: 0 0 22px;">
+            <tr style="color: #6b7280; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em;">
+                <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb;">Dia</td>
+                <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Enviado</td>
+                <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Agora</td>
+                <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Diferença</td>
+            </tr>
+            @foreach ($revisoes as $revisao)
+                <tr>
+                    <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; font-weight: 700;">{{ $revisao['data']->format('d/m') }}</td>
+                    <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; color: #6b7280;">{{ $brl($revisao['enviado']) }}</td>
+                    <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap;">{{ $brl($revisao['agora']) }}</td>
+                    <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; font-weight: 700; color: {{ $cor($revisao['diferenca']) }};">{{ $revisao['diferenca'] >= 0 ? '+' : '−' }} R$ {{ number_format(abs($revisao['diferenca']), 2, ',', '.') }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
     {{-- Mês dia a dia --}}
     <p style="margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #111827;">{{ ucfirst($resultado['data']->translatedFormat('F')) }} dia a dia</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 12px; color: #374151; border-collapse: collapse;">
@@ -122,7 +149,7 @@
     </table>
 
     <p style="margin: 18px 0 0; font-size: 11px; color: #9ca3af;">
-        Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − anúncios,
+        Dia fechado: enviado de manhã, depois do gasto de anúncio do dia chegar. Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − anúncios,
         menos o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
     </p>
 @endsection

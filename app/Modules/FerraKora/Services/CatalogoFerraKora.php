@@ -203,4 +203,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
             ->orderBy(FerraKoraProduto::query()->select('ordem')->whereColumn('ferrakora_produtos.product_id', 'products.id')->limit(1))
             ->orderBy('id');
     }
+
+    protected function mandaVideo(): bool
+    {
+        return true;
+    }
 }

@@ -51,6 +51,12 @@ abstract class CatalogoOutroSite
     /** Site do catálogo em SiteAtual (ferrakora, beautykora): define a Oferta Relâmpago que vale. */
     abstract public function site(): string;
 
+    /** Manda o vídeo do produto na galeria; a FerraKora liga (2026-11-11). */
+    protected function mandaVideo(): bool
+    {
+        return false;
+    }
+
     /** Colunas próprias do site gravadas a partir do item do JSON (ex.: categoria). */
     protected function camposDoItem(array $item): array
     {
@@ -257,6 +263,13 @@ abstract class CatalogoOutroSite
             ])
             ->all();
 
+        // Vídeo do anúncio do KazaKora (pedido do Lira 2026-11-11): entra só
+        // em "media", na frente das fotos; "images" e a capa continuam foto.
+        $midias = $imagens;
+        if ($this->mandaVideo() && $pai->video_url) {
+            $midias = [['url' => $pai->video_url, 'thumb_url' => null, 'media_url' => null, 'order' => 0, 'type' => 'video'], ...$imagens];
+        }
+
         $titulo = $registro->titulo ?: $this->tituloDoGrupo($pai, $temOpcao);
 
         return [
@@ -273,7 +286,7 @@ abstract class CatalogoOutroSite
             'purchasable' => true,
             'is_available' => $variantes->contains('is_available', true),
             'images' => $imagens,
-            'media' => $imagens,
+            'media' => $midias,
             'options' => $temOpcao ? [[
                 'id' => $opcaoId,
                 'title' => $this->nomeDaOpcao($pai),

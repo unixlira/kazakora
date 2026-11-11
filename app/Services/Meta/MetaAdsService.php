@@ -60,6 +60,29 @@ class MetaAdsService
 
     private const FUSO = 'America/Sao_Paulo';
 
+    /**
+     * Conta de anúncios usada no lugar de META_ADS_AD_ACCOUNT_ID (painel por
+     * loja, 2026-11-11: FerraKora tem conta própria e o mesmo token lê as
+     * duas). null = a conta da KazaKora, como sempre.
+     */
+    private ?string $contaFixa = null;
+
+    /**
+     * Cópia do serviço lendo outra conta de anúncios com o mesmo token. Só
+     * para LEITURA (espelho, totais): criar e enviar campanha seguem na
+     * conta da KazaKora.
+     */
+    public function naConta(string $adAccountId): static
+    {
+        $copia = clone $this;
+        $copia->contaFixa = $adAccountId;
+
+        return $copia;
+    }
+
+    /** Erros de limite de chamadas da Graph API (code 4, 17, 32, 613, 80004). */
+    public const ERROS_DE_LIMITE = [4, 17, 32, 613, 80004];
+
     public function configurado(): bool
     {
         return $this->faltando() === [];
@@ -984,6 +1007,27 @@ class MetaAdsService
     }
 
     /**
+     * Métricas completas da conta inteira no período (nível account: inclui
+     * campanha excluída e o alcance sem contar a mesma pessoa duas vezes).
+     * Cartões do painel por loja (2026-11-11). Guardado 5 minutos. Só leitura.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws MetaAdsException
+     */
+    public function resumoDaConta(string $datePreset): array
+    {
+        $linha = Cache::remember('meta-ads:resumo-conta:'.md5($this->conta().'|'.$datePreset), now()->addMinutes(5),
+            fn () => $this->get($this->conta().'/insights', [
+                'level' => 'account',
+                'date_preset' => $datePreset,
+                'fields' => self::INSIGHTS_BASE.self::INSIGHTS_EXTRAS,
+            ])['data'][0] ?? []);
+
+        return $this->metricas($linha);
+    }
+
+    /**
      * Gasto diário da conta inteira (nível account, inclui campanha excluída),
      * no formato de ads:sync-spend (correção do financeiro, 2026-10-31: a Meta
      * ficava fora da conta de lucro). Só leitura.
@@ -1580,7 +1624,7 @@ class MetaAdsService
 
     public function linkGerenciador(MetaAdsCampanha $campanha): ?string
     {
-        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+        $conta = $this->contaSemPrefixo();
 
         if ($conta === '') {
             return null;
@@ -1596,7 +1640,7 @@ class MetaAdsService
     /** Campanha aberta no Gerenciador (linha da campanha no espelho). */
     public function linkCampanhaGerenciador(string $campaignId): ?string
     {
-        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+        $conta = $this->contaSemPrefixo();
 
         return $conta === '' ? null
             : 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act='.urlencode($conta).'&selected_campaign_ids='.urlencode($campaignId);
@@ -1605,7 +1649,7 @@ class MetaAdsService
     /** Conjunto aberto no Gerenciador (cartões do "O que fazer agora"). */
     public function linkConjuntoGerenciador(string $adsetId): ?string
     {
-        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+        $conta = $this->contaSemPrefixo();
 
         return $conta === '' ? null
             : 'https://adsmanager.facebook.com/adsmanager/manage/adsets?act='.urlencode($conta).'&selected_adset_ids='.urlencode($adsetId);
@@ -1614,7 +1658,7 @@ class MetaAdsService
     /** Anúncio aberto no Gerenciador (espelho, anúncio criado direto lá). */
     public function linkAnuncioGerenciador(string $adId): ?string
     {
-        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+        $conta = $this->contaSemPrefixo();
 
         return $conta === '' ? null
             : 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='.urlencode($conta).'&selected_ad_ids='.urlencode($adId);
@@ -2234,9 +2278,15 @@ class MetaAdsService
 
     private function conta(): string
     {
-        $conta = (string) config('services.meta_ads.ad_account_id');
+        $conta = $this->contaFixa ?? (string) config('services.meta_ads.ad_account_id');
 
         return str_starts_with($conta, 'act_') ? $conta : 'act_'.$conta;
+    }
+
+    /** Número da conta sem o act_ (links do Gerenciador); '' sem conta. */
+    private function contaSemPrefixo(): string
+    {
+        return preg_replace('/^act_/', '', $this->contaFixa ?? (string) config('services.meta_ads.ad_account_id'));
     }
 
     private function cliente(): PendingRequest
@@ -2329,7 +2379,9 @@ class MetaAdsService
             return $corpo;
         }
 
-        throw new MetaAdsException($this->mensagemDeErro(is_array($corpo) ? $corpo : [], $resposta->status()));
+        // O código da Meta vai junto (17 = limite de chamadas) para quem lê decidir.
+        throw new MetaAdsException($this->mensagemDeErro(is_array($corpo) ? $corpo : [], $resposta->status()),
+            (int) (is_array($corpo) ? ($corpo['error']['code'] ?? 0) : 0));
     }
 
     /** @param  array<string, mixed>  $corpo */
@@ -2347,6 +2399,12 @@ class MetaAdsService
         if ((int) ($erro['error_subcode'] ?? 0) === 1885183) {
             $texto = 'O app da Meta usado pelo KazaKora (KazaKora Ads) está em modo de desenvolvimento e a Meta não deixa ele criar anúncio. '
                 .'No painel de desenvolvedor da Meta, ponha o app em modo Ao vivo e clique em enviar de novo: continua de onde parou.';
+        }
+
+        // Limite de chamadas da Graph API (code 17 "User request limit reached"):
+        // passa sozinho em alguns minutos; a mensagem da Meta não diz isso.
+        if (in_array((int) ($erro['code'] ?? 0), self::ERROS_DE_LIMITE, true)) {
+            $texto = 'A Meta limitou as consultas por alguns minutos (limite de chamadas da API). Espere um pouco e recarregue.';
         }
 
         if (isset($erro['code'])) {

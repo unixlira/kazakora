@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Storage;
  * mês e impostos do mês a pagar. Substitui o e-mail de margem que a Naia
  * mandava por fora (mesmo arquivo de controle, não repete o dia).
  *
- * Desde 11/11/2026 sai às 07:30 com o dia ANTERIOR fechado ("no site o lucro
+ * Desde 11/11/2026 sai às 06:30 com o dia ANTERIOR fechado ("no site o lucro
  * está um valor, no e-mail outro"). Às 23:50 o gasto de anúncio do dia ainda
  * não tinha chegado (Shopee/ML Ads e Meta sincronizam às 06:00 do dia
  * seguinte) e as taxas reais, cancelamentos e devoluções vinham depois: o

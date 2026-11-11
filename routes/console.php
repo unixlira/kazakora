@@ -52,9 +52,9 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // Relatórios por e-mail (pedido 2026-10-10; antes eram rotinas da Naia por
 // fora, no homolog): resultado do dia e pedidos separados que foram
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
-// Resultado às 07:30 com o dia anterior fechado (11/11/2026): depois do gasto
+// Resultado às 06:30 com o dia anterior fechado (11/11/2026): depois do gasto
 // de anúncio das 06:00, das cobranças das 05:50 e da conciliação das 05:40.
-Schedule::command('loja:resultado-diario')->dailyAt('07:30')->withoutOverlapping(30);
+Schedule::command('loja:resultado-diario')->dailyAt('06:30')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.

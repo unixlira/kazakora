@@ -211,7 +211,7 @@ abstract class CheckoutOutroSite
         $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
         $valorDoFrete = round((float) $escolhida['preco'], 2);
         $plataforma = (float) $entrega['desconto_plataforma'];
-        $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
+        $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens, $cupom)) : 0.0;
         $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
         $pixPercentual = DescontoPix::percentualDosItens($itens);
         // Desde 2026-10-24 o Pix desconta do valor antes do cupom (3% do
@@ -308,6 +308,9 @@ abstract class CheckoutOutroSite
         if ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0) {
             return [null, 'Cupons não valem para produtos da Oferta do Dia: eles já estão com o menor preço.'];
         }
+        if ($itens->isNotEmpty() && self::subtotalParaCupom($itens, $cupom) <= 0) {
+            return [null, 'Este cupom não vale para os produtos do seu carrinho.'];
+        }
 
         return [$cupom, null];
     }
@@ -331,9 +334,9 @@ abstract class CheckoutOutroSite
     }
 
     /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia nem da Relâmpago (2026-10-14). */
-    private static function subtotalParaCupom(Collection $itens): float
+    private static function subtotalParaCupom(Collection $itens, ?Coupon $cupom = null): float
     {
-        return round($itens->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
+        return Coupon::baseDosItens($itens, $cupom);
     }
 
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */

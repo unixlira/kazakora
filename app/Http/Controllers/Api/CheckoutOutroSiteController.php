@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Models\Lead;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoComMarca;
@@ -10,6 +11,8 @@ use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CepUf;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\LeadsDigitados;
+use App\Modules\Checkout\Support\LeadsDoCheckout;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
@@ -23,6 +26,7 @@ use App\Support\Privacidade\Cookies;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -44,6 +48,10 @@ use Illuminate\Support\Facades\Log;
  *                          pixel do site: meta_purchase{event_id, dados} para o Pixel do navegador
  * GET  pixel-meta          {pixel_id} do site, ou null (sem pixel)
  * GET  cep/{cep}           rua, bairro, cidade e UF
+ * POST lead                {itens, sessao (id da aba), campo, nome?, email?, cpf?, telefone?, cep?}
+ *                          → 204 sempre. Cada campo preenchido vira Lead (Admin > Leads),
+ *                          para recuperar quem desiste (FerraKora, pedido do Lira 11/11/2026)
+ * pedido também aceita sessao: o lead da aba vira "convertido".
  */
 abstract class CheckoutOutroSiteController extends Controller
 {
@@ -182,6 +190,16 @@ abstract class CheckoutOutroSiteController extends Controller
             }
         });
         rescue(fn () => $this->depoisDoPedido($request, $order, $dados));
+        // Lead da aba (e do mesmo e-mail/CPF) vira "convertido" na tela Leads.
+        rescue(function () use ($request, $order, $dados) {
+            $sessao = $request->input('sessao');
+            app(LeadsDigitados::class)->converter(
+                $order,
+                is_string($sessao) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $sessao) ? mb_substr($this->checkout->site().'-'.$sessao, 0, 100) : null,
+                LeadsDoCheckout::email($dados['cliente']['email']),
+                LeadsDoCheckout::cpf($dados['cliente']['cpf']),
+            );
+        }, null, false);
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
         return response()->json([
@@ -194,6 +212,38 @@ abstract class CheckoutOutroSiteController extends Controller
             ] : null,
             'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($order, $mp) : null,
         ], 201);
+    }
+
+    /**
+     * Campo preenchido no checkout (Leads). Nunca falha para o cliente: dado
+     * inválido, produto fora de venda ou erro só deixam de gravar.
+     */
+    public function lead(Request $request, LeadsDigitados $leads): Response
+    {
+        rescue(function () use ($request, $leads) {
+            $dados = $request->validate([
+                ...$this->regrasDosItens(),
+                'sessao' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
+                'campo' => ['nullable', 'string', 'max:20'],
+                ...array_fill_keys(Lead::CAMPOS, ['nullable', 'string', 'max:300']),
+            ]);
+
+            $cep = preg_replace('/\D/', '', (string) ($dados['cep'] ?? ''));
+            $itens = $this->checkout->itens($dados['itens'], strlen($cep) === 8 ? $cep : null)
+                ->map(fn (array $item) => [
+                    'product_id' => $item['product']->id,
+                    'parent_product_id' => $item['product']->parent_product_id,
+                    'nome' => $item['product']->name,
+                    'variacao' => $item['product']->variation ?: null,
+                    'quantidade' => (int) $item['quantity'],
+                    'preco_unitario' => round((float) $item['preco_unitario'], 2),
+                    'subtotal' => round((float) $item['subtotal'], 2),
+                ])->values()->all();
+
+            $leads->registrarDeOutroSite($request, $this->checkout->site(), $dados['sessao'], $dados, $dados['campo'] ?? null, $itens);
+        }, null, false);
+
+        return response()->noContent();
     }
 
     public function status(Request $request, Order $order): JsonResponse

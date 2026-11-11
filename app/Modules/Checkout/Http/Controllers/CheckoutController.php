@@ -166,7 +166,7 @@ class CheckoutController extends Controller
         return response()->json([
             'items' => $cartItems,
             'subtotal' => $subtotal,
-            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
+            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0,
             'entrega_expressa' => $expressa,
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
@@ -561,6 +561,9 @@ class CheckoutController extends Controller
         if ($subtotal > 0 && $this->subtotalParaCupom($cartItems) <= 0) {
             return ['erro' => 'Cupons não valem para produtos da Oferta do Dia — eles já estão com o menor preço.'];
         }
+        if ($subtotal > 0 && $this->subtotalParaCupom($cartItems, $coupon) <= 0) {
+            return ['erro' => 'Este cupom não vale para os produtos do seu carrinho.'];
+        }
 
         $draft['coupon_code'] = $coupon->code;
         $request->session()->put(self::SESSION_KEY, $draft);
@@ -569,7 +572,7 @@ class CheckoutController extends Controller
             'code' => $coupon->code,
             'discount_type' => $coupon->discount_type,
             'discount_value' => (float) $coupon->discount_value,
-            'discount_amount' => $coupon->discountFor($this->subtotalParaCupom($cartItems)),
+            'discount_amount' => $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)),
             'descricao' => $coupon->descricaoDesconto(),
         ];
     }
@@ -579,9 +582,10 @@ class CheckoutController extends Controller
      * 2026-10-10) nem da Oferta Relâmpago (2026-10-14) — a conta de "sem prejuízo" da oferta não tem espaço pra
      * mais um desconto em cima.
      */
-    private function subtotalParaCupom($cartItems): float
+    private function subtotalParaCupom($cartItems, ?Coupon $coupon = null): float
     {
-        return round($cartItems->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
+        // Cupom de produtos escolhidos (2026-11-11): só esses entram na base.
+        return Coupon::baseDosItens($cartItems, $coupon);
     }
 
     /**
@@ -741,7 +745,7 @@ class CheckoutController extends Controller
             return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
-        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0;
         // Frete embutido com vários itens numa caixa só (2026-10-12).
         $descontoPlataforma = app(FreteEmbutido::class)->ligado()
             ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma']
@@ -1694,7 +1698,7 @@ class CheckoutController extends Controller
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-        $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0;
         $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
         $discount = round($descontoCupom + $plataforma, 2);
 
@@ -2041,7 +2045,7 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
-            'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
+            'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             // Livros de brinde como linha GRÁTIS no resumo do pedido (2026-10-21).

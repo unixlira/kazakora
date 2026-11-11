@@ -41,6 +41,7 @@ class Coupon extends Model
         'expires_at',
         'is_active',
         'so_kazakora',
+        'produtos',
     ];
 
     protected function casts(): array
@@ -55,6 +56,9 @@ class Coupon extends Model
             'is_active' => 'boolean',
             // Só no checkout da KazaKora (BLACKFRIDAY, 2026-11-06): FerraKora e Beauty Kora recusam.
             'so_kazakora' => 'boolean',
+            // Cupom só de alguns produtos (BLACKFRIDAY30 do massageador, 2026-11-11): ids de
+            // produto (o pai vale para as variações). Vazio = vale para o carrinho todo.
+            'produtos' => 'array',
         ];
     }
 
@@ -205,6 +209,30 @@ class Coupon extends Model
         }
 
         return strlen($numeros) >= 10 ? $numeros : '';
+    }
+
+    /** O cupom vale para este produto? (sem lista de produtos, vale para todos) */
+    public function valeParaProduto(?object $produto): bool
+    {
+        $ids = array_map('intval', (array) ($this->produtos ?? []));
+        if ($ids === []) {
+            return true;
+        }
+
+        return $produto !== null && (in_array((int) $produto->id, $ids, true)
+            || ($produto->parent_product_id && in_array((int) $produto->parent_product_id, $ids, true)));
+    }
+
+    /**
+     * Base do cupom: itens do carrinho (array com 'product' e 'subtotal') fora
+     * de oferta e, se o cupom for de produtos escolhidos, só desses produtos.
+     */
+    public static function baseDosItens(iterable $itens, ?self $cupom = null): float
+    {
+        return round(collect($itens)
+            ->reject(fn ($item) => data_get($item, 'product')?->emOferta())
+            ->filter(fn ($item) => ! $cupom || $cupom->valeParaProduto(data_get($item, 'product')))
+            ->sum('subtotal'), 2);
     }
 
     public function discountFor(float $subtotal): float

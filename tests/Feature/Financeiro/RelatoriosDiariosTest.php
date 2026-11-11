@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** Resultado do dia (07:30, dia anterior fechado) e alerta de separados cancelados (pedido 2026-10-10). */
+/** Resultado do dia (06:30, dia anterior fechado) e alerta de separados cancelados (pedido 2026-10-10). */
 class RelatoriosDiariosTest extends TestCase
 {
     use RefreshDatabase;
@@ -84,7 +84,7 @@ class RelatoriosDiariosTest extends TestCase
     public function test_manda_de_manha_o_dia_anterior_e_lista_os_dias_que_mudaram(): void
     {
         Mail::fake();
-        Carbon::setTestNow('2026-10-11 07:30:00');
+        Carbon::setTestNow('2026-10-11 06:30:00');
         $dia10 = $this->pedido();
         $dia10->forceFill(['created_at' => '2026-10-10 15:00:00'])->save();
         $dia9 = $this->pedido();

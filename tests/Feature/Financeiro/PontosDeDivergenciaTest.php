@@ -79,12 +79,12 @@ class PontosDeDivergenciaTest extends TestCase
 
     // E-mail de lucro ---------------------------------------------------------
 
-    /** Desde 11/11/2026 o e-mail sai às 07:30 com o dia anterior, depois do anúncio das 06:00. */
+    /** Desde 11/11/2026 o e-mail sai às 06:30 com o dia anterior, depois do anúncio das 06:00. */
     public function test_ads_sincroniza_antes_do_email_da_manha(): void
     {
         $this->assertContains('30 23 * * *', $this->horarioNaAgenda('ads:sync-spend'));
         $this->assertContains('0 6 * * *', $this->horarioNaAgenda('ads:sync-spend'));
-        $this->assertSame(['30 7 * * *'], $this->horarioNaAgenda('loja:resultado-diario'));
+        $this->assertSame(['30 6 * * *'], $this->horarioNaAgenda('loja:resultado-diario'));
         $this->assertSame(['50 5 * * *'], $this->horarioNaAgenda('financeiro:lancamentos'));
     }
 

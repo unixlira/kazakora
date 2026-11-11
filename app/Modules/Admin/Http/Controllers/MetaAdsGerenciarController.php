@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\Publicidade\CampanhasMetaPorLoja;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
@@ -38,6 +39,8 @@ class MetaAdsGerenciarController extends Controller
 
     public function update(Request $request, string $nivel, string $metaId, MetaAdsService $meta): JsonResponse
     {
+        $meta = $this->daLoja($request);
+
         $validador = Validator::make($request->all(), [
             'nome' => ['required', 'string', 'max:255'],
             'orcamento_diario' => ['nullable', 'numeric', 'min:'.MetaAdsCampanha::MINIMO_POR_CONJUNTO, 'max:10000'],
@@ -114,6 +117,8 @@ class MetaAdsGerenciarController extends Controller
 
     public function destroy(Request $request, string $nivel, string $metaId, MetaAdsService $meta): JsonResponse
     {
+        $meta = $this->daLoja($request);
+
         if (! $request->boolean('confirmo_exclusao')) {
             return $this->erroDeCampo(['confirmo_exclusao' => ['Confirme que a exclusão na Meta é definitiva.']]);
         }
@@ -174,6 +179,8 @@ class MetaAdsGerenciarController extends Controller
      */
     public function pausar(Request $request, string $metaId, MetaAdsService $meta): JsonResponse
     {
+        $meta = $this->daLoja($request);
+
         if ($resposta = $this->semMeta($meta)) {
             return $resposta;
         }
@@ -223,6 +230,8 @@ class MetaAdsGerenciarController extends Controller
      */
     public function link(Request $request, string $metaId, MetaAdsService $meta): JsonResponse
     {
+        $meta = $this->daLoja($request);
+
         $validador = Validator::make($request->all(), [
             'link' => ['required', 'string', 'max:2048', 'url:https'],
             'confirmo_analise' => ['boolean'],
@@ -290,8 +299,11 @@ class MetaAdsGerenciarController extends Controller
      * das campanhas montadas no KazaKora; campanha já enviada acompanha a
      * Meta (ativada ou pausada no Gerenciador muda aqui também).
      */
-    public function status(MetaAdsService $meta): JsonResponse
+    public function status(Request $request, MetaAdsService $meta): JsonResponse
     {
+        // ?loja=ferrakora (2026-11-11): status da conta da FerraKora, sem as locais.
+        $loja = app(CampanhasMetaPorLoja::class)->umaLoja($request->query('loja'));
+        $meta = $this->daLoja($request);
         $naMeta = null;
         $erro = null;
         if ($meta->configurado()) {
@@ -302,7 +314,7 @@ class MetaAdsGerenciarController extends Controller
             }
         }
 
-        $locais = MetaAdsCampanha::query()->get()->map(function (MetaAdsCampanha $c) use ($naMeta) {
+        $locais = $loja !== CampanhasMetaPorLoja::KAZAKORA ? collect() : MetaAdsCampanha::query()->get()->map(function (MetaAdsCampanha $c) use ($naMeta) {
             $daMeta = filled($c->meta_campaign_id) ? ($naMeta['campanhas'][(string) $c->meta_campaign_id] ?? null) : null;
 
             if ($daMeta !== null && in_array($c->status, [MetaAdsCampanha::STATUS_ATIVA, MetaAdsCampanha::STATUS_ENVIADA_PAUSADA], true)) {
@@ -424,5 +436,16 @@ class MetaAdsGerenciarController extends Controller
     private function erroDeCampo(array $erros): JsonResponse
     {
         return response()->json(['message' => collect($erros)->flatten()->first(), 'errors' => $erros], 422);
+    }
+
+    /**
+     * Conta de anúncios da loja da tela (?loja=ferrakora, Lira 2026-11-11).
+     * A trava de objeto() continua: só mexe no que é da conta escolhida.
+     */
+    private function daLoja(Request $request): MetaAdsService
+    {
+        $porLoja = app(CampanhasMetaPorLoja::class);
+
+        return $porLoja->servicoDa($porLoja->umaLoja($request->query('loja')));
     }
 }

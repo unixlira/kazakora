@@ -6,7 +6,7 @@ import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
 import DiagnosticoMeta from './DiagnosticoMeta.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
-import { formatarData, formatarReais, statusDaCampanhaLocal } from './metaAds';
+import { definirLojaMeta, formatarData, formatarReais, statusDaCampanhaLocal } from './metaAds';
 import { useStatusAoVivo } from './useStatusAoVivo';
 
 const props = defineProps({
@@ -22,6 +22,17 @@ const props = defineProps({
     // Modal de editar anúncio no espelho (2026-10-19).
     produtos: { type: Array, default: () => [] },
     chamadas: { type: Object, default: () => ({}) },
+    // Loja (Lira 2026-11-11): KazaKora ou FerraKora, cada uma com a conta de anúncios dela.
+    lojasMeta: { type: Object, default: () => ({ lojas: {}, loja: 'kazakora' }) },
+});
+
+const ehKazaKora = computed(() => props.lojasMeta.loja === 'kazakora');
+// Antes do status ao vivo: as chamadas da tela vão para a conta da loja.
+definirLojaMeta(props.lojasMeta.loja);
+const trocarLoja = (loja) => router.get('/admin/publicidade/meta-ads/campanhas', {
+    ...(loja === 'kazakora' ? {} : { loja }),
+    ...(props.periodo === 'maximum' ? {} : { periodo: props.periodo }),
+    ...(props.status === 'ativos' ? {} : { status: props.status }),
 });
 
 const recarregar = () => router.reload({ only: ['espelho', 'campanhas'] });
@@ -47,6 +58,7 @@ const sincronizar = () => router.post('/admin/publicidade/meta-ads/campanhas/sin
 
 const carregando = ref(false);
 const filtrar = ({ periodo = props.periodo, status = props.status }) => router.get('/admin/publicidade/meta-ads/campanhas', {
+    ...(ehKazaKora.value ? {} : { loja: props.lojasMeta.loja }),
     ...(periodo === 'maximum' ? {} : { periodo }),
     ...(status === 'ativos' ? {} : { status }),
 }, {
@@ -124,18 +136,30 @@ const columns = [
                     class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">
                     <i class="fas fa-chart-line text-xs" aria-hidden="true"></i> Gasto e resultados
                 </Link>
-                <button v-if="can('financeiro.create') && props.config.configurado" type="button" :disabled="sincronizando"
+                <button v-if="ehKazaKora && can('financeiro.create') && props.config.configurado" type="button" :disabled="sincronizando"
                     title="Traz da Meta nomes, orçamento, status, textos e links de destino mudados no Gerenciador"
                     class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
                     @click="sincronizar">
                     <i :class="['fas fa-arrows-rotate text-xs', { 'animate-spin': sincronizando }]" aria-hidden="true"></i>
                     {{ sincronizando ? 'Sincronizando…' : 'Sincronizar com a Meta' }}
                 </button>
-                <Link v-if="can('financeiro.create')" href="/admin/publicidade/meta-ads/campanhas/nova"
+                <Link v-if="ehKazaKora && can('financeiro.create')" href="/admin/publicidade/meta-ads/campanhas/nova"
                     class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
                     <i class="fas fa-plus text-xs" aria-hidden="true"></i> Nova campanha
                 </Link>
             </div>
+        </div>
+
+        <div v-if="Object.keys(props.lojasMeta.lojas).length > 1" class="mb-4 flex flex-wrap items-center gap-2" role="tablist" aria-label="Loja">
+            <button v-for="(nome, chave) in props.lojasMeta.lojas" :key="chave" type="button" role="tab"
+                :aria-selected="props.lojasMeta.loja === chave"
+                :class="['rounded-lg px-4 py-2 text-sm font-semibold transition', props.lojasMeta.loja === chave
+                    ? 'bg-primary text-white'
+                    : 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']"
+                @click="props.lojasMeta.loja !== chave && trocarLoja(chave)">
+                {{ nome }}
+            </button>
+            <span v-if="!ehKazaKora" class="text-xs text-slate-500">Conta de anúncios da {{ props.lojasMeta.lojas[props.lojasMeta.loja] }}. Campanha nova continua sendo montada na KazaKora.</span>
         </div>
 
         <div v-if="!props.config.configurado" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="status">
@@ -201,6 +225,7 @@ const columns = [
             </Deferred>
         </section>
 
+        <template v-if="ehKazaKora">
         <h2 class="mb-1 text-lg font-bold">Montadas no KazaKora</h2>
         <p class="mb-4 text-sm text-slate-500">
             Monte a campanha como no Gerenciador da Meta: vários conjuntos e vários anúncios em cada, de uma vez.
@@ -213,5 +238,6 @@ const columns = [
             search-placeholder="Buscar campanha..."
             empty-message="Nenhuma campanha ainda."
         />
+        </template>
     </AdminLayout>
 </template>

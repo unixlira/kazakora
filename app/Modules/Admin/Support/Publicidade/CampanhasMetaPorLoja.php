@@ -91,6 +91,23 @@ class CampanhasMetaPorLoja
         return isset($lojas[$pedida]) ? (string) $pedida : (array_key_first($lojas) ?? self::KAZAKORA);
     }
 
+    /**
+     * Uma loja só (sem "ambas"), para a tela de campanhas (Lira 2026-11-11:
+     * campanha, conjuntos e anúncios da FerraKora no menu Meta).
+     */
+    public function umaLoja(?string $pedida): string
+    {
+        return isset($this->lojas()[$pedida]) ? (string) $pedida : self::KAZAKORA;
+    }
+
+    /** O serviço da Meta lendo a conta da loja (KazaKora = o padrão). */
+    public function servicoDa(string $loja): MetaAdsService
+    {
+        return $loja === self::KAZAKORA || ! isset(self::LOJAS[$loja]) || blank(config(self::LOJAS[$loja][1]))
+            ? $this->meta
+            : $this->meta->naConta((string) config(self::LOJAS[$loja][1]));
+    }
+
     public static function periodo(?string $pedido): string
     {
         return array_key_exists((string) $pedido, self::PERIODOS) ? (string) $pedido : self::PERIODO_PADRAO;

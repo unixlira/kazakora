@@ -81,7 +81,14 @@ class WhatsAppCloudApiClient
         if ($bodyParams !== []) {
             $components[] = [
                 'type' => 'body',
-                'parameters' => array_map(fn ($value) => ['type' => 'text', 'text' => (string) $value], array_values($bodyParams)),
+                // Chave texto = modelo com variável nomeada ({{nome}}): vai o parameter_name.
+                'parameters' => array_values(array_map(
+                    fn ($value, $key) => is_string($key)
+                        ? ['type' => 'text', 'parameter_name' => $key, 'text' => (string) $value]
+                        : ['type' => 'text', 'text' => (string) $value],
+                    $bodyParams,
+                    array_keys($bodyParams),
+                )),
             ];
         }
 

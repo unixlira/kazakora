@@ -149,9 +149,114 @@ const timeline = computed(() => {
 const composerBlocked = computed(() => {
     if (!active.value) return null;
     if (!props.status.readyToSend) return 'Credenciais da Meta ainda não configuradas: a mensagem fica salva aqui, mas não é entregue.';
-    if (!active.value.insideWindow) return 'Fora da janela de 24h da Meta: o cliente precisa escrever primeiro (ou use um modelo aprovado em Disparos).';
+    if (!active.value.insideWindow) return 'Fora da janela de 24h da Meta: texto livre só depois que o cliente escrever. Para falar agora, mande um modelo aprovado.';
     return null;
 });
+
+// Modelo aprovado direto da conversa (pedido do Lira 11/11/2026): fora da
+// janela de 24h é o único jeito de a Meta aceitar a mensagem.
+const modeloAberto = ref(false);
+const modelosLista = ref([]);
+const modelosLoja = ref('');
+const modelosNomeLoja = ref('');
+const modelosCarregando = ref(false);
+const modelosErro = ref(null);
+const modeloBusca = ref('');
+const modeloEscolhido = ref(null);
+const modeloValores = ref({});
+const modeloBotoes = ref({});
+const modeloLink = ref('');
+const modeloEnviando = ref(false);
+const modeloErroEnvio = ref(null);
+
+const modelosFiltrados = computed(() => {
+    const termo = modeloBusca.value.trim().toLowerCase();
+    if (!termo) return modelosLista.value;
+    return modelosLista.value.filter((m) => m.nome.toLowerCase().includes(termo) || m.corpo.toLowerCase().includes(termo));
+});
+
+const modeloBotoesVariaveis = computed(() => (modeloEscolhido.value?.botoes || []).filter((b) => b.variavel));
+const modeloPedeArquivo = computed(() => ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(modeloEscolhido.value?.cabecalho?.formato));
+const ROTULO_CABECALHO = { IMAGE: 'imagem', VIDEO: 'vídeo', DOCUMENT: 'documento' };
+const rotuloVariavel = (variavel) => `Campo {{${variavel}}}`;
+
+const modeloPrevia = computed(() => {
+    const m = modeloEscolhido.value;
+    if (!m) return '';
+    return m.corpo.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (inteiro, chave) => (modeloValores.value[chave] || '').trim() || inteiro);
+});
+
+const modeloPronto = computed(() => {
+    const m = modeloEscolhido.value;
+    if (!m || !m.suportado) return false;
+    if (m.variaveis.some((v) => !(modeloValores.value[v] || '').trim())) return false;
+    if (modeloBotoesVariaveis.value.some((b) => !(modeloBotoes.value[b.indice] || '').trim())) return false;
+    if (modeloPedeArquivo.value && !/^https:\/\//.test(modeloLink.value.trim())) return false;
+    return true;
+});
+
+async function abrirModelos(atualizar = false) {
+    if (!active.value) return;
+    modeloAberto.value = true;
+    modelosErro.value = null;
+    modeloErroEnvio.value = null;
+    if (modelosLista.value.length && !atualizar && modelosLoja.value === active.value.loja) return;
+    modelosCarregando.value = true;
+    try {
+        const data = await request(`/admin/whatsapp/conversas/${active.value.id}/modelos${atualizar ? '?atualizar=1' : ''}`);
+        modelosLista.value = data.modelos || [];
+        modelosLoja.value = active.value.loja;
+        modelosNomeLoja.value = data.loja || '';
+    } catch (error) {
+        modelosErro.value = error.message || 'Não foi possível buscar os modelos na Meta.';
+    } finally {
+        modelosCarregando.value = false;
+    }
+}
+
+function escolherModelo(modelo) {
+    modeloEscolhido.value = modelo;
+    modeloValores.value = Object.fromEntries(modelo.variaveis.map((v) => [v, '']));
+    modeloBotoes.value = {};
+    modeloLink.value = '';
+    modeloErroEnvio.value = null;
+}
+
+function fecharModelos() {
+    if (modeloEnviando.value) return;
+    modeloAberto.value = false;
+    modeloEscolhido.value = null;
+    modeloBusca.value = '';
+}
+
+async function enviarModelo() {
+    const m = modeloEscolhido.value;
+    if (!m || !modeloPronto.value || modeloEnviando.value || !active.value) return;
+    modeloEnviando.value = true;
+    modeloErroEnvio.value = null;
+    try {
+        const data = await request(`/admin/whatsapp/conversas/${active.value.id}/modelo`, {
+            method: 'POST',
+            body: {
+                nome: m.nome,
+                idioma: m.idioma,
+                variaveis: modeloValores.value,
+                botoes: modeloBotoes.value,
+                cabecalho_link: modeloPedeArquivo.value ? modeloLink.value.trim() : null,
+            },
+        });
+        mergeMessages([data.message]);
+        upsertConversation(data.conversation);
+        scrollToBottom();
+        modeloEnviando.value = false;
+        fecharModelos();
+        if (data.message.status === 'failed') actionError.value = 'A Meta recusou o modelo. Passe o mouse no ícone vermelho pra ver o motivo.';
+    } catch (error) {
+        modeloErroEnvio.value = error.message || 'Não foi possível enviar o modelo.';
+    } finally {
+        modeloEnviando.value = false;
+    }
+}
 
 // Manuela voltou a atender (chave ligada aqui ou em outra aba) no meio da
 // gravação: o áudio é descartado, porque gravar é só no modo humano.
@@ -1219,7 +1324,15 @@ function linkify(text) {
                         <button v-for="emoji in EMOJIS" :key="emoji" type="button" class="flex h-10 items-center justify-center rounded-md text-2xl hover:bg-black/5 dark:hover:bg-white/10" @click="insertEmoji(emoji)">{{ emoji }}</button>
                     </div>
                     <p v-if="composerBlocked" class="wa-banner wa-banner-warn mb-1.5 mt-1">
-                        <i class="fas fa-triangle-exclamation"></i><span>{{ composerBlocked }}</span>
+                        <i class="fas fa-triangle-exclamation"></i><span class="flex-1">{{ composerBlocked }}</span>
+                        <button
+                            v-if="props.status.readyToSend && !active.insideWindow"
+                            type="button"
+                            class="wa-nova-btn shrink-0"
+                            @click="abrirModelos()"
+                        >
+                            <i class="fas fa-file-lines"></i>Enviar modelo aprovado
+                        </button>
                     </p>
                     <p v-if="actionError" class="wa-banner wa-banner-error mb-1.5 mt-1">
                         <i class="fas fa-circle-exclamation"></i><span>{{ actionError }}</span>
@@ -1297,6 +1410,104 @@ function linkify(text) {
                         </button>
                     </form>
                 </footer>
+
+                <!-- Modelo aprovado (fora da janela de 24h): escolhe, preenche e manda. -->
+                <div v-if="modeloAberto" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="fecharModelos">
+                    <div class="wa-nova flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl shadow-2xl">
+                        <header class="wa-nova-head flex shrink-0 items-center gap-3 px-5 py-3">
+                            <button v-if="modeloEscolhido" type="button" class="wa-icon-btn inline-flex" title="Voltar para a lista" :disabled="modeloEnviando" @click="modeloEscolhido = null">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[17px] font-semibold">{{ modeloEscolhido ? modeloEscolhido.nome : 'Enviar modelo aprovado' }}</p>
+                                <p class="truncate text-[12.5px] opacity-90">
+                                    Para {{ displayName(active) }}<template v-if="modelosNomeLoja"> · pelo WhatsApp da {{ modelosNomeLoja }}</template>
+                                </p>
+                            </div>
+                            <button v-if="!modeloEscolhido" type="button" class="wa-icon-btn inline-flex" title="Buscar de novo na Meta" :disabled="modelosCarregando" @click="abrirModelos(true)">
+                                <i class="fas fa-rotate" :class="{ 'fa-spin': modelosCarregando }"></i>
+                            </button>
+                            <button type="button" class="wa-icon-btn inline-flex" title="Fechar" :disabled="modeloEnviando" @click="fecharModelos">
+                                <i class="fas fa-xmark text-lg"></i>
+                            </button>
+                        </header>
+
+                        <!-- Lista de modelos -->
+                        <div v-if="!modeloEscolhido" class="flex min-h-0 flex-1 flex-col">
+                            <div class="shrink-0 px-4 pt-3">
+                                <input v-model="modeloBusca" type="search" placeholder="Buscar modelo pelo nome ou texto" class="wa-input w-full rounded-lg border-0 px-3 py-2 text-[14px] focus:ring-0">
+                            </div>
+                            <div class="min-h-0 flex-1 overflow-y-auto py-3">
+                                <p v-if="modelosCarregando && !modelosLista.length" class="wa-muted px-5 py-6 text-center text-sm"><i class="fas fa-circle-notch fa-spin mr-2"></i>Buscando os modelos aprovados na Meta…</p>
+                                <p v-else-if="modelosErro" class="wa-banner wa-banner-error mx-4"><i class="fas fa-circle-exclamation"></i><span>{{ modelosErro }}</span></p>
+                                <p v-else-if="!modelosFiltrados.length" class="wa-muted px-5 py-6 text-center text-sm">Nenhum modelo aprovado{{ modeloBusca ? ' com esse nome' : '' }}.</p>
+                                <button
+                                    v-for="modelo in modelosFiltrados"
+                                    :key="modelo.nome + '-' + modelo.idioma"
+                                    type="button"
+                                    class="wa-nova-item mx-3 mb-2 block w-[calc(100%-1.5rem)] rounded-lg px-4 py-3 text-left"
+                                    :class="{ 'opacity-60': !modelo.suportado }"
+                                    @click="escolherModelo(modelo)"
+                                >
+                                    <span class="flex items-center gap-2">
+                                        <span class="wa-text truncate text-[15px] font-semibold">{{ modelo.nome }}</span>
+                                        <span class="wa-loja-badge">{{ modelo.idioma }}</span>
+                                        <span class="wa-loja-badge">{{ (modelo.categoria || '').toLowerCase() }}</span>
+                                        <span v-if="modelo.variaveis.length" class="wa-muted ml-auto shrink-0 text-[12px]">{{ modelo.variaveis.length }} campo{{ modelo.variaveis.length > 1 ? 's' : '' }}</span>
+                                    </span>
+                                    <span class="wa-muted mt-1 line-clamp-2 block whitespace-pre-line text-[13.5px]">{{ modelo.corpo }}</span>
+                                    <span v-if="!modelo.suportado" class="mt-1 block text-[12px] text-[#ea0038]">{{ modelo.motivo }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Modelo escolhido: campos + prévia -->
+                        <form v-else class="flex min-h-0 flex-1 flex-col" @submit.prevent="enviarModelo">
+                            <div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                                <p v-if="!modeloEscolhido.suportado" class="wa-banner wa-banner-error"><i class="fas fa-circle-exclamation"></i><span>{{ modeloEscolhido.motivo }}</span></p>
+
+                                <label v-if="modeloPedeArquivo" class="block">
+                                    <span class="wa-text mb-1 block text-[13px] font-semibold">Link da {{ ROTULO_CABECALHO[modeloEscolhido.cabecalho.formato] }} do cabeçalho (https)</span>
+                                    <input v-model="modeloLink" type="url" placeholder="https://…" class="wa-input w-full rounded-lg border-0 px-3 py-2 text-[14px] focus:ring-0">
+                                </label>
+
+                                <label v-for="variavel in modeloEscolhido.variaveis" :key="variavel" class="block">
+                                    <span class="wa-text mb-1 block text-[13px] font-semibold">{{ rotuloVariavel(variavel) }}</span>
+                                    <input v-model="modeloValores[variavel]" type="text" maxlength="1024" class="wa-input w-full rounded-lg border-0 px-3 py-2 text-[14px] focus:ring-0">
+                                </label>
+
+                                <label v-for="botao in modeloBotoesVariaveis" :key="'b' + botao.indice" class="block">
+                                    <span class="wa-text mb-1 block text-[13px] font-semibold">Final do link do botão "{{ botao.texto }}"</span>
+                                    <span class="wa-muted mb-1 block break-all text-[12px]">{{ botao.url }}</span>
+                                    <input v-model="modeloBotoes[botao.indice]" type="text" maxlength="2000" class="wa-input w-full rounded-lg border-0 px-3 py-2 text-[14px] focus:ring-0">
+                                </label>
+
+                                <div>
+                                    <span class="wa-muted mb-1 block text-[12px] font-semibold uppercase">Como o cliente vai receber</span>
+                                    <div class="wa-wallpaper rounded-lg p-3">
+                                        <div class="wa-bubble wa-bubble-out ml-auto max-w-[85%] whitespace-pre-line">
+                                            <p v-if="modeloEscolhido.cabecalho?.formato === 'TEXT'" class="mb-1 font-semibold">{{ modeloEscolhido.cabecalho.texto }}</p>
+                                            <p v-else-if="modeloPedeArquivo" class="wa-muted mb-1 text-[12px]"><i class="fas fa-paperclip mr-1"></i>{{ ROTULO_CABECALHO[modeloEscolhido.cabecalho.formato] }} no cabeçalho</p>
+                                            <p>{{ modeloPrevia }}</p>
+                                            <p v-if="modeloEscolhido.rodape" class="wa-muted mt-1 text-[12px]">{{ modeloEscolhido.rodape }}</p>
+                                        </div>
+                                        <div v-for="botao in modeloEscolhido.botoes" :key="'p' + botao.indice" class="wa-bubble wa-bubble-out ml-auto mt-1 max-w-[85%] text-center text-[13.5px] font-medium text-[#027eb5]">
+                                            {{ botao.texto }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p v-if="modeloErroEnvio" class="wa-banner wa-banner-error"><i class="fas fa-circle-exclamation"></i><span>{{ modeloErroEnvio }}</span></p>
+                            </div>
+                            <footer class="flex shrink-0 items-center justify-end gap-3 border-t border-black/10 px-5 py-3 dark:border-white/10">
+                                <span class="wa-muted mr-auto text-[12px]">A Meta cobra por modelo enviado.</span>
+                                <button type="submit" class="wa-nova-btn" :disabled="!modeloPronto || modeloEnviando">
+                                    <i class="fas" :class="modeloEnviando ? 'fa-circle-notch fa-spin' : 'fa-paper-plane'"></i>Enviar modelo
+                                </button>
+                            </footer>
+                        </form>
+                    </div>
+                </div>
             </template>
 
             <!-- Tela inicial (sem conversa aberta) -->

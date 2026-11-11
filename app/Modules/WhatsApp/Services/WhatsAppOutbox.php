@@ -138,4 +138,81 @@ class WhatsAppOutbox
 
         return $message;
     }
+
+    /**
+     * Modelo aprovado mandado pelo atendente na conversa (pedido do Lira
+     * 11/11/2026): o jeito de falar com o cliente fora da janela de 24h.
+     * No histórico fica o texto do modelo já preenchido.
+     *
+     * @param  array<string, mixed>  $modelo  WhatsAppModelos::montar()
+     * @param  array<string, string>  $valores  variável do corpo => valor
+     * @param  array<int, string>  $botoes  índice do botão de link => sufixo da URL
+     */
+    public function sendTemplate(
+        WhatsAppConversation $conversation,
+        array $modelo,
+        array $valores,
+        array $botoes,
+        ?string $cabecalhoLink,
+        string $sentBy,
+        ?int $userId = null,
+    ): WhatsAppMessage {
+        $basePayload = ['template' => $modelo['nome'], 'idioma' => $modelo['idioma'], 'variaveis' => $valores];
+        $formato = $modelo['cabecalho']['formato'] ?? null;
+        $tipoCabecalho = in_array($formato, ['IMAGE', 'VIDEO', 'DOCUMENT'], true) ? strtolower($formato) : null;
+
+        $message = WhatsAppMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => 'outbound',
+            'type' => 'template',
+            'body' => WhatsAppModelos::texto($modelo, $valores),
+            'status' => 'pending',
+            'sent_by' => $sentBy,
+            'user_id' => $userId,
+            'payload' => $basePayload,
+            'sent_at' => now(),
+        ]);
+
+        $conversation->registerMessage($message);
+
+        if (! $this->settings->isReadyToSend($conversation->loja)) {
+            $message->update(['status' => 'draft_no_token']);
+
+            return $message;
+        }
+
+        // Variável numerada vai em ordem ({{1}}, {{2}}...); nomeada vai com o nome.
+        $parametros = ($modelo['nomeadas'] ?? false)
+            ? $valores
+            : array_values(array_map(fn (string $chave) => $valores[$chave] ?? '', $modelo['variaveis']));
+
+        try {
+            $response = $this->client->paraLoja($conversation->loja)->sendTemplate(
+                $conversation->wa_id,
+                $modelo['nome'],
+                $modelo['idioma'],
+                $tipoCabecalho,
+                null,
+                $parametros,
+                $botoes,
+                [],
+                $tipoCabecalho ? $cabecalhoLink : null,
+            );
+
+            $message->update([
+                'wa_message_id' => $response['messages'][0]['id'] ?? null,
+                'status' => 'sent',
+                'payload' => array_merge($basePayload, ['meta_response' => $response]),
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp_template_send_failed', ['conversation_id' => $conversation->id, 'template' => $modelo['nome'], 'error' => $exception->getMessage()]);
+
+            $message->update([
+                'status' => 'failed',
+                'payload' => array_merge($basePayload, ['error' => $exception->getMessage()]),
+            ]);
+        }
+
+        return $message;
+    }
 }

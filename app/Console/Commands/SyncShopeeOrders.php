@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\AlertaVendaNaoImportada;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Models\User;
 use App\Notifications\OrderImportFailedNotification;
@@ -43,12 +44,14 @@ class SyncShopeeOrders extends Command
         $this->info(count($sns).' pedido(s) encontrado(s) no período.');
 
         $imported = 0;
+        $importadas = [];
         $falhas = [];
 
         foreach ($sns as $sn) {
             try {
                 $importer->import(MarketplaceAccount::CHANNEL_SHOPEE, $sn, viaVarredura: true);
                 $imported++;
+                $importadas[] = (string) $sn;
             } catch (Throwable $exception) {
                 $falhas[] = ['sn' => $sn, 'message' => $exception->getMessage()];
                 $this->warn("Pedido {$sn}: {$exception->getMessage()}");
@@ -56,6 +59,11 @@ class SyncShopeeOrders extends Command
         }
 
         $this->info('Concluído: '.$imported.' sincronizado(s), '.count($falhas).' com erro.');
+
+        // 11/11/2026: e-mail só para venda fora do sistema há 30 min (AlertaVendaNaoImportada);
+        // falha passageira da API (conexão caída, venda recém-feita) entra na rodada seguinte.
+        // Roda sempre, para tirar da lista o que entrou nesta rodada.
+        $presas = AlertaVendaNaoImportada::filtrar('Shopee', $falhas, $importadas);
 
         // INCIDENTE 2026-09-10: até aqui a falha era SÓ o warn acima — e
         // isto roda por cron, num console que ninguém lê. A venda
@@ -76,7 +84,11 @@ class SyncShopeeOrders extends Command
                 'vendas' => $falhas,
             ]);
 
-            $aviso = new OrderImportFailedNotification('Shopee', $falhas, $janela);
+            if ($presas === []) {
+                return self::SUCCESS;
+            }
+
+            $aviso = new OrderImportFailedNotification('Shopee', $presas, $janela);
             $destino = config('services.alerts.email');
 
             if ($destino) {

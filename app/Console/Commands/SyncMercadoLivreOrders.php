@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\User;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\AlertaVendaNaoImportada;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\OrderImportFailedNotification;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
@@ -49,12 +50,14 @@ class SyncMercadoLivreOrders extends Command
         $this->info(count($ids).' pedido(s) encontrado(s) no período.');
 
         $imported = 0;
+        $importadas = [];
         $falhas = [];
 
         foreach ($ids as $id) {
             try {
                 $importer->import(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $id, viaVarredura: true);
                 $imported++;
+                $importadas[] = (string) $id;
             } catch (Throwable $exception) {
                 $falhas[] = ['sn' => (string) $id, 'message' => $exception->getMessage()];
                 $this->warn("Pedido {$id}: {$exception->getMessage()}");
@@ -62,6 +65,11 @@ class SyncMercadoLivreOrders extends Command
         }
 
         $this->info('Concluído: '.$imported.' sincronizado(s), '.count($falhas).' com erro.');
+
+        // 11/11/2026: e-mail só para venda fora do sistema há 30 min (AlertaVendaNaoImportada);
+        // falha passageira da API (conexão caída, venda recém-feita) entra na rodada seguinte.
+        // Roda sempre, para tirar da lista o que entrou nesta rodada.
+        $presas = AlertaVendaNaoImportada::filtrar('Mercado Livre', $falhas, $importadas);
 
         // Mesma regra da Shopee, pelo mesmo motivo (incidente 2026-09-10):
         // venda que não entra não aparece em tela nenhuma, porque toda tela
@@ -75,7 +83,11 @@ class SyncMercadoLivreOrders extends Command
                 'vendas' => $falhas,
             ]);
 
-            $aviso = new OrderImportFailedNotification('Mercado Livre', $falhas, $janela);
+            if ($presas === []) {
+                return self::SUCCESS;
+            }
+
+            $aviso = new OrderImportFailedNotification('Mercado Livre', $presas, $janela);
             $destino = config('services.alerts.email');
 
             if ($destino) {

@@ -258,6 +258,8 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::post('pedido', [FerraKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1,fk-checkout-pedido')->name('pedido');
         Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,fk-checkout-status')->name('status');
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
+        // Leads (11/11/2026): cada campo preenchido, para recuperar quem desiste.
+        Route::post('lead', [FerraKoraCheckoutController::class, 'lead'])->middleware('throttle:60,1,fk-checkout-lead')->name('lead');
     });
 
     // Pixel da Meta do FerraKora (2026-10-28): o site pergunta o ID ao abrir.

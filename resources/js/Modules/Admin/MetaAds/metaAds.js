@@ -46,9 +46,17 @@ const erroDaResposta = (status, corpo) => {
     return erro;
 };
 
+// Loja da tela de campanhas (Lira 2026-11-11): editar, pausar, excluir e o
+// status ao vivo vão para a conta de anúncios dela (?loja=ferrakora).
+let lojaMeta = 'kazakora';
+export const definirLojaMeta = (loja) => { lojaMeta = loja || 'kazakora'; };
+const comLoja = (url) => (lojaMeta !== 'kazakora' && url.includes('/meta-ads/gerenciar')
+    ? `${url}${url.includes('?') ? '&' : '?'}loja=${encodeURIComponent(lojaMeta)}`
+    : url);
+
 /** fetch JSON com o token de sessão do Laravel; lança Error com .erros (validação). */
 export const pedirJson = async (metodo, url, dados = null) => {
-    const resposta = await fetch(url, {
+    const resposta = await fetch(comLoja(url), {
         method: metodo,
         credentials: 'same-origin',
         headers: {

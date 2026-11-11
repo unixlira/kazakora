@@ -21,6 +21,13 @@ class EtiquetaMelhorEnvioComMarca
     private const LOGO = 'images/marca/logo-kazakora-fiel.png';
 
     /**
+     * Logo da FerraKora para a térmica: o do site é metal e fogo para fundo
+     * escuro e some no papel. Este é o mesmo desenho (martelo no F, serra no
+     * O) só em preto sobre branco, sem degradê.
+     */
+    private const LOGO_FERRAKORA = 'images/marca/logo-ferrakora-etiqueta.png';
+
+    /**
      * Área do logo do Melhor Envio por modelo, em fração da página
      * [x0, y0, x1, y1]. J&T: medida na etiqueta do #3978 (770x1084 px, logo
      * em 97-328 x 866-973), com folga para cobrir o logo inteiro.
@@ -41,10 +48,15 @@ class EtiquetaMelhorEnvioComMarca
         };
     }
 
+    /** Logo que vai na etiqueta conforme o site do pedido (SiteAtual). */
+    public static function logo(?string $site): string
+    {
+        return $site === \App\Support\SiteAtual::FERRAKORA ? self::LOGO_FERRAKORA : self::LOGO;
+    }
+
     /**
      * @param  ?string  $site  site do pedido (SiteAtual): FerraKora sai com o
-     *                         nome dela em preto (o logo é de fundo escuro e
-     *                         some na térmica); o resto, logo da KazaKora.
+     *                         logo dela em preto e branco; o resto, KazaKora.
      */
     public function aplicar(string $pdf, ?string $servico, ?int $orderId = null, ?string $site = null): string
     {
@@ -75,21 +87,19 @@ class EtiquetaMelhorEnvioComMarca
                     $fpdi->SetFillColor(255, 255, 255);
                     $fpdi->Rect($x0 * $w, $y0 * $h, ($x1 - $x0) * $w, ($y1 - $y0) * $h, 'F');
 
-                    if ($site === \App\Support\SiteAtual::FERRAKORA) {
-                        $fpdi->SetTextColor(0, 0, 0);
-                        $fpdi->SetFont('Helvetica', 'B', ($y1 - $y0) * $h * 0.42);
-                        $texto = 'FerraKora';
-                        $fpdi->Text(($x0 + $x1) / 2 * $w - $fpdi->GetStringWidth($texto) / 2, ($y0 + $y1) / 2 * $h + ($y1 - $y0) * $h * 0.15, $texto);
+                    $logo = public_path(self::logo($site));
 
-                        continue;
-                    }
-
-                    // Logo centrado na área, ocupando 90% da largura dela.
-                    [$lw, $lh] = getimagesize(public_path(self::LOGO));
+                    // Logo centrado na área, ocupando 90% da largura dela (ou
+                    // 90% da altura, se o desenho for alto demais para a área).
+                    [$lw, $lh] = getimagesize($logo);
                     $largura = ($x1 - $x0) * $w * 0.9;
                     $altura = $largura * $lh / $lw;
+                    if ($altura > ($y1 - $y0) * $h * 0.9) {
+                        $altura = ($y1 - $y0) * $h * 0.9;
+                        $largura = $altura * $lw / $lh;
+                    }
                     $fpdi->Image(
-                        public_path(self::LOGO),
+                        $logo,
                         ($x0 + $x1) / 2 * $w - $largura / 2,
                         ($y0 + $y1) / 2 * $h - $altura / 2,
                         $largura,

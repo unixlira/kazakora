@@ -3,6 +3,7 @@
 namespace Tests\Feature\MelhorEnvio;
 
 use App\Modules\Marketplace\Support\EtiquetaMelhorEnvioComMarca;
+use App\Support\SiteAtual;
 use setasign\Fpdi\Fpdi;
 use Tests\TestCase;
 
@@ -36,5 +37,28 @@ class EtiquetaComMarcaTest extends TestCase
 
         $this->assertSame($original, app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Jadlog .Package', 1));
         $this->assertSame('jet', EtiquetaMelhorEnvioComMarca::modelo('J&T Express'));
+    }
+
+    public function test_ferrakora_sai_com_o_logo_preto_e_branco_dela(): void
+    {
+        $this->assertSame('images/marca/logo-ferrakora-etiqueta.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
+        $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::KAZAKORA));
+        $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(null));
+
+        // O PNG da térmica é cinza de 1 canal (preto no branco, sem cor nem
+        // transparência): no PDF não tem /DeviceRGB, o da KazaKora tem.
+        $png = public_path(EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
+        $this->assertFileExists($png);
+        $this->assertSame(0, ord(file_get_contents($png, false, null, 25, 1)), 'PNG tem que ser escala de cinza');
+
+        $original = $this->pdf();
+        $ferra = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1, SiteAtual::FERRAKORA);
+        $kaza = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1, SiteAtual::KAZAKORA);
+
+        $this->assertStringContainsString('/Image', $ferra);
+        $this->assertStringContainsString('/DeviceGray', $ferra);
+        $this->assertStringNotContainsString('/DeviceRGB', $ferra);
+        $this->assertStringContainsString('/DeviceRGB', $kaza);
+        $this->assertStringContainsString('577.50 813.00', $ferra);
     }
 }

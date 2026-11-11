@@ -47,9 +47,11 @@ Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(6
 // por fora do Laravel — sem ele a impressão automática para. Agora fica aqui.
 Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoMinutes()->withoutOverlapping(5);
 // Relatórios por e-mail (pedido 2026-10-10; antes eram rotinas da Naia por
-// fora, no homolog): resultado do dia às 23:50 e pedidos separados que foram
+// fora, no homolog): resultado do dia e pedidos separados que foram
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
-Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
+// Resultado às 07:30 com o dia anterior fechado (11/11/2026): depois do gasto
+// de anúncio das 06:00, das cobranças das 05:50 e da conciliação das 05:40.
+Schedule::command('loja:resultado-diario')->dailyAt('07:30')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.

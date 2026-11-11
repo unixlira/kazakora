@@ -7,6 +7,7 @@
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import CampanhasMetaLojas from '@/Modules/Admin/Publicidade/CampanhasMetaLojas.vue';
 import DiagnosticoMeta from '@/Modules/Admin/MetaAds/DiagnosticoMeta.vue';
 import { Deferred, Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -22,6 +23,9 @@ const props = defineProps({
     // Lira 2026-10-27: sem gasto gravado no painel, o resumo vem da Meta (prop adiada).
     daMeta: { type: Boolean, default: false },
     resumoMeta: { type: Object, default: null },
+    // Lira 2026-11-11: campanhas por loja (KazaKora | FerraKora | Ambas) e o período (prop adiada).
+    lojasMeta: { type: Object, default: null },
+    campanhasLojas: { type: Array, default: null },
 });
 
 const dinheiro = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
@@ -65,6 +69,16 @@ const atual = computed(() => linhas.value[0]?.totais ?? { gasto: 0, vendas: 0, r
             ROAS é a venda atribuída dividida pelo gasto. O lucro de verdade fica em
             <Link href="/admin/dashboard-financeiro" class="font-medium text-primary hover:underline">Resultado e margem</Link>.
         </p>
+
+        <Deferred v-if="lojasMeta" data="campanhasLojas">
+            <template #fallback>
+                <div class="mb-6 flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500" role="status" aria-live="polite">
+                    <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Lendo as campanhas de cada loja na Meta…
+                </div>
+            </template>
+            <CampanhasMetaLojas :config="lojasMeta" :dados="campanhasLojas ?? []" />
+        </Deferred>
+
 
         <Deferred v-if="temDiagnostico" data="diagnostico">
             <template #fallback>

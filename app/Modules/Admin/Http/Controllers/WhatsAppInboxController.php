@@ -10,6 +10,7 @@ use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\ConversorDeVoz;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
+use App\Modules\WhatsApp\Services\WhatsAppModelos;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use App\Modules\WhatsApp\Support\ClienteDaConversa;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
@@ -338,6 +339,89 @@ class WhatsAppInboxController extends Controller
         $this->humanTakesOver($conversation);
 
         $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id, [], $citada?->wa_message_id);
+
+        return response()->json([
+            'message' => $this->messagePayload($message),
+            'conversation' => $this->conversationPayload($conversation->fresh()),
+        ]);
+    }
+
+    /**
+     * Modelos aprovados do número da conversa (pedido do Lira 11/11/2026),
+     * para mandar fora da janela de 24h sem ir para Disparos.
+     */
+    public function modelos(Request $request, WhatsAppConversation $conversation, WhatsAppModelos $modelos): JsonResponse
+    {
+        if ($request->boolean('atualizar')) {
+            $modelos->esquecer($conversation->loja);
+        }
+
+        try {
+            $lista = $modelos->aprovados($conversation->loja);
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp_modelos_falhou', ['loja' => $conversation->loja, 'error' => $exception->getMessage()]);
+
+            return response()->json(['message' => $exception->getMessage()], 502);
+        }
+
+        return response()->json(['loja' => WhatsAppNumeros::nome($conversation->loja), 'modelos' => $lista]);
+    }
+
+    public function sendTemplate(Request $request, WhatsAppConversation $conversation, WhatsAppModelos $modelos, WhatsAppOutbox $outbox): JsonResponse
+    {
+        $validated = $request->validate([
+            'nome' => ['required', 'string', 'max:512'],
+            'idioma' => ['required', 'string', 'max:16'],
+            'variaveis' => ['nullable', 'array'],
+            'variaveis.*' => ['nullable', 'string', 'max:1024'],
+            'botoes' => ['nullable', 'array'],
+            'botoes.*' => ['nullable', 'string', 'max:2000'],
+            'cabecalho_link' => ['nullable', 'url:https', 'max:2000'],
+        ]);
+
+        try {
+            $modelo = $modelos->encontrar($conversation->loja, $validated['nome'], $validated['idioma']);
+        } catch (Throwable $exception) {
+            return response()->json(['message' => $exception->getMessage()], 502);
+        }
+
+        if ($modelo === null) {
+            return response()->json(['message' => 'Esse modelo não está aprovado no WhatsApp da '.WhatsAppNumeros::nome($conversation->loja).'.'], 422);
+        }
+
+        if (! $modelo['suportado']) {
+            return response()->json(['message' => $modelo['motivo']], 422);
+        }
+
+        $valores = [];
+        foreach ($modelo['variaveis'] as $chave) {
+            $valor = trim((string) ($validated['variaveis'][$chave] ?? ''));
+            if ($valor === '') {
+                return response()->json(['message' => "Preencha a variável {{{$chave}}} do modelo."], 422);
+            }
+            $valores[$chave] = $valor;
+        }
+
+        $botoes = [];
+        foreach ($modelo['botoes'] as $botao) {
+            if (! $botao['variavel']) {
+                continue;
+            }
+            $valor = trim((string) ($validated['botoes'][$botao['indice']] ?? ''));
+            if ($valor === '') {
+                return response()->json(['message' => "Preencha o final do link do botão \"{$botao['texto']}\"."], 422);
+            }
+            $botoes[$botao['indice']] = $valor;
+        }
+
+        $formato = $modelo['cabecalho']['formato'] ?? null;
+        if (in_array($formato, ['IMAGE', 'VIDEO', 'DOCUMENT'], true) && blank($validated['cabecalho_link'] ?? null)) {
+            return response()->json(['message' => 'Esse modelo tem '.['IMAGE' => 'imagem', 'VIDEO' => 'vídeo', 'DOCUMENT' => 'documento'][$formato].' no cabeçalho: cole o link (https) do arquivo.'], 422);
+        }
+
+        $this->humanTakesOver($conversation);
+
+        $message = $outbox->sendTemplate($conversation, $modelo, $valores, $botoes, $validated['cabecalho_link'] ?? null, $request->user()->name, $request->user()->id);
 
         return response()->json([
             'message' => $this->messagePayload($message),

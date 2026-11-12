@@ -69,7 +69,13 @@ class FluxoDeCaixaTest extends TestCase
         $this->pedido('shopee', 999, '2026-10-03 10:00:00', 1, 1, extra: ['status' => Order::STATUS_CANCELLED]);
         // Nota de venda menor que o subtotal: o imposto sai sobre ela.
         $ml = Order::query()->where('origin', 'mercado_livre')->first();
-        DB::table('invoices')->insert(['order_id' => $ml->id, 'numero' => 7, 'status' => 'authorized', 'operation_type' => 'saida', 'valor_total' => 280, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('invoices')->insert(['order_id' => $ml->id, 'numero' => 7, 'status' => 'authorized', 'operation_type' => 'saida', 'valor_total' => 280, 'autorizada_em' => '2026-10-05 09:00:00', 'created_at' => now(), 'updated_at' => now()]);
+        // Imposto pela data da nota (12/11/2026): venda antiga sem nota não gera imposto, então
+        // a de setembro e a de 02/10 têm a nota delas; as recentes (até 10 dias) ainda vão pela receita.
+        foreach ([['2026-09-04 10:00:00', 500, 8], ['2026-10-02 10:00:00', 200, 9]] as [$quando, $valor, $numero]) {
+            $pedido = Order::query()->where('origin', 'shopee')->where('created_at', $quando)->where('status', Order::STATUS_PAID)->firstOrFail();
+            DB::table('invoices')->insert(['order_id' => $pedido->id, 'numero' => $numero, 'status' => 'authorized', 'operation_type' => 'saida', 'valor_total' => $valor, 'autorizada_em' => $quando, 'created_at' => now(), 'updated_at' => now()]);
+        }
 
         foreach ([['2026-10-02', 'shopee', 15], ['2026-10-10', 'shopee', 25], ['2026-10-06', 'mercado_livre', 9]] as [$dia, $canal, $gasto]) {
             ChannelAdSpend::create(['date' => $dia, 'channel' => $canal, 'spend' => $gasto, 'impressions' => 0, 'clicks' => 0, 'attributed_orders' => 0, 'attributed_gmv' => 0]);
@@ -115,7 +121,7 @@ class FluxoDeCaixaTest extends TestCase
         $base = ContributionMargin::baseImposto($desde, $ate);
         $imposto = ContributionMargin::imposto($desde, $ate);
         $this->assertEqualsWithDelta(280.0, $base['mercado_livre'], 0.001, 'nota de R$ 280');
-        $this->assertEqualsWithDelta(350.0, $base['shopee'], 0.001, 'sem nota: receita');
+        $this->assertEqualsWithDelta(350.0, $base['shopee'], 0.001, 'nota de 02/10 (R$ 200) + venda recente sem nota pela receita (R$ 150)');
         foreach ($base as $canal => $valor) {
             $this->assertEqualsWithDelta(round($valor * 0.045, 2), $imposto[$canal], 0.001);
         }

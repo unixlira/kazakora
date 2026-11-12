@@ -329,7 +329,7 @@ const confirmarApagar = () => {
                             <th scope="col" class="px-4 py-3">Data/Hora</th>
                             <th scope="col" class="px-4 py-3">IP</th>
                             <th scope="col" class="px-4 py-3">Origem</th>
-                            <th scope="col" class="px-4 py-3 text-right" title="Preço que a página do produto mostrou ao visitante quando abriu">Valor</th>
+                            <th scope="col" class="px-4 py-3" title="O visitante abriu alguma página de produto no período? O valor de cada produto está no olho.">Produto</th>
                             <th scope="col" class="px-4 py-3">Cliente</th>
                             <th scope="col" class="px-4 py-3 text-right">Ações</th>
                         </tr>
@@ -352,13 +352,11 @@ const confirmarApagar = () => {
                                 <span v-if="visita.origem?.outras?.length" class="ml-1 text-xs tabular-nums text-slate-400"
                                     :title="`Também veio de: ${visita.origem.outras.join(', ')}`">+{{ visita.origem.outras.length }}</span>
                             </td>
-                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" data-testid="visita-valor">
-                                <template v-if="visita.produto">
-                                    <span :title="`Último produto que abriu: ${visita.produto.path}`">{{ moeda(visita.produto.valor) }}</span>
-                                    <span v-if="visita.produto.mais" class="ml-1 text-xs text-slate-400"
-                                        :title="tituloOutrosProdutos(visita.produto)">+{{ visita.produto.mais }}</span>
-                                </template>
-                                <span v-else class="text-slate-400" title="Não abriu página de produto, ou a visita é anterior a 12/11/2026">—</span>
+                            <td class="whitespace-nowrap px-4 py-2.5" data-testid="visita-produto">
+                                <span v-if="visita.viu_produto" title="Abriu página de produto no período. Clique no olho para ver o valor de cada uma."
+                                    class="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Sim</span>
+                                <span v-else title="Não abriu nenhuma página de produto no período"
+                                    class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">Não</span>
                             </td>
                             <td class="whitespace-nowrap px-4 py-2.5">
                                 <span v-if="visita.cliente" :title="tituloCliente(visita)"
@@ -506,6 +504,10 @@ const confirmarApagar = () => {
                                 <a :href="r.url" target="_blank" rel="noopener noreferrer"
                                     class="min-w-0 flex-1 truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
                                     :title="r.path">{{ r.path }}</a>
+                                <span v-if="r.valor != null" class="whitespace-nowrap text-xs font-semibold tabular-nums" data-testid="rota-valor"
+                                    :title="r.frete != null ? `Valor que a página mostrou. Frete incluído: ${moeda(r.frete)}; produto: ${moeda(r.valor - r.frete)}` : 'Valor que a página mostrou ao abrir'">{{ moeda(r.valor) }}</span>
+                                <span v-else-if="r.produto" class="whitespace-nowrap text-xs text-slate-400"
+                                    title="Página de produto aberta antes de 12/11/2026, quando o valor ainda não era gravado">sem valor</span>
                                 <span class="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400"
                                     :title="`Última vez em ${r.ultima}`">{{ numero(r.vezes) }}×</span>
                             </li>

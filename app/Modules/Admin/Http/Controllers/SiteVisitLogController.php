@@ -151,6 +151,7 @@ class SiteVisitLogController extends Controller
         $apagaveis = $this->contarApagaveis($site, $linhas, $de, $fim);
         $origens = $this->origensDeEntrada(clone $query, $linhas);
         $valores = $this->produtosVistos(clone $query, $linhas);
+        $viramProduto = $this->abriramProduto(clone $query, $linhas, $site);
 
         $visitas = (new LengthAwarePaginator(
             $linhas->map(fn ($l) => [
@@ -164,6 +165,8 @@ class SiteVisitLogController extends Controller
                 'apagaveis' => $apagaveis[$l->ip ?? 'v:'.$l->anonimo] ?? 0,
                 'origem' => $origens[$l->ip ?? 'v:'.$l->anonimo] ?? ['chave' => 'interno', 'rotulo' => OrigemVisita::rotulo('interno'), 'outras' => []],
                 'produto' => $valores[$l->ip ?? 'v:'.$l->anonimo] ?? null,
+                // Selo Sim/Não da lista (pedido 2026-11-12): abriu alguma página de produto no período.
+                'viu_produto' => isset($viramProduto[$l->ip ?? 'v:'.$l->anonimo]),
             ])->values(),
             $total,
             self::POR_PAGINA,
@@ -292,12 +295,21 @@ class SiteVisitLogController extends Controller
             ->orderBy('path')
             ->get();
 
+        // Valor de cada rota de produto (pedido 2026-11-12): o da última vez que abriu.
+        $valoresDasRotas = (clone $query)->toBase()->whereNotNull('preco_visto')
+            ->orderByDesc('created_at')->orderByDesc('id')
+            ->get(['path', 'preco_visto', 'frete_visto'])
+            ->unique('path')->keyBy('path');
+
         return response()->json([
             'rotas' => [
                 'distintas' => $rotas->count(),
                 'lista' => $rotas->take(self::MAX_ROTAS)->map(fn ($r) => [
                     'path' => $r->path,
                     'url' => $site.$r->path,
+                    'produto' => self::rotaDeProduto($doSite, $r->path),
+                    'valor' => isset($valoresDasRotas[$r->path]) ? (float) $valoresDasRotas[$r->path]->preco_visto : null,
+                    'frete' => isset($valoresDasRotas[$r->path]) && $valoresDasRotas[$r->path]->frete_visto !== null ? (float) $valoresDasRotas[$r->path]->frete_visto : null,
                     'vezes' => (int) $r->vezes,
                     'ultima' => Carbon::parse($r->ultima)->format('d/m/Y H:i'),
                 ])->values(),
@@ -712,6 +724,44 @@ class SiteVisitLogController extends Controller
 
                 return ['chave' => $conhecidas->first()->origem, 'rotulo' => $rotulos->first(), 'outras' => $rotulos->slice(1)->values()->all()];
             })
+            ->all();
+    }
+
+    /** Página de produto: /produtos/<slug> na loja, /produto/<slug> nos outros sites. */
+    private static function prefixoDeProduto(string $site): string
+    {
+        return $site === SiteVisit::SITE_LOJA ? '/produtos/' : '/produto/';
+    }
+
+    private static function rotaDeProduto(string $site, string $path): bool
+    {
+        return str_starts_with($path, self::prefixoDeProduto($site)) && strlen($path) > strlen(self::prefixoDeProduto($site));
+    }
+
+    /**
+     * Visitantes da página que abriram alguma página de produto no período
+     * (com os filtros). Vale também para visita antiga, sem valor gravado.
+     *
+     * @return array<string, true>
+     */
+    private function abriramProduto(Builder $query, Collection $linhas, string $site): array
+    {
+        if ($linhas->isEmpty()) {
+            return [];
+        }
+
+        $ips = $linhas->pluck('ip')->filter()->unique()->values()->all();
+        $anonimos = $linhas->whereNull('ip')->pluck('anonimo')->filter()->unique()->values()->all();
+
+        return $query->toBase()
+            ->where(fn ($q) => $q
+                ->whereIn('ip', $ips)
+                ->orWhere(fn ($s) => $s->whereNull('ip')->whereIn('visitor_id', $anonimos)))
+            ->where('path', 'like', self::prefixoDeProduto($site).'_%')
+            ->selectRaw('ip, MIN('.self::CHAVE_ANONIMO.') as anonimo')
+            ->groupBy('ip', DB::raw(self::CHAVE_ANONIMO))
+            ->get()
+            ->mapWithKeys(fn ($l) => [($l->ip ?? 'v:'.$l->anonimo) => true])
             ->all();
     }
 

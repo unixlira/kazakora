@@ -111,6 +111,8 @@ class VisitasValorDoProdutoTest extends TestCase
                 ->has('visitas.data', 2)
                 ->where('visitas.data.0.ip', '2.2.2.2')
                 ->where('visitas.data.0.produto', null)
+                ->where('visitas.data.0.viu_produto', false)
+                ->where('visitas.data.1.viu_produto', true)
                 ->where('visitas.data.1.ip', '1.1.1.1')
                 ->where('visitas.data.1.produto.path', '/produtos/caneca')
                 ->where('visitas.data.1.produto.valor', 44.9)
@@ -123,11 +125,22 @@ class VisitasValorDoProdutoTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->has('visitas.data', 1)
                 ->where('visitas.data.0.produto.path', '/produto/trena')
+                ->where('visitas.data.0.viu_produto', true)
                 ->where('visitas.data.0.produto.valor', 39.9)
                 ->where('visitas.data.0.produto.mais', 0));
 
         $this->actingAs($admin)->getJson('/admin/visitas-site/visitante?de=2026-11-12&ate=2026-11-12&ip=1.1.1.1&todos=1')
             ->assertOk()
+            // Rotas do olho: cada rota de produto com o valor da última vez que abriu.
+            ->assertJsonPath('rotas.lista.0.path', '/produtos/caneca')
+            ->assertJsonPath('rotas.lista.0.produto', true)
+            ->assertJsonPath('rotas.lista.0.valor', 44.9)
+            ->assertJsonPath('rotas.lista.1.path', '/')
+            ->assertJsonPath('rotas.lista.1.produto', false)
+            ->assertJsonPath('rotas.lista.1.valor', null)
+            ->assertJsonPath('rotas.lista.2.path', '/produtos/arvore')
+            ->assertJsonPath('rotas.lista.2.valor', 180)
+            ->assertJsonPath('rotas.lista.2.frete', 29.9)
             ->assertJsonPath('visitas.0.valor', null)
             ->assertJsonPath('visitas.0.frete', null)
             // Visita gravada antes do registro do frete: só o valor total.

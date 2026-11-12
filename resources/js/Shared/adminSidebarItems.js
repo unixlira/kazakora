@@ -129,6 +129,9 @@ export const sidebarSections = [
             // Insumos (pedido do Lira em 12/11/2026): material de escritório e
             // galpão que entra no lucro. Só admin (rota com middleware admin).
             { label: 'Insumos', href: '/admin/insumos', icon: 'fas fa-box-open', cor: 'ambar', permission: 'configuracoes.auditoria' },
+            // Compras (pedido do Lira em 12/11/2026): o custo do produto sai do
+            // que a loja pagou. Só admin (rota com middleware admin).
+            { label: 'Compras', href: '/admin/compras', icon: 'fas fa-basket-shopping', cor: 'verde', permission: 'configuracoes.auditoria' },
             { label: 'Centros de custo', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-chart-pie', cor: 'indigo', permission: 'relatorios.view' },
         ],

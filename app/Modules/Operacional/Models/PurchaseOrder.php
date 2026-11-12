@@ -28,13 +28,28 @@ class PurchaseOrder extends Model
         'notes',
         'created_by',
         'received_at',
+        // Tela Compras (pedido do Lira em 12/11/2026).
+        'origem',
+        'purchase_date',
+        'freight',
+        'other_costs',
+        'payment_method',
+        'attachment_path',
+        'invoice_key',
     ];
+
+    public const ORIGEM_PEDIDO = 'pedido';
+
+    public const ORIGEM_COMPRA = 'compra';
 
     protected function casts(): array
     {
         return [
             'expected_date' => 'date',
             'received_at' => 'datetime',
+            'purchase_date' => 'date:Y-m-d',
+            'freight' => 'decimal:2',
+            'other_costs' => 'decimal:2',
         ];
     }
 

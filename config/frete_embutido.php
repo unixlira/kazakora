@@ -41,6 +41,11 @@ return [
     // no prejuízo, o frete somado sobe até a mesma margem mínima do teto.
     'piso_margem' => (bool) env('FRETE_EMBUTIDO_PISO', true),
 
+    // Produto com cupom só dele valendo (BLACKFRIDAY30 do massageador, pedido do
+    // Lira em 2026-11-12): teto e piso fazem a conta no preço com o cupom, com
+    // esta margem mínima (% do preço). 0 = só onde daria prejuízo (Norte, MA, AL, TO).
+    'piso_margem_com_cupom' => (float) env('FRETE_EMBUTIDO_PISO_CUPOM', 0),
+
     // Trava do frete (pedido do Lira em 2026-10-24): depois que o visitante
     // calcula o frete de um produto (CEP na página do produto ou no checkout),
     // o valor fica guardado pelo IP e pela hash do aparelho. Voltando ao site

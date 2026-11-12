@@ -3,10 +3,12 @@
 namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Coupon extends Model
 {
@@ -60,6 +62,13 @@ class Coupon extends Model
             // produto (o pai vale para as variações). Vazio = vale para o carrinho todo.
             'produtos' => 'array',
         ];
+    }
+
+    /** Cupom de produto entra na conta do frete somado (FreteEmbutido): mudou, refaz já. */
+    protected static function booted(): void
+    {
+        static::saved(fn () => Cache::forget(FreteEmbutido::CACHE_CUPONS));
+        static::deleted(fn () => Cache::forget(FreteEmbutido::CACHE_CUPONS));
     }
 
     /** Código sempre em maiúsculas e sem espaços. */

@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Support;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\FreteCategoriaPacote;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use App\Modules\Fiscal\Models\Company;
@@ -283,12 +284,59 @@ class FreteEmbutido
         $base = $promocional !== null ? min($product->precoSemOferta(), $promocional) : $product->precoSemOferta();
         $gastos = $custo + (float) ($frete['correios'] ?? $frete['embutido']) + (float) config('frete_embutido.teto_insumos', 2);
         $taxas = ((float) config('loja.simples.aliquota', 4.5) + (float) config('frete_embutido.teto_taxa_pagamento', 5)) / 100;
-        $fatia = 1 - $taxas - (float) config('frete_embutido.teto_margem_minima', 10) / 100;
-        if ($fatia <= 0 || $taxas >= 1) {
+
+        // Cupom só deste produto valendo agora (BLACKFRIDAY30 do massageador, 2026-11-12):
+        // a conta é feita no preço que o cliente paga com o cupom, e a margem mínima
+        // passa a ser a do cupom (0 = só não dar prejuízo).
+        $cupom = $promocional === null ? $this->cupomDoProduto($product) : 0.0;
+        $fator = 1 - $cupom / 100;
+        $margem = $cupom > 0
+            ? (float) config('frete_embutido.piso_margem_com_cupom', 0)
+            : (float) config('frete_embutido.teto_margem_minima', 10);
+        $fatia = 1 - $taxas - $margem / 100;
+        if ($fatia <= 0 || $taxas >= 1 || $fator <= 0) {
             return null;
         }
 
-        return ['base' => $base, 'preco' => $base + $frete['embutido'], 'minimo' => $gastos / $fatia, 'minimo_sem_lucro' => $gastos / (1 - $taxas)];
+        return ['base' => $base, 'preco' => $base + $frete['embutido'], 'minimo' => $gastos / ($fator * $fatia), 'minimo_sem_lucro' => $gastos / ($fator * (1 - $taxas))];
+    }
+
+    /** @var array<int, float>|null maior % de cupom ativo por id de produto (cupons só de produtos escolhidos) */
+    private ?array $cuponsDosProdutos = null;
+
+    public const CACHE_CUPONS = 'frete-embutido:cupons-produto';
+
+    /**
+     * Maior desconto (%) de cupom ativo agora, de produtos escolhidos, que vale
+     * para este produto no site atual. Cupom do carrinho todo não entra: ele
+     * não é anunciado por produto.
+     */
+    private function cupomDoProduto(Product $product): float
+    {
+        if ($this->cuponsDosProdutos === null) {
+            // Só os dados do cupom no cache (vale para todos os sites); o filtro do site é aqui.
+            $cupons = rescue(fn () => Cache::remember(self::CACHE_CUPONS, now()->addMinutes(5), fn () => Coupon::query()
+                ->where('is_active', true)
+                ->where('discount_type', Coupon::TYPE_PERCENTAGE)
+                ->whereNotNull('produtos')
+                ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+                ->get()
+                ->map(fn (Coupon $c) => ['produtos' => array_map('intval', (array) $c->produtos), 'pct' => (float) $c->discount_value, 'so_kazakora' => (bool) $c->so_kazakora])
+                ->all()), [], false);
+
+            $this->cuponsDosProdutos = [];
+            foreach ((array) $cupons as $c) {
+                if ($c['so_kazakora'] && $this->site() !== SiteAtual::KAZAKORA) {
+                    continue;
+                }
+                foreach ($c['produtos'] as $id) {
+                    $this->cuponsDosProdutos[$id] = max($this->cuponsDosProdutos[$id] ?? 0.0, $c['pct']);
+                }
+            }
+        }
+
+        return (float) ($this->cuponsDosProdutos[(int) $product->id] ?? ($product->parent_product_id ? ($this->cuponsDosProdutos[(int) $product->parent_product_id] ?? 0) : 0));
     }
 
     /**

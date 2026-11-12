@@ -347,6 +347,7 @@ class Order extends Model
     protected function casts(): array
     {
         return [
+            'amostra_em' => 'datetime',
             'subtotal' => 'decimal:2',
             'shipping_cost' => 'decimal:2',
             'discount_amount' => 'decimal:2',
@@ -521,7 +522,23 @@ class Order extends Model
             ->whereNull($this->qualifyColumn('estornado_em'))
             // Devolução concluída não é venda (pedido do Lira em 12/11/2026),
             // o mesmo filtro de ContributionMargin::semDevolucao().
-            ->tap(fn ($q) => \App\Modules\Marketplace\Support\ContributionMargin::semDevolucaoConcluida($q, $this->getTable()));
+            ->tap(fn ($q) => \App\Modules\Marketplace\Support\ContributionMargin::semDevolucaoConcluida($q, $this->getTable()))
+            ->semAmostra();
+    }
+
+    /**
+     * Tira o pedido de amostra (TikTok "Amostra grátis"): o produto sai,
+     * mas não é venda. Pedido do Lira em 12/11/2026 (#4108): amostra não
+     * entra no faturamento nem na contagem de vendas do KoraSync.
+     */
+    public function scopeSemAmostra($query)
+    {
+        return $query->whereNull($this->qualifyColumn('amostra_em'));
+    }
+
+    public function ehAmostra(): bool
+    {
+        return $this->amostra_em !== null;
     }
 
     /**

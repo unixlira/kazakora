@@ -139,11 +139,18 @@ class FechamentoFiscalTest extends TestCase
 
         $r = app(FechamentoFiscalService::class)->gerar(Carbon::parse('2026-09-01'));
 
-        $this->assertSame(3, $r['totais']['autorizadas']);
+        // Devolução não soma como venda (pedido do Lira em 12/11/2026).
+        $this->assertSame(2, $r['totais']['autorizadas']);
+        $this->assertSame(200.0, (float) $r['totais']['valor_autorizado']);
         $this->assertSame(2, $r['totais']['canceladas']);
         $this->assertSame(1, $r['totais']['canceladas_fora_do_prazo']);
         $this->assertSame(230.52, $r['totais']['multa_estimada']);
         $this->assertSame(1, $r['totais']['devolucoes']);
+        $this->assertSame(100.0, (float) $r['totais']['valor_devolucoes']);
+        $serie2 = collect($r['series'])->firstWhere('serie', 2);
+        $this->assertSame(1, $serie2['autorizadas']);
+        $this->assertSame(100.0, (float) $serie2['valor']);
+        $this->assertSame(1, $serie2['devolucoes']);
         $this->assertSame(1, $r['totais']['sem_xml']);
         $this->assertSame([2, 3], array_column($r['series'], 'serie'));
 

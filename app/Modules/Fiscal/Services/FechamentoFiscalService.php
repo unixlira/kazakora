@@ -30,6 +30,15 @@ class FechamentoFiscalService
     /** Operações fiscais que são devolução (de venda = entrada, de compra = saída). */
     private const DEVOLUCOES = ['sales_return', 'purchase_return'];
 
+    /** Nota que saiu do sistema sem resposta final da SEFAZ. */
+    public const STATUS_PARADOS = [Invoice::STATUS_PENDING, Invoice::STATUS_SIGNED, Invoice::STATUS_SENT];
+
+    public const MOTIVO_SEM_NOTA = 'sem nota no sistema';
+
+    public const MOTIVO_REJEITADA = 'nota rejeitada de pedido cancelado';
+
+    public const MOTIVO_PARADA = 'nota parada (pendente/assinada/enviada) de pedido cancelado, a conferir na SEFAZ';
+
     public function __construct(private readonly UfespService $ufesp) {}
 
     /** @return array<string, mixed> */
@@ -52,6 +61,12 @@ class FechamentoFiscalService
         $comNumero = $notas->filter(fn ($n) => in_array($n['status'], self::STATUS_COM_NUMERO, true));
         $canceladas = $notas->where('status', Invoice::STATUS_CANCELLED)->values();
         $foraDoPrazo = $canceladas->where('fora_do_prazo', true);
+        // Nota de devolução não é venda: até 12/11/2026 ela entrava no total
+        // de autorizadas e inflava o faturamento (outubro: 851 de venda +
+        // 114 devoluções somadas). Pedido do Lira em 12/11/2026.
+        $validas = $comNumero->whereIn('status', [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL]);
+        $vendas = $validas->where('devolucao', false);
+        $devolucoes = $validas->where('devolucao', true);
 
         $ocorrencias = NumeracaoOcorrencia::query()
             ->where('ambiente', $ambiente)
@@ -69,12 +84,13 @@ class FechamentoFiscalService
             'ufesp' => ['ano' => (int) $inicio->year, 'valor' => $this->ufesp->valor((int) $inicio->year), ...($this->ufesp->registro((int) $inicio->year) ?? [])],
             'series' => $this->porSerie($comNumero),
             'totais' => [
-                'autorizadas' => $comNumero->whereIn('status', [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL])->count(),
-                'valor_autorizado' => round($comNumero->whereIn('status', [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL])->sum('valor'), 2),
+                'autorizadas' => $vendas->count(),
+                'valor_autorizado' => round($vendas->sum('valor'), 2),
                 'canceladas' => $canceladas->count(),
                 'canceladas_fora_do_prazo' => $foraDoPrazo->count(),
                 'multa_estimada' => round($foraDoPrazo->sum('multa'), 2),
-                'devolucoes' => $comNumero->where('devolucao', true)->count(),
+                'devolucoes' => $devolucoes->count(),
+                'valor_devolucoes' => round($devolucoes->sum('valor'), 2),
                 'sem_xml' => $comNumero->where('tem_xml', false)->count(),
                 'rejeitadas_ou_paradas' => $notas->whereNotIn('status', self::STATUS_COM_NUMERO)->count(),
             ],
@@ -96,6 +112,12 @@ class FechamentoFiscalService
      * inutiliza. Nota rejeitada/pendente de pedido ainda ativo NÃO entra:
      * o número dela continua reservado pra reenvio.
      *
+     * Desde 12/11/2026 (pedido do Lira) entra também a nota parada em
+     * pendente/assinada/enviada há mais de 24h de pedido cancelado (ex.:
+     * invoice 2261, nº 2981, assinada desde 11/10): ela fica "a conferir na
+     * SEFAZ". A inutilização automática (fiscal:conciliar --executar)
+     * consulta a chave antes e só inutiliza se a SEFAZ não a conhece.
+     *
      * @return list<array{inicio: int, fim: int, quantidade: int, motivo: string}>
      */
     public function buracos(int $serie, string $ambiente): array
@@ -114,12 +136,18 @@ class FechamentoFiscalService
                     return;
                 }
 
-                $parado = in_array($nota->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_ERROR], true)
-                    && $nota->updated_at?->lt(now()->subDay())
-                    && (! $nota->order || $nota->order->status === Order::STATUS_CANCELLED);
+                $pedidoMorto = ! $nota->order || $nota->order->status === Order::STATUS_CANCELLED;
+                $antiga = (bool) $nota->updated_at?->lt(now()->subDay());
 
-                if ($parado) {
-                    $abandonados[$numero] = true;
+                $motivo = match (true) {
+                    ! $pedidoMorto || ! $antiga => null,
+                    in_array($nota->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_ERROR], true) => self::MOTIVO_REJEITADA,
+                    in_array($nota->status, self::STATUS_PARADOS, true) => self::MOTIVO_PARADA,
+                    default => null,
+                };
+
+                if ($motivo !== null) {
+                    $abandonados[$numero] = $motivo;
                 } else {
                     $usados[$numero] = true;
                 }
@@ -148,7 +176,7 @@ class FechamentoFiscalService
         $atual = null;
 
         for ($n = $primeiro; $n <= $ultimo; $n++) {
-            $motivo = isset($usados[$n]) ? null : (isset($abandonados[$n]) ? 'nota rejeitada de pedido cancelado' : 'sem nota no sistema');
+            $motivo = isset($usados[$n]) ? null : ($abandonados[$n] ?? self::MOTIVO_SEM_NOTA);
 
             if ($motivo !== null && $atual && $atual['fim'] === $n - 1 && $atual['motivo'] === $motivo) {
                 $atual['fim'] = $n;
@@ -296,17 +324,21 @@ class FechamentoFiscalService
     {
         return $notas->groupBy('serie')->sortKeys()->map(function (Collection $daSerie, $serie) {
             $validas = $daSerie->whereIn('status', [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL]);
+            // Só venda em "autorizadas"/"valor"; devolução à parte (12/11/2026).
+            $vendas = $validas->where('devolucao', false);
+            $devolucoes = $validas->where('devolucao', true);
 
             return [
                 'serie' => (int) $serie,
                 'emissor' => (int) $serie === (int) config('nfe.serie') ? 'Kazakora' : 'Outro emissor (Bling/canal)',
                 'primeiro' => $daSerie->min('numero'),
                 'ultimo' => $daSerie->max('numero'),
-                'autorizadas' => $validas->count(),
-                'valor' => round($validas->sum('valor'), 2),
+                'autorizadas' => $vendas->count(),
+                'valor' => round($vendas->sum('valor'), 2),
                 'canceladas' => $daSerie->where('status', Invoice::STATUS_CANCELLED)->count(),
                 'denegadas' => $daSerie->where('status', Invoice::STATUS_DENIED)->count(),
-                'devolucoes' => $daSerie->where('devolucao', true)->count(),
+                'devolucoes' => $devolucoes->count(),
+                'valor_devolucoes' => round($devolucoes->sum('valor'), 2),
             ];
         })->values()->all();
     }

@@ -20,17 +20,17 @@
     </p>
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 20px; border-collapse: collapse;">
-        <tr><td style="{{ $td }}">Notas autorizadas</td><td style="{{ $td }} text-align: right; font-weight: 600;">{{ $r['totais']['autorizadas'] }} ({{ $brl($r['totais']['valor_autorizado']) }})</td></tr>
+        <tr><td style="{{ $td }}">Notas de venda autorizadas</td><td style="{{ $td }} text-align: right; font-weight: 600;">{{ $r['totais']['autorizadas'] }} ({{ $brl($r['totais']['valor_autorizado']) }})</td></tr>
         <tr><td style="{{ $td }}">Canceladas</td><td style="{{ $td }} text-align: right; font-weight: 600;">{{ $r['totais']['canceladas'] }}</td></tr>
         <tr><td style="{{ $td }}">Canceladas depois de 24h (fora do prazo)</td><td style="{{ $td }} text-align: right; font-weight: 600; color: {{ $r['totais']['canceladas_fora_do_prazo'] ? '#b91c1c' : '#1b3a5c' }};">{{ $r['totais']['canceladas_fora_do_prazo'] }} — multa estimada {{ $brl($r['totais']['multa_estimada']) }}</td></tr>
-        <tr><td style="{{ $td }}">Notas de devolução</td><td style="{{ $td }} text-align: right; font-weight: 600;">{{ $r['totais']['devolucoes'] }}</td></tr>
+        <tr><td style="{{ $td }}">Notas de devolução autorizadas (não somam na venda)</td><td style="{{ $td }} text-align: right; font-weight: 600;">{{ $r['totais']['devolucoes'] }} ({{ $brl($r['totais']['valor_devolucoes'] ?? 0) }})</td></tr>
         <tr><td style="{{ $td }}">Notas sem XML no sistema</td><td style="{{ $td }} text-align: right; font-weight: 600; color: {{ $r['totais']['sem_xml'] ? '#b91c1c' : '#1b3a5c' }};">{{ $r['totais']['sem_xml'] }}</td></tr>
         <tr><td style="{{ $td }}">UFESP {{ $r['ufesp']['ano'] }}</td><td style="{{ $td }} text-align: right;">{{ $brl($r['ufesp']['valor']) }}{{ !empty($r['ufesp']['base_legal']) ? ' ('.$r['ufesp']['base_legal'].')' : '' }}</td></tr>
     </table>
 
     <h2 style="margin: 0 0 8px; font-size: 16px; color: #1b3a5c;">Séries usadas no mês</h2>
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 20px; border-collapse: collapse;">
-        <tr><th style="{{ $th }}">Série</th><th style="{{ $th }}">Emissor</th><th style="{{ $th }}">Números</th><th style="{{ $th }}">Autorizadas</th><th style="{{ $th }}">Canceladas</th></tr>
+        <tr><th style="{{ $th }}">Série</th><th style="{{ $th }}">Emissor</th><th style="{{ $th }}">Números</th><th style="{{ $th }}">Vendas autorizadas</th><th style="{{ $th }}">Canceladas</th></tr>
         @foreach ($r['series'] as $s)
             <tr>
                 <td style="{{ $td }}">{{ $s['serie'] }}</td>

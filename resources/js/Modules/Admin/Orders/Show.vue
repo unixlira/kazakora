@@ -291,6 +291,13 @@ const cancelOrder = () => {
 
 // Pedido #3219 (2026-10-18): cancelado com o estorno recusado pelo Mercado
 // Pago, o dinheiro seguia cobrado. "Reenviar estorno" tenta de novo na hora.
+// Pedido de amostra (Lira, 2026-11-12, #4108): sai da conta de vendas e
+// faturamento, mas segue na separação e na etiqueta.
+const amostraForm = useForm({});
+const alternarAmostra = () => {
+    amostraForm.post(`/admin/pedidos/${props.order.id}/amostra`, { preserveScroll: true });
+};
+
 const showReenviarEstorno = ref(false);
 const reenviarEstornoForm = useForm({});
 const reenviarEstorno = () => {
@@ -383,7 +390,16 @@ const cancelInvoice = () => {
             <StatusBadge :status="order.status" context="order" />
             <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" :title="d.envio?.label" />
             <StatusBadge v-if="situacaoPagamento" :status="situacaoPagamento.tom" :label="situacaoPagamento.selo" :title="situacaoPagamento.titulo" />
+            <StatusBadge v-if="d.amostra_em" status="pending" label="Amostra" title="Pedido de amostra: não conta no faturamento nem nas vendas" />
             <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
+            <button
+                type="button"
+                class="ml-auto rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
+                :disabled="amostraForm.processing"
+                @click="alternarAmostra"
+            >
+                {{ d.amostra_em ? 'Desmarcar amostra' : 'Marcar como amostra' }}
+            </button>
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">

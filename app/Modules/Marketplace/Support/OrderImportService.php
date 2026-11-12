@@ -421,6 +421,12 @@ class OrderImportService
                 $order->forceFill(['created_at' => $dataDaVenda])->save();
             }
 
+            // Pedido de amostra não é venda (Lira, 12/11/2026): fica fora do
+            // faturamento e das vendas (Order::vendaEfetiva()).
+            if (! empty($data['amostra'])) {
+                $order->forceFill(['amostra_em' => $order->created_at ?? now()])->save();
+            }
+
             $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Pedido importado do canal {$channel}", ['external_order_id' => $data['external_order_id']]);
 
             $unmappedItems = [];

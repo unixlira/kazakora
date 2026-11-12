@@ -1040,6 +1040,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
 
+        // Insumos de escritório e galpão (pedido do Lira em 12/11/2026): só
+        // admin; os lançamentos entram no lucro (ContributionMargin).
+        Route::get('insumos', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'index'])->name('insumos.listar');
+        Route::post('insumos', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'store'])->name('insumos.armazenar');
+        Route::put('insumos/{insumo}', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'update'])->whereNumber('insumo')->name('insumos.atualizar');
+        Route::delete('insumos/{insumo}', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'destroy'])->whereNumber('insumo')->name('insumos.excluir');
+
         // Menu "Log": os arquivos de storage/logs na tela, com filtro de
         // data/hora, nível e busca por texto. Admin-only igual à auditoria —
         // log de produção carrega dado de cliente e payload de marketplace.

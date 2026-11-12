@@ -126,6 +126,9 @@ export const sidebarSections = [
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },
             { label: 'Extratos do TikTok', href: '/admin/arquivos-tiktok', icon: 'fab fa-tiktok', marca: 'tiktok', permission: 'financeiro.view' },
+            // Insumos (pedido do Lira em 12/11/2026): material de escritório e
+            // galpão que entra no lucro. Só admin (rota com middleware admin).
+            { label: 'Insumos', href: '/admin/insumos', icon: 'fas fa-box-open', cor: 'ambar', permission: 'configuracoes.auditoria' },
             { label: 'Centros de custo', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-chart-pie', cor: 'indigo', permission: 'relatorios.view' },
         ],

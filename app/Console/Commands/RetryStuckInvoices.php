@@ -2,12 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Services\FechamentoFiscalService;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Fiscal\Support\SituacaoNaSefaz;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -74,6 +77,7 @@ class RetryStuckInvoices extends Command
         // saber — e aí contam no faturamento. Consultar é leitura; o que
         // muda aqui é só o registro do que a SEFAZ já decidiu.
         $this->reconciliarEnviadas($canal, $this->option('incluir-delegados') ? [] : $delegadosAoBling);
+        $this->conferirParadasDePedidoCancelado($canal);
 
         if ($this->option('so-conferir')) {
             return self::SUCCESS;
@@ -244,6 +248,105 @@ class RetryStuckInvoices extends Command
             } catch (\Throwable $exception) {
                 $this->warn("  #{$invoice->order_id} -> falhou na consulta: ".substr($exception->getMessage(), 0, 110));
             }
+        }
+
+        $this->newLine();
+    }
+
+    /**
+     * Nota da nossa série parada em pendente/assinada/enviada há mais de
+     * 24h de pedido CANCELADO. As rodadas acima só olham pedido pago, então
+     * ela ficava invisível pra sempre (ex.: invoice 2261, nº 2981, assinada
+     * desde 11/10). Pedido do Lira em 12/11/2026: consulta a SEFAZ pela
+     * chave e decide sozinho.
+     *
+     * - Não consta (217): o número não foi usado. Vira rejeitada com o
+     *   motivo, e o buraco entra na inutilização automática
+     *   (fiscal:conciliar --executar, depois de 3 dias).
+     * - Existe lá: assinada/enviada passa pelo reconcileSent (fica
+     *   autorizada e o cancelamento/devolução automático assume); pendente
+     *   só alerta, porque não temos o XML assinado.
+     * - Resposta inconclusiva: só alerta, nunca age.
+     */
+    private function conferirParadasDePedidoCancelado(?string $canal): void
+    {
+        $serie = (int) config('nfe.serie');
+        $fechamento = app(FechamentoFiscalService::class);
+
+        $paradas = Invoice::query()
+            ->whereIn('status', FechamentoFiscalService::STATUS_PARADOS)
+            ->where('ambiente', (string) config('nfe.ambiente'))
+            ->whereNotNull('chave_acesso')
+            ->where('updated_at', '<', now()->subDay())
+            ->where(fn ($q) => $q->whereNull('emitida_por')->orWhere('emitida_por', Invoice::EMITIDA_KAZAKORA))
+            ->whereHas('order', fn ($q) => $q
+                ->where('status', Order::STATUS_CANCELLED)
+                ->when($canal, fn ($q) => $q->where('origin', $canal)))
+            ->with('order')
+            ->orderBy('id')
+            ->limit(max(1, (int) $this->option('limite')))
+            ->get()
+            // Série vem da chave: nota do Bling com a coluna sobrescrita não entra.
+            ->filter(fn (Invoice $nota) => $fechamento->serieENumero($nota)[0] === $serie);
+
+        if ($paradas->isEmpty()) {
+            return;
+        }
+
+        $this->info("Notas paradas de pedido cancelado pra conferir na SEFAZ: {$paradas->count()}");
+        $sefaz = app(SituacaoNaSefaz::class);
+        $alertas = app(AlertasAdmin::class);
+
+        foreach ($paradas as $nota) {
+            [, $numero] = $fechamento->serieENumero($nota);
+            $rotulo = "invoice {$nota->id} nº {$numero} (pedido #{$nota->order_id}, {$nota->status})";
+
+            try {
+                $situacao = $sefaz->consultar((string) $nota->chave_acesso);
+            } catch (\Throwable $e) {
+                $this->warn("  {$rotulo} -> consulta falhou: ".substr($e->getMessage(), 0, 110));
+
+                continue;
+            }
+
+            Log::info('nfe.parada_de_pedido_cancelado', ['invoice_id' => $nota->id, 'numero' => $numero, 'cStat' => $situacao['cStat']]);
+
+            if ($situacao['existe'] === false) {
+                $nota->update([
+                    'status' => Invoice::STATUS_REJECTED,
+                    'motivo_rejeicao' => "Não consta na SEFAZ ({$situacao['cStat']} - {$situacao['xMotivo']}) e o pedido foi cancelado: o número vai para inutilização.",
+                ]);
+                $this->line("  {$rotulo} -> não consta na SEFAZ; número vai para inutilização");
+                rescue(fn () => $alertas->disparar(
+                    AlertasAdmin::FISCAL_CONCILIACAO,
+                    "parada:{$nota->id}",
+                    "NF-e nº {$numero} parada de pedido cancelado: não existe na SEFAZ",
+                    "{$rotulo}: a SEFAZ não conhece a chave. O sistema marcou a nota como rejeitada e o número entra na inutilização automática depois de 3 dias (fiscal:conciliar --executar). Nada a fazer, só acompanhar.",
+                    "/admin/pedidos/{$nota->order_id}",
+                ), report: false);
+
+                continue;
+            }
+
+            if ($situacao['existe'] === true && in_array($nota->status, [Invoice::STATUS_SIGNED, Invoice::STATUS_SENT], true)) {
+                try {
+                    $resolvida = app(InvoiceService::class)->reconcileSent($nota);
+                    $this->line("  {$rotulo} -> existe na SEFAZ; registrada como {$resolvida->status}");
+                } catch (\Throwable $e) {
+                    $this->warn("  {$rotulo} -> existe na SEFAZ, mas não deu pra registrar: ".substr($e->getMessage(), 0, 110));
+                }
+
+                continue;
+            }
+
+            $this->warn("  {$rotulo} -> SEFAZ respondeu {$situacao['cStat']}; precisa de conferência");
+            rescue(fn () => $alertas->disparar(
+                AlertasAdmin::FISCAL_CONCILIACAO,
+                "parada:{$nota->id}",
+                "NF-e nº {$numero} parada de pedido cancelado precisa de conferência",
+                "{$rotulo}: a SEFAZ respondeu {$situacao['cStat']} - {$situacao['xMotivo']}. O sistema não age sozinho nesse caso: confira a nota na tela do pedido.",
+                "/admin/pedidos/{$nota->order_id}",
+            ), report: false);
         }
 
         $this->newLine();

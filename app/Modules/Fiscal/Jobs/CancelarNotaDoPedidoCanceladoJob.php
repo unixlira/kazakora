@@ -36,8 +36,10 @@ class CancelarNotaDoPedidoCanceladoJob implements ShouldQueue
             $cancelamento->cancelar($nota);
         }
 
+        // Nota do Bling: completa o protocolo (XML ou SEFAZ) e cancela;
+        // sem confirmação vira alerta (pedido do Lira em 12/11/2026).
         foreach ($cancelamento->semProtocolo($this->orderId) as $nota) {
-            $cancelamento->marcarParaChecagem($nota, 'Nota sem protocolo de autorização gravado (emitida pelo Bling): o sistema não consegue cancelar sozinho. Cancele no Bling.');
+            $cancelamento->cancelarSemProtocolo($nota);
         }
     }
 }

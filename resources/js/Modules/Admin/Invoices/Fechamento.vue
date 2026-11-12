@@ -114,7 +114,7 @@ const td = 'border-b border-[var(--surface-border)] px-3 py-2';
 
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <div :class="card">
-                <p class="text-xs uppercase tracking-wide text-slate-400">Autorizadas</p>
+                <p class="text-xs uppercase tracking-wide text-slate-400">Vendas autorizadas</p>
                 <p class="mt-1 text-xl font-bold">{{ relatorio.totais.autorizadas }}</p>
                 <p class="text-xs text-slate-500">{{ brl(relatorio.totais.valor_autorizado) }}</p>
             </div>
@@ -133,6 +133,7 @@ const td = 'border-b border-[var(--surface-border)] px-3 py-2';
             <div :class="card">
                 <p class="text-xs uppercase tracking-wide text-slate-400">Devoluções</p>
                 <p class="mt-1 text-xl font-bold">{{ relatorio.totais.devolucoes }}</p>
+                <p class="text-xs text-slate-500">{{ brl(relatorio.totais.valor_devolucoes ?? 0) }}, fora da venda</p>
             </div>
             <div :class="card">
                 <p class="text-xs uppercase tracking-wide text-slate-400">Sem XML no sistema</p>
@@ -145,7 +146,7 @@ const td = 'border-b border-[var(--surface-border)] px-3 py-2';
                 <h2 class="font-semibold">Séries usadas em {{ relatorio.mes_extenso }}</h2>
                 <div class="mt-3 overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead><tr><th :class="th">Série</th><th :class="th">Emissor</th><th :class="th">Números</th><th :class="th">Autorizadas</th><th :class="th">Canceladas</th><th :class="th">Devoluções</th></tr></thead>
+                        <thead><tr><th :class="th">Série</th><th :class="th">Emissor</th><th :class="th">Números</th><th :class="th">Vendas autorizadas</th><th :class="th">Canceladas</th><th :class="th">Devoluções</th></tr></thead>
                         <tbody>
                             <tr v-for="s in relatorio.series" :key="s.serie">
                                 <td :class="td" class="font-semibold">{{ s.serie }}</td>

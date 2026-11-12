@@ -76,12 +76,32 @@ class CancelarNotasDePedidosCancelados extends Command
             }
         }
 
+        // Nota do Bling sem protocolo gravado: desde 12/11/2026 (pedido do
+        // Lira) o sistema completa o protocolo pelo XML ou pela consulta à
+        // SEFAZ e cancela sozinho. Sem confirmação vira alerta, com a mesma
+        // espera de 1h entre tentativas.
         foreach ($cancelamento->semProtocolo() as $nota) {
-            $linha = sprintf('#%d %s: NF-e %d-%d sem protocolo de autorização (Bling)', $nota->order->id, $nota->order->origin, $nota->serie, $nota->numero);
-            $this->line($linha.($simular ? '' : ' -> para checagem'));
+            $pedido = $nota->order;
+            $linha = sprintf('#%d %s: NF-e %d-%d sem protocolo de autorização (Bling)', $pedido->id, $pedido->origin, $nota->serie, $nota->numero);
 
-            if (! $simular && ($this->option('checagem') || Cache::add("nfe-sem-protocolo-marcada:{$nota->id}", true, now()->addDay()))) {
-                $cancelamento->marcarParaChecagem($nota, 'Nota sem protocolo de autorização gravado (emitida pelo Bling): o sistema não consegue cancelar sozinho. Cancele no Bling.');
+            if ($simular) {
+                $this->line($linha);
+
+                continue;
+            }
+
+            $chaveEspera = "nfe-cancelar-pedido-cancelado:{$nota->id}";
+            if (! $this->option('checagem') && Cache::has($chaveEspera)) {
+                continue;
+            }
+
+            if ($cancelamento->cancelarSemProtocolo($nota)) {
+                $this->info("{$linha} -> CANCELADA");
+                $canceladas[] = "#{$pedido->id}";
+            } else {
+                Cache::put($chaveEspera, true, now()->addMinutes(self::ESPERA_FALHA_MINUTOS));
+                $this->error("{$linha} -> não cancelada (alerta em Sistema › Alertas)");
+                $falhas[] = "#{$pedido->id}";
             }
         }
 

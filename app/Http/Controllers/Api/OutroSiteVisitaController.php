@@ -8,6 +8,7 @@ use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\GeoDoVisitante;
 use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
+use App\Modules\Analytics\Support\PrecoVisto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
@@ -36,6 +37,10 @@ use Illuminate\Support\Str;
  *  - fbp/fbc: os cookies _fbp e _fbc do Pixel da Meta, que o site carrega
  *    sem aviso de cookies (docs/privacidade-e-cookies.md, "FerraKora").
  * Sem "e" (versão antiga do site em cache) grava como antes, sem origem.
+ *
+ * Valor (2026-11-12): na página /produto/<slug> do FerraKora a visita guarda
+ * o preço que a página mostra a este visitante (PrecoVisto), lido aqui do
+ * mesmo catálogo que o site consulta; o site não manda nada a mais.
  */
 class OutroSiteVisitaController extends Controller
 {
@@ -71,7 +76,9 @@ class OutroSiteVisitaController extends Controller
                 'ip' => $ip,
                 // O aviso passa pela Cloudflare do kazakora.com: localização do visitante.
                 ...LocalizacaoDaVisita::doRequest($request),
-                'path' => Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
+                'path' => $caminho = Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
+                // Página de produto do FerraKora: o preço que ela mostra a este visitante (2026-11-12).
+                'preco_visto' => $site === 'ferrakora' ? rescue(fn () => PrecoVisto::doFerraKora($caminho), null, false) : null,
                 'user_agent' => Str::limit($userAgent, 250, ''),
                 'dispositivo' => TrackSiteVisit::dispositivo($userAgent),
                 'consentiu' => false,

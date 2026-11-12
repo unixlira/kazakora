@@ -97,6 +97,13 @@ const limpar = () => {
 };
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('pt-BR');
+// Coluna Valor (2026-11-12): preço que a página do produto mostrou ao abrir.
+const moeda = (valor) => Number(valor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const tituloOutrosProdutos = (produto) => {
+    const linhas = produto.outros.map((o) => `${o.path}: ${moeda(o.valor)}`);
+    const resto = produto.mais - produto.outros.length;
+    return `Também abriu:\n${linhas.join('\n')}${resto > 0 ? `\ne mais ${resto}` : ''}`;
+};
 
 // Período e visitante no formato das rotas do olho e da lixeira.
 const alvo = (linha) => ({
@@ -322,6 +329,7 @@ const confirmarApagar = () => {
                             <th scope="col" class="px-4 py-3">Data/Hora</th>
                             <th scope="col" class="px-4 py-3">IP</th>
                             <th scope="col" class="px-4 py-3">Origem</th>
+                            <th scope="col" class="px-4 py-3 text-right" title="Preço que a página do produto mostrou ao visitante quando abriu">Valor</th>
                             <th scope="col" class="px-4 py-3">Cliente</th>
                             <th scope="col" class="px-4 py-3 text-right">Ações</th>
                         </tr>
@@ -344,6 +352,14 @@ const confirmarApagar = () => {
                                 <span v-if="visita.origem?.outras?.length" class="ml-1 text-xs tabular-nums text-slate-400"
                                     :title="`Também veio de: ${visita.origem.outras.join(', ')}`">+{{ visita.origem.outras.length }}</span>
                             </td>
+                            <td class="whitespace-nowrap px-4 py-2.5 text-right tabular-nums" data-testid="visita-valor">
+                                <template v-if="visita.produto">
+                                    <span :title="`Último produto que abriu: ${visita.produto.path}`">{{ moeda(visita.produto.valor) }}</span>
+                                    <span v-if="visita.produto.mais" class="ml-1 text-xs text-slate-400"
+                                        :title="tituloOutrosProdutos(visita.produto)">+{{ visita.produto.mais }}</span>
+                                </template>
+                                <span v-else class="text-slate-400" title="Não abriu página de produto, ou a visita é anterior a 12/11/2026">—</span>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-2.5">
                                 <span v-if="visita.cliente" :title="tituloCliente(visita)"
                                     class="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Sim</span>
@@ -360,7 +376,7 @@ const confirmarApagar = () => {
                         </tr>
 
                         <tr v-if="props.visitas.data.length === 0">
-                            <td colspan="5" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                            <td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                                 Nenhuma visita encontrada com esses filtros.
                             </td>
                         </tr>
@@ -502,6 +518,7 @@ const confirmarApagar = () => {
                                 <th scope="col" class="px-4 py-3 text-right">#</th>
                                 <th scope="col" class="px-4 py-3">Horário</th>
                                 <th scope="col" class="px-4 py-3">Página (rota)</th>
+                                <th scope="col" class="px-4 py-3 text-right" title="Preço que a página do produto mostrou ao abrir">Valor</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
                                 <th scope="col" class="px-4 py-3">CPF</th>
                                 <th scope="col" class="px-4 py-3 text-right">Ações</th>
@@ -514,6 +531,10 @@ const confirmarApagar = () => {
                                 <td class="px-4 py-2" data-testid="visita-rota">
                                     <a :href="v.url" target="_blank" rel="noopener noreferrer" :title="v.url"
                                         class="break-all font-mono text-xs text-primary hover:underline">{{ v.path }}</a>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums">
+                                    <template v-if="v.valor != null">{{ moeda(v.valor) }}</template>
+                                    <span v-else class="text-slate-400">—</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
                                     <template v-if="v.cliente">
@@ -536,7 +557,7 @@ const confirmarApagar = () => {
                                 </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="6" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
+                                <td colspan="7" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>
                         </tbody>
                     </table>

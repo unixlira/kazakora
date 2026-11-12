@@ -34,6 +34,7 @@ class SiteVisit extends Model
         'visitor_id',
         'user_id',
         'path',
+        'preco_visto',
         'referer',
         'user_agent',
         'ip',
@@ -56,7 +57,7 @@ class SiteVisit extends Model
 
     protected function casts(): array
     {
-        return ['consentiu' => 'boolean', 'cookies' => 'array'];
+        return ['consentiu' => 'boolean', 'cookies' => 'array', 'preco_visto' => 'float'];
     }
 
     /**

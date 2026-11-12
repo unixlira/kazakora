@@ -47,6 +47,9 @@ class ContributionMargin
 {
     public const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
+    /** Pedido sem nota entra na base do imposto pela receita só até esta idade (dias); depois, sem nota não há imposto. */
+    public const DIAS_SEM_NOTA = 10;
+
     /**
      * Etiqueta do Melhor Envio que a loja já pagou (saldo da carteira): paga
      * ou gerada, e não cancelada. Pedido do Lira em 12/11/2026.
@@ -417,7 +420,7 @@ class ContributionMargin
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $bonus = self::bonificacoes($desde, $ate);
 
-        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), array_keys($embalagem), array_keys($lancados), $ads->keys(), array_keys($cobrancas)])
+        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), array_keys($embalagem), array_keys($lancados), $ads->keys(), array_keys($cobrancas), array_keys($imposto)])
             ->flatten()->filter()->unique()->values();
         if ($flex > 0 || $bonus > 0) {
             $canais->push(Order::ORIGIN_MERCADO_LIVRE);
@@ -694,11 +697,12 @@ class ContributionMargin
 
     /**
      * Imposto do Simples por canal (auditoria 2026-10-11, entrou na conta de
-     * todas as telas em 2026-10-18): alíquota × valor da NOTA de venda
-     * autorizada (o que o cliente pagou, frete incluso quando vai na nota);
-     * pedido sem nota importada ainda usa a receita. Só pedidos a partir de
-     * LOJA_SIMPLES_DESDE (antes a empresa era MEI). Estimativa do DAS: o
-     * oficial é a guia, que vence dia 20 do mês seguinte.
+     * todas as telas em 2026-10-18): alíquota × base fiscal do período
+     * (basePorCanal: notas de venda menos notas de devolução, pela data da
+     * nota, desde 12/11/2026). Só a partir de LOJA_SIMPLES_DESDE (antes a
+     * empresa era MEI). Num dia em que as devoluções passam das vendas o
+     * imposto do canal sai negativo (crédito do mês). O oficial continua
+     * sendo a guia, que vence dia 20 do mês seguinte.
      *
      * @return array<string, float>
      */
@@ -718,8 +722,8 @@ class ContributionMargin
 
     /**
      * Faturamento em nota por canal (Fluxo de Caixa, 2026-10-19): a base do
-     * imposto, ou seja, o valor da NF-e de venda autorizada de cada pedido
-     * (sem nota importada ainda, a receita). imposto() = base × alíquota,
+     * imposto (basePorCanal: notas de venda menos notas de devolução do
+     * período, pela data da nota). imposto() = base × alíquota,
      * só a partir de LOJA_SIMPLES_DESDE; aqui a base vale para qualquer data.
      *
      * @return array<string, float>
@@ -729,22 +733,92 @@ class ContributionMargin
         return array_map(fn (float $base) => round($base, 2), self::basePorCanal($desde, $ate));
     }
 
-    /** @return array<string, float> */
+    /**
+     * Base do Simples por canal, pela competência fiscal (correção de
+     * 12/11/2026, conferida com a guia DAS de outubro/2026: R$ 2.300,96 =
+     * 4% de R$ 57.524; a conta antiga, pela data do pedido, dava R$ 2.253,21).
+     * O DAS sai sobre as NOTAS do mês, não sobre os pedidos do mês:
+     *
+     *   + NF-e de venda autorizada, na data da nota (pedido de setembro com
+     *     nota em outubro é imposto de outubro; pedido cancelado ou devolvido
+     *     com a nota de pé continua na base);
+     *   − NF-e de devolução de venda autorizada, na data dela, no canal da
+     *     venda devolvida (é ela que abate a receita, não o pedido devolvido);
+     *   + pedido recente ainda sem nota (até DIAS_SEM_NOTA dias), pela
+     *     receita, para o lucro do dia já sair com imposto. Depois disso,
+     *     sem nota não há imposto.
+     *
+     * Nota do TikTok emitida pelo Bling pode ficar "pending" aqui mesmo
+     * autorizada na SEFAZ: com chave e data de autorização ela conta.
+     *
+     * @return array<string, float>
+     */
     private static function basePorCanal(Carbon $desde, Carbon $ate): array
     {
-        $nota = 'SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.status = \'authorized\''
-            ." AND i.operation_type = 'saida' AND i.cancelada_em IS NULL LIMIT 1";
+        $dataDaNota = 'COALESCE(i.autorizada_em, i.created_at)';
+        $devolucoes = [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE];
+        $notaValida = fn ($q) => $q
+            ->whereNull('i.cancelada_em')
+            ->whereRaw($dataDaNota.' >= ?', [$desde])
+            ->whereRaw($dataDaNota.' < ?', [$ate])
+            ->where(fn ($s) => $s->where('i.status', 'authorized')
+                ->orWhere(fn ($p) => $p->where('i.status', 'pending')->whereNotNull('i.chave_acesso')->whereNotNull('i.autorizada_em')));
 
-        return DB::table('orders')
+        $base = [];
+        $somar = function (string $canal, float $valor) use (&$base) {
+            // Nota avulsa não é de canal nenhum: fica na loja.
+            $canal = $canal === Order::ORIGIN_MANUAL_INVOICE ? Order::ORIGIN_STORE : $canal;
+            $base[$canal] = ($base[$canal] ?? 0.0) + $valor;
+        };
+
+        // + notas de venda do período
+        DB::table('invoices as i')
+            ->join('orders', 'orders.id', '=', 'i.order_id')
+            ->where('i.operation_type', 'saida')
+            ->tap($notaValida)
+            ->where(fn ($q) => $q->whereNotIn('orders.origin', $devolucoes)->orWhereNull('orders.origin'))
+            ->where(fn ($q) => $q->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])->orWhereNull('orders.fiscal_operation_type'))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(i.valor_total), 0) as total')
+            ->groupBy('canal')->get()
+            ->each(fn ($l) => $somar((string) $l->canal, (float) $l->total));
+
+        // + pedido recente ainda sem nota (a nota entra depois, na data dela)
+        DB::table('orders')
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $desde)
             ->where('orders.created_at', '<', $ate)
+            ->where('orders.created_at', '>=', now()->subDays(self::DIAS_SEM_NOTA)->startOfDay())
             ->tap(fn ($q) => self::semDevolucao($q))
-            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(COALESCE(('.$nota.'), '.self::receitaSql().')), 0) as base')
-            ->groupBy('canal')
-            ->pluck('base', 'canal')
-            ->map(fn ($base) => (float) $base)
-            ->all();
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('invoices as i')
+                ->whereColumn('i.order_id', 'orders.id')
+                ->where('i.operation_type', 'saida')
+                ->whereNull('i.cancelada_em')
+                ->whereIn('i.status', ['authorized', 'pending']))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM('.self::receitaSql().'), 0) as total')
+            ->groupBy('canal')->get()
+            ->each(fn ($l) => $somar((string) $l->canal, (float) $l->total));
+
+        // − notas de devolução de venda do período, no canal da venda devolvida
+        $semCanal = 0.0;
+        DB::table('invoices as i')
+            ->join('orders as dev', 'dev.id', '=', 'i.order_id')
+            ->leftJoin('invoices as venda', fn ($j) => $j->on('venda.chave_acesso', '=', 'dev.fiscal_referenced_nfe_key')->whereNotNull('dev.fiscal_referenced_nfe_key'))
+            ->leftJoin('orders as orig', 'orig.id', '=', 'venda.order_id')
+            ->where('dev.origin', Order::ORIGIN_SALES_RETURN_INVOICE)
+            ->tap($notaValida)
+            ->selectRaw(Order::canalSql('orig').' as canal, COALESCE(SUM(i.valor_total), 0) as total')
+            ->groupBy('canal')->get()
+            ->each(function ($l) use ($somar, &$semCanal) {
+                $l->canal === null ? $semCanal += (float) $l->total : $somar((string) $l->canal, -(float) $l->total);
+            });
+
+        // Devolução sem a venda achada (nota de venda fora do sistema): abate do canal de maior base.
+        if ($semCanal != 0.0) {
+            arsort($base);
+            $somar((string) (array_key_first($base) ?? Order::ORIGIN_STORE), -$semCanal);
+        }
+
+        return $base;
     }
 
     /**

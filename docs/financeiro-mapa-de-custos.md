@@ -24,7 +24,7 @@ lucro líquido = receita
 | Taxas dos canais | `order_channel_fees` (por pedido) | `source`: `api` (real, ML/Shopee), `report`/`tiktok_income_settlement` (extrato real), **`estimate`** (TikTok antes do extrato — provisão), `manual`. |
 | Frete pago pela loja | Correios (`correios_pre_postagens.postage_price`) + Flex (entregas × custo por entrega) | `orders.shipping_cost` **não é custo** — é o frete do comprador (fica só informativo). |
 | Anúncios | `channel_ad_spends.spend` (consumo **diário** por canal) | Ver armadilhas abaixo. |
-| Imposto | receita × `LOJA_SIMPLES_ALIQUOTA` (4,5%) desde `LOJA_SIMPLES_DESDE` | Estimativa do DAS; o oficial é a guia. Vence dia 20 do mês seguinte. Empresa no **Simples Nacional** desde 01/09/2026 (antes MEI). |
+| Imposto | alíquota (`LOJA_SIMPLES_ALIQUOTA`) × base fiscal do período: notas de venda autorizadas **menos** notas de devolução de venda, pela **data da nota** (`ContributionMargin::basePorCanal`), desde `LOJA_SIMPLES_DESDE` | Conferido com a guia DAS de outubro/2026 (R$ 2.300,96 = 4% de R$ 57.524): a conta antiga, pela data do pedido, dava R$ 2.253,21. Pedido sem nota só entra pela receita enquanto tem até 10 dias; depois, sem nota não há imposto. O oficial continua sendo a guia (vence dia 20 do mês seguinte). Empresa no **Simples Nacional** desde 01/09/2026 (antes MEI). |
 
 ## Armadilhas dos anúncios (ADS)
 
@@ -104,7 +104,7 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
   - site: taxa do Mercado Pago;
   - essa taxa nunca é sobrescrita pela API nem pelo Bling.
 - **Bônus do Flex:** entra somando na margem (`bonificacoes`).
-- **Imposto (Simples):** a base é o valor da NF-e de venda autorizada. Se o pedido ainda não tem nota importada, usa a receita.
+- **Imposto (Simples):** a base é a das notas do período (venda − devolução, pela data da nota; correção de 12/11/2026). Pedido de um mês com nota no mês seguinte é imposto do mês da nota; pedido devolvido ou cancelado com a nota de venda de pé continua na base até sair a nota de devolução ou o cancelamento. Nota do TikTok emitida pelo Bling que ficou `pending` com chave e data de autorização conta. Pedido recente sem nota (até 10 dias) vai pela receita.
 
 ## Validação de 2026-10-18
 

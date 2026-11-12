@@ -2,6 +2,7 @@
 
 namespace App\Modules\Analytics\Support;
 
+use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -9,6 +10,7 @@ use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use App\Support\SiteAtual;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -33,6 +35,14 @@ class PrecoVisto
     public const ATRIBUTO = 'preco_visto';
 
     public const ATRIBUTO_FRETE = 'frete_visto';
+
+    public const ATRIBUTO_ITENS = 'itens_vistos';
+
+    /** Tela de pagamento dos outros sites (a visita é avisada antes do resumo do checkout). */
+    private const PAGINAS_DE_PAGAMENTO = ['/seguro-pagamento', '/checkout'];
+
+    /** Itens guardados por visita: carrinho maior que isso corta o resto. */
+    private const MAX_ITENS = 30;
 
     /**
      * @param  Collection<int, Product>  $variacoes  as outras variações do grupo, como vão para a página
@@ -67,7 +77,94 @@ class PrecoVisto
      */
     public static function daRequisicao(Request $request): array
     {
-        return ['preco_visto' => $request->attributes->get(self::ATRIBUTO), 'frete_visto' => $request->attributes->get(self::ATRIBUTO_FRETE)];
+        return [
+            'preco_visto' => $request->attributes->get(self::ATRIBUTO),
+            'frete_visto' => $request->attributes->get(self::ATRIBUTO_FRETE),
+            'itens_vistos' => $request->attributes->get(self::ATRIBUTO_ITENS),
+        ];
+    }
+
+    /**
+     * Tela de pagamento da loja (pedido 2026-11-12): a visita guarda o total
+     * dos itens do carrinho como a tela mostra, o frete embutido neles e a
+     * lista do que estava no checkout. Carrinho vazio não grava nada.
+     *
+     * @param  Collection<int, array{product: Product, quantity: int, subtotal: float}>  $itens  CartManager::items()
+     */
+    public static function guardarCheckout(Request $request, Collection $itens): void
+    {
+        rescue(function () use ($request, $itens) {
+            if ($itens->isEmpty()) {
+                return;
+            }
+
+            $request->attributes->set(self::ATRIBUTO, round((float) $itens->sum('subtotal'), 2));
+            $request->attributes->set(self::ATRIBUTO_FRETE, round((float) $itens->sum(fn (array $item) => $item['product']->freteEmbutido() * $item['quantity']), 2));
+            $request->attributes->set(self::ATRIBUTO_ITENS, $itens->take(self::MAX_ITENS)->map(fn (array $item) => [
+                'nome' => (string) $item['product']->name,
+                'quantidade' => (int) $item['quantity'],
+                'valor' => round((float) $item['subtotal'], 2),
+            ])->values()->all());
+        }, null, false);
+    }
+
+    /**
+     * Tela de pagamento do FerraKora/Beauty Kora: o site avisa a visita e
+     * logo depois pede o resumo do checkout. O resumo completa a última
+     * visita desse IP na tela de pagamento (30 min) com o total, o frete
+     * cobrado e os itens. Cada resumo novo (CEP, cupom, quantidade) atualiza.
+     *
+     * @param  array<string, mixed>  $resumo  CheckoutOutroSite::resumo() (valores em centavos)
+     */
+    public static function completarCheckout(Request $request, string $site, array $resumo): void
+    {
+        rescue(function () use ($request, $site, $resumo) {
+            $ip = $request->ip();
+            $itens = collect($resumo['itens'] ?? []);
+            if ($ip === null || $itens->isEmpty()) {
+                return;
+            }
+
+            $visita = SiteVisit::query()->where('site', $site)->where('ip', $ip)
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->where(fn ($q) => collect(self::PAGINAS_DE_PAGAMENTO)->each(fn (string $pagina) => $q->orWhere('path', 'like', $pagina.'%')))
+                ->latest('id')
+                ->first();
+
+            $valores = [
+                'preco_visto' => round(($resumo['total'] ?? 0) / 100, 2),
+                'frete_visto' => round(($resumo['frete'] ?? 0) / 100, 2),
+                'itens_vistos' => $itens->take(self::MAX_ITENS)->map(fn (array $item) => [
+                    'nome' => (string) ($item['nome'] ?? ''),
+                    'quantidade' => (int) ($item['quantidade'] ?? 1),
+                    'valor' => round(($item['subtotal'] ?? 0) / 100, 2),
+                ])->values()->all(),
+            ];
+
+            $visita?->update($valores);
+            // O aviso de visita pode chegar depois do resumo: fica guardado 2 min para ele (doCheckoutGuardado).
+            Cache::put(self::chaveDoCheckout($site, $ip), $valores, now()->addMinutes(2));
+        }, null, false);
+    }
+
+    /**
+     * Aviso de visita da tela de pagamento que chegou depois do resumo: os
+     * valores que o resumo deixou guardados para este IP. Outra página: nada.
+     *
+     * @return array<string, mixed>
+     */
+    public static function doCheckoutGuardado(string $site, ?string $ip, string $pagina): array
+    {
+        if ($ip === null || ! collect(self::PAGINAS_DE_PAGAMENTO)->contains(fn (string $p) => str_starts_with($pagina, $p))) {
+            return [];
+        }
+
+        return (array) Cache::get(self::chaveDoCheckout($site, $ip), []);
+    }
+
+    private static function chaveDoCheckout(string $site, string $ip): string
+    {
+        return 'visita-checkout:'.$site.':'.md5($ip);
     }
 
     /**

@@ -80,6 +80,8 @@ class OutroSiteVisitaController extends Controller
                 'path' => $caminho = Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
                 // Página de produto do FerraKora: o preço que ela mostra a este visitante e o frete dentro dele (2026-11-12).
                 ...($site === 'ferrakora' ? rescue(fn () => PrecoVisto::doFerraKora($caminho), [], false) : []),
+                // Tela de pagamento: total e itens que o resumo do checkout deixou, se ele chegou antes deste aviso.
+                ...rescue(fn () => PrecoVisto::doCheckoutGuardado($site, $ip, $caminho), [], false),
                 'user_agent' => Str::limit($userAgent, 250, ''),
                 'dispositivo' => TrackSiteVisit::dispositivo($userAgent),
                 'consentiu' => false,

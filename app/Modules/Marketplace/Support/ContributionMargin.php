@@ -244,6 +244,12 @@ class ContributionMargin
     /**
      * Materiais de escritório e galpão lançados na tela Insumos (pedido do
      * Lira em 12/11/2026), pela data do lançamento.
+     *
+     * Embalagem não conta em dobro (decisão do Lira em 12/11/2026: "mantém os
+     * 2 reais por pedido"): enquanto a embalagem por pedido estiver ligada
+     * (loja.insumos_por_pedido > 0), o lançamento da categoria "embalagem"
+     * fica só registrado na tela, como histórico do que foi comprado, e não
+     * sai do lucro de novo. Com a embalagem por pedido desligada (0), entra.
      */
     public static function insumosLancados(Carbon $desde, Carbon $ate): float
     {
@@ -254,6 +260,7 @@ class ContributionMargin
         return round((float) DB::table('insumos_lancamentos')
             ->where('data', '>=', $desde->toDateString())
             ->where('data', '<', $ate->toDateString())
+            ->when(self::insumosPorPedido() > 0, fn ($q) => $q->where('categoria', '!=', 'embalagem'))
             ->sum('valor'), 2);
     }
 

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -23,15 +24,23 @@ use Throwable;
  *
  * Nunca cancela fora do prazo: só nota autorizada há menos de
  * 24h − nfe.cancelamento_auto_folga_minutos, e sem confirmar multa.
- * Erro ou nota que não dá para cancelar sozinho (sem protocolo de
- * autorização gravado, caso das notas que vêm do Bling) vira alerta
+ * Erro ou nota que não dá para cancelar sozinho vira alerta
  * nfe_cancelamento em Sistema › Alertas.
+ *
+ * Nota do Bling (série 3, TikTok/Amazon) chega sem o protocolo de
+ * autorização gravado. Até 12/11/2026 ela ia direto para checagem e passava
+ * das 24h (caso real: nota 3-751, invoice 3120, cancelada à mão). Pedido do
+ * Lira em 12/11/2026: o sistema completa o protocolo sozinho, primeiro pelo
+ * <nProt> do XML guardado e, se não houver, consultando a SEFAZ pela chave;
+ * confirmada a autorização (cStat 100, sem evento de cancelamento), cancela
+ * normalmente. Só a nota emitida pelo próprio TikTok fica de fora.
  */
 class CancelamentoAutomaticoDaNota
 {
     public function __construct(
         private readonly InvoiceService $invoices,
         private readonly AlertasAdmin $alertas,
+        private readonly SituacaoNaSefaz $sefaz,
     ) {}
 
     /** Só o servidor de produção (APP_URL kazakora.com) age sozinho; ver config nfe.automatico_host. */
@@ -53,7 +62,8 @@ class CancelamentoAutomaticoDaNota
     /**
      * Pedido cancelado, nota no prazo, mas sem o protocolo de autorização
      * gravado (nota emitida pelo Bling: série 3 do TikTok e da Amazon). Sem
-     * protocolo a SEFAZ não aceita o evento: vai para checagem.
+     * protocolo a SEFAZ não aceita o evento: cancelarSemProtocolo() completa
+     * antes (desde 12/11/2026).
      *
      * @return Collection<int, Invoice>
      */
@@ -94,6 +104,80 @@ class CancelamentoAutomaticoDaNota
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Nota sem protocolo gravado (Bling): completa o protocolo e cancela.
+     * Sem confirmar a autorização, vira alerta e nada é enviado à SEFAZ.
+     * Pedido do Lira em 12/11/2026.
+     */
+    public function cancelarSemProtocolo(Invoice $nota): bool
+    {
+        $motivo = $this->completarProtocolo($nota);
+
+        if ($motivo === null) {
+            return $this->cancelar($nota);
+        }
+
+        if ($nota->fresh()?->status === Invoice::STATUS_CANCELLED) {
+            rescue(fn () => $this->alertas->resolver(AlertasAdmin::NFE_CANCELAMENTO, $this->chave($nota)), report: false);
+
+            return true;
+        }
+
+        $this->marcarParaChecagem($nota, $motivo);
+
+        return false;
+    }
+
+    /**
+     * Grava o protocolo de autorização que falta. Devolve null quando
+     * conseguiu, ou o motivo de não ter conseguido (vai para o alerta). Se a
+     * SEFAZ já mostra a nota cancelada (cancelaram pelo Bling), registra o
+     * cancelamento aqui: não há o que enviar.
+     */
+    private function completarProtocolo(Invoice $nota): ?string
+    {
+        $disco = Storage::disk('local');
+
+        if ($nota->xml_path && $disco->exists($nota->xml_path)) {
+            $protocolo = SituacaoNaSefaz::protocoloDoXml((string) $disco->get($nota->xml_path));
+
+            if ($protocolo !== null) {
+                $nota->update(['protocolo_autorizacao' => $protocolo]);
+
+                return null;
+            }
+        }
+
+        if ($bloqueio = $this->invoices->bloqueadoPorConsumoIndevidoAte()) {
+            return "Nota do Bling sem protocolo gravado; a SEFAZ está bloqueando consultas (656) até {$bloqueio}. A rodada tenta de novo.";
+        }
+
+        try {
+            $situacao = $this->sefaz->consultar((string) $nota->chave_acesso);
+        } catch (Throwable $e) {
+            return 'Nota do Bling sem protocolo gravado e a consulta à SEFAZ falhou: '.mb_substr($e->getMessage(), 0, 200).'. A rodada tenta de novo; se não resolver, cancele no Bling.';
+        }
+
+        if ($situacao['cancelada']) {
+            $nota->update([
+                'status' => Invoice::STATUS_CANCELLED,
+                'protocolo_cancelamento' => $situacao['protocolo_cancelamento'],
+                'cancelada_em' => $situacao['cancelada_em'] ?? now(),
+                'motivo_cancelamento' => 'Cancelada fora do Kazakora (confirmado na SEFAZ em '.now()->format('d/m/Y H:i').')',
+            ]);
+
+            return 'A SEFAZ já mostra a nota cancelada.';
+        }
+
+        if (! $situacao['autorizada'] || ! $situacao['protocolo']) {
+            return "Nota do Bling sem protocolo gravado e a SEFAZ não confirmou a autorização ({$situacao['cStat']} - {$situacao['xMotivo']}). Cancele no Bling.";
+        }
+
+        $nota->update(['protocolo_autorizacao' => $situacao['protocolo']]);
+
+        return null;
     }
 
     /** Abre (ou atualiza) o alerta da nota em Sistema › Alertas. */

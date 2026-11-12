@@ -182,17 +182,91 @@ class CancelarNotasDePedidosCanceladosTest extends TestCase
         $this->assertNotNull($alerta->fresh()->resolvido_em);
     }
 
-    public function test_nota_do_bling_sem_protocolo_vai_para_checagem(): void
+    private function consultaResponde(string $cStat, ?string $nProt = null, bool $comEventoDeCancelamento = false): void
+    {
+        $prot = $nProt ? "<protNFe versao=\"4.00\"><infProt><cStat>100</cStat><xMotivo>Autorizado</xMotivo><nProt>{$nProt}</nProt><dhRecbto>2026-11-12T10:00:00-03:00</dhRecbto></infProt></protNFe>" : '';
+        $evento = $comEventoDeCancelamento ? '<procEventoNFe><retEvento><infEvento><tpEvento>110111</tpEvento><cStat>135</cStat><nProt>135260000000777</nProt><dhRegEvento>2026-11-12T11:00:00-03:00</dhRegEvento></infEvento></retEvento></procEventoNFe>' : '';
+
+        $this->webservice->shouldReceive('consultarChave')->andReturn(
+            "<retConsSitNFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><cStat>{$cStat}</cStat><xMotivo>situacao</xMotivo>{$prot}{$evento}</retConsSitNFe>"
+        );
+    }
+
+    private function notaDoBling(): Invoice
     {
         $nota = $this->nota(origem: Order::ORIGIN_TIKTOK_SHOP);
-        $nota->update(['serie' => 3, 'protocolo_autorizacao' => null]);
+        $nota->update(['serie' => 3, 'protocolo_autorizacao' => null, 'emitida_por' => Invoice::EMITIDA_BLING]);
+
+        return $nota;
+    }
+
+    public function test_nota_do_bling_sem_protocolo_que_a_sefaz_nao_confirma_vai_para_checagem(): void
+    {
+        $this->consultaResponde('217');
+        $nota = $this->notaDoBling();
 
         CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
         $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
 
         $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $nota->fresh()->status);
         $alerta = AlertaAdmin::query()->abertos()->where('tipo', AlertasAdmin::NFE_CANCELAMENTO)->sole();
         $this->assertStringContainsString('Bling', $alerta->mensagem);
+    }
+
+    /** Caso real 12/11/2026: nota 3-751 (invoice 3120) ficou sem cancelar por falta do protocolo. */
+    public function test_nota_do_bling_sem_protocolo_le_o_protocolo_do_xml_e_cancela(): void
+    {
+        $this->sefazResponde('135');
+        $this->webservice->shouldNotReceive('consultarChave');
+        $nota = $this->notaDoBling();
+        Storage::disk('local')->put('invoices/bling/3-751.xml', '<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe"><NFe/><protNFe><infProt><cStat>100</cStat><nProt>135261234567890</nProt></infProt></protNFe></nfeProc>');
+        $nota->update(['xml_path' => 'invoices/bling/3-751.xml']);
+
+        CancelarNotaDoPedidoCanceladoJob::dispatchSync($nota->order_id);
+
+        $nota->refresh();
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->status);
+        $this->assertSame('135261234567890', $nota->protocolo_autorizacao);
+        $this->webservice->shouldHaveReceived('cancelarComEvento')->with($nota->chave_acesso, Mockery::any(), '135261234567890', Mockery::any())->once();
+        $this->assertSame(0, AlertaAdmin::query()->abertos()->count());
+    }
+
+    public function test_nota_do_bling_sem_xml_consulta_a_sefaz_e_cancela(): void
+    {
+        $this->sefazResponde('135');
+        $this->consultaResponde('100', '135269999000001');
+        $nota = $this->notaDoBling();
+
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->fresh()->status);
+        $this->assertSame('135269999000001', $nota->fresh()->protocolo_autorizacao);
+    }
+
+    public function test_nota_do_bling_ja_cancelada_na_sefaz_so_registra(): void
+    {
+        $this->consultaResponde('101', '135269999000001', comEventoDeCancelamento: true);
+        $nota = $this->notaDoBling();
+
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $this->assertSame(Invoice::STATUS_CANCELLED, $nota->fresh()->status);
+        $this->assertSame('135260000000777', $nota->fresh()->protocolo_cancelamento);
+        $this->assertSame(0, AlertaAdmin::query()->abertos()->count());
+    }
+
+    public function test_nota_emitida_pelo_proprio_tiktok_fica_de_fora(): void
+    {
+        $nota = $this->notaDoBling();
+        $nota->update(['emitida_por' => Invoice::EMITIDA_TIKTOK]);
+
+        $this->artisan('nfe:cancelar-pedidos-cancelados')->assertSuccessful();
+
+        $this->webservice->shouldNotHaveReceived('consultarChave');
+        $this->webservice->shouldNotHaveReceived('cancelarComEvento');
+        $this->assertSame(0, AlertaAdmin::query()->count());
     }
 
     public function test_job_no_homolog_nao_cancela(): void

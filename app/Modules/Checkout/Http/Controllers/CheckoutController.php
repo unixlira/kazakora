@@ -2032,6 +2032,8 @@ class CheckoutController extends Controller
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
+        // Visitas ao site (2026-11-12): a visita desta tela guarda o valor e os itens do checkout.
+        \App\Modules\Analytics\Support\PrecoVisto::guardarCheckout($request, $cartItems);
 
         return [
             'items' => $cartItems,

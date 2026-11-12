@@ -98,6 +98,8 @@ const numero = (valor) => Number(valor ?? 0).toLocaleString('pt-BR');
 const moeda = (valor) => Number(valor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 // Olho da rota da tela de pagamento: itens do checkout abertos ou fechados.
 const itensAbertos = reactive({});
+// Olho de cada linha do histórico: detalhes daquela página (antes abria as cidades do IP).
+const linhasAbertas = reactive({});
 const tituloOutrosProdutos = (produto) => {
     const linhas = produto.outros.map((o) => `${o.path}: ${moeda(o.valor)}`);
     const resto = produto.mais - produto.outros.length;
@@ -534,7 +536,8 @@ const confirmarApagar = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-[var(--surface-border)]">
-                            <tr v-for="(v, i) in detalhe.dados.visitas" :key="v.id" class="align-top">
+                            <template v-for="(v, i) in detalhe.dados.visitas" :key="v.id">
+                            <tr class="align-top">
                                 <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums text-slate-400">{{ (detalhe.dados.pagina - 1) * detalhe.dados.por_pagina + i + 1 }}</td>
                                 <td class="whitespace-nowrap px-4 py-2 tabular-nums text-slate-500 dark:text-slate-400">{{ v.quando }}</td>
                                 <td class="px-4 py-2" data-testid="visita-rota">
@@ -568,11 +571,53 @@ const confirmarApagar = () => {
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2">
                                     <div class="flex justify-end">
-                                        <ActionIcon v-if="detalhe.linha?.ip" icon="fa-eye" label="Ver as cidades do estado deste IP" color="slate" @click="abrirCidades(detalhe.linha.ip)" />
-                                        <span v-else class="text-xs text-slate-400" title="IP apagado depois de 6 meses (privacidade)">sem IP</span>
+                                        <ActionIcon :icon="linhasAbertas[v.id] ? 'fa-eye-slash' : 'fa-eye'" :label="linhasAbertas[v.id] ? 'Esconder os detalhes desta página' : 'Ver os detalhes desta página'"
+                                            color="slate" data-testid="visita-detalhes-abrir" @click="linhasAbertas[v.id] = !linhasAbertas[v.id]" />
+                                        <ActionIcon v-if="detalhe.linha?.ip" icon="fa-map-location-dot" label="Ver as cidades do estado deste IP" color="slate" @click="abrirCidades(detalhe.linha.ip)" />
                                     </div>
                                 </td>
                             </tr>
+                            <!-- Detalhes da página (olho da linha, 2026-11-12): valor, itens do checkout e de onde veio. -->
+                            <tr v-if="linhasAbertas[v.id]" data-testid="visita-detalhes">
+                                <td colspan="9" class="bg-[var(--surface-muted)]/50 px-4 py-3">
+                                    <dl class="grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                                        <div class="sm:col-span-2 lg:col-span-4">
+                                            <dt class="text-slate-500 dark:text-slate-400">Página</dt>
+                                            <dd><a :href="v.url" target="_blank" rel="noopener noreferrer" class="break-all font-mono text-primary hover:underline">{{ v.url }}</a></dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-slate-500 dark:text-slate-400">Valor total na tela</dt>
+                                            <dd class="font-semibold tabular-nums">{{ v.valor != null ? moeda(v.valor) : 'Sem valor (não é página de produto nem de pagamento, ou é anterior a 12/11/2026)' }}</dd>
+                                        </div>
+                                        <div v-if="v.valor != null">
+                                            <dt class="text-slate-500 dark:text-slate-400">Frete incluído</dt>
+                                            <dd class="tabular-nums">{{ v.frete != null ? moeda(v.frete) : '—' }}</dd>
+                                        </div>
+                                        <div v-if="v.sem_frete != null">
+                                            <dt class="text-slate-500 dark:text-slate-400">Produto sem o frete</dt>
+                                            <dd class="tabular-nums">{{ moeda(v.sem_frete) }}</dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-slate-500 dark:text-slate-400">De onde veio</dt>
+                                            <dd>{{ v.origem?.rotulo ?? '—' }}<template v-if="v.origem?.utm_campaign"> · {{ v.origem.utm_campaign }}</template></dd>
+                                        </div>
+                                        <div>
+                                            <dt class="text-slate-500 dark:text-slate-400">Aparelho</dt>
+                                            <dd>{{ v.dispositivo ?? '—' }}<template v-if="v.navegador"> · {{ v.navegador }}</template></dd>
+                                        </div>
+                                    </dl>
+                                    <div v-if="v.itens?.length" class="mt-3">
+                                        <p class="mb-1 text-xs font-semibold">Itens no checkout</p>
+                                        <ul class="space-y-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-xs">
+                                            <li v-for="(item, n) in v.itens" :key="n" class="flex items-baseline gap-3">
+                                                <span class="min-w-0 flex-1">{{ item.quantidade }}× {{ item.nome }}</span>
+                                                <span class="whitespace-nowrap tabular-nums">{{ moeda(item.valor) }}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            </template>
                             <tr v-if="detalhe.dados.visitas.length === 0">
                                 <td colspan="9" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>

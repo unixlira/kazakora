@@ -44,7 +44,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   (LocalizacaoDaVisita, pedido 2026-10-24).
  *
  * - Em todos, desde 2026-11-12: o preço que a página de produto mostrou ao
- *   abrir (site_visits.preco_visto, regra em PrecoVisto). Não é dado pessoal.
+ *   abrir e o frete que estava dentro dele (site_visits.preco_visto e
+ *   frete_visto, regra em PrecoVisto). Não é dado pessoal.
  *
  * Depois de 6 meses o IP, o navegador e a localização são apagados
  * (privacidade:limpar).
@@ -191,8 +192,8 @@ class TrackSiteVisit
             'visitor_id' => $visitorId,
             'user_id' => $request->user()?->id,
             'path' => Str::limit('/'.ltrim($path, '/'), 250, ''),
-            // Página de produto: o preço que ela mostrou ao abrir (PrecoVisto, 2026-11-12).
-            'preco_visto' => $request->attributes->get(PrecoVisto::ATRIBUTO),
+            // Página de produto: o preço que ela mostrou ao abrir e o frete dentro dele (PrecoVisto, 2026-11-12).
+            ...PrecoVisto::daRequisicao($request),
             'referer' => $referer,
             'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
             'ip' => $request->ip(),

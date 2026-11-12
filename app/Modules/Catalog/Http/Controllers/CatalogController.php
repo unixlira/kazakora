@@ -4,6 +4,7 @@ namespace App\Modules\Catalog\Http\Controllers;
 
 use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
+use App\Modules\Analytics\Support\PrecoVisto;
 use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
@@ -456,6 +457,10 @@ class CatalogController extends Controller
                 }
             }
         }
+
+        // Coluna Valor de Visitas ao site (2026-11-12): o preço que esta página
+        // mostra ao abrir vai junto na visita (TrackSiteVisit).
+        PrecoVisto::guardar($request, $product, $variations);
 
         // Quadros do sorteio e dos livros (Entregáveis) com a chave, a imagem
         // e os produtos de Vender › Promoções (2026-10-21), em cache.

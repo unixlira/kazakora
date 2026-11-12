@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
+use App\Modules\Analytics\Support\PrecoVisto;
 use App\Support\Privacidade\Cookies;
 use Closure;
 use Illuminate\Http\Request;
@@ -41,6 +42,9 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * - Em todos: latitude, longitude e CEP aproximados do IP, da Cloudflare
  *   (LocalizacaoDaVisita, pedido 2026-10-24).
+ *
+ * - Em todos, desde 2026-11-12: o preço que a página de produto mostrou ao
+ *   abrir (site_visits.preco_visto, regra em PrecoVisto). Não é dado pessoal.
  *
  * Depois de 6 meses o IP, o navegador e a localização são apagados
  * (privacidade:limpar).
@@ -187,6 +191,8 @@ class TrackSiteVisit
             'visitor_id' => $visitorId,
             'user_id' => $request->user()?->id,
             'path' => Str::limit('/'.ltrim($path, '/'), 250, ''),
+            // Página de produto: o preço que ela mostrou ao abrir (PrecoVisto, 2026-11-12).
+            'preco_visto' => $request->attributes->get(PrecoVisto::ATRIBUTO),
             'referer' => $referer,
             'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
             'ip' => $request->ip(),

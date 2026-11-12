@@ -1040,6 +1040,28 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
 
+        // Insumos de escritório e galpão (pedido do Lira em 12/11/2026): só
+        // admin; os lançamentos entram no lucro (ContributionMargin).
+        Route::get('insumos', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'index'])->name('insumos.listar');
+        Route::post('insumos', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'store'])->name('insumos.armazenar');
+        Route::put('insumos/{insumo}', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'update'])->whereNumber('insumo')->name('insumos.atualizar');
+        Route::delete('insumos/{insumo}', [\App\Modules\Admin\Http\Controllers\InsumosController::class, 'destroy'])->whereNumber('insumo')->name('insumos.excluir');
+
+        // Compras com custo real (pedido do Lira em 12/11/2026): só admin.
+        Route::prefix('compras')->name('compras.')->controller(\App\Modules\Admin\Http\Controllers\ComprasController::class)->group(function () {
+            Route::get('/', 'index')->name('listar');
+            Route::get('nova', 'create')->name('criar');
+            Route::post('importar-xml', 'importarXml')->name('importar-xml');
+            Route::post('/', 'store')->name('armazenar');
+            Route::get('{compra}', 'show')->whereNumber('compra')->name('exibir');
+            Route::get('{compra}/editar', 'edit')->whereNumber('compra')->name('editar');
+            // POST (com _method=PUT no front) porque o formulário manda arquivo.
+            Route::put('{compra}', 'update')->whereNumber('compra')->name('atualizar');
+            Route::delete('{compra}', 'destroy')->whereNumber('compra')->name('excluir');
+            Route::post('{compra}/atualizar-custo', 'atualizarCusto')->whereNumber('compra')->name('atualizar-custo');
+            Route::get('{compra}/comprovante', 'comprovante')->whereNumber('compra')->name('comprovante');
+        });
+
         // Menu "Log": os arquivos de storage/logs na tela, com filtro de
         // data/hora, nível e busca por texto. Admin-only igual à auditoria —
         // log de produção carrega dado de cliente e payload de marketplace.

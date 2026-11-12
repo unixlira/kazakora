@@ -518,7 +518,10 @@ class Order extends Model
     {
         return $query->nonPurchaseReturn()
             ->where(fn ($q) => $q->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_MANUAL_INVOICE)->orWhereNull($this->qualifyColumn('origin')))
-            ->whereNull($this->qualifyColumn('estornado_em'));
+            ->whereNull($this->qualifyColumn('estornado_em'))
+            // Devolução concluída não é venda (pedido do Lira em 12/11/2026),
+            // o mesmo filtro de ContributionMargin::semDevolucao().
+            ->tap(fn ($q) => \App\Modules\Marketplace\Support\ContributionMargin::semDevolucaoConcluida($q, $this->getTable()));
     }
 
     /**

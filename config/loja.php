@@ -123,6 +123,16 @@ return [
     ],
 
     /*
+    | Insumos de embalagem (caixa/envelope, fita, etiqueta) por pedido, em R$
+    | (pedido do Lira em 12/11/2026, regra oficial do dono: R$ 2,00). Sai da
+    | margem de toda venda efetiva que a loja embala (ContributionMargin,
+    | linha "insumos"); o Full do ML fica de fora, quem embala é o ML. É o
+    | mesmo valor do teto_insumos da conta de preço (config/frete_embutido).
+    | 0 desliga.
+    */
+    'insumos_por_pedido' => (float) env('LOJA_INSUMOS_POR_PEDIDO', 2.0),
+
+    /*
     | Selo do cliente no Meu Perfil (pedido 2026-10-14): todo cliente começa
     | como "Super Cliente"; com MAIS de `pedidos` pedidos finalizados
     | (entregues) vira "5 ★". Só contam pedidos feitos a partir de `desde`

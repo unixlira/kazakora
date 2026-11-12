@@ -300,7 +300,8 @@ class FinancialDashboardController extends Controller
         $settlementAdSpendMonth = 0.0;
         $settlementShippingCostMonth = 0.0;
         $settlementAffiliateCostMonth = 0.0;
-        $platformCostsMonth = round($contaMes['taxas'] + $contaMes['frete'] - $contaMes['bonificacoes'], 2);
+        // Insumos (embalagem) entram junto do frete: pedido do Lira em 12/11/2026.
+        $platformCostsMonth = round($contaMes['taxas'] + $contaMes['frete'] + ($contaMes['insumos'] ?? 0) - $contaMes['bonificacoes'], 2);
         $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
         // Validação 2026-10-18: lucro líquido = margem − imposto do Simples
         // (antes o imposto só saía no e-mail das 23h50).
@@ -315,7 +316,7 @@ class FinancialDashboardController extends Controller
         $marketplaceFeeAllTime = $contaTotal['taxas'];
         $adSpendAllTime = $contaTotal['ads'];
         $netProfitAllTime = $contaTotal['lucro'];
-        $netRevenueAfterDeductionsAllTime = round($contaTotal['receita'] - $contaTotal['taxas'] - $contaTotal['frete'] + $contaTotal['bonificacoes'] - $contaTotal['ads'], 2);
+        $netRevenueAfterDeductionsAllTime = round($contaTotal['receita'] - $contaTotal['taxas'] - $contaTotal['frete'] - ($contaTotal['insumos'] ?? 0) + $contaTotal['bonificacoes'] - $contaTotal['ads'], 2);
 
         $settlementSummary = $this->settlementSummary($startOfMonth);
         $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? []);
@@ -662,7 +663,7 @@ class FinancialDashboardController extends Controller
                 $ordersCount = $oficial['pedidos'];
                 $productCost = $oficial['custo_produtos'];
                 $adSpend = $oficial['ads'];
-                $platformCosts = round($oficial['taxas'] + $oficial['frete'] - $oficial['bonificacoes'], 2);
+                $platformCosts = round($oficial['taxas'] + $oficial['frete'] + ($oficial['insumos'] ?? 0) - $oficial['bonificacoes'], 2);
                 $tax = $oficial['imposto'];
             }
 

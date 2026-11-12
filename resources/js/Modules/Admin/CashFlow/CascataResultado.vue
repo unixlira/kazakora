@@ -26,6 +26,9 @@ const passos = computed(() => {
     menos('Produtos', c.custo_produtos);
     menos('Taxas', c.taxas);
     menos('Frete', c.frete);
+    // Insumos (embalagem): pedido do Lira em 12/11/2026.
+    menos('Embalagem', c.insumos_embalagem ?? 0);
+    menos('Insumos', c.insumos_lancados ?? 0);
     menos('ADS', c.ads);
     mais('Bônus Flex', c.bonificacoes);
     total('Margem', c.margem);

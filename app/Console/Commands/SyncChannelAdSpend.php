@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
@@ -25,6 +26,12 @@ use Throwable;
  * Correção do financeiro (2026-10-31): janela de 7 dias, porque com 3 dias uma
  * falha de duas rodadas deixou 21/10 parcial para sempre (Shopee: API 112,28 ×
  * banco 15,59), e a Meta entra aqui, com canal meta_ads (o site na conta de lucro).
+ *
+ * Meta da FerraKora (pedido do Lira em 12/11/2026): a FerraKora tem conta de
+ * anúncios própria (services.meta_ads.ferrakora_ad_account_id) e o gasto dela
+ * ficava fora do lucro. Agora grava com canal `ferrakora`, a mesma chave que
+ * ContributionMargin::porCanal() usa para os pedidos da FerraKora, então o
+ * ADS cai no canal certo sem mapeamento.
  */
 class SyncChannelAdSpend extends Command
 {
@@ -41,6 +48,7 @@ class SyncChannelAdSpend extends Command
         $this->syncShopee($shopeeAds, $from, $to);
         $this->syncMercadoLivre($mlAds, $from, $to);
         $this->syncMeta($metaAds, $from, $to);
+        $this->syncMetaFerraKora($metaAds, $from, $to);
 
         return self::SUCCESS;
     }
@@ -125,6 +133,34 @@ class SyncChannelAdSpend extends Command
         } catch (Throwable $exception) {
             $this->error("Meta Ads: falha ao sincronizar — {$exception->getMessage()}");
             $this->avisarFalha('Meta Ads', $exception->getMessage());
+        }
+    }
+
+    /**
+     * Conta de anúncios da FerraKora, com o mesmo token (pedido do Lira em
+     * 12/11/2026). Sem conta preenchida, ou com a mesma conta da KazaKora
+     * (o gasto já entrou como meta_ads), não grava nada.
+     */
+    private function syncMetaFerraKora(MetaAdsService $service, Carbon $from, Carbon $to): void
+    {
+        $semPrefixo = fn ($c) => preg_replace('/^act_/', '', trim((string) $c));
+        $conta = trim((string) config('services.meta_ads.ferrakora_ad_account_id'));
+
+        if (! $service->configurado() || $conta === '' || $semPrefixo($conta) === $semPrefixo(config('services.meta_ads.ad_account_id'))) {
+            return;
+        }
+
+        try {
+            $rows = $service->naConta($conta)->gastoDiario($from, $to);
+
+            foreach ($rows as $row) {
+                $this->upsert(Order::SITE_FERRAKORA, $row);
+            }
+
+            $this->info('Meta Ads FerraKora: '.count($rows).' dia(s) sincronizado(s).');
+        } catch (Throwable $exception) {
+            $this->error("Meta Ads FerraKora: falha ao sincronizar — {$exception->getMessage()}");
+            $this->avisarFalha('Meta Ads FerraKora', $exception->getMessage());
         }
     }
 

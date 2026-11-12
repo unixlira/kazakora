@@ -139,6 +139,8 @@ const colunas = computed(() => [
         ]),
     },
     { accessorKey: 'shipping_cost', header: 'Frete (loja)', cell: ({ row }) => h('span', { class: 'tabular-nums text-[var(--texto-suave)]' }, formatPrice(row.original.shipping_cost)) },
+    // Insumos (embalagem), pedido do Lira em 12/11/2026.
+    { accessorKey: 'supplies_cost', header: 'Insumos (embalagem)', cell: ({ row }) => h('span', { class: 'tabular-nums text-[var(--texto-suave)]' }, formatPrice(row.original.supplies_cost ?? 0)) },
     {
         accessorKey: 'net_profit',
         header: 'Margem antes do ADS',
@@ -151,16 +153,17 @@ const sortParams = (sort) => ({ sort: sort?.id ?? null, direction: sort ? (sort.
 
 <template>
     <div>
-        <div class="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+        <div class="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
             <CardStats stat-subtitle="Receita" :stat-title="formatPrice(t.receita)" stat-icon-name="fas fa-sack-dollar" variant="neutral" compact />
             <CardStats stat-subtitle="Pago ao fornecedor" :stat-title="formatPrice(t.cost)" stat-icon-name="fas fa-truck-ramp-box" variant="neutral" compact />
             <CardStats stat-subtitle="Comissão dos canais" :stat-title="formatPrice(t.fee)" stat-icon-name="fas fa-percent" variant="neutral" compact />
-            <CardStats stat-subtitle="Frete pago pela loja (Correios)" :stat-title="formatPrice(t.shipping)" stat-icon-name="fas fa-truck" variant="neutral" compact />
+            <CardStats stat-subtitle="Frete pago pela loja (Correios/Melhor Envio)" :stat-title="formatPrice(t.shipping)" stat-icon-name="fas fa-truck" variant="neutral" compact />
+            <CardStats stat-subtitle="Insumos (embalagem)" :stat-title="formatPrice(t.supplies ?? 0)" stat-icon-name="fas fa-box" variant="neutral" compact />
             <CardStats stat-subtitle="Margem antes do ADS" :stat-title="formatPrice(t.netProfit)" stat-icon-name="fas fa-scale-balanced" :variant="t.netProfit >= 0 ? 'success' : 'error'" compact />
         </div>
 
         <p v-if="t.margemOficial !== null && t.margemOficial !== undefined" class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 text-sm tabular-nums shadow-sm">
-            Soma das linhas {{ formatPrice(t.netProfit) }} − ADS {{ formatPrice(t.ads) }} − Flex {{ formatPrice(t.flex) }} + bônus do Flex {{ formatPrice(t.bonificacoes) }}
+            Soma das linhas {{ formatPrice(t.netProfit) }} − ADS {{ formatPrice(t.ads) }} − Flex {{ formatPrice(t.flex) }} + bônus do Flex {{ formatPrice(t.bonificacoes) }}<template v-if="t.insumosLancados"> − insumos lançados {{ formatPrice(t.insumosLancados) }}</template>
             = <strong>margem de contribuição {{ formatPrice(t.margemOficial) }}</strong>, a mesma do Resumo.
         </p>
         <p v-else class="mb-4 text-sm text-[var(--texto-suave)]">Com busca ou filtro de linha, os totais somam só as linhas mostradas (sem ADS e Flex, que são do canal inteiro).</p>

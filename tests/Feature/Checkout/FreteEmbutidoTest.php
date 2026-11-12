@@ -166,6 +166,34 @@ class FreteEmbutidoTest extends TestCase
         $this->get("/produtos/{$prejuizo->slug}")->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 50));
     }
 
+    public function test_cupom_do_produto_entra_na_conta_do_piso_so_onde_daria_prejuizo(): void
+    {
+        // Pedido do Lira em 2026-11-12 (BLACKFRIDAY30 do massageador): com 30% de cupom o
+        // Norte dava prejuízo. Ceará: PAC R$ 20. R$ 100 + R$ 20 = R$ 120; custo 70 + frete 20
+        // + insumos 2 = 92. Com o cupom, 120 x 0,7 x 0,905 = 76,02: prejuízo. Sobe até não
+        // perder: 92 / (0,7 x 0,905) = 145,23.
+        $this->comCorreios();
+        $comCupom = Product::factory()->create(['price' => 100, 'cost_price' => 70, 'stock' => 5, 'is_active' => true]);
+        $semCupom = Product::factory()->create(['price' => 100, 'cost_price' => 70, 'stock' => 5, 'is_active' => true]);
+        // Cupom que dá lucro mesmo com o desconto: preço não muda.
+        $folgado = Product::factory()->create(['price' => 100, 'cost_price' => 40, 'stock' => 5, 'is_active' => true]);
+
+        $cupom = \App\Modules\Checkout\Models\Coupon::query()->create([
+            'code' => 'BLACKFRIDAY30', 'name' => 'Black', 'discount_type' => 'percentage', 'discount_value' => 30,
+            'is_active' => true, 'starts_at' => now()->subDay(), 'expires_at' => now()->addDay(),
+            'produtos' => [$comCupom->id, $folgado->id],
+        ]);
+
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$comCupom->id)->assertOk()->assertJsonPath('final_price', 145.23);
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$semCupom->id)->assertOk()->assertJsonPath('final_price', 120);
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$folgado->id)->assertOk()->assertJsonPath('final_price', 120);
+
+        // Cupom vencido: volta à conta normal (sem prejuízo sem o cupom).
+        $cupom->update(['expires_at' => now()->subMinute()]);
+        app()->forgetScopedInstances();
+        $this->getJson('/frete/prazo?cep=60025000&produto='.$comCupom->id)->assertOk()->assertJsonPath('final_price', 120);
+    }
+
     public function test_cep_no_produto_mostra_rua_e_turbo_fora_do_full(): void
     {
         Http::fake(['viacep.com.br/*' => Http::response(['logradouro' => 'Rua Pedro Pereira', 'bairro' => 'Centro', 'localidade' => 'Fortaleza', 'uf' => 'CE'])]);

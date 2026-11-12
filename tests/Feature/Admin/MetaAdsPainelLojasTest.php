@@ -173,8 +173,11 @@ class MetaAdsPainelLojasTest extends TestCase
                     ->where('campanhasLojas.0.totais.cliques_link', 200)
                     ->where('campanhasLojas.0.totais.cpc_link', 0.5)
                     ->where('campanhasLojas.0.totais.cpm', 10)
-                    // A pausada sem gasto fica fora e é contada.
-                    ->has('campanhasLojas.0.campanhas', 1)
+                    // A pausada sem gasto vem marcada como oculta (no fim) e é contada;
+                    // a tela só mostra com "Mostrar todas".
+                    ->has('campanhasLojas.0.campanhas', 2)
+                    ->where('campanhasLojas.0.campanhas.0.oculta', false)
+                    ->where('campanhasLojas.0.campanhas.1.oculta', true)
                     ->where('campanhasLojas.0.ocultas', 1)
                     // FerraKora: a campanha com os anúncios, mais gasto primeiro.
                     ->where('campanhasLojas.1.loja', 'ferrakora')

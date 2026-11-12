@@ -47,7 +47,12 @@ const trocar = (mudanca) => {
 };
 
 // Campanhas de todas as lojas escolhidas numa tabela só (com a loja em "Ambas").
-const linhas = computed(() => props.dados.flatMap((l) => l.campanhas.map((c) => ({ ...c, loja: l.nome, chave: `${l.loja}-${c.id}` }))));
+// "Mostrar todas" (Lira 2026-11-12): inclui as paradas e sem gasto no período.
+const todas = ref(false);
+const totalOcultas = computed(() => props.dados.reduce((soma, l) => soma + (l.ocultas || 0), 0));
+const linhas = computed(() => props.dados.flatMap((l) => l.campanhas
+    .filter((c) => todas.value || !c.oculta)
+    .map((c) => ({ ...c, loja: l.nome, chave: `${l.loja}-${c.id}` }))));
 const abertas = ref({});
 const alternar = (chave) => { abertas.value = { ...abertas.value, [chave]: !abertas.value[chave] }; };
 
@@ -103,6 +108,13 @@ const COLUNAS = [
                     @click="trocar({ loja: a.chave })"
                 >{{ a.nome }}</button>
             </div>
+            <button
+                type="button"
+                class="rounded-lg border px-3 py-1 text-sm font-medium"
+                :class="todas ? 'border-primary bg-primary text-white' : 'border-[var(--surface-border)] text-slate-600 hover:text-primary dark:text-slate-300'"
+                :aria-pressed="todas"
+                @click="todas = !todas"
+            >{{ todas ? 'Só ativas e com gasto' : `Mostrar todas${totalOcultas ? ` (+${totalOcultas})` : ''}` }}</button>
             <div class="inline-flex flex-wrap rounded-lg border border-[var(--surface-border)] p-0.5" role="group" aria-label="Período">
                 <button
                     v-for="(rotulo, chave) in config.periodos" :key="chave" type="button"
@@ -204,8 +216,8 @@ const COLUNAS = [
         <p v-else-if="dados.some((l) => !l.erro)" class="border-t border-[var(--surface-border)] px-4 py-3 text-sm text-slate-500">
             Nenhuma campanha ativa ou com gasto no período.
         </p>
-        <p v-if="dados.some((l) => l.ocultas > 0)" class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500">
-            <template v-for="(l, i) in dados.filter((x) => x.ocultas > 0)" :key="l.loja">{{ i ? ' · ' : '' }}{{ l.nome }}: {{ l.ocultas }} campanha(s) parada(s) e sem gasto no período fora da lista</template>.
+        <p v-if="!todas && dados.some((l) => l.ocultas > 0)" class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500">
+            <template v-for="(l, i) in dados.filter((x) => x.ocultas > 0)" :key="l.loja">{{ i ? ' · ' : '' }}{{ l.nome }}: {{ l.ocultas }} campanha(s) parada(s) e sem gasto no período fora da lista</template>. <button type="button" class="font-medium text-primary hover:underline" @click="todas = true">Mostrar todas</button>
         </p>
     </section>
 </template>

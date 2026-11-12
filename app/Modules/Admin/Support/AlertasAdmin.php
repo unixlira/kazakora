@@ -31,6 +31,9 @@ class AlertasAdmin
 
     public const MELHOR_ENVIO_CONEXAO = 'melhor_envio_conexao';
 
+    /** Pedido do Lira em 12/11/2026: conciliação fiscal autônoma (fiscal:conciliar). */
+    public const FISCAL_CONCILIACAO = 'fiscal_conciliacao';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -43,7 +46,11 @@ class AlertasAdmin
         ],
         self::NFE_CANCELAMENTO => [
             'nome' => 'NF-e de pedido cancelado que não foi cancelada',
-            'descricao' => 'O canal cancelou o pedido e o cancelamento automático da nota na SEFAZ deu erro ou não é possível (nota do Bling sem protocolo). Precisa cancelar dentro das 24h. Some sozinho quando a nota é cancelada pela rotina.',
+            'descricao' => 'O canal cancelou o pedido e o cancelamento automático da nota na SEFAZ deu erro ou não foi possível (nota do Bling cuja autorização a SEFAZ não confirmou). Precisa cancelar dentro das 24h. Some sozinho quando a nota é cancelada pela rotina.',
+        ],
+        self::FISCAL_CONCILIACAO => [
+            'nome' => 'Conciliação fiscal (notas e numeração)',
+            'descricao' => 'Conferência das 07:30 e das 19:00 (fiscal:conciliar): venda sem nota, nota de pedido cancelado sem cancelamento ou devolução, devolução parada, número da série sem nota, nota parada que a SEFAZ não conhece e inutilização que a SEFAZ recusou. Cada alerta diz o que o sistema vai fazer ou já fez. Some sozinho quando o problema deixa de aparecer na conferência.',
         ],
         self::MELHOR_ENVIO_CONEXAO => [
             'nome' => 'Conexão do Melhor Envio caiu',

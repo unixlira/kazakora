@@ -78,6 +78,8 @@ abstract class CheckoutOutroSiteController extends Controller
         try {
             $resumo = $this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null);
             $ufEntrega = CepUf::porCep($dados['cep'] ?? null);
+            // Visitas (2026-11-12): a visita da tela de pagamento guarda o total e os itens do checkout.
+            \App\Modules\Analytics\Support\PrecoVisto::completarCheckout($request, $this->checkout->site(), $resumo);
 
             // Aviso de entrega fora da região do cliente (pedido 2026-10-25).
             return $this->semCache(response()->json([...$resumo, 'outra_regiao' => $ufNavegacao !== null && $ufEntrega !== null && $ufNavegacao !== $ufEntrega]));

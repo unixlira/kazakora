@@ -99,6 +99,8 @@ const limpar = () => {
 const numero = (valor) => Number(valor ?? 0).toLocaleString('pt-BR');
 // Coluna Valor (2026-11-12): preço que a página do produto mostrou ao abrir.
 const moeda = (valor) => Number(valor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// Olho da rota da tela de pagamento: itens do checkout abertos ou fechados.
+const itensAbertos = reactive({});
 const tituloOutrosProdutos = (produto) => {
     const linhas = produto.outros.map((o) => `${o.path}: ${moeda(o.valor)}`);
     const resto = produto.mais - produto.outros.length;
@@ -500,7 +502,8 @@ const confirmarApagar = () => {
                             <template v-if="(detalhe.dados.visitantes ?? 0) > 1">, {{ numero(detalhe.dados.visitantes) }} navegadores neste IP</template>
                         </p>
                         <ul v-if="(detalhe.dados.rotas?.lista ?? []).length" class="max-h-64 divide-y divide-[var(--surface-border)] overflow-auto text-sm">
-                            <li v-for="r in detalhe.dados.rotas.lista" :key="r.path" class="flex items-baseline gap-3 py-1.5">
+                            <li v-for="r in detalhe.dados.rotas.lista" :key="r.path" class="py-1.5">
+                                <div class="flex items-baseline gap-3">
                                 <a :href="r.url" target="_blank" rel="noopener noreferrer"
                                     class="min-w-0 flex-1 truncate font-mono text-xs text-[var(--foreground)] hover:text-primary hover:underline"
                                     :title="r.path">{{ r.path }}</a>
@@ -508,8 +511,27 @@ const confirmarApagar = () => {
                                     :title="r.frete != null ? `Valor que a página mostrou. Frete incluído: ${moeda(r.frete)}; produto: ${moeda(r.valor - r.frete)}` : 'Valor que a página mostrou ao abrir'">{{ moeda(r.valor) }}</span>
                                 <span v-else-if="r.produto" class="whitespace-nowrap text-xs text-slate-400"
                                     title="Página de produto aberta antes de 12/11/2026, quando o valor ainda não era gravado">sem valor</span>
+                                <button v-if="r.itens?.length" type="button" data-testid="rota-itens-abrir"
+                                    class="whitespace-nowrap text-xs text-primary hover:underline"
+                                    :title="itensAbertos[r.path] ? 'Esconder os itens do checkout' : 'Ver o que estava no checkout'"
+                                    :aria-expanded="!!itensAbertos[r.path]" @click="itensAbertos[r.path] = !itensAbertos[r.path]">
+                                    <i class="fas" :class="itensAbertos[r.path] ? 'fa-eye-slash' : 'fa-eye'" aria-hidden="true"></i>
+                                    {{ r.itens.length }} {{ r.itens.length === 1 ? 'item' : 'itens' }}
+                                </button>
                                 <span class="whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400"
                                     :title="`Última vez em ${r.ultima}`">{{ numero(r.vezes) }}×</span>
+                                </div>
+                                <ul v-if="r.itens?.length && itensAbertos[r.path]" data-testid="rota-itens"
+                                    class="mt-1.5 space-y-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-xs">
+                                    <li v-for="(item, n) in r.itens" :key="n" class="flex items-baseline gap-3">
+                                        <span class="min-w-0 flex-1">{{ item.quantidade }}× {{ item.nome }}</span>
+                                        <span class="whitespace-nowrap tabular-nums">{{ moeda(item.valor) }}</span>
+                                    </li>
+                                    <li class="flex items-baseline gap-3 border-t border-[var(--surface-border)] pt-1 font-semibold">
+                                        <span class="flex-1">Total no checkout<template v-if="r.frete"> (frete {{ moeda(r.frete) }})</template></span>
+                                        <span class="whitespace-nowrap tabular-nums">{{ moeda(r.valor) }}</span>
+                                    </li>
+                                </ul>
                             </li>
                         </ul>
                         <p v-else class="text-sm text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</p>

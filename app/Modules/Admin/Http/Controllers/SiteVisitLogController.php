@@ -60,7 +60,9 @@ use Inertia\Response;
  * em PrecoVisto). A lista mostra o do último produto aberto no período e
  * quantos outros produtos ele viu; o olho, o valor de cada página com o
  * frete que estava dentro dele (frete_visto) e o que sobra para o produto.
- * Visita anterior a 12/11/2026 e página que não é de produto ficam sem valor.
+ * A tela de pagamento guarda o total e os itens do checkout (itens_vistos):
+ * a rota dela tem um olho que abre a lista do que estava no carrinho.
+ * Visita anterior a 12/11/2026 e as outras páginas ficam sem valor.
  */
 class SiteVisitLogController extends Controller
 {
@@ -251,6 +253,7 @@ class SiteVisitLogController extends Controller
                 // Frete que estava dentro do valor e o que sobra para o produto (2026-11-12).
                 'frete' => $v->preco_visto !== null ? $v->frete_visto : null,
                 'sem_frete' => $v->preco_visto !== null && $v->frete_visto !== null ? round($v->preco_visto - $v->frete_visto, 2) : null,
+                'itens' => $v->itens_vistos ?? [],
                 'cliente' => $v->user?->name,
                 'cpf' => filled($v->user?->cpf),
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),
@@ -298,7 +301,7 @@ class SiteVisitLogController extends Controller
         // Valor de cada rota de produto (pedido 2026-11-12): o da última vez que abriu.
         $valoresDasRotas = (clone $query)->toBase()->whereNotNull('preco_visto')
             ->orderByDesc('created_at')->orderByDesc('id')
-            ->get(['path', 'preco_visto', 'frete_visto'])
+            ->get(['path', 'preco_visto', 'frete_visto', 'itens_vistos'])
             ->unique('path')->keyBy('path');
 
         return response()->json([
@@ -310,6 +313,8 @@ class SiteVisitLogController extends Controller
                     'produto' => self::rotaDeProduto($doSite, $r->path),
                     'valor' => isset($valoresDasRotas[$r->path]) ? (float) $valoresDasRotas[$r->path]->preco_visto : null,
                     'frete' => isset($valoresDasRotas[$r->path]) && $valoresDasRotas[$r->path]->frete_visto !== null ? (float) $valoresDasRotas[$r->path]->frete_visto : null,
+                    // Tela de pagamento: o que estava no checkout na última vez (olho da rota, 2026-11-12).
+                    'itens' => isset($valoresDasRotas[$r->path]) ? (json_decode((string) $valoresDasRotas[$r->path]->itens_vistos, true) ?: []) : [],
                     'vezes' => (int) $r->vezes,
                     'ultima' => Carbon::parse($r->ultima)->format('d/m/Y H:i'),
                 ])->values(),

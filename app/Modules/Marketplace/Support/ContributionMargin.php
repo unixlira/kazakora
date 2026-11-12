@@ -7,6 +7,8 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
+use App\Modules\Marketplace\Models\MarketplaceReturn;
+use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -20,8 +22,10 @@ use Illuminate\Support\Facades\Schema;
  *   receita das vendas
  *   − custo dos produtos
  *   − taxa da plataforma (comissão)
- *   − frete pago pela loja (pré-postagem dos Correios menos o TURBO que o
- *     cliente do site pagou, Flex)
+ *   − frete pago pela loja (pré-postagem dos Correios e etiqueta do Melhor
+ *     Envio menos o TURBO que o cliente do site pagou, Flex)
+ *   − insumos (embalagem por pedido que a loja embala, fora o Full do ML,
+ *     e os materiais de escritório/galpão lançados na tela Insumos)
  *   − ADS (Shopee/ML Ads e o GMV Max do TikTok, cobrado no extrato)
  *   = margem
  *   − imposto (Simples Nacional sobre o valor da nota)
@@ -30,10 +34,24 @@ use Illuminate\Support\Facades\Schema;
  * Antes cada tela fazia a sua conta: o painel inicial subtraía o frete que
  * o COMPRADOR paga, o KoraSync só tirava a taxa, e o Financeiro deixava a
  * Amazon zerada. As peças ficam aqui pra todas usarem a mesma definição.
+ *
+ * Auditoria de 12/11/2026 (pedido do Lira em 12/11/2026), lacunas fechadas:
+ *  1. insumos: R$ por pedido (config loja.insumos_por_pedido, R$ 2,00) +
+ *     lançamentos da tela Insumos (insumos_lancamentos);
+ *  2. etiqueta do Melhor Envio (site desde 03/11) no frete, como os Correios;
+ *  3. devolução concluída sai da venda efetiva (semDevolucao);
+ *  4. Meta da FerraKora em channel_ad_spends com canal `ferrakora`
+ *     (SyncChannelAdSpend), que já entra no ADS daqui.
  */
 class ContributionMargin
 {
     public const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
+    /**
+     * Etiqueta do Melhor Envio que a loja já pagou (saldo da carteira): paga
+     * ou gerada, e não cancelada. Pedido do Lira em 12/11/2026.
+     */
+    public const MELHOR_ENVIO_PAGAS = [MelhorEnvioEnvio::STATUS_PAGA, MelhorEnvioEnvio::STATUS_GERADA];
 
     /**
      * Receita de um pedido: o valor dos produtos (subtotal; no site, menos
@@ -85,39 +103,74 @@ class ContributionMargin
      * gerada pra cada pedido (CorreiosAutoShipping / menu Correios),
      * atribuído ao mês da venda. Agrupado por canal quando pedido.
      *
+     * Melhor Envio (pedido do Lira em 12/11/2026): desde 03/11 o site envia
+     * pelo Melhor Envio (melhor_envio_envios). O preço da etiqueta paga ou
+     * gerada, não cancelada, entra aqui do mesmo jeito, no mês da venda.
+     *
      * @return float|array<string, float>
      */
     public static function correios(?Carbon $desde, ?Carbon $ate = null, bool $porCanal = false): float|array
     {
-        $query = CorreiosPrePostagem::query()
-            ->join('orders', 'orders.id', '=', 'correios_pre_postagens.order_id')
-            ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
-            // Devolução (cliente → loja) não é frete de envio da venda.
-            ->where('correios_pre_postagens.devolucao', false)
+        $vendas = fn ($q) => $q
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->when($desde, fn ($q) => $q->where('orders.created_at', '>=', $desde))
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
             ->tap(fn ($q) => self::semDevolucao($q));
 
+        $etiquetas = [
+            [fn () => $vendas(DB::table('correios_pre_postagens')
+                ->join('orders', 'orders.id', '=', 'correios_pre_postagens.order_id')
+                ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
+                // Devolução (cliente → loja) não é frete de envio da venda.
+                ->where('correios_pre_postagens.devolucao', false)), 'correios_pre_postagens.postage_price'],
+            [fn () => $vendas(DB::table('melhor_envio_envios')
+                ->join('orders', 'orders.id', '=', 'melhor_envio_envios.order_id')
+                ->tap(fn ($q) => self::etiquetaMelhorEnvioPaga($q))), 'melhor_envio_envios.preco'],
+        ];
+
         $turbo = self::turboCobrado($desde, $ate);
 
         if (! $porCanal) {
-            return round((float) $query->sum('correios_pre_postagens.postage_price') - array_sum($turbo), 2);
+            $total = 0.0;
+            foreach ($etiquetas as [$query, $coluna]) {
+                $total += (float) $query()->sum($coluna);
+            }
+
+            return round($total - array_sum($turbo), 2);
         }
 
-        return $query
-            ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
-            ->groupBy('channel')
-            ->pluck('total', 'channel')
-            ->map(fn ($total, $canal) => round((float) $total - ($turbo[$canal] ?? 0), 2))
-            ->all();
+        $total = [];
+        foreach ($etiquetas as [$query, $coluna]) {
+            $query()
+                ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM('.$coluna.'), 0) as total')
+                ->groupBy('channel')
+                ->pluck('total', 'channel')
+                ->each(function ($valor, $canal) use (&$total) {
+                    $total[$canal] = ($total[$canal] ?? 0.0) + (float) $valor;
+                });
+        }
+
+        foreach ($total as $canal => $valor) {
+            $total[$canal] = round($valor - ($turbo[$canal] ?? 0), 2);
+        }
+
+        return $total;
+    }
+
+    /** Filtro da etiqueta do Melhor Envio que a loja pagou (MELHOR_ENVIO_PAGAS). */
+    public static function etiquetaMelhorEnvioPaga($query, string $tabela = 'melhor_envio_envios'): void
+    {
+        $query->whereIn("{$tabela}.status", self::MELHOR_ENVIO_PAGAS)
+            ->whereNull("{$tabela}.cancelada_em")
+            ->whereNotNull("{$tabela}.preco");
     }
 
     /**
      * TURBO do site (2026-10-12): o cliente paga só a diferença SEDEX − PAC e
      * a loja paga o SEDEX inteiro na pré-postagem. O que o cliente pagou NÃO
      * é receita: abate o frete do pedido. Só de pedido com pré-postagem
-     * gerada, para o frete não ficar negativo antes da etiqueta.
+     * gerada (ou etiqueta paga do Melhor Envio, pedido do Lira em
+     * 12/11/2026), para o frete não ficar negativo antes da etiqueta.
      *
      * @return array<string, float> por canal
      */
@@ -128,10 +181,14 @@ class ContributionMargin
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->when($desde, fn ($q) => $q->where('orders.created_at', '>=', $desde))
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
-            ->whereExists(fn ($q) => $q->from('correios_pre_postagens')
-                ->whereColumn('correios_pre_postagens.order_id', 'orders.id')
-                ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
-                ->where('correios_pre_postagens.devolucao', false))
+            ->where(fn ($comEtiqueta) => $comEtiqueta
+                ->whereExists(fn ($q) => $q->from('correios_pre_postagens')
+                    ->whereColumn('correios_pre_postagens.order_id', 'orders.id')
+                    ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA)
+                    ->where('correios_pre_postagens.devolucao', false))
+                ->orWhereExists(fn ($q) => $q->from('melhor_envio_envios')
+                    ->whereColumn('melhor_envio_envios.order_id', 'orders.id')
+                    ->tap(fn ($me) => self::etiquetaMelhorEnvioPaga($me))))
             ->tap(fn ($q) => self::semDevolucao($q))
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
             ->groupBy('canal')
@@ -140,11 +197,118 @@ class ContributionMargin
             ->all();
     }
 
+    /** R$ de insumos de embalagem por pedido. Pedido do Lira em 12/11/2026. */
+    public static function insumosPorPedido(): float
+    {
+        return max(0.0, (float) config('loja.insumos_por_pedido', 2.0));
+    }
+
+    /**
+     * Pedidos que a loja embalou, por canal: venda efetiva (mesmos filtros
+     * da receita), menos o Full do Mercado Livre (quem embala é o ML).
+     *
+     * @return array<string, int>
+     */
+    public static function pedidosEmbalados(Carbon $desde, Carbon $ate): array
+    {
+        return DB::table('orders')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->tap(fn ($q) => self::semFull($q))
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as pedidos')
+            ->groupBy('canal')
+            ->pluck('pedidos', 'canal')
+            ->map(fn ($pedidos) => (int) $pedidos)
+            ->all();
+    }
+
+    /**
+     * Insumos de embalagem por canal (pedido do Lira em 12/11/2026, regra
+     * oficial do dono: R$ 2,00 por pedido): valor fixo × pedidosEmbalados(),
+     * pelo dia da venda.
+     *
+     * @return array<string, float>
+     */
+    public static function insumosEmbalagem(Carbon $desde, Carbon $ate): array
+    {
+        $valor = self::insumosPorPedido();
+        if ($valor <= 0) {
+            return [];
+        }
+
+        return array_map(fn (int $pedidos) => round($pedidos * $valor, 2), self::pedidosEmbalados($desde, $ate));
+    }
+
+    /**
+     * Materiais de escritório e galpão lançados na tela Insumos (pedido do
+     * Lira em 12/11/2026), pela data do lançamento.
+     */
+    public static function insumosLancados(Carbon $desde, Carbon $ate): float
+    {
+        if (! Schema::hasTable('insumos_lancamentos')) {
+            return 0.0;
+        }
+
+        return round((float) DB::table('insumos_lancamentos')
+            ->where('data', '>=', $desde->toDateString())
+            ->where('data', '<', $ate->toDateString())
+            ->sum('valor'), 2);
+    }
+
+    /**
+     * Lançamentos da tela Insumos repartidos entre os canais pelo número de
+     * pedidos embalados no período (é custo da operação inteira, não de um
+     * canal). O último canal leva o resto do arredondamento, então a soma é
+     * exatamente insumosLancados(), e periodo() continua igual à soma de
+     * porCanal(). Período sem pedido embalado: tudo no site (loja).
+     *
+     * @return array<string, float>
+     */
+    public static function insumosLancadosPorCanal(Carbon $desde, Carbon $ate, ?array $pedidos = null): array
+    {
+        $total = self::insumosLancados($desde, $ate);
+        if ($total == 0.0) {
+            return [];
+        }
+
+        $pedidos = array_filter($pedidos ?? self::pedidosEmbalados($desde, $ate));
+        $soma = array_sum($pedidos);
+        if ($soma <= 0) {
+            return [Order::ORIGIN_STORE => $total];
+        }
+
+        ksort($pedidos);
+        $rateio = [];
+        $restante = $total;
+        $canais = array_keys($pedidos);
+        foreach ($canais as $i => $canal) {
+            $parte = $i === count($canais) - 1 ? round($restante, 2) : round($total * $pedidos[$canal] / $soma, 2);
+            $rateio[$canal] = $parte;
+            $restante -= $parte;
+        }
+
+        return $rateio;
+    }
+
+    /** Tira o pedido do Full do ML (channel_shipments.shipping_method = fulfillment). */
+    public static function semFull($query, string $orders = 'orders'): void
+    {
+        $query->whereNotExists(fn ($q) => $q->selectRaw('1')
+            ->from('channel_shipments as cm_full')
+            ->whereColumn('cm_full.order_id', "{$orders}.id")
+            ->where('cm_full.shipping_method', MercadoLivreFull::LOGISTIC_TYPE));
+    }
+
     /**
      * A conta inteira pra um intervalo [desde, ate) — usada no painel
      * inicial (hoje) e no KoraSync.
      *
-     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}
+     * 'insumos' = insumos_embalagem (R$ por pedido) + insumos_lancados (tela
+     * Insumos); os dois vêm separados para as telas mostrarem.
+     *
+     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, insumos: float, insumos_embalagem: float, insumos_lancados: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}
      */
     public function periodo(Carbon $desde, Carbon $ate): array
     {
@@ -174,6 +338,9 @@ class ContributionMargin
 
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $frete = round(self::correios($desde, $ate) + $flex, 2);
+        $embalagem = round(array_sum(self::insumosEmbalagem($desde, $ate)), 2);
+        $lancados = self::insumosLancados($desde, $ate);
+        $insumos = round($embalagem + $lancados, 2);
 
         $bonificacoes = self::bonificacoes($desde, $ate);
 
@@ -182,7 +349,7 @@ class ContributionMargin
             ->where('date', '<', $ate->toDateString())
             ->sum('spend') + array_sum(self::adsDoExtrato($desde, $ate)), 2);
 
-        $margem = round($receita - $custo - $taxas - $frete - $ads + $bonificacoes, 2);
+        $margem = round($receita - $custo - $taxas - $frete - $insumos - $ads + $bonificacoes, 2);
         $imposto = round(array_sum(self::imposto($desde, $ate)), 2);
 
         return [
@@ -190,6 +357,9 @@ class ContributionMargin
             'custo_produtos' => $custo,
             'taxas' => $taxas,
             'frete' => $frete,
+            'insumos' => $insumos,
+            'insumos_embalagem' => $embalagem,
+            'insumos_lancados' => $lancados,
             'ads' => $ads,
             'bonificacoes' => $bonificacoes,
             'margem' => $margem,
@@ -203,7 +373,10 @@ class ContributionMargin
      * o Financeiro fazia uma conta própria por canal e não batia com o
      * painel nem com o e-mail). Flex e bônus do Flex ficam no Mercado Livre.
      *
-     * @return array<string, array{pedidos: int, receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}>
+     * Insumos: a embalagem é do canal do pedido; os lançamentos da tela
+     * Insumos são rateados pelos pedidos embalados (insumosLancadosPorCanal).
+     *
+     * @return array<string, array{pedidos: int, receita: float, custo_produtos: float, taxas: float, frete: float, insumos: float, insumos_embalagem: float, insumos_lancados: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}>
      */
     public function porCanal(Carbon $desde, Carbon $ate): array
     {
@@ -224,6 +397,9 @@ class ContributionMargin
             ->groupBy('canal')->pluck('total', 'canal');
         $cobrancas = self::cobrancasSemPedido($desde, $ate);
         $correios = self::correios($desde, $ate, porCanal: true);
+        $embalados = self::pedidosEmbalados($desde, $ate);
+        $embalagem = array_map(fn (int $n) => round($n * self::insumosPorPedido(), 2), $embalados);
+        $lancados = self::insumosLancadosPorCanal($desde, $ate, $embalados);
         $ads = ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())
             ->where('date', '<', $ate->toDateString())
@@ -241,13 +417,13 @@ class ContributionMargin
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $bonus = self::bonificacoes($desde, $ate);
 
-        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), $ads->keys(), array_keys($cobrancas)])
+        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), array_keys($embalagem), array_keys($lancados), $ads->keys(), array_keys($cobrancas)])
             ->flatten()->filter()->unique()->values();
         if ($flex > 0 || $bonus > 0) {
             $canais->push(Order::ORIGIN_MERCADO_LIVRE);
         }
 
-        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $cobrancas, $correios, $ads, $imposto, $flex, $bonus) {
+        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $cobrancas, $correios, $embalagem, $lancados, $ads, $imposto, $flex, $bonus) {
             $ml = $canal === Order::ORIGIN_MERCADO_LIVRE;
             $linha = [
                 'pedidos' => (int) ($receita->get($canal)?->pedidos ?? 0),
@@ -255,10 +431,13 @@ class ContributionMargin
                 'custo_produtos' => round((float) ($custo[$canal] ?? 0), 2),
                 'taxas' => round((float) ($taxas[$canal] ?? 0) + ($cobrancas[$canal] ?? 0), 2),
                 'frete' => round((float) ($correios[$canal] ?? 0) + ($ml ? $flex : 0), 2),
+                'insumos' => round((float) ($embalagem[$canal] ?? 0) + (float) ($lancados[$canal] ?? 0), 2),
+                'insumos_embalagem' => round((float) ($embalagem[$canal] ?? 0), 2),
+                'insumos_lancados' => round((float) ($lancados[$canal] ?? 0), 2),
                 'ads' => round((float) ($ads[$canal] ?? 0), 2),
                 'bonificacoes' => $ml ? $bonus : 0.0,
             ];
-            $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['ads'] + $linha['bonificacoes'], 2);
+            $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['insumos'] - $linha['ads'] + $linha['bonificacoes'], 2);
             $linha['imposto'] = round((float) ($imposto[$canal] ?? 0), 2);
             $linha['lucro'] = round($linha['margem'] - $linha['imposto'], 2);
 
@@ -272,14 +451,17 @@ class ContributionMargin
      * receita do pedido (receitaSql), a taxa (order_channel_fees) e o frete
      * dos Correios do pedido são repartidos entre os itens pelo peso do item
      * no pedido (subtotal; sem subtotal, quantidade). Custo é custoSql() do
-     * próprio item.
+     * próprio item. Pedido do Lira em 12/11/2026: o frete inclui a etiqueta
+     * do Melhor Envio, e a embalagem do pedido (fora o Full) é repartida do
+     * mesmo jeito e sai da margem da linha. Os lançamentos da tela Insumos
+     * são da operação inteira: ficam em 'canal' (insumos_lancados), como o ADS.
      *
      * ADS, Flex e bônus do Flex são do canal inteiro, não de um pedido: ficam
      * em 'canal' e NÃO entram na margem de cada linha. Por isso
-     *   soma(linhas.margem) − ads − flex + bonificacoes − cobrancas = porCanal()[canal].margem
+     *   soma(linhas.margem) − ads − flex + bonificacoes − cobrancas − insumos_lancados = porCanal()[canal].margem
      * (o teste OportunidadesCurvaAbcTest confere essa igualdade).
      *
-     * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float, cobrancas: float}}
+     * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, insumos: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float, cobrancas: float, insumos_lancados: float}}
      */
     public function porItem(Carbon $desde, Carbon $ate, ?string $canal = null): array
     {
@@ -290,12 +472,19 @@ class ContributionMargin
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
             ->where('devolucao', false)
             ->selectRaw('order_id, SUM(postage_price) as total')->groupBy('order_id');
+        $melhorEnvio = DB::table('melhor_envio_envios')
+            ->tap(fn ($q) => self::etiquetaMelhorEnvioPaga($q))
+            ->selectRaw('order_id, SUM(preco) as total')->groupBy('order_id');
+        $full = 'EXISTS (SELECT 1 FROM channel_shipments cm_full WHERE cm_full.order_id = orders.id AND cm_full.shipping_method = ?)';
+
+        $insumosPorPedido = self::insumosPorPedido();
 
         $linhas = DB::table('orders')
             ->leftJoin('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
             ->leftJoinSub($taxas, 'taxa_pedido', 'taxa_pedido.order_id', '=', 'orders.id')
             ->leftJoinSub($correios, 'correios_pedido', 'correios_pedido.order_id', '=', 'orders.id')
+            ->leftJoinSub($melhorEnvio, 'me_pedido', 'me_pedido.order_id', '=', 'orders.id')
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $desde)
             ->where('orders.created_at', '<', $ate)
@@ -310,16 +499,18 @@ class ContributionMargin
                 '.self::receitaSql().' as receita_pedido,
                 CASE WHEN order_items.id IS NULL THEN 0 ELSE '.self::custoSql().' END as custo,
                 COALESCE(taxa_pedido.total, 0) as taxa_pedido,
-                COALESCE(correios_pedido.total, 0) - CASE WHEN correios_pedido.total IS NOT NULL AND orders.shipping_carrier_name = ?
-                    THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_pedido', [FreteEmbutido::TURBO])
+                COALESCE(correios_pedido.total, 0) + COALESCE(me_pedido.total, 0)
+                    - CASE WHEN (correios_pedido.total IS NOT NULL OR me_pedido.total IS NOT NULL) AND orders.shipping_carrier_name = ?
+                    THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_pedido,
+                CASE WHEN '.$full.' THEN 0 ELSE 1 END as embalado', [FreteEmbutido::TURBO, MercadoLivreFull::LOGISTIC_TYPE])
             ->orderBy('orders.id')->orderBy('order_items.id')
             ->get()
             ->groupBy('order_id')
-            ->flatMap(function ($itens) {
+            ->flatMap(function ($itens) use ($insumosPorPedido) {
                 $somaSubtotal = (float) $itens->sum('subtotal');
                 $somaQuantidade = (float) $itens->sum('quantidade');
 
-                return $itens->map(function ($item) use ($itens, $somaSubtotal, $somaQuantidade) {
+                return $itens->map(function ($item) use ($itens, $somaSubtotal, $somaQuantidade, $insumosPorPedido) {
                     $peso = match (true) {
                         $somaSubtotal > 0 => (float) $item->subtotal / $somaSubtotal,
                         $somaQuantidade > 0 => (float) $item->quantidade / $somaQuantidade,
@@ -328,6 +519,7 @@ class ContributionMargin
                     $receita = (float) $item->receita_pedido * $peso;
                     $taxas = (float) $item->taxa_pedido * $peso;
                     $frete = (float) $item->frete_pedido * $peso;
+                    $insumos = (int) $item->embalado * $insumosPorPedido * $peso;
                     $custo = (float) $item->custo;
 
                     return [
@@ -347,7 +539,8 @@ class ContributionMargin
                         'custo_produtos' => $custo,
                         'taxas' => $taxas,
                         'frete' => $frete,
-                        'margem' => $receita - $custo - $taxas - $frete,
+                        'insumos' => $insumos,
+                        'margem' => $receita - $custo - $taxas - $frete - $insumos,
                     ];
                 });
             })
@@ -368,6 +561,10 @@ class ContributionMargin
                 'flex' => $ml ? (float) app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'] : 0.0,
                 'bonificacoes' => $ml ? self::bonificacoes($desde, $ate) : 0.0,
                 'cobrancas' => round($canal === null ? array_sum($cobrancas) : ($cobrancas[$canal] ?? 0), 2),
+                // Tela Insumos (pedido do Lira em 12/11/2026): custo da operação inteira.
+                'insumos_lancados' => $canal === null
+                    ? self::insumosLancados($desde, $ate)
+                    : (float) (self::insumosLancadosPorCanal($desde, $ate)[$canal] ?? 0),
             ],
         ];
     }
@@ -412,7 +609,9 @@ class ContributionMargin
      *  - extrato do TikTok: reembolso de logística/plataforma (crédito) e
      *    cobrança em pedido que não conta como venda;
      *  - frete do comprador recebido no Mercado Pago (marketplace_shipment);
-     *  - etiqueta dos Correios gerada para pedido que não conta como venda.
+     *  - etiqueta dos Correios gerada para pedido que não conta como venda;
+     *  - etiqueta paga do Melhor Envio de pedido que não conta como venda
+     *    (pedido do Lira em 12/11/2026).
      *
      * @return array<string, float>
      */
@@ -471,6 +670,16 @@ class ContributionMargin
             ->where('orders.created_at', '<', $ate)
             ->whereNotIn('orders.id', fn ($q) => $efetiva($q->from('orders')->select('orders.id')))
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
+            ->groupBy('canal')->get()
+            ->each(fn ($l) => $somar((string) $l->canal, (float) $l->total));
+
+        DB::table('melhor_envio_envios')
+            ->join('orders', 'orders.id', '=', 'melhor_envio_envios.order_id')
+            ->tap(fn ($q) => self::etiquetaMelhorEnvioPaga($q))
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->whereNotIn('orders.id', fn ($q) => $efetiva($q->from('orders')->select('orders.id')))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(melhor_envio_envios.preco), 0) as total')
             ->groupBy('canal')->get()
             ->each(fn ($l) => $somar((string) $l->canal, (float) $l->total));
 
@@ -560,7 +769,8 @@ class ContributionMargin
      */
     public static function contaVazia(): array
     {
-        return ['pedidos' => 0, 'receita' => 0.0, 'custo_produtos' => 0.0, 'taxas' => 0.0, 'frete' => 0.0, 'ads' => 0.0,
+        return ['pedidos' => 0, 'receita' => 0.0, 'custo_produtos' => 0.0, 'taxas' => 0.0, 'frete' => 0.0,
+            'insumos' => 0.0, 'insumos_embalagem' => 0.0, 'insumos_lancados' => 0.0, 'ads' => 0.0,
             'bonificacoes' => 0.0, 'margem' => 0.0, 'imposto' => 0.0, 'lucro' => 0.0];
     }
 
@@ -672,5 +882,52 @@ class ContributionMargin
             ->whereNull("{$orders}.estornado_em")
             ->where(fn ($q) => $q->whereNotIn("{$orders}.origin", [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])->orWhereNull("{$orders}.origin"))
             ->where(fn ($q) => $q->whereNotIn("{$orders}.fiscal_operation_type", ['purchase_return', 'sales_return'])->orWhereNull("{$orders}.fiscal_operation_type"));
+
+        self::semDevolucaoConcluida($query, $orders);
+    }
+
+    /**
+     * Devolução concluída deixa de ser venda (pedido do Lira em 12/11/2026;
+     * caso real: Shopee #3435, status shipped, devolução conferida e
+     * entregue, reembolso de R$ 60,30 e NF-e de devolução emitida, e ainda
+     * contava receita, custo e imposto). Sai da venda efetiva o pedido que:
+     *  - tem caso de devolução (kind devolucao) em que o produto voltou:
+     *    situação conferida/entregue ou return_status delivered, salvo
+     *    veredito "não recebemos"; OU
+     *  - tem NF-e de devolução de venda AUTORIZADA (pedido técnico
+     *    nota_devolucao_venda) referenciando a chave da nota de venda dele.
+     *
+     * Simplificações (não há dado confiável, por pedido, do que o canal
+     * devolveu):
+     *  - a devolução vale para o pedido inteiro, mesmo se só um item voltou;
+     *  - a taxa do canal sai junto com a venda (Shopee e ML devolvem a
+     *    comissão no reembolso total; no TikTok a cobrança do extrato em
+     *    pedido fora da venda já volta como custo em cobrancasSemPedido);
+     *  - o frete que a loja pagou (Correios/Melhor Envio) continua custo:
+     *    cobrancasSemPedido() pega a etiqueta de pedido que não é venda.
+     *
+     * Performance: NOT EXISTS por order_id (índice da FK em
+     * marketplace_returns e invoices) e pela chave referenciada (índice novo
+     * em orders.fiscal_referenced_nfe_key, migration de 12/11/2026).
+     */
+    public static function semDevolucaoConcluida($query, string $orders = 'orders'): void
+    {
+        $query
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')
+                ->from('marketplace_returns as cm_dev')
+                ->whereColumn('cm_dev.order_id', "{$orders}.id")
+                ->where('cm_dev.kind', MarketplaceReturn::KIND_DEVOLUCAO)
+                ->where(fn ($voltou) => $voltou
+                    ->whereIn('cm_dev.situacao', [MarketplaceReturn::CONFERIDA, MarketplaceReturn::ENTREGUE])
+                    ->orWhere('cm_dev.return_status', 'delivered'))
+                ->where(fn ($veredito) => $veredito->whereNull('cm_dev.verdict')->orWhere('cm_dev.verdict', '!=', 'nao_recebido')))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')
+                ->from('invoices as cm_venda')
+                ->join('orders as cm_dev_pedido', 'cm_dev_pedido.fiscal_referenced_nfe_key', '=', 'cm_venda.chave_acesso')
+                ->join('invoices as cm_dev_nota', 'cm_dev_nota.order_id', '=', 'cm_dev_pedido.id')
+                ->whereColumn('cm_venda.order_id', "{$orders}.id")
+                ->where('cm_dev_pedido.origin', Order::ORIGIN_SALES_RETURN_INVOICE)
+                ->where('cm_dev_nota.status', 'authorized')
+                ->whereNull('cm_dev_nota.cancelada_em'));
     }
 }

@@ -320,6 +320,9 @@ class CashFlowController extends Controller
             'custo_produtos' => (float) $conta['custo_produtos'],
             'taxas' => (float) $conta['taxas'],
             'frete' => (float) $conta['frete'],
+            'insumos' => (float) ($conta['insumos'] ?? 0),
+            'insumos_embalagem' => (float) ($conta['insumos_embalagem'] ?? 0),
+            'insumos_lancados' => (float) ($conta['insumos_lancados'] ?? 0),
             'ads' => (float) $conta['ads'],
             'bonificacoes' => (float) $conta['bonificacoes'],
             'margem' => (float) $conta['margem'],
@@ -399,6 +402,7 @@ class CashFlowController extends Controller
             'product_cost' => 'custo_produtos',
             'platform_fee' => 'taxas',
             'shipping_cost' => 'frete',
+            'supplies_cost' => 'insumos',
             'net_profit' => 'margem',
         ], 'pedido_em');
 
@@ -440,13 +444,15 @@ class CashFlowController extends Controller
                     'cost' => round((float) $linhas->sum('custo_produtos'), 2),
                     'fee' => round((float) $linhas->sum('taxas'), 2),
                     'shipping' => round((float) $linhas->sum('frete'), 2),
+                    'supplies' => round((float) $linhas->sum('insumos'), 2),
                     'netProfit' => round($margemLinhas, 2),
                     'ads' => $conta['canal']['ads'],
                     'flex' => round((float) $conta['canal']['flex'], 2),
                     'bonificacoes' => $conta['canal']['bonificacoes'],
+                    'insumosLancados' => $conta['canal']['insumos_lancados'],
                     // Igual à margem do Resumo (periodo/porCanal) quando não
                     // há busca nem filtro de linha.
-                    'margemOficial' => $filtrado ? null : round($margemLinhas - $conta['canal']['ads'] - $conta['canal']['flex'] + $conta['canal']['bonificacoes'] - $conta['canal']['cobrancas'], 2),
+                    'margemOficial' => $filtrado ? null : round($margemLinhas - $conta['canal']['ads'] - $conta['canal']['flex'] + $conta['canal']['bonificacoes'] - $conta['canal']['cobrancas'] - $conta['canal']['insumos_lancados'], 2),
                     'filtrado' => $filtrado,
                     'semCusto' => $todas->filter(fn ($l) => $l['item_id'] !== null && ! $l['tem_custo'])->count(),
                     'taxaEstimada' => $todas->filter(fn ($l) => $l['taxa_estimada'])->count(),
@@ -498,6 +504,8 @@ class CashFlowController extends Controller
             'has_fee_data' => $l['tem_taxa'],
             'fee_source' => $l['tem_taxa'] ? ($l['taxa_estimada'] ? 'estimate' : 'real') : null,
             'shipping_cost' => round($l['frete'], 2),
+            // Insumos (embalagem) do pedido, repartidos entre os itens: pedido do Lira em 12/11/2026.
+            'supplies_cost' => round($l['insumos'] ?? 0, 2),
             'net_profit' => round($l['margem'], 2),
         ];
     }

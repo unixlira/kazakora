@@ -62,7 +62,7 @@ class CurvaAbc
             'ads' => $canalCustos['ads'],
             'flex' => $canalCustos['flex'],
             'bonificacoes' => $canalCustos['bonificacoes'],
-            'lucro' => round($lucroProdutos - $canalCustos['ads'] - $canalCustos['flex'] + $canalCustos['bonificacoes'] - $canalCustos['cobrancas'], 2),
+            'lucro' => round($lucroProdutos - $canalCustos['ads'] - $canalCustos['flex'] + $canalCustos['bonificacoes'] - $canalCustos['cobrancas'] - ($canalCustos['insumos_lancados'] ?? 0), 2),
             'produtos' => $curva->values()->all(),
             'classes' => collect(['A', 'B', 'C'])->mapWithKeys(fn ($classe) => [$classe => [
                 'produtos' => $curva->where('classe', $classe)->count(),
@@ -154,6 +154,7 @@ class CurvaAbc
                     'custo_produtos' => round((float) $grupo->sum('custo_produtos'), 2),
                     'taxas' => round((float) $grupo->sum('taxas'), 2),
                     'frete' => round((float) $grupo->sum('frete'), 2),
+                    'insumos' => round((float) $grupo->sum('insumos'), 2),
                     'lucro' => round((float) $grupo->sum('margem'), 2),
                 ];
             })

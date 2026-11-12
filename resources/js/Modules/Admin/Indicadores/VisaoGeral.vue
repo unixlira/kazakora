@@ -264,7 +264,7 @@ const roscaCanalOpcoes = computed(() => ({
 // ---- Para onde vai o dinheiro (composição, conta oficial) --------------
 const comp = computed(() => {
     const linhas = props.composicao[dias.value] ?? {};
-    const s = { receita: 0, custo_produtos: 0, taxas: 0, frete: 0, ads: 0, bonificacoes: 0, margem: 0 };
+    const s = { receita: 0, custo_produtos: 0, taxas: 0, frete: 0, insumos: 0, ads: 0, bonificacoes: 0, margem: 0 };
     ativos.value.forEach((c) => Object.keys(s).forEach((k) => { s[k] += linhas[c]?.[k] ?? 0; }));
     return s;
 });
@@ -272,6 +272,8 @@ const partesComp = computed(() => [
     { rotulo: 'Custo dos produtos', valor: comp.value.custo_produtos, cor: isDark.value ? '#8a7f83' : '#3c4044' },
     { rotulo: 'Taxas dos canais', valor: comp.value.taxas, cor: isDark.value ? '#a99fa2' : '#6b5f63' },
     { rotulo: 'Frete pago pela loja', valor: comp.value.frete, cor: isDark.value ? '#c9c1c3' : '#9a8f92' },
+    // Pedido do Lira em 12/11/2026.
+    { rotulo: 'Insumos (embalagem)', valor: comp.value.insumos, cor: isDark.value ? '#d6cfd1' : '#b3aaad' },
     { rotulo: 'ADS', valor: comp.value.ads, cor: isDark.value ? '#e3dcde' : '#c9c1c3' },
     { rotulo: 'Margem', valor: Math.max(0, comp.value.margem), cor: STATUS.bom },
 ].filter((p) => p.valor > 0));

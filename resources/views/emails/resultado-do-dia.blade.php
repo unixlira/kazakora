@@ -66,7 +66,9 @@
             ['Custo dos produtos', $dia['custo_produto'], true],
             ['Taxas dos canais'.($dia['taxas_estimadas'] > 0 ? ' *' : ''), $dia['taxas_canal'], true],
             ['Anúncios', $dia['anuncios'], true],
-            ['Frete pago pela loja (Correios/Flex)', $dia['frete'], true],
+            ['Frete pago pela loja (Correios/Melhor Envio/Flex)', $dia['frete'], true],
+            ['Insumos (embalagem)', $dia['insumos_embalagem'] ?? 0, true],
+            ['Insumos (escritório e galpão)', $dia['insumos_lancados'] ?? 0, true],
             ['Imposto (Simples '.$aliquota.'% sobre o valor das notas)', $dia['impostos'], true],
         ] as [$rotulo, $valor, $desconta])
             <tr>
@@ -149,7 +151,7 @@
     </table>
 
     <p style="margin: 18px 0 0; font-size: 11px; color: #9ca3af;">
-        Dia fechado: enviado de manhã, depois do gasto de anúncio do dia chegar. Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − anúncios,
+        Dia fechado: enviado de manhã, depois do gasto de anúncio do dia chegar. Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − insumos (embalagem) − anúncios,
         menos o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
     </p>
 @endsection

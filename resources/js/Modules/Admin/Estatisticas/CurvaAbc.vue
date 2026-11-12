@@ -183,7 +183,7 @@ const tendenciaCor = (p) => {
                             <th scope="col" class="py-2 pr-3 text-right">Faturamento</th>
                             <th scope="col" class="py-2 pr-3 text-right">%</th>
                             <th scope="col" class="py-2 pr-3 text-right">% acum.</th>
-                            <th scope="col" class="py-2 pr-3 text-right" title="Receita − custo do produto − taxa da plataforma − frete pago pela loja. ADS e Flex ficam no lucro do canal.">Lucro</th>
+                            <th scope="col" class="py-2 pr-3 text-right" title="Receita − custo do produto − taxa da plataforma − frete pago pela loja − insumos (embalagem). ADS e Flex ficam no lucro do canal.">Lucro</th>
                             <th scope="col" class="py-2 pr-4 text-right" title="Faturamento contra o período anterior de mesmo tamanho">Tendência</th>
                         </tr>
                     </thead>
@@ -217,7 +217,7 @@ const tendenciaCor = (p) => {
                 </table>
             </div>
             <p class="border-t border-[var(--surface-border)] px-4 py-3 text-xs text-[var(--texto-suave)]">
-                Lucro por produto = receita − custo do produto − taxa da plataforma − frete pago pela loja, com a taxa e o frete do pedido divididos pelo valor de cada item.
+                Lucro por produto = receita − custo do produto − taxa da plataforma − frete pago pela loja − insumos (embalagem), com a taxa, o frete e os insumos do pedido divididos pelo valor de cada item.
                 ADS{{ curva.flex > 0 || curva.bonificacoes > 0 ? ', Flex e bônus do Flex' : '' }} são do canal e entram só no lucro do canal. Produto sem custo cadastrado aparece com lucro maior que o real.
             </p>
         </section>

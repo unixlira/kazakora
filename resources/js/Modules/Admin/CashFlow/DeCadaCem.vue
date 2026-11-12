@@ -23,6 +23,8 @@ const partes = computed(() => {
         { rotulo: 'ADS', valor: c.ads, cor: '#9a8f92', corEscuro: '#c9c1c3' },
         { rotulo: 'Imposto', valor: c.imposto, cor: '#b3aaad', corEscuro: '#7a6f73' },
         { rotulo: 'Frete', valor: c.frete - c.bonificacoes, cor: '#d6cfd1', corEscuro: '#5b5458' },
+        // Insumos (embalagem): pedido do Lira em 12/11/2026.
+        { rotulo: 'Insumos', valor: c.insumos ?? 0, cor: '#e6e0e2', corEscuro: '#4a4447' },
         { rotulo: 'Lucro', valor: c.lucro, cor: '#a3324f', corEscuro: '#fd7b41', destaque: true },
     ].map((p) => ({ ...p, cem: (p.valor / r) * 100 }));
 });

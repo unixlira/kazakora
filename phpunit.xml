@@ -34,6 +34,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <!-- Frete embutido (2026-10-12): desligado nos testes antigos; FreteEmbutidoTest liga. -->
         <env name="FRETE_EMBUTIDO_ATIVO" value="false"/>
+        <!-- Insumos por pedido (12/11/2026): zerado nos testes antigos de valor exato; LucroLacunasTest liga. -->
+        <env name="LOJA_INSUMOS_POR_PEDIDO" value="0"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="ML_APP_ID" value="test-app-id"/>

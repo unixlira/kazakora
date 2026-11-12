@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\DB;
  * 2026-10-18 já traz o imposto do Simples (ContributionMargin::imposto()):
  *
  *   lucro líquido = receita − custo dos produtos − taxas dos canais
- *                   − frete pago pela loja (Correios/Flex) − anúncios − imposto
+ *                   − frete pago pela loja (Correios/Melhor Envio/Flex)
+ *                   − insumos (embalagem) − anúncios − imposto
  *
  * O frete que o COMPRADOR paga não entra (na Amazon ele é receita, porque a
  * loja envia pelos próprios Correios). Anúncio = consumo diário (Shopee/ML
@@ -53,6 +54,9 @@ class ResultadoDiario
                 'taxas_canal' => $somar('taxas_canal'),
                 'anuncios' => $somar('anuncios'),
                 'frete' => $somar('frete'),
+                'insumos' => $somar('insumos'),
+                'insumos_embalagem' => $somar('insumos_embalagem'),
+                'insumos_lancados' => $somar('insumos_lancados'),
                 'bonificacoes' => $somar('bonificacoes'),
                 'impostos' => $somar('impostos'),
                 'lucro' => $somar('lucro'),
@@ -97,6 +101,12 @@ class ResultadoDiario
             'taxas_canal' => $conta['taxas'],
             'taxas_estimadas' => $estimadas,
             'frete' => $conta['frete'],
+            // Pedido do Lira em 12/11/2026: R$ por pedido embalado pela loja +
+            // lançamentos da tela Insumos.
+            'insumos' => $conta['insumos'],
+            // Tela Insumos (escritório/galpão), pela data do lançamento.
+            'insumos_embalagem' => $conta['insumos_embalagem'],
+            'insumos_lancados' => $conta['insumos_lancados'],
             'anuncios' => $conta['ads'],
             'bonificacoes' => $conta['bonificacoes'],
             'impostos' => $conta['imposto'],

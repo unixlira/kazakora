@@ -9,7 +9,8 @@ novo que mostre lucro **tem que usar essa classe**, nunca refazer a conta.
 lucro líquido = receita
               − custo dos produtos
               − taxas dos canais
-              − frete pago pela loja
+              − frete pago pela loja (Correios, Melhor Envio, Flex)
+              − insumos (embalagem por pedido + tela Insumos)   ← desde 12/11/2026
               − anúncios (consumo)
               − imposto (Simples Nacional)      ← em todas as telas desde 18/10/2026
 ```
@@ -136,4 +137,11 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
 - **Extrato do TikTok:** regra 3 de `removerLinhasSuperadas` tira a linha "Pagos" repetida com ID provisório e definitivo; a regra 2 olha `updated_at`, para não apagar GMV Max real do mesmo arquivo.
 - **Cobranças sem pedido na linha de taxas** (`ContributionMargin::cobrancasSemPedido`): Full e Minha página do ML e DIFAL da Shopee (`financeiro:lancamentos`, tabela `financeiro_lancamentos`), reembolso e cobrança de pedido cancelado do TikTok, frete recebido no Mercado Pago, etiqueta de pedido fora da receita.
 - **Ao levar à produção, dados a acertar uma vez:** `tiktok:limpar-extrato`, reimportar o último demonstrativo do TikTok, `ads:sync-spend --dias=60`, `financeiro:lancamentos --desde=2026-05-01`, `orders:recalcular-taxas --desde=2026-07-01 --canal=shopee`.
-- **Fora daqui:** custo sem histórico, insumos de R$ 2 por pedido, imposto real da guia DAS.
+- **Fora daqui:** custo sem histórico, imposto real da guia DAS (insumos entraram em 12/11/2026, abaixo).
+
+## Lacunas fechadas em 12/11/2026 (pedido do Lira)
+
+- **Insumos** (linha nova `insumos`, entra na margem): `insumos_embalagem` = `LOJA_INSUMOS_POR_PEDIDO` (R$ 2,00) × pedidos de venda efetiva que a loja embala (Full do ML fica de fora: `channel_shipments.shipping_method = fulfillment`); `insumos_lancados` = tela **Financeiro › Insumos** (`insumos_lancamentos`, só admin), pela data do lançamento. Em `porCanal()` os lançamentos são rateados pelos pedidos embalados do período (sem pedido, tudo no `loja`), então `periodo()` continua igual à soma dos canais. Em `porItem()` ficam em `canal.insumos_lancados`, como o ADS.
+- **Frete do Melhor Envio:** `correios()` soma também `melhor_envio_envios.preco` das etiquetas `paga`/`gerada` não canceladas, no mês da venda; o TURBO é abatido também de pedido com etiqueta ME; etiqueta ME de pedido fora da venda vai para `cobrancasSemPedido`.
+- **Devolução concluída sai da venda** (`semDevolucao()` e `Order::vendaEfetiva()`): caso `devolucao` com produto de volta (situação conferida/entregue ou `return_status = delivered`, salvo veredito "não recebemos") ou NF-e de devolução de venda autorizada referenciando a chave da nota do pedido. Simplificação: vale para o pedido inteiro; a taxa do canal sai junto (Shopee/ML devolvem a comissão no reembolso total); o frete pago pela loja continua custo (via `cobrancasSemPedido`).
+- **Meta da FerraKora:** `ads:sync-spend` grava a conta `FERRAKORA_META_ADS_AD_ACCOUNT_ID` (config `services.meta_ads.ferrakora_ad_account_id`) com canal `ferrakora`, que é o canal dos pedidos da FerraKora no `porCanal()`.

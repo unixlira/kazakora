@@ -51,7 +51,7 @@ class CampanhasMetaPorLoja
 
     public const PERIODO_PADRAO = 'last_7d';
 
-    private const CACHE = 'meta-ads:painel-lojas:v1:';
+    private const CACHE = 'meta-ads:painel-lojas:v2:';
 
     private const PAUSA = 'meta-ads:painel-lojas:pausa:';
 
@@ -162,15 +162,18 @@ class CampanhasMetaPorLoja
         $totais = self::numeros($meta->resumoDaConta($periodo));
         $campanhas = $meta->espelhoCompleto($periodo)['campanhas'];
 
-        // Campanha parada e sem gasto no período só ocupa espaço (é contada).
-        $visiveis = array_values(array_filter($campanhas,
-            fn (array $c) => ($c['status'] ?? '') === 'ACTIVE' || (float) ($c['metricas']['gasto'] ?? 0) > 0));
+        // Campanha parada e sem gasto no período sai da lista padrão (é contada);
+        // "Mostrar todas" (Lira 2026-11-12) mostra as marcadas como "oculta".
+        $oculta = fn (array $c) => ($c['status'] ?? '') !== 'ACTIVE' && (float) ($c['metricas']['gasto'] ?? 0) <= 0;
+        // Visíveis primeiro, na ordem da Meta; as paradas no fim.
+        usort($campanhas, fn (array $a, array $b) => $oculta($a) <=> $oculta($b));
 
         return [
             'totais' => $totais,
-            'ocultas' => count($campanhas) - count($visiveis),
+            'ocultas' => count(array_filter($campanhas, $oculta)),
             'campanhas' => array_map(fn (array $c) => [
                 'id' => (string) $c['id'],
+                'oculta' => $oculta($c),
                 'nome' => (string) $c['nome'],
                 'status' => (string) $c['status'],
                 'objetivo' => $c['objetivo'] ?? null,
@@ -178,7 +181,7 @@ class CampanhasMetaPorLoja
                 'orcamento_diario' => $c['orcamento_diario'] ?? null,
                 'gerenciador' => $c['gerenciador'] ?? null,
                 'anuncios' => self::anuncios($c),
-            ] + self::numeros($c['metricas'] ?? []), $visiveis),
+            ] + self::numeros($c['metricas'] ?? []), $campanhas),
         ];
     }
 

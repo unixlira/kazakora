@@ -501,7 +501,9 @@ const confirmarApagar = () => {
                                 <th scope="col" class="px-4 py-3 text-right">#</th>
                                 <th scope="col" class="px-4 py-3">Horário</th>
                                 <th scope="col" class="px-4 py-3">Página (rota)</th>
-                                <th scope="col" class="px-4 py-3 text-right" title="Preço que a página do produto mostrou ao abrir">Valor</th>
+                                <th scope="col" class="px-4 py-3 text-right" title="Preço total que a página do produto mostrou ao abrir, já com o frete incluído">Valor total</th>
+                                <th scope="col" class="px-4 py-3 text-right" title="Frete que estava dentro do valor total, para a região do visitante">Frete incluído</th>
+                                <th scope="col" class="px-4 py-3 text-right" title="Valor total menos o frete incluído">Produto</th>
                                 <th scope="col" class="px-4 py-3">Cliente</th>
                                 <th scope="col" class="px-4 py-3">CPF</th>
                                 <th scope="col" class="px-4 py-3 text-right">Ações</th>
@@ -517,6 +519,14 @@ const confirmarApagar = () => {
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums">
                                     <template v-if="v.valor != null">{{ moeda(v.valor) }}</template>
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums" data-testid="visita-frete">
+                                    <template v-if="v.frete != null">{{ moeda(v.frete) }}</template>
+                                    <span v-else class="text-slate-400" :title="v.valor != null ? 'Visita gravada antes do registro do frete' : ''">—</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                                    <template v-if="v.sem_frete != null">{{ moeda(v.sem_frete) }}</template>
                                     <span v-else class="text-slate-400">—</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs">
@@ -540,7 +550,7 @@ const confirmarApagar = () => {
                                 </td>
                             </tr>
                             <tr v-if="detalhe.dados.visitas.length === 0">
-                                <td colspan="7" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
+                                <td colspan="9" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">Nenhuma página nesse período.</td>
                             </tr>
                         </tbody>
                     </table>

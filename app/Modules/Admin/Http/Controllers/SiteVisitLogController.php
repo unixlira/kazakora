@@ -58,8 +58,9 @@ use Inertia\Response;
  * Valor (pedido 2026-11-12): o preço que a página de produto mostrou ao
  * visitante quando abriu, gravado na visita (site_visits.preco_visto, regra
  * em PrecoVisto). A lista mostra o do último produto aberto no período e
- * quantos outros produtos ele viu; o olho, o valor de cada página. Visita
- * anterior a 12/11/2026 e página que não é de produto ficam sem valor.
+ * quantos outros produtos ele viu; o olho, o valor de cada página com o
+ * frete que estava dentro dele (frete_visto) e o que sobra para o produto.
+ * Visita anterior a 12/11/2026 e página que não é de produto ficam sem valor.
  */
 class SiteVisitLogController extends Controller
 {
@@ -244,6 +245,9 @@ class SiteVisitLogController extends Controller
                 'path' => $v->path,
                 'url' => $site.$v->path,
                 'valor' => $v->preco_visto,
+                // Frete que estava dentro do valor e o que sobra para o produto (2026-11-12).
+                'frete' => $v->preco_visto !== null ? $v->frete_visto : null,
+                'sem_frete' => $v->preco_visto !== null && $v->frete_visto !== null ? round($v->preco_visto - $v->frete_visto, 2) : null,
                 'cliente' => $v->user?->name,
                 'cpf' => filled($v->user?->cpf),
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),

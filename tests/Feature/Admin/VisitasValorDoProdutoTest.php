@@ -42,6 +42,8 @@ class VisitasValorDoProdutoTest extends TestCase
         $visita = SiteVisit::sole();
         $this->assertSame('/produtos/caneca-azul', $visita->path);
         $this->assertSame(49.90, $visita->preco_visto);
+        // Frete embutido desligado neste teste: nada de frete dentro do preço.
+        $this->assertSame(0.0, $visita->frete_visto);
     }
 
     public function test_com_variacao_grava_o_da_mais_barata_com_estoque_como_a_pagina_mostra(): void
@@ -61,6 +63,7 @@ class VisitasValorDoProdutoTest extends TestCase
         $this->withHeader('User-Agent', self::NAVEGADOR)->get('https://kazakora.com/politica-de-entrega')->assertOk();
 
         $this->assertNull(SiteVisit::sole()->preco_visto);
+        $this->assertNull(SiteVisit::sole()->frete_visto);
     }
 
     public function test_aviso_do_ferrakora_grava_o_preco_da_pagina_do_produto(): void
@@ -90,13 +93,13 @@ class VisitasValorDoProdutoTest extends TestCase
         $this->travelTo('2026-11-12 15:00:00');
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $visita = fn (string $ip, string $hora, string $path, ?float $preco, string $site = 'kazakora') => DB::table('site_visits')->insert([
-            'site' => $site, 'visitor_id' => 'v-'.$ip, 'path' => $path, 'preco_visto' => $preco, 'ip' => $ip,
+        $visita = fn (string $ip, string $hora, string $path, ?float $preco, string $site = 'kazakora', ?float $frete = null) => DB::table('site_visits')->insert([
+            'site' => $site, 'visitor_id' => 'v-'.$ip, 'path' => $path, 'preco_visto' => $preco, 'frete_visto' => $frete, 'ip' => $ip,
             'consentiu' => true, 'created_at' => '2026-11-12 '.$hora, 'dispositivo' => 'celular', 'origem' => 'direto',
         ]);
         $visita('1.1.1.1', '10:00:00', '/', null);
         $visita('1.1.1.1', '10:01:00', '/produtos/caneca', 49.90);
-        $visita('1.1.1.1', '10:02:00', '/produtos/arvore', 180.00);
+        $visita('1.1.1.1', '10:02:00', '/produtos/arvore', 180.00, 'kazakora', 29.90);
         // Abriu a caneca de novo, já com outro preço: vale o da última vez.
         $visita('1.1.1.1', '10:03:00', '/produtos/caneca', 44.90);
         $visita('2.2.2.2', '11:00:00', '/', null);
@@ -126,8 +129,14 @@ class VisitasValorDoProdutoTest extends TestCase
         $this->actingAs($admin)->getJson('/admin/visitas-site/visitante?de=2026-11-12&ate=2026-11-12&ip=1.1.1.1&todos=1')
             ->assertOk()
             ->assertJsonPath('visitas.0.valor', null)
+            ->assertJsonPath('visitas.0.frete', null)
+            // Visita gravada antes do registro do frete: só o valor total.
             ->assertJsonPath('visitas.1.valor', 49.9)
+            ->assertJsonPath('visitas.1.frete', null)
+            ->assertJsonPath('visitas.1.sem_frete', null)
             ->assertJsonPath('visitas.2.valor', 180)
+            ->assertJsonPath('visitas.2.frete', 29.9)
+            ->assertJsonPath('visitas.2.sem_frete', 150.1)
             ->assertJsonPath('visitas.3.valor', 44.9);
     }
 }

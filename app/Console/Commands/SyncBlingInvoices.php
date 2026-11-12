@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Services\Bling\BlingInvoiceImporter;
 use Illuminate\Console\Command;
@@ -20,7 +21,16 @@ use Illuminate\Console\Command;
  */
 class SyncBlingInvoices extends Command
 {
-    protected $signature = 'invoices:sync-bling {--dias=7 : Janela de pedidos a reconferir}';
+    /**
+     * --so-nao-autorizadas (pedido do Lira em 12/11/2026): a passada de 5
+     * min olha só 7 dias, e nota do Bling que demorou mais que isso sumia da
+     * conferência (11 pedidos do TikTok de 5 a 19/10 ficaram pendentes).
+     * Uma passada diária com --dias=60 --so-nao-autorizadas pega esses, sem
+     * reconsultar no Bling as notas que já estão autorizadas e só sem XML.
+     */
+    protected $signature = 'invoices:sync-bling
+        {--dias=7 : Janela de pedidos a reconferir}
+        {--so-nao-autorizadas : Só pedidos sem nota ou com nota ainda não autorizada}';
 
     protected $description = 'Traz pro Kazakora as NF-e emitidas pelo Bling nos canais delegados a ele';
 
@@ -46,7 +56,13 @@ class SyncBlingInvoices extends Command
             ->whereIn('origin', $canais)
             ->where('status', Order::STATUS_PAID)
             ->where('created_at', '>=', now()->subDays((int) $this->option('dias')))
-            ->where(fn ($query) => $query->doesntHave('invoice')->orWhereHas('invoice', fn ($q) => $q->whereNull('xml_path')))
+            ->when(
+                $this->option('so-nao-autorizadas'),
+                fn ($query) => $query->where(fn ($query) => $query->doesntHave('invoice')->orWhereHas('invoice', fn ($q) => $q->whereNotIn('status', [
+                    Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL, Invoice::STATUS_CANCELLED, Invoice::STATUS_DENIED,
+                ]))),
+                fn ($query) => $query->where(fn ($query) => $query->doesntHave('invoice')->orWhereHas('invoice', fn ($q) => $q->whereNull('xml_path'))),
+            )
             ->get();
 
         $this->info($pedidos->count().' pedido(s) sem nota completa deste lado.');

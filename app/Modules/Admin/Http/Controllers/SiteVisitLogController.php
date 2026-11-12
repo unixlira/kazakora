@@ -54,6 +54,12 @@ use Inertia\Response;
  * Rotas do visitante (pedido 2026-10-25): o histórico volta a mostrar a
  * página (path, com link para a loja) de cada acesso, numerado em ordem
  * de horário.
+ *
+ * Valor (pedido 2026-11-12): o preço que a página de produto mostrou ao
+ * visitante quando abriu, gravado na visita (site_visits.preco_visto, regra
+ * em PrecoVisto). A lista mostra o do último produto aberto no período e
+ * quantos outros produtos ele viu; o olho, o valor de cada página. Visita
+ * anterior a 12/11/2026 e página que não é de produto ficam sem valor.
  */
 class SiteVisitLogController extends Controller
 {
@@ -73,6 +79,9 @@ class SiteVisitLogController extends Controller
 
     /** Rotas diferentes listadas no "Rotas visitadas" do olho. */
     private const MAX_ROTAS = 200;
+
+    /** Produtos diferentes listados no "também viu" da coluna Valor. */
+    private const MAX_PRODUTOS_VISTOS = 10;
 
     /** Agrupa visitas sem IP (anonimizadas) pelo cookie; com IP, o IP basta. */
     private const CHAVE_ANONIMO = 'CASE WHEN ip IS NULL THEN visitor_id END';
@@ -140,6 +149,7 @@ class SiteVisitLogController extends Controller
         $equipe = $this->equipe();
         $apagaveis = $this->contarApagaveis($site, $linhas, $de, $fim);
         $origens = $this->origensDeEntrada(clone $query, $linhas);
+        $valores = $this->produtosVistos(clone $query, $linhas);
 
         $visitas = (new LengthAwarePaginator(
             $linhas->map(fn ($l) => [
@@ -152,6 +162,7 @@ class SiteVisitLogController extends Controller
                 'equipe' => $l->user_id !== null && in_array((int) $l->user_id, $equipe, true),
                 'apagaveis' => $apagaveis[$l->ip ?? 'v:'.$l->anonimo] ?? 0,
                 'origem' => $origens[$l->ip ?? 'v:'.$l->anonimo] ?? ['chave' => 'interno', 'rotulo' => OrigemVisita::rotulo('interno'), 'outras' => []],
+                'produto' => $valores[$l->ip ?? 'v:'.$l->anonimo] ?? null,
             ])->values(),
             $total,
             self::POR_PAGINA,
@@ -232,6 +243,7 @@ class SiteVisitLogController extends Controller
                 'quando' => $v->created_at?->format('d/m/Y H:i:s'),
                 'path' => $v->path,
                 'url' => $site.$v->path,
+                'valor' => $v->preco_visto,
                 'cliente' => $v->user?->name,
                 'cpf' => filled($v->user?->cpf),
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),
@@ -689,6 +701,45 @@ class SiteVisitLogController extends Controller
                 }
 
                 return ['chave' => $conhecidas->first()->origem, 'rotulo' => $rotulos->first(), 'outras' => $rotulos->slice(1)->values()->all()];
+            })
+            ->all();
+    }
+
+    /**
+     * Coluna Valor: para cada visitante da página, o último produto aberto
+     * no período (com os filtros) com o preço que a página mostrou, e os
+     * outros produtos que ele viu (cada página uma vez, com o preço da
+     * última vez). Visitante que não abriu produto fica de fora.
+     *
+     * @return array<string, array{path: string, valor: float, outros: array<int, array{path: string, valor: float}>, mais: int}>
+     */
+    private function produtosVistos(Builder $query, Collection $linhas): array
+    {
+        if ($linhas->isEmpty()) {
+            return [];
+        }
+
+        $ips = $linhas->pluck('ip')->filter()->unique()->values()->all();
+        $anonimos = $linhas->whereNull('ip')->pluck('anonimo')->filter()->unique()->values()->all();
+
+        return $query->toBase()
+            ->where(fn ($q) => $q
+                ->whereIn('ip', $ips)
+                ->orWhere(fn ($s) => $s->whereNull('ip')->whereIn('visitor_id', $anonimos)))
+            ->whereNotNull('preco_visto')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get(['ip', 'visitor_id', 'path', 'preco_visto'])
+            ->groupBy(fn ($v) => $v->ip ?? 'v:'.$v->visitor_id)
+            ->map(function (Collection $doVisitante) {
+                $produtos = $doVisitante->unique('path')->values()
+                    ->map(fn ($v) => ['path' => $v->path, 'valor' => (float) $v->preco_visto]);
+
+                return [
+                    ...$produtos->first(),
+                    'outros' => $produtos->slice(1, self::MAX_PRODUTOS_VISTOS)->values()->all(),
+                    'mais' => max(0, $produtos->count() - 1),
+                ];
             })
             ->all();
     }

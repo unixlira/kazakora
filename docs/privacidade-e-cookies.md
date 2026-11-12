@@ -122,6 +122,7 @@ jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento apro
 | Campo | Sem OK | Com OK |
 |---|---|---|
 | página, data/hora | sim | sim |
+| preço que a página de produto mostrou ao abrir (`preco_visto`, desde 12/11/2026; dado do produto, não do visitante) | sim | sim |
 | IP | sim (Marco Civil) | sim |
 | visitante | `kazakora_visitor` (desde 25/10/2026; antes, código tirado da sessão `s-...`) | `kazakora_visitor` |
 | navegador completo | **não** | sim |

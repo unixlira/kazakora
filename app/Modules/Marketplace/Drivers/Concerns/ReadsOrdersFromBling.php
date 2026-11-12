@@ -127,6 +127,10 @@ trait ReadsOrdersFromBling
         return [
             'external_order_id' => (string) ($order['numeroLoja'] ?? $externalOrderId),
             'status' => $this->mapBlingOrderStatus($order),
+            // Amostra grátis do TikTok: o Bling traz o valor cheio do item e
+            // só avisa em observacoesInternas ("Pedido de amostra", visto no
+            // #4108 em 12/11/2026). Vira Order::amostra_em na importação.
+            'amostra' => str_contains(mb_strtolower((string) ($order['observacoesInternas'] ?? '')), 'pedido de amostra'),
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round((float) ($order['transporte']['frete'] ?? 0), 2),
             'total' => round((float) ($order['total'] ?? $itemsSubtotal), 2),

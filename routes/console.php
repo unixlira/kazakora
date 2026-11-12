@@ -341,6 +341,17 @@ Schedule::command('fiscal:fechamento-mensal')->monthlyOn(1, '07:00')->withoutOve
 // UFESP do ano (multa do cancelamento fora do prazo): só consulta as
 // fontes enquanto o valor do ano não estiver gravado.
 Schedule::command('fiscal:atualizar-ufesp')->dailyAt('06:10');
+// Conciliação fiscal autônoma (pedido do Lira em 12/11/2026: "se foi
+// cancelado ou devolvido o sistema tem que fazer automático, com alerta").
+// 07:30 confere e inutiliza os números da série sem nota há mais de 3 dias
+// (só produção com nfe.ambiente=producao); 19:00 só confere. Os alertas vão
+// para Sistema › Alertas, tipo fiscal_conciliacao.
+Schedule::command('fiscal:conciliar --executar')->dailyAt('07:30')->withoutOverlapping(60);
+Schedule::command('fiscal:conciliar')->dailyAt('19:00')->withoutOverlapping(60);
+// Nota do Bling pendente há mais de 7 dias saía da passada de 5 min
+// (11 pedidos do TikTok de 5 a 19/10). Uma vez por dia, 60 dias, só o que
+// ainda não está autorizado (pedido do Lira em 12/11/2026).
+Schedule::command('invoices:sync-bling --dias=60 --so-nao-autorizadas')->dailyAt('06:40')->withoutOverlapping(60);
 // Conteúdo do anúncio da página do produto (pedido 2026-10-09): benefícios e
 // descrição em blocos gerados pelo Gemini (regra própria se ele falhar), só
 // pra produto ativo novo ou que mudou — lote pequeno pra não estourar cota.

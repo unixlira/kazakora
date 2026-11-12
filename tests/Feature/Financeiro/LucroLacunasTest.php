@@ -145,6 +145,25 @@ class LucroLacunasTest extends TestCase
         $this->assertSame(999.0, $cm->porCanal(...$ontem)['loja']['insumos']);
     }
 
+    public function test_embalagem_lancada_nao_conta_em_dobro_com_o_valor_por_pedido(): void
+    {
+        // Decisão do Lira em 12/11/2026: mantém os R$ 2 por pedido. A compra de embalagem
+        // lançada na tela fica só como histórico; escritório e galpão continuam entrando.
+        $this->pedido(['origin' => 'loja']);
+        InsumoLancamento::create(['data' => '2026-11-12', 'descricao' => 'Etiquetas', 'categoria' => 'embalagem', 'valor' => 94.90]);
+        InsumoLancamento::create(['data' => '2026-11-12', 'descricao' => 'Papel', 'categoria' => 'escritorio', 'valor' => 10]);
+
+        [$de, $ate] = $this->hoje();
+        $cm = app(ContributionMargin::class);
+        $this->assertSame(10.0, $cm->periodo($de, $ate)['insumos_lancados']);
+        $this->assertSame(12.0, $cm->periodo($de, $ate)['insumos']);
+        $this->confereSomas();
+
+        // Embalagem por pedido desligada: aí vale a compra real.
+        config(['loja.insumos_por_pedido' => 0]);
+        $this->assertSame(104.9, $cm->periodo($de, $ate)['insumos']);
+    }
+
     // 2. Melhor Envio --------------------------------------------------------
 
     public function test_etiqueta_do_melhor_envio_entra_no_frete_e_abate_o_turbo(): void

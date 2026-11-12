@@ -39,7 +39,8 @@ use Illuminate\Support\Str;
  * Sem "e" (versão antiga do site em cache) grava como antes, sem origem.
  *
  * Valor (2026-11-12): na página /produto/<slug> do FerraKora a visita guarda
- * o preço que a página mostra a este visitante (PrecoVisto), lido aqui do
+ * o preço que a página mostra a este visitante e o frete que está dentro dele
+ * (PrecoVisto), lidos aqui do
  * mesmo catálogo que o site consulta; o site não manda nada a mais.
  */
 class OutroSiteVisitaController extends Controller
@@ -77,8 +78,8 @@ class OutroSiteVisitaController extends Controller
                 // O aviso passa pela Cloudflare do kazakora.com: localização do visitante.
                 ...LocalizacaoDaVisita::doRequest($request),
                 'path' => $caminho = Str::limit('/'.ltrim(strip_tags($pagina), '/'), 250, ''),
-                // Página de produto do FerraKora: o preço que ela mostra a este visitante (2026-11-12).
-                'preco_visto' => $site === 'ferrakora' ? rescue(fn () => PrecoVisto::doFerraKora($caminho), null, false) : null,
+                // Página de produto do FerraKora: o preço que ela mostra a este visitante e o frete dentro dele (2026-11-12).
+                ...($site === 'ferrakora' ? rescue(fn () => PrecoVisto::doFerraKora($caminho), [], false) : []),
                 'user_agent' => Str::limit($userAgent, 250, ''),
                 'dispositivo' => TrackSiteVisit::dispositivo($userAgent),
                 'consentiu' => false,

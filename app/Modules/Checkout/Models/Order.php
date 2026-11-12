@@ -376,6 +376,7 @@ class Order extends Model
     protected function casts(): array
     {
         return [
+            'amostra_em' => 'datetime',
             'subtotal' => 'decimal:2',
             'shipping_cost' => 'decimal:2',
             'discount_amount' => 'decimal:2',
@@ -535,7 +536,23 @@ class Order extends Model
     {
         return $query->nonPurchaseReturn()
             ->where(fn ($q) => $q->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_MANUAL_INVOICE)->orWhereNull($this->qualifyColumn('origin')))
-            ->whereNull($this->qualifyColumn('estornado_em'));
+            ->whereNull($this->qualifyColumn('estornado_em'))
+            ->semAmostra();
+    }
+
+    /**
+     * Tira o pedido de amostra (TikTok "Amostra grátis"): o produto sai,
+     * mas não é venda. Pedido do Lira em 12/11/2026 (#4108): amostra não
+     * entra no faturamento nem na contagem de vendas do KoraSync.
+     */
+    public function scopeSemAmostra($query)
+    {
+        return $query->whereNull($this->qualifyColumn('amostra_em'));
+    }
+
+    public function ehAmostra(): bool
+    {
+        return $this->amostra_em !== null;
     }
 
     /**

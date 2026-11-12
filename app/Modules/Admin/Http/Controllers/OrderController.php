@@ -303,6 +303,32 @@ class OrderController extends Controller
      * na hora, com a mesma chave fixa por pagamento (dois cliques não
      * viram dois estornos) e fica no histórico de quem pediu.
      */
+    /**
+     * Liga ou desliga a marcação de amostra. Pedido de amostra continua na
+     * fila de separação e etiqueta, mas não conta como venda: fica fora do
+     * faturamento, da contagem de vendas e do lucro (Order::vendaEfetiva()).
+     * Pedido do Lira em 12/11/2026 (#4108, amostra grátis do TikTok).
+     */
+    public function amostra(Order $order): RedirectResponse
+    {
+        $era = $order->amostra_em;
+        $order->forceFill(['amostra_em' => $era ? null : now()])->save();
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => $era ? 'pedido.amostra_desmarcada' : 'pedido.amostra_marcada',
+            'entity' => class_basename(Order::class),
+            'entity_id' => $order->id,
+            'old_values' => ['amostra_em' => $era],
+            'new_values' => ['amostra_em' => $order->amostra_em],
+            'created_at' => now(),
+        ]);
+
+        return back()->with('success', $era
+            ? 'Pedido voltou a contar como venda.'
+            : 'Pedido marcado como amostra: não conta no faturamento nem nas vendas.');
+    }
+
     public function reenviarEstorno(Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
     {
         $pendente = $cancelamento->estornoPendente($order);
@@ -716,6 +742,7 @@ class OrderController extends Controller
                 'uf' => $order->shipping_state,
                 'cep' => $order->shipping_zip,
             ],
+            'amostra_em' => $order->amostra_em,
             'canal' => [
                 'origin' => $order->origin,
                 'site' => Order::ROTULOS_SITE[$order->site_origem] ?? null,

@@ -583,6 +583,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/reenviar-estorno', [AdminOrderController::class, 'reenviarEstorno'])
         ->name('pedidos.reenviar-estorno')
         ->middleware('permission:pedidos.edit');
+    // Marca ou desmarca o pedido como amostra: fora do faturamento e das vendas (Lira, 2026-11-12, #4108).
+    Route::post('pedidos/{order}/amostra', [AdminOrderController::class, 'amostra'])
+        ->name('pedidos.amostra')
+        ->middleware('permission:pedidos.edit');
     Route::patch('pedidos/{order}/itens', [AdminOrderController::class, 'updateItems'])
         ->name('pedidos.itens.atualizar')
         ->middleware('permission:pedidos.edit');

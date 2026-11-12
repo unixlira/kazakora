@@ -130,6 +130,7 @@ class DashboardAgentController extends Controller
         // dashboard admin.
         $revenueMonthByChannel = Order::query()
             ->nonPurchaseReturn()
+            ->semAmostra()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
@@ -138,6 +139,7 @@ class DashboardAgentController extends Controller
 
         $revenueTodayByChannel = Order::query()
             ->nonPurchaseReturn()
+            ->semAmostra()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
@@ -146,6 +148,7 @@ class DashboardAgentController extends Controller
 
         $salesMonthByChannel = Order::query()
             ->nonPurchaseReturn()
+            ->semAmostra()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
@@ -154,6 +157,7 @@ class DashboardAgentController extends Controller
 
         $ordersTodayByChannel = Order::query()
             ->nonPurchaseReturn()
+            ->semAmostra()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')

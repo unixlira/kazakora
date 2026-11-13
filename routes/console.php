@@ -329,10 +329,13 @@ Schedule::command('marketplace:release-scheduled-mercadolivre')
 // Avaliações Shopee alimentam a resposta automática da Manuela/Naia.
 // Roda a cada 4 minutos porque resposta pública atrasada prejudica a loja;
 // falhas ficam registradas no banco, em log PT-BR e notificam administradores.
-// Só Shopee: o Mercado Livre entra só pelo reviews:coletar, rodado à mão.
-// O reviews:coletar NÃO é agendado (Lira 2026-10-22): ele importa à mão
-// para escolher quais avaliações aparecem na loja.
+// Só Shopee: o Mercado Livre entra pelo reviews:coletar, abaixo.
 Schedule::command('reviews:sync --canal=shopee')->cron('*/4 * * * *');
+// Avaliações novas na loja todo dia (pedido do Lira 2026-11-13; até então era
+// só à mão, decisão de 2026-10-22): de madrugada, traz as avaliações reais
+// que os compradores deixaram nos anúncios da Shopee e do Mercado Livre de
+// todos os produtos, com nome sorteado e sem citar marketplace no texto.
+Schedule::command('reviews:coletar')->dailyAt('03:10')->withoutOverlapping(120);
 Schedule::command('video-downloads:clean')->hourlyAt(23);
 // Fechamento fiscal do mês anterior por e-mail, pro contador (pedido
 // 2026-10-09: "todo primeiro dia após o final do mês quero o email").

@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
  * texto. Também passa a limpeza nas avaliações desses canais que já estavam
  * no banco antes disso (nome_original vazio = ainda não tratada).
  *
- * Só manual, sem cron (Lira 2026-10-22): ele escolhe o que entra na loja.
+ * Roda todo dia às 03:10 (Lira 2026-11-13; antes era só à mão, 2026-10-22).
  * Use --produto=ID (repetível) para trazer só as avaliações desses produtos.
  *
  * Diferente do reviews:sync (a cada 4 min, só Shopee, para a resposta

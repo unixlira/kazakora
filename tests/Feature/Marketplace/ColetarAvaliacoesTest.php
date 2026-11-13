@@ -104,6 +104,7 @@ class ColetarAvaliacoesTest extends TestCase
 
         $agendados = collect(app(Schedule::class)->events())
             ->map(fn ($evento) => $evento->command);
-        $this->assertFalse($agendados->contains(fn ($comando) => str_contains((string) $comando, 'reviews:coletar')));
+        // Pedido do Lira 2026-11-13: a coleta passou a rodar todo dia de madrugada.
+        $this->assertTrue($agendados->contains(fn ($comando) => str_contains((string) $comando, 'reviews:coletar')));
     }
 }

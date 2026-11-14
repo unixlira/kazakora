@@ -511,7 +511,7 @@ class CatalogController extends Controller
             // tem oferta própria no cadastro. Só afirma o que o checkout dá para este produto.
             'ofertaPadrao' => OfertaBlackFriday::padrao(
                 $product,
-                PromocoesDoProduto::mostraQuadroDosLivros($product, $promocoes['livrosQuadro']) ? count($promocoes['livrosDigitais']) : 0,
+                count($promocoes['livrosDigitais']),
             ),
             // Condições e botão para a página da promoção de cada quadro (2026-10-21).
             'quadrosPromocao' => $promocoes['quadros'],

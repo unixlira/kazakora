@@ -40,7 +40,7 @@ class EmailsFerraKoraTest extends TestCase
             new OrderConfirmation($order),
         ] as $mail) {
             $html = $mail->render();
-            $this->assertStringContainsString('/images/marca/ferrakora-email.png', $html);
+            $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $html);
             $this->assertStringContainsString('alt="FerraKora"', $html);
             $this->assertStringContainsString('https://ferrakora.devlira.com.br/meus-pedidos', $html);
             $this->assertStringNotContainsString(route('pedidos.meus'), $html);
@@ -91,7 +91,7 @@ class EmailsFerraKoraTest extends TestCase
         $cliente = FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'phone' => '11999999999', 'password' => 'senha12345']);
         $html = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
 
-        $this->assertStringContainsString('/images/marca/ferrakora-email.png', $html);
+        $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $html);
         $this->assertStringContainsString('alt="FerraKora"', $html);
         $this->assertStringContainsString('https://wa.me/5511927206026', $html);
         $this->assertStringContainsString('https://ferrakora.devlira.com.br/nova-senha?token=x', $html);

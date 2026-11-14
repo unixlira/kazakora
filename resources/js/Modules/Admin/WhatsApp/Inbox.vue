@@ -1596,6 +1596,12 @@ function linkify(text) {
                     <p v-if="active.needsHuman" class="wa-banner wa-banner-warn mt-4">
                         <i class="fas fa-hand"></i><span>A {{ attendant }} pediu ajuda de uma pessoa nesta conversa.</span>
                     </p>
+                    <!-- Ficha que a Manuela preparou no cancelamento (pedido do Lira 14/11/2026): pedido, motivo e o que o
+                         cliente quer, para o atendente já chegar sabendo como lidar. O cliente não vê. -->
+                    <div v-if="active.ficha?.texto" class="wa-banner wa-banner-warn mt-3 block" data-ficha-atendente>
+                        <p class="mb-1.5 font-semibold"><i class="fas fa-clipboard-list mr-1.5"></i>Ficha para o atendente</p>
+                        <p v-for="(linha, i) in active.ficha.texto.split(/;\s*/).filter(Boolean)" :key="i" class="text-[13px] leading-snug">{{ linha }}</p>
+                    </div>
                     <p class="wa-muted mt-4 text-[13px]">
                         <i class="far fa-clock mr-1"></i>
                         {{ active.insideWindow ? 'Dentro da janela de 24h: dá pra responder com texto livre.' : 'Fora da janela de 24h: só modelo aprovado até o cliente escrever de novo.' }}

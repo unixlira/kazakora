@@ -94,21 +94,32 @@ const srcsetFoto = (image) => (image?.thumb_url && image.media_url && image.thum
     ? `${image.thumb_url} 512w, ${image.media_url} 1200w`
     : null);
 
-// Galeria: vídeo primeiro, depois as imagens em ordem. `src` é a foto média
-// (1200px; pedido 2026-10-15, página lenta) e `full` a original, só no zoom.
+// Padrão da página de produto da FerraKora (ProdutoPage.jsx), trazido para cá a pedido do Lira em
+// 14/11/2026 ("aplica as mesmas características no KazaKora também"). Mudou lá? Espelhe aqui.
+// Quantos blocos da descrição aparecem: "padrão 4 para todos os produtos" (anotação da mentoria).
+// Com vídeo, o primeiro bloco mostra o vídeo e os outros 3, fotos.
+const BLOCOS_NA_DESCRICAO = 4;
+const blocosDaDescricao = computed(() => (props.product.ad_content?.blocos ?? []).slice(0, BLOCOS_NA_DESCRICAO));
+// Vídeo do produto: desde 14/11/2026 sai do carrossel e abre a descrição, mostrando o produto em uso.
+const videoDescricao = computed(() => props.product.video_url || null);
+
+// Galeria do topo: só fotos (sem o vídeo), em ordem, e sem repetir as que ilustram a descrição
+// (pedido do Lira 14/11/2026: carrossel com o produto em vários ângulos; a descrição reforça com
+// outras imagens). A primeira foto (capa) fica sempre, e a foto de uma variação também (escolher a
+// variação troca a foto grande pela dela). Se a regra deixasse o carrossel com menos de 2 fotos, ele
+// mostra todas, como antes. `src` é a foto média (1200px; pedido 2026-10-15, página lenta) e `full`
+// a original, só no zoom.
 const mediaItems = computed(() => {
-    const items = [];
-    if (props.product.video_url) items.push({ type: 'video', src: props.product.video_url });
-    // A 1ª foto já é a capa do vídeo: não repete na galeria (Botrel, 2026-11-02).
-    const capaDoVideo = props.product.video_url ? props.product.images?.[0]?.url : null;
     // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
     // a foto da variação escolhida só ganha borda, não muda de lugar.
-    if (props.galeria?.length) {
-        for (const image of props.galeria.filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id });
-    } else {
-        for (const image of (props.product.images ?? []).filter((foto) => foto.url !== capaDoVideo)) items.push({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url });
-    }
-    return items;
+    const fotos = props.galeria?.length ? props.galeria : (props.product.images ?? []);
+    // Com vídeo, a foto do 1º bloco não aparece na descrição (o vídeo entra no lugar): ela continua no carrossel.
+    const naDescricao = new Set(blocosDaDescricao.value.slice(videoDescricao.value ? 1 : 0)
+        .map((bloco) => (bloco.imagem === null || bloco.imagem === undefined ? null : props.product.images?.[bloco.imagem]?.url))
+        .filter(Boolean));
+    const semRepetir = fotos.filter((foto, indice) => indice === 0 || foto.variant_id || !naDescricao.has(foto.url));
+    return (semRepetir.length >= 2 ? semRepetir : fotos)
+        .map((image) => ({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id }));
 });
 
 // Variação escolhida (pedido 2026-10-15): trocar de modelo é na própria
@@ -400,7 +411,21 @@ const descriptionSections = computed(() => {
 // Conteúdo do anúncio gerado (Gemini ou regra automática) — pedido
 // 2026-10-09. Sem ele, a página usa a descrição como está (nunca fica vazia).
 const anuncio = computed(() => props.product.ad_content ?? null);
-const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
+// No máximo 4 blocos na descrição (BLOCOS_NA_DESCRICAO, 14/11/2026).
+const blocosAnuncio = computed(() => blocosDaDescricao.value);
+// Oferta do produto cadastrada no conteúdo do anúncio (14/11/2026), dentro do comparativo:
+// { selo, titulo, texto, ate }. Só aparece com título e até a data "ate" (AAAA-MM-DD, fim do dia no
+// horário de Brasília); sem data, fica até tirarem do cadastro. Sem oferta cadastrada não aparece nada.
+const ofertaNoAr = (oferta) => {
+    if (!oferta?.titulo) return null;
+    if (oferta.ate && Date.now() > Date.parse(`${oferta.ate}T23:59:59-03:00`)) return null;
+    return oferta;
+};
+const oferta = computed(() => ofertaNoAr(anuncio.value?.comparativo?.oferta));
+// Fotos do "Por que escolher": comparativo.imagens[linha] = [foto da solução comum, foto com o produto].
+// Sem foto cadastrada, o quadro aparece só com o ícone e o texto.
+const fotosComparativo = computed(() => (Array.isArray(anuncio.value?.comparativo?.imagens) ? anuncio.value.comparativo.imagens : []));
+const fotoComparativo = (linha, lado) => (Array.isArray(fotosComparativo.value[linha]) ? fotosComparativo.value[linha][lado] || null : null);
 const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
 const srcsetDoBloco = (indice) => (indice === null || indice === undefined ? null : srcsetFoto(props.product.images?.[indice]));
 
@@ -621,6 +646,12 @@ const carregarMaisAvaliacoes = async () => {
     avaliacoesVisiveis.value += 12;
 };
 
+// Cartão compacto (pedido do Lira 14/11/2026, igual ao da FerraKora): texto da avaliação cortado em
+// 4 linhas, com "ver mais"; uma avaliação comprida ocupava a tela inteira do celular.
+const TEXTO_CURTO = 110;
+const avaliacoesAbertas = ref({});
+const textoComprido = (review) => String(review.comment ?? '').length > TEXTO_CURTO;
+
 // No celular o vídeo da avaliação não baixa nada até o toque (pedido 2026-10-23):
 // a miniatura é só o quadrado com o play; o 1º quadro custava ~2 MB por página.
 
@@ -792,6 +823,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <hr class="divisor">
 
+                            <!-- Oferta do produto em destaque, acima do preço (pedido do Lira 14/11/2026). Uma caixa só,
+                                 lida do cadastro (comparativo.oferta); sem oferta no ar não aparece nada. -->
+                            <div v-if="oferta" class="oferta-bf" data-oferta-produto>
+                                <span v-if="oferta.selo" class="oferta-bf-selo"><i class="fa-solid fa-bolt" aria-hidden="true"></i>{{ oferta.selo }}</span>
+                                <strong>{{ oferta.titulo }}</strong>
+                                <p v-if="oferta.texto">{{ oferta.texto }}</p>
+                            </div>
+
                             <div class="preco">
                                 <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
                                 <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
@@ -926,35 +965,52 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="blocosAnuncio.length" class="descricao">
                                 <!-- Foto pequena ao lado do texto, alternando o lado a cada bloco, na
                                      estrutura da página do FerraKora (pedido 2026-10-19). -->
+                                <!-- São no máximo 4 blocos (padrão de 14/11/2026). No primeiro, o vídeo do produto em uso
+                                     entra no lugar da foto; produto sem vídeo mostra a foto, como nos outros. -->
                                 <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
-                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
-                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? '320px' : null" :alt="bloco.titulo" loading="lazy" decoding="async">
+                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem) || (index === 0 && videoDescricao), 'foto-direita': index % 2 === 1 }">
+                                    <video v-if="index === 0 && videoDescricao" class="foto-desc video-desc" data-video-descricao :src="videoDescricao"
+                                        :poster="imagemDoBloco(bloco.imagem) || videoPoster" controls playsinline muted preload="metadata"></video>
+                                    <img v-else-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? '320px' : null" :alt="bloco.titulo" loading="lazy" decoding="async">
                                     <div>
                                         <h3>{{ bloco.titulo }}</h3>
                                         <p>{{ bloco.texto }}</p>
                                     </div>
                                 </article>
 
-                                <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
-                                    <h3>{{ anuncio.comparativo.titulo }}</h3>
-                                    <p v-if="anuncio.comparativo.intro">{{ anuncio.comparativo.intro }}</p>
-                                    <div class="tabela-wrap">
-                                        <table class="comparativo">
-                                            <thead><tr><th>Critério</th><th>Solução comum</th><th>Com este produto</th></tr></thead>
-                                            <tbody>
-                                                <tr v-for="(linha, index) in anuncio.comparativo.linhas" :key="index">
-                                                    <td>{{ linha[0] }}</td>
-                                                    <td class="ruim">✕ {{ linha[1] }}</td>
-                                                    <td class="bom">✓ {{ linha[2] }}</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                <!-- "Por que escolher" e os benefícios num bloco só (pedido do Lira 14/11/2026, anotação da
+                                     mentoria): cada linha põe lado a lado, também no celular, a solução comum (foto e X
+                                     vermelho) e a solução com este produto (foto e sinal verde). Embaixo, os benefícios em
+                                     quadros curtos. Sem foto cadastrada, os quadros aparecem só com o ícone e o texto. -->
+                                <div v-if="anuncio.comparativo?.linhas?.length || anuncio.beneficios?.length" class="bloco-anuncio porque" data-porque-escolher>
+                                    <h3>{{ anuncio.comparativo?.titulo || 'Benefícios que fazem diferença na rotina' }}</h3>
+                                    <p v-if="anuncio.comparativo?.intro">{{ anuncio.comparativo.intro }}</p>
+                                    <div v-if="anuncio.comparativo?.linhas?.length" class="porque-linhas">
+                                        <div class="porque-cabecalho" aria-hidden="true">
+                                            <span class="ruim">Solução comum</span>
+                                            <span class="bom">Com este produto</span>
+                                        </div>
+                                        <div v-for="(linha, index) in anuncio.comparativo.linhas" :key="index" class="porque-linha">
+                                            <p class="porque-criterio">{{ linha[0] }}</p>
+                                            <div class="porque-par">
+                                                <figure class="porque-lado ruim">
+                                                    <img v-if="fotoComparativo(index, 0)" :src="fotoComparativo(index, 0)" alt="" loading="lazy" decoding="async">
+                                                    <figcaption>
+                                                        <i class="fas fa-xmark porque-x" aria-hidden="true"></i>
+                                                        <span><span class="sr-only">Solução comum: </span>{{ linha[1] }}</span>
+                                                    </figcaption>
+                                                </figure>
+                                                <figure class="porque-lado bom">
+                                                    <img v-if="fotoComparativo(index, 1)" :src="fotoComparativo(index, 1)" alt="" loading="lazy" decoding="async">
+                                                    <figcaption>
+                                                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                                        <span><span class="sr-only">Com este produto: </span>{{ linha[2] }}</span>
+                                                    </figcaption>
+                                                </figure>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-
-                                <div v-if="anuncio.beneficios?.length" class="bloco-anuncio">
-                                    <h3>Benefícios que fazem diferença na rotina</h3>
-                                    <ul class="beneficios">
+                                    <ul v-if="anuncio.beneficios?.length" class="beneficios beneficios-quadros">
                                         <li v-for="(item, index) in anuncio.beneficios" :key="index">
                                             <i class="fas fa-circle-check"></i>
                                             <span><strong>{{ item[0] }}</strong><template v-if="item[1]">: {{ item[1] }}</template></span>
@@ -964,10 +1020,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                                 <div v-if="anuncio.duvidas?.length" class="bloco-anuncio">
                                     <h3>Dúvidas comuns antes de escolher o seu</h3>
-                                    <div v-for="(duvida, index) in anuncio.duvidas" :key="index" class="duvida">
-                                        <strong>{{ duvida[0] }}</strong>
+                                    <!-- Dropdown (pedido do Lira 14/11/2026): pergunta em negrito na cor do tema, resposta abre no toque. -->
+                                    <details v-for="(duvida, index) in anuncio.duvidas" :key="index" class="duvida">
+                                        <summary><span>{{ duvida[0] }}</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary>
                                         <p>{{ duvida[1] }}</p>
-                                    </div>
+                                    </details>
                                 </div>
 
                                 <!-- Sem o quadro CTA no fim da descrição (pedido do Lira 2026-10-26, print do
@@ -1083,7 +1140,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
                                 <small>{{ formatDate(review.created_at) }}</small>
                             </div>
-                            <p v-if="review.comment">{{ review.comment }}</p>
+                            <template v-if="review.comment">
+                                <p :class="{ 'texto-cortado': textoComprido(review) && !avaliacoesAbertas[review.id] }">{{ review.comment }}</p>
+                                <button v-if="textoComprido(review)" type="button" class="ver-mais" :aria-expanded="!!avaliacoesAbertas[review.id]"
+                                    @click="avaliacoesAbertas[review.id] = !avaliacoesAbertas[review.id]">{{ avaliacoesAbertas[review.id] ? 'ver menos' : 'ver mais' }}</button>
+                            </template>
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
@@ -1385,22 +1446,17 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .com-foto.foto-direita { grid-template-columns: 1fr minmax(0, 320px); }
 .pd2 .com-foto.foto-direita .foto-desc { order: 2; }
 .pd2 .foto-desc { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: #fff; border: 1px solid var(--line); }
-.pd2 .tabela-wrap { overflow-x: auto; }
-.pd2 .comparativo { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0; }
-.pd2 .comparativo th, .pd2 .comparativo td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
-.dark .pd2 .comparativo th, .dark .pd2 .comparativo td { border-color: var(--line); }
-.pd2 .comparativo th { background: var(--soft); color: var(--ink); text-align: center; }
-.pd2 .comparativo .ruim { color: #b42318; font-weight: 700; }
-.pd2 .comparativo .bom { color: #16803c; font-weight: 700; }
-.dark .pd2 .comparativo .ruim { color: #f87171; }
-.dark .pd2 .comparativo .bom { color: #4ade80; }
 .pd2 .beneficios { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .pd2 .beneficios li { display: flex; gap: 10px; align-items: flex-start; }
 .pd2 .beneficios i { color: #10b981; margin-top: 4px; }
 .pd2 .beneficios strong { color: var(--ink); }
-.pd2 .duvida { margin-top: 14px; }
-.pd2 .duvida strong { display: block; color: var(--ink); }
-.pd2 .duvida p { margin: 2px 0 0; }
+/* Dúvidas comuns em dropdown (14/11/2026): pergunta em negrito na cor do tema da página (--blue), resposta abre no toque. */
+.pd2 .duvida { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pd2 .duvida summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; cursor: pointer; list-style: none; color: var(--blue); font-weight: 800; font-size: 15px; line-height: 1.35; }
+.pd2 .duvida summary i { flex: none; width: auto; font-size: 13px; color: var(--blue); transition: transform .2s; }
+.pd2 .duvida[open] summary i { transform: rotate(180deg); }
+.pd2 .duvida[open] summary { border-bottom: 1px solid var(--line); }
+.pd2 .bloco-anuncio .duvida p { margin: 0; padding: 12px 14px 14px; }
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }
@@ -1461,6 +1517,15 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .pd2 .video-sem-capa { display: block; }
 .pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video, .pd2 .video-sem-capa { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; background: #000; }
+/* Cartão compacto (14/11/2026): texto em até 4 linhas com "ver mais"; no celular, letra e fotos menores. */
+.pd2 .aval-item .texto-cortado { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.pd2 .aval-item .ver-mais { display: inline-block; margin: -2px 0 6px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; text-decoration: underline; cursor: pointer; }
+@media (max-width: 767px) {
+    .pd2 .aval-item { padding: 10px 11px 6px; border-radius: 12px; font-size: 12.5px; box-shadow: 1px 2px 5px rgba(0, 0, 0, .14); }
+    .pd2 .aval-item p { margin: 4px 0; line-height: 1.4; }
+    .pd2 .aval-item small { font-size: 11px; }
+    .pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video, .pd2 .video-sem-capa { width: 44px; height: 44px; }
+}
 .pd2 .foto-btn { position: relative; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
 .pd2 .play-video { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .pd2 .play-video i { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 10px; padding-left: 2px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
@@ -1716,5 +1781,52 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     .pd2 .descricao-card.recolhida .descricao > .bloco:nth-of-type(n+5),
     .pd2 .descricao-card.recolhida .dimensoes-embalagem { display: none; }
     .pd2 .ver-descricao { display: block; width: 100%; margin-top: 16px; }
+}
+
+/* Padrão da página de produto da FerraKora (produto.css), trazido em 14/11/2026 com as cores da KazaKora. */
+/* Vídeo do produto em uso no primeiro bloco da descrição: ocupa o lugar da foto do bloco. */
+.pd2 .video-desc { object-fit: cover; background: #000; cursor: pointer; }
+
+/* "Por que escolher" unido aos benefícios: solução comum (X vermelho) ao lado da solução com o produto (verde). */
+.pd2 .porque-linhas { display: grid; gap: 18px; margin: 14px 0 20px; }
+.pd2 .porque-cabecalho, .pd2 .porque-par { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pd2 .porque-cabecalho span { text-align: center; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; padding: 7px 8px; border-radius: 999px; }
+.pd2 .porque-cabecalho .ruim { background: #fdecea; color: #b42318; }
+.pd2 .porque-cabecalho .bom { background: #e7f6ec; color: #16803c; }
+.pd2 .bloco-anuncio .porque-criterio { margin: 0 0 8px; font-size: 15px; line-height: 1.4; font-weight: 700; color: var(--ink); }
+.pd2 .porque-lado { margin: 0; border-radius: 14px; overflow: hidden; border: 2px solid var(--line); background: var(--card); display: flex; flex-direction: column; }
+.pd2 .porque-lado.ruim { border-color: #f3b5ad; }
+.pd2 .porque-lado.bom { border-color: #8fd6a6; }
+.pd2 .porque-lado img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.pd2 .porque-lado.ruim img { filter: saturate(.55); }
+.pd2 .porque-lado figcaption { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; font-size: 14px; line-height: 1.45; font-weight: 600; }
+.pd2 .porque-lado.ruim figcaption { color: #b42318; }
+.pd2 .porque-lado.bom figcaption { color: #16803c; }
+.pd2 .porque-lado figcaption i { margin-top: 2px; font-size: 16px; }
+/* X dentro de bolinha vermelha. */
+.pd2 .porque-lado figcaption .porque-x { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 17px; width: 17px; height: 17px; border-radius: 50%; background: #b42318; color: #fff; font-size: 10px; margin-top: 2px; }
+.dark .pd2 .porque-cabecalho .ruim { background: rgba(248, 113, 113, .14); }
+.dark .pd2 .porque-cabecalho .bom { background: rgba(74, 222, 128, .14); }
+.dark .pd2 .porque-lado.ruim figcaption, .dark .pd2 .porque-cabecalho .ruim { color: #f87171; }
+.dark .pd2 .porque-lado.bom figcaption, .dark .pd2 .porque-cabecalho .bom { color: #4ade80; }
+.pd2 .beneficios-quadros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pd2 .beneficios-quadros li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; line-height: 1.45; }
+@media (max-width: 640px) {
+    .pd2 .porque-cabecalho, .pd2 .porque-par { gap: 8px; }
+    .pd2 .porque-cabecalho span { font-size: 11px; letter-spacing: 0; }
+    .pd2 .porque-lado figcaption { padding: 8px 9px; font-size: 13px; }
+    .pd2 .beneficios-quadros { grid-template-columns: 1fr; }
+}
+
+/* Oferta do produto acima do preço: caixa escura com o laranja da KazaKora (o da faixa do topo, #F37021).
+   Na FerraKora a mesma caixa usa as cores de lá; aqui ficam as da KazaKora. */
+.pd2 .compra .oferta-bf { position: relative; overflow: hidden; margin: 0 0 16px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(243, 112, 33, .5); background: radial-gradient(circle at 100% 0%, rgba(243, 112, 33, .28), transparent 55%), linear-gradient(135deg, #141414 0%, #0d1b3e 100%); color: #fff; box-shadow: 0 8px 20px -10px rgba(13, 27, 62, .6); }
+.pd2 .compra .oferta-bf-selo { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; padding: 5px 10px; border-radius: 999px; background: #f37021; color: #111; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: .7px; text-transform: uppercase; }
+.pd2 .compra .oferta-bf-selo i { font-size: 10px; color: #111; }
+.pd2 .compra .oferta-bf strong { position: relative; display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; color: #fcbd10; text-transform: uppercase; text-wrap: balance; }
+.pd2 .compra .oferta-bf p { position: relative; margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: rgba(255, 255, 255, .88); text-wrap: pretty; }
+@media (max-width: 767px) {
+    /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
+    .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }
 }
 </style>

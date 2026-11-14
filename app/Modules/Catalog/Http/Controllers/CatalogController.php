@@ -14,6 +14,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -506,6 +507,12 @@ class CatalogController extends Controller
             'sorteios' => $promocoes['sorteios'],
             'livrosDigitais' => $promocoes['livrosDigitais'],
             'livrosQuadro' => $promocoes['livrosQuadro'],
+            // Card de Black Friday acima do preço em todo produto (14/11/2026): o padrão, para quem não
+            // tem oferta própria no cadastro. Só afirma o que o checkout dá para este produto.
+            'ofertaPadrao' => OfertaBlackFriday::padrao(
+                $product,
+                count($promocoes['livrosDigitais']),
+            ),
             // Condições e botão para a página da promoção de cada quadro (2026-10-21).
             'quadrosPromocao' => $promocoes['quadros'],
             'relatedProducts' => $relatedProducts->values(),

@@ -31,6 +31,25 @@ class EtiquetaComMarcaTest extends TestCase
         $this->assertStringContainsString('577.50 813.00', $novo);
     }
 
+    public function test_correios_ganha_o_logo_e_a_linha_do_remetente_sem_telefone(): void
+    {
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios SEDEX'));
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios PAC'));
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('SEDEX'));
+        $this->assertNull(EtiquetaMelhorEnvioComMarca::modelo('Jadlog .Package'));
+
+        $original = $this->pdf();
+        $novo = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1);
+
+        $this->assertNotSame($original, $novo);
+        $this->assertStringContainsString('/Image', $novo);
+        $this->assertStringContainsString('577.50 813.00', $novo);
+        $this->assertSame('KazaKora', EtiquetaMelhorEnvioComMarca::remetente(null));
+        $this->assertSame('FerraKora', EtiquetaMelhorEnvioComMarca::remetente(SiteAtual::FERRAKORA));
+        // Telefone que vai ao Melhor Envio é o da loja, nunca vazio.
+        $this->assertSame('11965723990', config('melhorenvio.telefone'));
+    }
+
     public function test_transportadora_sem_posicao_medida_sai_como_veio(): void
     {
         $original = $this->pdf();

@@ -189,7 +189,8 @@ class MelhorEnvioAutoShipping
                 // Remetente "KazaKora" na etiqueta (pedido do Lira 09/11, #3978):
                 // o nome fantasia do cadastro é o do dono e vai na NF-e.
                 'name' => Str::limit((string) ($order->site_origem === SiteAtual::FERRAKORA ? 'FerraKora' : (config('melhorenvio.remetente') ?: $empresa->nome_fantasia ?: $empresa->razao_social)), 60, ''),
-                'phone' => self::digitos($empresa->phone),
+                // Telefone da loja, não o do cadastro da empresa (pessoal do dono).
+                'phone' => self::digitos(config('melhorenvio.telefone') ?: $empresa->phone),
                 'email' => $empresa->email,
                 'document' => '',
                 'company_document' => self::digitos($empresa->cnpj),

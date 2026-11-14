@@ -36,6 +36,22 @@ class EtiquetaMelhorEnvioComMarca
      */
     public const AREAS = [
         'jet' => [0.10, 0.785, 0.46, 0.91],
+        // Correios (SEDEX/PAC): medida na etiqueta do #4172 (14/11): logo em
+        // 0,036-0,317 x 0,078-0,170 e "melhorenvio.com" logo abaixo, até
+        // 0,208. A linha "NF:" começa em 0,218 e fica.
+        'correios' => [0.03, 0.06, 0.345, 0.2145],
+    ];
+
+    /**
+     * Primeira linha do remetente, onde o Melhor Envio imprime "Nome, Tel:
+     * (11) ..." [x0, y0, x1, y1, linha de base]. O telefone é o do cadastro
+     * da empresa (em 14/11, #4172, saiu o pessoal do Lira): a linha é
+     * reescrita só com o nome da loja. Medida na etiqueta do #4172.
+     *
+     * @var array<string, array{0: float, 1: float, 2: float, 3: float, 4: float}>
+     */
+    public const REMETENTE = [
+        'correios' => [0.03, 0.7085, 0.97, 0.7335, 0.7298],
     ];
 
     public static function modelo(?string $servico): ?string
@@ -44,6 +60,7 @@ class EtiquetaMelhorEnvioComMarca
 
         return match (true) {
             str_contains($s, 'jet') || str_contains($s, 'j&t') => 'jet',
+            str_contains($s, 'correios') || str_contains($s, 'sedex') || preg_match('/\bpac\b/', $s) === 1 => 'correios',
             default => null,
         };
     }
@@ -52,6 +69,14 @@ class EtiquetaMelhorEnvioComMarca
     public static function logo(?string $site): string
     {
         return $site === \App\Support\SiteAtual::FERRAKORA ? self::LOGO_FERRAKORA : self::LOGO;
+    }
+
+    /** Nome da loja na linha do remetente (o mesmo que vai ao Melhor Envio). */
+    public static function remetente(?string $site): string
+    {
+        $nome = $site === \App\Support\SiteAtual::FERRAKORA ? 'FerraKora' : (string) (config('melhorenvio.remetente') ?: 'KazaKora');
+
+        return (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $nome) ?: $nome);
     }
 
     /**
@@ -105,6 +130,18 @@ class EtiquetaMelhorEnvioComMarca
                         $largura,
                         $altura,
                     );
+
+                    if (isset(self::REMETENTE[$modelo])) {
+                        [$rx0, $ry0, $rx1, $ry1, $base] = self::REMETENTE[$modelo];
+                        $fpdi->Rect($rx0 * $w, $ry0 * $h, ($rx1 - $rx0) * $w, ($ry1 - $ry0) * $h, 'F');
+                        $fpdi->SetTextColor(0, 0, 0);
+                        $fpdi->SetFont('Helvetica', 'B', 15);
+                        $rotulo = 'REMETENTE: ';
+                        $fpdi->Text(0.0365 * $w, $base * $h, $rotulo);
+                        $recuo = $fpdi->GetStringWidth($rotulo);
+                        $fpdi->SetFont('Helvetica', '', 15);
+                        $fpdi->Text(0.0365 * $w + $recuo, $base * $h, self::remetente($site));
+                    }
                 }
             }
 

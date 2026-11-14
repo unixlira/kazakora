@@ -6,6 +6,7 @@ use App\Modules\Checkout\Mail\BoletoAguardandoPagamento;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Mail\FerraKoraBoasVindas;
 use App\Modules\FerraKora\Mail\FerraKoraNovaSenha;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -96,5 +97,25 @@ class EmailsFerraKoraTest extends TestCase
         $this->assertStringContainsString('https://wa.me/5511927206026', $html);
         $this->assertStringContainsString('https://ferrakora.devlira.com.br/nova-senha?token=x', $html);
         $this->assertStringNotContainsString('alt="KazaKora"', $html);
+    }
+
+    /** 2026-11-14: boas-vindas e nova senha com o logo e o índigo da FerraKora, sem o laranja da KazaKora. */
+    public function test_boas_vindas_do_ferrakora_com_logo_e_cor_da_ferrakora(): void
+    {
+        $cliente = FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'phone' => '11999999999', 'password' => 'senha12345']);
+
+        $boasVindas = (new FerraKoraBoasVindas($cliente, 'Abc123XyZ9'))->render();
+        $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $boasVindas);
+        $this->assertStringContainsString('alt="FerraKora"', $boasVindas);
+        $this->assertStringContainsString('Abc123XyZ9', $boasVindas);
+        $this->assertStringContainsString('border-bottom: 4px solid #271E91', $boasVindas);
+        $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $boasVindas);
+        $this->assertStringNotContainsString('alt="KazaKora"', $boasVindas);
+
+        $novaSenha = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
+        $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $novaSenha);
+
+        // A KazaKora continua com o laranja dela.
+        $this->assertStringContainsString('border-bottom: 4px solid #f27a2a', view('emails.welcome', ['user' => \App\Models\User::factory()->make(), 'senhaTemporaria' => null])->render());
     }
 }

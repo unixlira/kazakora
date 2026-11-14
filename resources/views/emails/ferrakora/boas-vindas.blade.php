@@ -15,7 +15,7 @@
     <p style="margin: 0 0 8px; color: #374151;">
         Criamos sua conta junto com o seu pedido. Para entrar, use:
     </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 0 12px; background-color: #fff7ed; border: 1px dashed #f27a2a; border-radius: 10px; width: 100%;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 0 12px; background-color: #f3f2fb; border: 1px dashed {{ $marcaEmail['cor'] }}; border-radius: 10px; width: 100%;">
         <tr>
             <td style="padding: 16px 18px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #111827;">
                 <strong>E-mail:</strong> {{ $cliente->email }}<br>
@@ -35,7 +35,7 @@
         </tr>
     </table>
 
-    @include('emails.partials.botao', ['url' => $entrar, 'texto' => 'Acessar minha conta', 'cor' => '#F27A2A'])
+    @include('emails.partials.botao', ['url' => $entrar, 'texto' => 'Acessar minha conta', 'cor' => $marcaEmail['cor']])
 
     <p style="margin: 0; text-align: center; color: #9ca3af; font-size: 12px;">
         Se você não criou essa conta, pode ignorar este e-mail com segurança.

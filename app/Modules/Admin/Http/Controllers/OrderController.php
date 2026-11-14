@@ -583,6 +583,10 @@ class OrderController extends Controller
 
             if ($alternativo !== $caminho && Storage::disk('local')->exists($alternativo)) {
                 $caminho = $alternativo;
+            } elseif (str_ends_with((string) $shipment->raw_label_path, '.pdf') && Storage::disk('local')->exists($shipment->raw_label_path)) {
+                // Melhor Envio (2026-11-14): a etiqueta como veio dele, sem o
+                // logo da loja, fica no arquivo bruto do envio.
+                $caminho = $shipment->raw_label_path;
             }
         }
 
@@ -781,6 +785,10 @@ class OrderController extends Controller
                 'frete' => (float) $order->shipping_cost,
                 // Quanto a loja paga de frete (2026-11-14): frete grátis para o cliente tem custo para a loja.
                 'frete_custo' => CustoDoFrete::doPedido($order),
+                // Etiqueta do Melhor Envio guardada como veio dele (2026-11-14): botão "Etiqueta original".
+                'etiqueta_original' => $order->origin === Order::ORIGIN_STORE
+                    && $order->melhorEnvioEnvio !== null
+                    && str_ends_with((string) $order->channelShipment?->raw_label_path, '.pdf'),
                 'cupom' => $order->coupon_code,
                 // discount_amount já soma Pix e desconto da plataforma (mesma
                 // conta da área do cliente, CheckoutController::showOrder).

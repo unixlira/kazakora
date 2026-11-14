@@ -311,6 +311,11 @@ const canCheckLabel = () =>
     && props.order.channel_shipment.channel !== 'tiktok_shop'
     && !['label_ready', 'label_downloaded'].includes(props.order.channel_shipment.status);
 
+// Etiqueta do Melhor Envio: a original fica guardada e tem botão próprio.
+const temEtiquetaOriginal = computed(() =>
+    ['label_ready', 'label_downloaded'].includes(props.order.channel_shipment?.status)
+    && Boolean(props.detalhe?.valores?.etiqueta_original));
+
 const checkLabelForm = useForm({});
 const checkLabel = () => {
     checkLabelForm.post(`/admin/pedidos/${props.order.id}/verificar-etiqueta`);
@@ -604,7 +609,19 @@ const cancelInvoice = () => {
                                 class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary"
                             >
                                 <i class="fas fa-print"></i>
-                                Reimprimir etiqueta
+                                {{ temEtiquetaOriginal ? `Etiqueta ${originBadge.label}` : 'Reimprimir etiqueta' }}
+                            </a>
+                            <!-- Melhor Envio (2026-11-14, #4172): a etiqueta como veio
+                                 dele fica guardada; ao lado, a da loja (logo, telefone
+                                 de atendimento, SKU e quantidade). -->
+                            <a
+                                v-if="temEtiquetaOriginal"
+                                :href="`/admin/pedidos/${order.id}/etiqueta/imprimir?original=1`"
+                                target="_blank"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary"
+                            >
+                                <i class="fas fa-file-pdf"></i>
+                                Etiqueta original (Melhor Envio)
                             </a>
                         </div>
                     </div>

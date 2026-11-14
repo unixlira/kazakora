@@ -46,7 +46,8 @@ class EtiquetaMelhorEnvioComMarca
      * Primeira linha do remetente, onde o Melhor Envio imprime "Nome, Tel:
      * (11) ..." [x0, y0, x1, y1, linha de base]. O telefone é o do cadastro
      * da empresa (em 14/11, #4172, saiu o pessoal do Lira): a linha é
-     * reescrita só com o nome da loja. Medida na etiqueta do #4172.
+     * reescrita com o nome e o telefone de atendimento da loja do pedido.
+     * Medida na etiqueta do #4172.
      *
      * @var array<string, array{0: float, 1: float, 2: float, 3: float, 4: float}>
      */
@@ -71,19 +72,53 @@ class EtiquetaMelhorEnvioComMarca
         return $site === \App\Support\SiteAtual::FERRAKORA ? self::LOGO_FERRAKORA : self::LOGO;
     }
 
-    /** Nome da loja na linha do remetente (o mesmo que vai ao Melhor Envio). */
+    /**
+     * Onde entram a linha e a lista "SKU / quantidade" (pedido do Lira em
+     * 14/11, #4172): abaixo do remetente, no espaço em branco da etiqueta
+     * [x0, y da linha, x1, primeira linha de base, limite de baixo].
+     *
+     * @var array<string, array{0: float, 1: float, 2: float, 3: float, 4: float}>
+     */
+    public const ITENS = [
+        'correios' => [0.0365, 0.80, 0.9635, 0.826, 0.965],
+    ];
+
+    /** Nome e telefone da loja na linha do remetente (os mesmos que vão ao Melhor Envio). */
     public static function remetente(?string $site): string
     {
         $nome = $site === \App\Support\SiteAtual::FERRAKORA ? 'FerraKora' : (string) (config('melhorenvio.remetente') ?: 'KazaKora');
 
-        return (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $nome) ?: $nome);
+        $nome = (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $nome) ?: $nome);
+        $telefone = self::telefoneFormatado($site);
+
+        return $telefone === '' ? $nome : "{$nome}, Tel: {$telefone}";
+    }
+
+    /** Telefone de atendimento da loja do pedido, só dígitos (vai ao Melhor Envio). */
+    public static function telefone(?string $site): string
+    {
+        $loja = $site === \App\Support\SiteAtual::FERRAKORA ? 'ferrakora' : 'kazakora';
+
+        return (string) preg_replace('/\D/', '', (string) config("melhorenvio.telefones.{$loja}"));
+    }
+
+    public static function telefoneFormatado(?string $site): string
+    {
+        $d = self::telefone($site);
+
+        return match (strlen($d)) {
+            11 => sprintf('(%s) %s-%s', substr($d, 0, 2), substr($d, 2, 5), substr($d, 7)),
+            10 => sprintf('(%s) %s-%s', substr($d, 0, 2), substr($d, 2, 4), substr($d, 6)),
+            default => $d,
+        };
     }
 
     /**
+     * @param  array<int, array{sku: ?string, quantidade: int}>  $itens  o que vai na caixa, para quem separa
      * @param  ?string  $site  site do pedido (SiteAtual): FerraKora sai com o
      *                         logo dela em preto e branco; o resto, KazaKora.
      */
-    public function aplicar(string $pdf, ?string $servico, ?int $orderId = null, ?string $site = null): string
+    public function aplicar(string $pdf, ?string $servico, ?int $orderId = null, ?string $site = null, array $itens = []): string
     {
         $modelo = self::modelo($servico);
         if (! $modelo || ! isset(self::AREAS[$modelo])) {
@@ -141,6 +176,39 @@ class EtiquetaMelhorEnvioComMarca
                         $recuo = $fpdi->GetStringWidth($rotulo);
                         $fpdi->SetFont('Helvetica', '', 15);
                         $fpdi->Text(0.0365 * $w + $recuo, $base * $h, self::remetente($site));
+                    }
+
+                    if ($itens !== [] && isset(self::ITENS[$modelo])) {
+                        [$ix0, $linha, $ix1, $primeira, $limite] = self::ITENS[$modelo];
+                        $fpdi->SetDrawColor(0, 0, 0);
+                        $fpdi->SetLineWidth(1);
+                        $fpdi->Line($ix0 * $w, $linha * $h, $ix1 * $w, $linha * $h);
+                        $fpdi->SetTextColor(0, 0, 0);
+                        $passo = 0.0235;
+                        $cabem = max(1, (int) floor(($limite - $primeira) / $passo) + 1);
+                        $linhas = array_values($itens);
+                        $sobra = count($linhas) - $cabem;
+                        if ($sobra > 0) {
+                            $linhas = array_slice($linhas, 0, $cabem - 1);
+                        }
+                        $y = $primeira;
+                        foreach ($linhas as $item) {
+                            $sku = trim((string) ($item['sku'] ?? '')) ?: 'sem SKU';
+                            $fpdi->SetFont('Helvetica', 'B', 14);
+                            $fpdi->Text($ix0 * $w, $y * $h, 'SKU: ');
+                            $recuo = $fpdi->GetStringWidth('SKU: ');
+                            $fpdi->SetFont('Helvetica', '', 14);
+                            $texto = (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $sku) ?: $sku);
+                            $qtd = 'Qtd: '.(int) ($item['quantidade'] ?? 1);
+                            $fpdi->Text($ix0 * $w + $recuo, $y * $h, $texto);
+                            $fpdi->SetFont('Helvetica', 'B', 14);
+                            $fpdi->Text($ix1 * $w - $fpdi->GetStringWidth($qtd), $y * $h, $qtd);
+                            $y += $passo;
+                        }
+                        if ($sobra > 0) {
+                            $fpdi->SetFont('Helvetica', '', 14);
+                            $fpdi->Text($ix0 * $w, $y * $h, '+ '.($sobra + 1).' itens (ver pedido)');
+                        }
                     }
                 }
             }

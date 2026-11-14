@@ -125,8 +125,18 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             // ACHADO REAL 2026-11-09 (#3978): a etiqueta do Melhor Envio vem
             // numa folha de 204 x 287 mm; a térmica 10x15 recebeu, marcou
             // impresso e não saiu nada. Encaixa no papel como a do TikTok.
+            $original = $pdf;
             if ($pdf) {
-                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($pdf, $envio->servico, $order->id, $order->site_origem);
+                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar(
+                    $pdf,
+                    $envio->servico,
+                    $order->id,
+                    $order->site_origem,
+                    // SKU e quantidade abaixo do remetente (pedido do Lira 14/11).
+                    $order->loadMissing('items.product')->items
+                        ->map(fn ($i) => ['sku' => $i->product?->sku, 'quantidade' => (int) $i->quantity])
+                        ->all(),
+                );
                 try {
                     $pdf = app(LabelProcessingService::class)->encaixarNaFolha($pdf);
                 } catch (\Throwable $e) {
@@ -135,7 +145,7 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             }
 
             return $pdf
-                ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf']
+                ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf', 'original' => $original]
                 : ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 

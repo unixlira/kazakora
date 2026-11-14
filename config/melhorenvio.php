@@ -30,10 +30,13 @@ return [
     // Nome do remetente na etiqueta (CNPJ e endereço continuam os da empresa).
     'remetente' => env('MELHORENVIO_REMETENTE', 'KazaKora'),
 
-    // Telefone do remetente (2026-11-14, #4172): o da loja (WhatsApp de
-    // atendimento, o mesmo do rodapé), nunca o do cadastro da empresa, que é
-    // o pessoal do dono e saiu impresso na etiqueta do SEDEX.
-    'telefone' => env('MELHORENVIO_TELEFONE', '11965723990'),
+    // Telefone do remetente (2026-11-14, #4172): o de atendimento de cada
+    // loja (o mesmo do rodapé do site e dos e-mails), nunca o do cadastro da
+    // empresa, que é o pessoal do dono e saiu impresso na etiqueta do SEDEX.
+    'telefones' => [
+        'kazakora' => env('MELHORENVIO_TELEFONE', '11965723990'),
+        'ferrakora' => env('MELHORENVIO_TELEFONE_FERRAKORA', '11927206026'),
+    ],
 
     // Onde levar os pacotes (2026-11-09): ponto que aceita quase todas as
     // transportadoras, a 200 m da loja (Pegaki DISTRIBUE, Rua Florianópolis,

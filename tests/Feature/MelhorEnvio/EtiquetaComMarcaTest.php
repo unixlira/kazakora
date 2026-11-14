@@ -44,10 +44,26 @@ class EtiquetaComMarcaTest extends TestCase
         $this->assertNotSame($original, $novo);
         $this->assertStringContainsString('/Image', $novo);
         $this->assertStringContainsString('577.50 813.00', $novo);
-        $this->assertSame('KazaKora', EtiquetaMelhorEnvioComMarca::remetente(null));
-        $this->assertSame('FerraKora', EtiquetaMelhorEnvioComMarca::remetente(SiteAtual::FERRAKORA));
-        // Telefone que vai ao Melhor Envio é o da loja, nunca vazio.
-        $this->assertSame('11965723990', config('melhorenvio.telefone'));
+        // Telefone de atendimento de cada loja, nunca o do cadastro da empresa.
+        $this->assertSame('KazaKora, Tel: (11) 96572-3990', EtiquetaMelhorEnvioComMarca::remetente(null));
+        $this->assertSame('FerraKora, Tel: (11) 92720-6026', EtiquetaMelhorEnvioComMarca::remetente(SiteAtual::FERRAKORA));
+        $this->assertSame('11965723990', EtiquetaMelhorEnvioComMarca::telefone(SiteAtual::KAZAKORA));
+        $this->assertSame('11927206026', EtiquetaMelhorEnvioComMarca::telefone(SiteAtual::FERRAKORA));
+    }
+
+    public function test_correios_lista_sku_e_quantidade_abaixo_do_remetente(): void
+    {
+        $original = $this->pdf();
+        $sem = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1);
+        $com = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1, null, [
+            ['sku' => 'TRAV-CERV-01', 'quantidade' => 2],
+            ['sku' => null, 'quantidade' => 1],
+        ]);
+
+        // Stream do PDF sem compressão nos testes do FPDF: o texto aparece.
+        $this->assertGreaterThan(strlen($sem), strlen($com));
+        $this->assertStringContainsString('577.50 813.00', $com);
+        $this->assertArrayHasKey('correios', EtiquetaMelhorEnvioComMarca::ITENS);
     }
 
     public function test_transportadora_sem_posicao_medida_sai_como_veio(): void

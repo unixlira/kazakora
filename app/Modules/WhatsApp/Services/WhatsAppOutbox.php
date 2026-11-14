@@ -153,6 +153,7 @@ class WhatsAppOutbox
         ?int $userId = null,
         ?string $caption = null,
         ?string $fileName = null,
+        bool $voz = false,
     ): WhatsAppMessage {
         $extension = pathinfo($fileName ?: $absolutePath, PATHINFO_EXTENSION) ?: 'bin';
         $localPath = 'whatsapp/enviadas/'.$conversation->id.'/'.Str::uuid().'.'.strtolower($extension);
@@ -184,7 +185,7 @@ class WhatsAppOutbox
 
         try {
             $mediaId = $this->client->paraLoja($conversation->loja)->uploadMedia(Storage::disk('local')->path($localPath), $mimeType);
-            $response = $this->client->paraLoja($conversation->loja)->sendMedia($conversation->wa_id, $type, $mediaId, $caption, $fileName);
+            $response = $this->client->paraLoja($conversation->loja)->sendMedia($conversation->wa_id, $type, $mediaId, $caption, $fileName, $voz);
 
             $message->update([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,

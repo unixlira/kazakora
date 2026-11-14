@@ -677,6 +677,8 @@ class WhatsAppInboxController extends Controller
             'insideWindow' => $c->insideServiceWindow(),
             // Venda e nome do cadastro guardados ao abrir a conversa (ClienteDaConversa).
             'pedidoId' => $c->metadata['pedido_id'] ?? null,
+            // Ficha que a Manuela deixou para o atendente (cancelamento, 2026-11-14).
+            'ficha' => $c->metadata[\App\Modules\WhatsApp\Support\ManuelaCancelamento::FICHA_KEY] ?? null,
             'clienteNome' => $c->metadata['cliente_nome'] ?? null,
             // Loja do cliente (kazakora.com ou ferrakora.devlira.com.br), pela venda principal.
             'clienteLoja' => isset($c->metadata['cliente_loja']) ? ClienteDaConversa::loja($c->metadata['cliente_loja']) : null,

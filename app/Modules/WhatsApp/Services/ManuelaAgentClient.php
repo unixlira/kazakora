@@ -4,6 +4,7 @@ namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Support\ManuelaCancelamento;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\ManuelaSemPreco;
 use Illuminate\Support\Facades\Http;
@@ -73,7 +74,9 @@ class ManuelaAgentClient
 
     /**
      * @param  (callable(string): void)|null  $sendNow  manda uma mensagem pro cliente na hora (o "só um minutinho")
-     * @return array{reply: string, needs_human: bool, provider: string, alerta_atendimento: bool, rascunho: string, gerencia?: bool}
+     * `ficha`: anotações para o atendente (cancelamento, ManuelaCancelamento); nunca vai ao cliente.
+     *
+     * @return array{reply: string, needs_human: bool, provider: string, alerta_atendimento: bool, rascunho: string, ficha: string, gerencia?: bool}
      */
     public function reply(WhatsAppConversation $conversation, string $systemPrompt, ?callable $sendNow = null): array
     {
@@ -83,26 +86,30 @@ class ManuelaAgentClient
             ? $this->replyFromHermes($conversation, $systemPrompt)
             : $this->replyFromGemini($conversation, $systemPrompt, $sendNow);
 
+        // A ficha do atendente sai do texto antes de qualquer outra regra: o cliente nunca a vê.
+        [$text, $ficha] = ManuelaCancelamento::separar($text);
+        $ficha = trim(str_replace([self::HANDOFF_TAG, self::ALERT_TAG, self::GERENCIA_TAG], '', $ficha));
+
         $alerta = Str::contains($text, self::ALERT_TAG);
-        $needsHuman = Str::contains($text, self::HANDOFF_TAG);
+        $needsHuman = Str::contains($text, self::HANDOFF_TAG) || $ficha !== '';
         $gerencia = Str::contains($text, self::GERENCIA_TAG);
         $text = trim(str_replace([self::HANDOFF_TAG, self::ALERT_TAG, self::GERENCIA_TAG], '', $text));
 
         if ($gerencia || ManuelaSemPreco::temPreco($text)) {
-            return ['reply' => ManuelaSemPreco::RESPOSTA, 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => $text, 'gerencia' => true];
+            return ['reply' => ManuelaSemPreco::RESPOSTA, 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => $text, 'ficha' => $ficha, 'gerencia' => true];
         }
 
         $alerta = $alerta || self::respostaNegativa($text);
 
         if ($alerta) {
-            return ['reply' => '', 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => true, 'rascunho' => $text];
+            return ['reply' => '', 'needs_human' => true, 'provider' => $provider, 'alerta_atendimento' => true, 'rascunho' => $text, 'ficha' => $ficha];
         }
 
         if ($text === '') {
             throw new RuntimeException("Manuela ({$provider}) devolveu só a marcação, sem texto pro cliente.");
         }
 
-        return ['reply' => $text, 'needs_human' => $needsHuman, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => ''];
+        return ['reply' => $text, 'needs_human' => $needsHuman, 'provider' => $provider, 'alerta_atendimento' => false, 'rascunho' => '', 'ficha' => $ficha];
     }
 
     public static function respostaNegativa(string $text): bool

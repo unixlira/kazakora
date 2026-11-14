@@ -50,10 +50,10 @@ const foto = (product) => {
                 </div>
 
                 <button v-if="pagina > 0" type="button" aria-label="Anterior"
-                    class="absolute left-0 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-black shadow-lg"
+                    class="absolute left-0 top-1/2 flex h-10 w-10 -translate-x-1/4 -translate-y-1/2 items-center justify-center rounded-full bg-white text-black shadow-lg md:-translate-x-1/2"
                     @click="rolar(-1)"><i class="fas fa-angle-left"></i></button>
                 <button v-if="pagina < paginas - 1" type="button" aria-label="Próximo"
-                    class="absolute right-0 top-1/2 flex h-10 w-10 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-white text-black shadow-lg"
+                    class="absolute right-0 top-1/2 flex h-10 w-10 -translate-y-1/2 translate-x-1/4 items-center justify-center rounded-full bg-white text-black shadow-lg md:translate-x-1/2"
                     @click="rolar(1)"><i class="fas fa-angle-right"></i></button>
 
                 <div v-if="paginas > 1" class="mt-4 flex justify-center">

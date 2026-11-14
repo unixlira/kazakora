@@ -51,10 +51,10 @@ watch(() => props.produtos, () => {
         </div>
 
         <button v-if="pagina > 0" type="button" aria-label="Produtos anteriores"
-            class="absolute left-0 top-[35%] z-10 flex h-10 w-10 -translate-x-1/3 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md md:-translate-x-1/2"
+            class="absolute left-0 top-[35%] z-10 flex h-10 w-10 -translate-x-[6px] -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md md:-translate-x-1/2"
             @click="rolar(-1)"><i class="fas fa-angle-left"></i></button>
         <button v-if="pagina < paginas - 1" type="button" aria-label="Próximos produtos"
-            class="absolute right-0 top-[35%] z-10 flex h-10 w-10 -translate-y-1/2 translate-x-1/3 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md md:translate-x-1/2"
+            class="absolute right-0 top-[35%] z-10 flex h-10 w-10 -translate-y-1/2 translate-x-[6px] items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md md:translate-x-1/2"
             @click="rolar(1)"><i class="fas fa-angle-right"></i></button>
 
         <div v-if="paginas > 1" class="mt-4 flex justify-center">

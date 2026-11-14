@@ -23,6 +23,11 @@ use Throwable;
  * contrato dos Correios levar o MESMO pacote por menos, a etiqueta sai pela
  * pré-postagem dos Correios. Pedido com TURBO compara só com o SEDEX.
  *
+ * ATENÇÃO (mesmo dia): a comparação NÃO é de igual para igual. O preço do
+ * Melhor Envio inclui o seguro do valor do pedido; o do contrato, não. No
+ * #4172 os dois cobravam R$ 14,98 sem seguro. Por isso fica desligada por
+ * padrão (config melhorenvio.comparar_correios).
+ *
  * Nunca trava a etiqueta: sem contrato configurado, sem cotação de um dos
  * lados ou com qualquer erro, fica o Melhor Envio, como antes.
  */
@@ -38,7 +43,7 @@ class FreteMaisBarato
     /** true = a etiqueta deste pedido sai pelos Correios, que cobram menos. */
     public function correiosGanha(Order $order): bool
     {
-        if (! config('melhorenvio.comparar_correios', true) || ! $this->tokens->isConfigured()) {
+        if (! config('melhorenvio.comparar_correios', false) || ! $this->tokens->isConfigured()) {
             return false;
         }
 

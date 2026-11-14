@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Checkout\Models\Lead;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
@@ -202,6 +203,8 @@ abstract class CheckoutOutroSiteController extends Controller
                 LeadsDoCheckout::cpf($dados['cliente']['cpf']),
             );
         }, null, false);
+        // Funil da tela de pagamento do site (checkout:funil --site=...).
+        CheckoutEvento::pedidoCriadoEmOutroSite($request, $this->checkout->site());
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
         return response()->json([

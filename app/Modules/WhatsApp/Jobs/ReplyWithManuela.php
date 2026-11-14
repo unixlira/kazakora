@@ -12,7 +12,9 @@ use App\Modules\WhatsApp\Services\ManuelaProductSearch;
 use App\Modules\WhatsApp\Services\ManuelaVisao;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\ManuelaCancelamento;
 use App\Notifications\ManuelaAlertaAtendimentoNotification;
+use App\Notifications\ManuelaFichaAtendimentoNotification;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -167,6 +169,16 @@ class ReplyWithManuela
             $this->alertarAtendimento($conversation, $text !== '' ? $text : $inbound->preview(), (string) ($reply['rascunho'] ?? ''));
         }
 
+        // Cancelamento (pedido do Lira 2026-11-14): a ficha que a Manuela preparou fica
+        // na conversa para o atendente; na primeira, o time é avisado no sino.
+        if (filled($reply['ficha'] ?? null)) {
+            $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
+
+            if (ManuelaCancelamento::guardar($conversation->fresh(), (string) $reply['ficha'])) {
+                $this->avisarFicha($conversation->fresh(), (string) $reply['ficha']);
+            }
+        }
+
         // Resposta negativa ("não sei", "não tem"): nada vai ao cliente; o
         // time de Atendimento é alertado para assumir (pedido do Lira 2026-10-25).
         if ($reply['alerta_atendimento'] ?? false) {
@@ -183,6 +195,15 @@ class ReplyWithManuela
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
 
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    private function avisarFicha(WhatsAppConversation $conversation, string $ficha): void
+    {
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            rescue(fn () => Notification::send($admins, new ManuelaFichaAtendimentoNotification($conversation, $ficha)), report: true);
+        }
     }
 
     private function alertarAtendimento(WhatsAppConversation $conversation, string $pergunta, string $rascunho): void

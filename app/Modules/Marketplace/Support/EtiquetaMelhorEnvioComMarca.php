@@ -81,6 +81,9 @@ class EtiquetaMelhorEnvioComMarca
      */
     public const ITENS = [
         'correios' => [0.0365, 0.80, 0.9635, 0.826, 0.965],
+        // J&T: rodapé livre abaixo do logo, medido na etiqueta do #4162 (14/11):
+        // nada impresso entre 0,90 e 0,989. Cabem duas linhas.
+        'jet' => [0.05, 0.915, 0.95, 0.9425, 0.968],
     ];
 
     /** Nome e telefone da loja na linha do remetente (os mesmos que vão ao Melhor Envio). */

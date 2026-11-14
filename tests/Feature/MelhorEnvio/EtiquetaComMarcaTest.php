@@ -64,6 +64,11 @@ class EtiquetaComMarcaTest extends TestCase
         $this->assertGreaterThan(strlen($sem), strlen($com));
         $this->assertStringContainsString('577.50 813.00', $com);
         $this->assertArrayHasKey('correios', EtiquetaMelhorEnvioComMarca::ITENS);
+
+        // J&T: SKU e quantidade no rodapé, abaixo do logo (#4162).
+        $jetSem = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1);
+        $jetCom = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1, null, [['sku' => 'KIC-PF36V-2B-SR', 'quantidade' => 1]]);
+        $this->assertGreaterThan(strlen($jetSem), strlen($jetCom));
     }
 
     public function test_transportadora_sem_posicao_medida_sai_como_veio(): void

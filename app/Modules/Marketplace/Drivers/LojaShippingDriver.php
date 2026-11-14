@@ -10,6 +10,7 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\EtiquetaMelhorEnvioComMarca;
+use App\Modules\Marketplace\Support\FreteMaisBarato;
 use App\Modules\Marketplace\Support\J3FlexLabel;
 use App\Modules\Marketplace\Support\LabelProcessingService;
 use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
@@ -180,8 +181,18 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             return false;
         }
 
-        return FreteProvedor::doPedido($order->site_origem) === FreteProvedor::MELHOR_ENVIO
-            || $this->caixaForaDosCorreios($order);
+        // Caixa que os Correios recusam: só o Melhor Envio leva.
+        if ($this->caixaForaDosCorreios($order)) {
+            return true;
+        }
+
+        if (FreteProvedor::doPedido($order->site_origem) !== FreteProvedor::MELHOR_ENVIO) {
+            return false;
+        }
+
+        // 2026-11-14 (#4172): com o Melhor Envio conectado, o contrato dos
+        // Correios ainda leva a etiqueta quando cobra menos pelo mesmo pacote.
+        return ! app(FreteMaisBarato::class)->correiosGanha($order);
     }
 
     /**

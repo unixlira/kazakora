@@ -30,6 +30,10 @@ return [
     // Nome do remetente na etiqueta (CNPJ e endereço continuam os da empresa).
     'remetente' => env('MELHORENVIO_REMETENTE', 'KazaKora'),
 
+    // Antes de comprar a etiqueta, compara com o contrato dos Correios e
+    // compra o que custar menos (2026-11-14, #4172). false = sempre Melhor Envio.
+    'comparar_correios' => (bool) env('MELHORENVIO_COMPARAR_CORREIOS', true),
+
     // Telefone do remetente (2026-11-14, #4172): o de atendimento de cada
     // loja (o mesmo do rodapé do site e dos e-mails), nunca o do cadastro da
     // empresa, que é o pessoal do dono e saiu impresso na etiqueta do SEDEX.

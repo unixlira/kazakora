@@ -85,7 +85,7 @@ class FerraKoraPerfilController extends Controller
         $dados = $this->validarSenha($request);
 
         // Cast "hashed" do modelo faz o hash.
-        $request->user()->forceFill(['password' => $dados['password'], 'senha_definida' => true])->save();
+        $request->user()->forceFill(['password' => $dados['password'], 'senha_definida' => true, 'deve_trocar_senha' => false])->save();
 
         return response()->json(['message' => 'Senha alterada com sucesso.']);
     }

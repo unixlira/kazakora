@@ -12,13 +12,13 @@
         conta no FerraKora. Clique no botão abaixo para escolher a senha.
     </p>
 
-    @include('emails.partials.botao', ['url' => $link, 'texto' => 'Criar nova senha'])
+    @include('emails.partials.botao', ['url' => $link, 'texto' => 'Criar nova senha', 'cor' => $marcaEmail['cor']])
 
     <p style="margin: 0 0 8px; text-align: center; color: #6b7280; font-size: 13px; line-height: 1.5;">
         Este link vale por {{ $minutos }} minutos. Se você não pediu, pode ignorar este e-mail: sua senha continua a mesma.
     </p>
     <p style="margin: 16px 0 0; word-break: break-all; font-size: 12px; color: #9ca3af;">
         Se o botão não funcionar, copie e cole este link no navegador:<br>
-        <a href="{{ $link }}" style="color: #f27a2a;">{{ $link }}</a>
+        <a href="{{ $link }}" style="color: {{ $marcaEmail['cor'] }};">{{ $link }}</a>
     </p>
 @endsection

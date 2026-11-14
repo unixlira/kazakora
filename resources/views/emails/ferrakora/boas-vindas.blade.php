@@ -12,20 +12,26 @@
         guarda suas ferramentas favoritas na Minha Bancada e finaliza as compras bem mais rápido.
     </p>
 
-    <p style="margin: 0 0 8px; color: #374151;">
-        Criamos sua conta junto com o seu pedido. Para entrar, use:
-    </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 0 12px; background-color: #f3f2fb; border: 1px dashed {{ $marcaEmail['cor'] }}; border-radius: 10px; width: 100%;">
-        <tr>
-            <td style="padding: 16px 18px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #111827;">
-                <strong>E-mail:</strong> {{ $cliente->email }}<br>
-                <strong>Senha temporária:</strong> <span style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 2px;">{{ $senhaTemporaria }}</span>
-            </td>
-        </tr>
-    </table>
-    <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">
-        &#128274; Por segurança, no primeiro acesso vamos pedir para você criar uma senha pessoal.
-    </p>
+    @if ($senhaTemporaria)
+        <p style="margin: 0 0 8px; color: #374151;">
+            Criamos sua conta junto com o seu pedido. Para entrar, use:
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 0 12px; background-color: #f3f2fb; border: 1px dashed {{ $marcaEmail['cor'] }}; border-radius: 10px; width: 100%;">
+            <tr>
+                <td style="padding: 16px 18px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #111827;">
+                    <strong>E-mail:</strong> {{ $cliente->email }}<br>
+                    <strong>Senha temporária:</strong> <span style="font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; letter-spacing: 2px;">{{ $senhaTemporaria }}</span>
+                </td>
+            </tr>
+        </table>
+        <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">
+            &#128274; Por segurança, no primeiro acesso vamos pedir para você criar uma senha pessoal.
+        </p>
+    @else
+        <p style="margin: 0 0 8px; text-align: center; color: #374151;">
+            Para entrar, use o e-mail <strong>{{ $cliente->email }}</strong> e a senha que você criou.
+        </p>
+    @endif
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 16px 0 0;">
         <tr>

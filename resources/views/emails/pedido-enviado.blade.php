@@ -7,7 +7,7 @@
     @include('emails.partials.titulo', ['texto' => 'Seu pedido foi enviado', 'icone' => '🚚'])
 
     <p style="margin: 0 0 18px; text-align: center; color: #374151;">
-        Olá, {{ $order->shipping_name }}. Seu pedido <strong style="color: #F27A2A;">{{ $order->numero }}</strong> acabou de sair para entrega.
+        Olá, {{ $order->shipping_name }}. Seu pedido <strong style="color: {{ ($marcaEmail ?? [])['cor'] ?? '#F27A2A' }};">{{ $order->numero }}</strong> acabou de sair para entrega.
         Agora falta pouco para a sua compra {{ $marcaEmail['nome'] ?? 'KazaKora' }} chegar até você.
     </p>
 

@@ -257,13 +257,16 @@ class DashboardAgentController extends Controller
                     ->where('updated_at', '>=', $desde)))
             ->orderByDesc('id')
             ->limit(30)
-            ->get(['id', 'origin', 'created_at']);
+            ->get(['id', 'origin', 'site_origem', 'created_at']);
 
         return response()->json([
             'last_order_id' => (int) (Order::query()->nonPurchaseReturn()->max('id') ?? 0),
             'recent' => $recentes->map(fn (Order $order) => [
                 'id' => $order->id,
                 'channel' => $order->origin,
+                // Site do pedido da loja (2026-11-14): o KoraSync toca o som
+                // da FerraKora em vez do "KazaKora!"; channel segue 'loja'.
+                'site_origem' => $order->site_origem,
             ])->values(),
             'server_time' => now()->toIso8601String(),
         ]);

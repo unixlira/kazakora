@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
+use App\Http\Controllers\Api\OutroSiteCheckoutEventosController;
 use App\Http\Controllers\Api\OutroSiteVisitaController;
 use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
@@ -235,6 +236,13 @@ Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
     ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
     ->middleware('throttle:120,1')
     ->name('api.outro-site.visita');
+
+// Medição da tela de pagamento dos outros sites (FerraKora; 2026-11-14): o que a
+// pessoa fez na tela, nunca o que digitou. Mesma lista fechada da /finalizacao.
+Route::post('/{site}/checkout/eventos', [OutroSiteCheckoutEventosController::class, 'registrar'])
+    ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
+    ->middleware('throttle:120,1,outro-site-checkout-eventos')
+    ->name('api.outro-site.checkout.eventos');
 
 // Catálogo do site FerraKora vindo do KazaKora (2026-10-13), igual ao do
 // Beauty Kora, com categoria e link do produto na loja. Fica depois da rota

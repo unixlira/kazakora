@@ -18,10 +18,15 @@ use App\Modules\Checkout\Models\Order;
  * com tudo da FerraKora): nome do rodapé e WhatsApp de contato. Na FerraKora,
  * o mesmo número do site (src/lib/loja.js do ferrakora); na KazaKora, os de
  * config('loja.empresa').
+ *
+ * `cor` (2026-11-14, pedido do Lira: e-mail da FerraKora com o layout da
+ * FerraKora): cor da faixa sob o logo, dos botões e dos links. Na FerraKora, o
+ * índigo do site (#271E91, tailwind.config.js do ferrakora); na KazaKora, o
+ * laranja de sempre.
  */
 class MarcaDoEmail
 {
-    /** @return array{nome: string, logo: string, fundo_topo: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
+    /** @return array{nome: string, logo: string, fundo_topo: string, cor: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
     public static function doPedido(?Order $order): array
     {
         if ($order?->site_origem === Order::SITE_FERRAKORA) {
@@ -32,7 +37,7 @@ class MarcaDoEmail
     }
 
     /** Também nos e-mails da conta FerraKora, que não têm pedido (nova senha). */
-    /** @return array{nome: string, logo: string, fundo_topo: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
+    /** @return array{nome: string, logo: string, fundo_topo: string, cor: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
     public static function ferrakora(): array
     {
         $site = rtrim((string) config('services.ferrakora.url'), '/');
@@ -43,6 +48,7 @@ class MarcaDoEmail
             // 14/11/2026: o e-mail ainda saía com o logo antigo). Arquivo novo: programa de e-mail guarda imagem pelo endereço.
             'logo' => url('/images/marca/ferrakora-email-v2.png'),
             'fundo_topo' => '#ffffff',
+            'cor' => '#271E91',
             'site' => $site,
             'meus_pedidos' => $site.'/meus-pedidos',
             'pedido' => $site.'/meus-pedidos',
@@ -51,13 +57,14 @@ class MarcaDoEmail
         ];
     }
 
-    /** @return array{nome: string, logo: string, fundo_topo: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
+    /** @return array{nome: string, logo: string, fundo_topo: string, cor: string, site: string, meus_pedidos: string, pedido: string, rodape: string, whatsapp_link: string} */
     public static function kazakora(?Order $order = null): array
     {
         return [
             'nome' => 'KazaKora',
             'logo' => Marca::urlAbsoluta('logo_nav'),
             'fundo_topo' => '#ffffff',
+            'cor' => '#f27a2a',
             'site' => url('/'),
             'meus_pedidos' => route('pedidos.meus'),
             'pedido' => $order?->id ? route('pedidos.ver', $order->id) : route('pedidos.meus'),

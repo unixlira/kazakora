@@ -100,6 +100,13 @@ final class TipoDeEnvio
             }
         }
 
+        // Pedido do site que sai pelo Melhor Envio (2026-11-14): a transportadora
+        // escolhida no pedido (a mais barata) vale mais que o nome do frete do
+        // checkout ("Frete Grátis"), que não diz quem leva a caixa.
+        if ($order->origin === 'loja' && ! $metodo && ($servico = CustoDoFrete::servicoDoMelhorEnvio($order))) {
+            return ['tipo' => self::OUTRO, 'label' => "Melhor Envio — {$servico}", 'curto' => $servico];
+        }
+
         return self::montar($order->origin, $metodo, $order->shipping_carrier_name);
     }
 

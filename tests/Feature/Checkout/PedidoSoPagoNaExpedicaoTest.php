@@ -68,6 +68,20 @@ class PedidoSoPagoNaExpedicaoTest extends TestCase
         $this->assertSame([$pago->id], $ids);
     }
 
+    public function test_pulse_diz_de_qual_site_e_o_pedido_para_o_som_da_ferrakora(): void
+    {
+        $kazakora = $this->pedido(Order::STATUS_PAID);
+        $this->pix($kazakora, Payment::STATUS_CAPTURED);
+        $ferrakora = $this->pedido(Order::STATUS_PAID, ['site_origem' => Order::SITE_FERRAKORA]);
+        $this->pix($ferrakora, Payment::STATUS_CAPTURED);
+
+        $recentes = collect($this->painel('pulse')->assertOk()->json('recent'))->keyBy('id');
+
+        $this->assertSame('loja', $recentes[$ferrakora->id]['channel']);
+        $this->assertSame('ferrakora', $recentes[$ferrakora->id]['site_origem']);
+        $this->assertNull($recentes[$kazakora->id]['site_origem']);
+    }
+
     public function test_pix_pago_depois_de_15_minutos_toca_na_hora_do_pagamento(): void
     {
         $this->travel(-40)->minutes();

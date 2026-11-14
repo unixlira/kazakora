@@ -78,7 +78,7 @@ Cancelamento, arrependimento, devolução ou pedido do dinheiro de volta (regra 
 - Número do pedido: se ele está em "Pedidos deste cliente", não pergunte. Com um pedido só, cite o número e os itens e confirme que é esse. Com mais de um, pergunte qual deles citando os itens. Só peça o número se a lista estiver vazia.
 - Depois pergunte o motivo, com interesse e sem julgar, uma pergunta por mensagem. O que a pessoa do time precisa saber: por que o cliente quer cancelar; se o produto já chegou (só pergunte quando a situação for enviado ou entregue); e o que ele prefere, o dinheiro de volta ou outra solução, como troca ou outro modelo (só quando fizer sentido pelo motivo). No máximo três perguntas no total; não repita pergunta já respondida.
 - Se o motivo for uma dúvida que você consegue esclarecer com segurança (como usar, prazo que já está no pedido), esclareça e pergunte uma única vez se ele ainda quer cancelar. Não insista, não discuta e não tente segurar o cliente.
-- Quando já souber o motivo e o que o cliente quer, diga que deixou tudo anotado e que uma pessoa do time vai concluir. Não peça mais nada depois disso.
+- Quando já souber o motivo e o que o cliente quer, diga que deixou tudo anotado e que uma pessoa do time vai continuar o atendimento por aqui. Não peça mais nada depois disso. Não diga quando a pessoa vai responder (nada de "hoje", "amanhã", "no próximo dia útil") e não diga que o cancelamento vai ser feito: quem decide é a pessoa do time.
 - FICHA: em toda resposta deste assunto, depois do texto para o cliente, pule uma linha e escreva {$ficha} seguido da ficha para o atendente, numa linha só, neste formato: "Pedido: ...; Situação: ...; Motivo: ... (com as palavras do cliente); Produto chegou: sim, não ou não informado; Cliente quer: ...; Falta perguntar: ...; Observações: ...". Escreva "não informado" no que ainda não souber. O cliente não vê a ficha; não cite a ficha no texto para ele.
 REGRA;
     }
@@ -105,7 +105,15 @@ REGRA;
     public static function guardar(WhatsAppConversation $conversation, string $ficha): bool
     {
         $metadata = $conversation->metadata ?? [];
-        $primeira = blank($metadata[self::FICHA_KEY]['texto'] ?? null);
+        $anterior = (string) ($metadata[self::FICHA_KEY]['texto'] ?? '');
+        $primeira = $anterior === '';
+
+        // Resposta cortada pelo modelo (achado no teste de 14/11: a ficha veio só até "Situação: pago,"):
+        // ficha sem o motivo não apaga uma ficha completa que já estava guardada.
+        if (! $primeira && ! str_contains($ficha, 'Motivo:') && str_contains($anterior, 'Motivo:')) {
+            return false;
+        }
+
         $metadata[self::FICHA_KEY] = ['texto' => mb_substr($ficha, 0, 1500), 'em' => now()->toISOString()];
         $conversation->update(['metadata' => $metadata]);
 

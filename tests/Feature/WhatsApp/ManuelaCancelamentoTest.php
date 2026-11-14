@@ -82,6 +82,17 @@ class ManuelaCancelamentoTest extends TestCase
         $this->assertSame(['Oi, tudo certo.', ''], ManuelaCancelamento::separar('Oi, tudo certo.'));
     }
 
+    public function test_ficha_cortada_nao_apaga_a_completa(): void
+    {
+        $conversa = WhatsAppConversation::create(['wa_id' => '551190253050', 'phone' => '551190253050', 'loja' => 'ferrakora', 'ai_enabled' => true]);
+
+        $this->assertTrue(ManuelaCancelamento::guardar($conversa, 'Pedido: X; Situação: pago,'));
+        $this->assertFalse(ManuelaCancelamento::guardar($conversa->fresh(), 'Pedido: X; Motivo: comprou errado; Cliente quer: dinheiro de volta'));
+        $this->assertFalse(ManuelaCancelamento::guardar($conversa->fresh(), 'Pedido: X; Situação: pago,'));
+
+        $this->assertSame('Pedido: X; Motivo: comprou errado; Cliente quer: dinheiro de volta', $conversa->fresh()->metadata[ManuelaCancelamento::FICHA_KEY]['texto']);
+    }
+
     public function test_ficha_fica_na_conversa_chama_o_time_uma_vez_e_o_cliente_so_recebe_o_texto(): void
     {
         Notification::fake();

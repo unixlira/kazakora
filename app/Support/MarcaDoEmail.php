@@ -7,7 +7,7 @@ use App\Modules\Checkout\Models\Order;
 /**
  * Marca dos e-mails ao comprador (pedido do Lira 2026-10-15: FerraKora
  * separado da KazaKora). Pedido feito no site FerraKora sai com o nome, o
- * logo (topo preto, o logo é claro) e o "Meus pedidos" do FerraKora; o
+ * logo (topo branco desde 14/11/2026) e o "Meus pedidos" do FerraKora; o
  * resto, com a KazaKora de sempre. Beauty Kora continua como KazaKora.
  *
  * `pedido` (2026-10-16, pedido do Lira): link para o cliente ver o detalhe
@@ -39,8 +39,10 @@ class MarcaDoEmail
 
         return [
             'nome' => 'FerraKora',
-            'logo' => url('/images/marca/ferrakora-email.png'),
-            'fundo_topo' => '#0b0b0b',
+            // Logo novo da FerraKora (verde-limão e azul) sobre topo branco, como no topo do site (pedido do Lira
+            // 14/11/2026: o e-mail ainda saía com o logo antigo). Arquivo novo: programa de e-mail guarda imagem pelo endereço.
+            'logo' => url('/images/marca/ferrakora-email-v2.png'),
+            'fundo_topo' => '#ffffff',
             'site' => $site,
             'meus_pedidos' => $site.'/meus-pedidos',
             'pedido' => $site.'/meus-pedidos',

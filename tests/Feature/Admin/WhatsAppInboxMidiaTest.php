@@ -125,7 +125,7 @@ class WhatsAppInboxMidiaTest extends TestCase
             ->assertJsonPath('message.mimeType', 'audio/ogg')
             ->assertJsonPath('message.status', 'sent');
 
-        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/messages') && $r['type'] === 'audio' && $r['audio'] === ['id' => 'MEDIA1']);
+        Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/messages') && $r['type'] === 'audio' && $r['audio'] === ['id' => 'MEDIA1', 'voice' => true]);
         $this->assertFileDoesNotExist($ogg);
     }
 

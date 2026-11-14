@@ -352,7 +352,7 @@ class WhatsAppInboxController extends Controller
         $this->humanTakesOver($conversation);
 
         try {
-            $message = $outbox->sendMedia($conversation, $type, $path, $mime, $request->user()->name, $request->user()->id, $caption, $name);
+            $message = $outbox->sendMedia($conversation, $type, $path, $mime, $request->user()->name, $request->user()->id, $caption, $name, $request->boolean('gravacao'));
         } finally {
             if ($temporary) {
                 @unlink($temporary);

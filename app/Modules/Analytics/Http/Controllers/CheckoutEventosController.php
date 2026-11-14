@@ -90,9 +90,11 @@ class CheckoutEventosController extends Controller
      * Lote válido ou null. Cada evento só pode ter as chaves previstas para
      * ele, com valores da lista fechada.
      *
+     * Público: a rota dos outros sites (OutroSiteCheckoutEventosController) usa a mesma lista fechada.
+     *
      * @return array<int, array<string, mixed>>|null
      */
-    private function validar(mixed $dados): ?array
+    public function validar(mixed $dados): ?array
     {
         if (! is_array($dados) || array_diff(array_keys($dados), ['pagina', 'eventos']) !== []
             || ! is_string($dados['pagina'] ?? null) || preg_match('/^[a-z0-9]{8,16}$/', $dados['pagina']) !== 1

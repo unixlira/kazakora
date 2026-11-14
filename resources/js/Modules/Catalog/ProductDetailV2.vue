@@ -45,6 +45,8 @@ const props = defineProps({
     livrosDigitais: { type: Array, default: () => [] },
     // Imagem dos tablets do grupo de livros (admin); null = padrão (dor nas costas).
     livrosQuadro: { type: String, default: null },
+    // Card de Black Friday padrão (14/11/2026), para o produto sem oferta própria: { tipo, selo, titulo, texto, ate } ou null.
+    ofertaPadrao: { type: Object, default: null },
     // Condições e botão de cada quadro, definidos em Promoções (2026-10-21): { airfryer: {condicoes, botao}, pdfs: {...} }.
     quadrosPromocao: { type: Object, default: () => ({}) },
     // Unidades vendidas de verdade, todos os canais (pedido 2026-10-23).
@@ -415,13 +417,16 @@ const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => blocosDaDescricao.value);
 // Oferta do produto cadastrada no conteúdo do anúncio (14/11/2026), dentro do comparativo:
 // { selo, titulo, texto, ate }. Só aparece com título e até a data "ate" (AAAA-MM-DD, fim do dia no
-// horário de Brasília); sem data, fica até tirarem do cadastro. Sem oferta cadastrada não aparece nada.
+// horário de Brasília); sem data, fica até tirarem do cadastro. "faixas" (opcional) lista vantagens por
+// quantidade: [{ rotulo: 'Levando 1', valor: '...' }]. Desde 14/11/2026 (pedido do Lira: o card em TODOS os
+// produtos) quem não tem oferta própria mostra a padrão que vem do servidor (OfertaBlackFriday::padrao):
+// só o que o checkout dá de verdade para este produto. Sem nenhuma das duas, não aparece nada.
 const ofertaNoAr = (oferta) => {
     if (!oferta?.titulo) return null;
     if (oferta.ate && Date.now() > Date.parse(`${oferta.ate}T23:59:59-03:00`)) return null;
     return oferta;
 };
-const oferta = computed(() => ofertaNoAr(anuncio.value?.comparativo?.oferta));
+const oferta = computed(() => ofertaNoAr(anuncio.value?.comparativo?.oferta) ?? ofertaNoAr(props.ofertaPadrao));
 // Fotos do "Por que escolher": comparativo.imagens[linha] = [foto da solução comum, foto com o produto].
 // Sem foto cadastrada, o quadro aparece só com o ícone e o texto.
 const fotosComparativo = computed(() => (Array.isArray(anuncio.value?.comparativo?.imagens) ? anuncio.value.comparativo.imagens : []));
@@ -828,6 +833,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="oferta" class="oferta-bf" data-oferta-produto>
                                 <span v-if="oferta.selo" class="oferta-bf-selo"><i class="fa-solid fa-bolt" aria-hidden="true"></i>{{ oferta.selo }}</span>
                                 <strong>{{ oferta.titulo }}</strong>
+                                <ul v-if="oferta.faixas?.length" class="oferta-bf-faixas">
+                                    <li v-for="faixa in oferta.faixas" :key="faixa.rotulo"><span>{{ faixa.rotulo }}</span><b>{{ faixa.valor }}</b></li>
+                                </ul>
                                 <p v-if="oferta.texto">{{ oferta.texto }}</p>
                             </div>
 
@@ -844,7 +852,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span v-if="parcela">1x de <strong>{{ formatPrice(precoPor) }}</strong> ou até {{ parcela.parcelas }}x de <strong>{{ formatPrice(parcela.valor) }}</strong> no cartão <small class="parc-total">(total {{ formatPrice(parcela.total) }}, com juros)</small></span>
                                     <span v-else>em até {{ PARCELAS }}x no cartão, com juros a partir de 2x</span>
                                 </div>
-                                <div v-if="precoPix !== null && seloPix" class="linha-pix">
+                                <!-- Quando o card de cima já fala do Pix, a linha não repete (sem informação repetida na mesma tela). -->
+                                <div v-if="precoPix !== null && seloPix && oferta?.tipo !== 'pix'" class="linha-pix">
                                     <i class="fa-brands fa-pix" aria-hidden="true"></i> pague no pix <b>{{ seloPix }}</b>
                                 </div>
                             </div>
@@ -1825,6 +1834,10 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .compra .oferta-bf-selo i { font-size: 10px; color: #111; }
 .pd2 .compra .oferta-bf strong { position: relative; display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; color: #fcbd10; text-transform: uppercase; text-wrap: balance; }
 .pd2 .compra .oferta-bf p { position: relative; margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: rgba(255, 255, 255, .88); text-wrap: pretty; }
+.pd2 .compra .oferta-bf-faixas { position: relative; list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pd2 .compra .oferta-bf-faixas li { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .16); }
+.pd2 .compra .oferta-bf-faixas span { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255, 255, 255, .75); }
+.pd2 .compra .oferta-bf-faixas b { font-size: 15px; line-height: 1.2; color: #fff; }
 @media (max-width: 767px) {
     /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
     .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }

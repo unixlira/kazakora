@@ -495,6 +495,12 @@ class Order extends Model
         return $this->hasMany(CorreiosPrePostagem::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
+    /** Etiqueta do Melhor Envio do pedido do site (transportadora escolhida e custo do frete). */
+    public function melhorEnvioEnvio(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Marketplace\Models\MelhorEnvioEnvio::class)->latestOfMany();
+    }
+
     public function latestCorreiosPrePostagem(): HasOne
     {
         // Só a de envio: a de devolução (cliente → loja) não é o rastreio do

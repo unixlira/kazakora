@@ -458,6 +458,14 @@ const cancelInvoice = () => {
                             <dt class="text-slate-500">{{ valores.freteEmbutido != null ? 'Frete cobrado à parte' : 'Frete' }}</dt>
                             <dd class="tabular-nums">{{ valores.frete > 0 ? formatPrice(valores.frete) : 'Grátis / pago pelo canal' }}</dd>
                         </div>
+                        <!-- Custo do frete para a loja (Lira 2026-11-14): frete grátis para o cliente tem custo; não entra no total pago. -->
+                        <div v-if="d.valores?.frete_custo" class="flex justify-between" data-frete-custo>
+                            <dt class="text-slate-500">
+                                Custo do frete para a loja
+                                <span class="text-xs text-slate-400">({{ d.valores.frete_custo.servico }}, {{ d.valores.frete_custo.situacao === 'pago' ? 'pago' : 'cotação' }})</span>
+                            </dt>
+                            <dd class="tabular-nums font-semibold text-error">{{ formatPrice(d.valores.frete_custo.valor) }}</dd>
+                        </div>
                         <div v-if="d.valores?.cupom || d.valores?.desconto_cupom > 0" class="flex justify-between">
                             <dt class="text-slate-500">Cupom <span v-if="d.valores?.cupom" class="font-mono text-xs">{{ d.valores.cupom }}</span></dt>
                             <dd class="tabular-nums text-success">− {{ formatPrice(Math.max(d.valores?.desconto_cupom ?? 0, 0)) }}</dd>

@@ -118,4 +118,24 @@ class EmailsFerraKoraTest extends TestCase
         // A KazaKora continua com o laranja dela.
         $this->assertStringContainsString('border-bottom: 4px solid #f27a2a', view('emails.welcome', ['user' => \App\Models\User::factory()->make(), 'senhaTemporaria' => null])->render());
     }
+
+    /** 2026-11-14: e-mails de pedido da FerraKora sem o laranja da KazaKora no número do pedido e nos botões. */
+    public function test_emails_de_pedido_do_ferrakora_sem_o_laranja_da_kazakora(): void
+    {
+        $ferrakora = $this->pedido(Order::SITE_FERRAKORA);
+        $kazakora = $this->pedido(null);
+
+        foreach ([
+            fn (Order $order) => new PixAguardandoPagamento($order, 100.0, 'pix-copia'),
+            fn (Order $order) => new BoletoAguardandoPagamento($order, 100.0, '2379', 'https://mp/boleto'),
+            fn (Order $order) => new OrderConfirmation($order),
+            fn (Order $order) => new \App\Modules\Checkout\Mail\PedidoCancelado($order),
+        ] as $email) {
+            $html = $email($ferrakora)->render();
+            $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $html);
+            $this->assertStringContainsString('#271E91', $html);
+            $this->assertStringNotContainsString('alt="KazaKora"', $html);
+            $this->assertStringContainsStringIgnoringCase('#f27a2a', $email($kazakora)->render());
+        }
+    }
 }

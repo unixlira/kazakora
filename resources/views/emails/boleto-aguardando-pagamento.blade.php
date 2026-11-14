@@ -7,7 +7,7 @@
     @include('emails.partials.titulo', ['icone' => '🧾', 'texto' => 'Seu boleto está pronto!'])
 
     <p style="margin: 0 0 18px; text-align: center; color: #374151;">
-        Falta só pagar para o pedido <strong style="color: #F27A2A;">{{ $order->numero }}</strong> seguir para separação. Pague pelo app do seu banco
+        Falta só pagar para o pedido <strong style="color: {{ ($marcaEmail ?? [])['cor'] ?? '#F27A2A' }};">{{ $order->numero }}</strong> seguir para separação. Pague pelo app do seu banco
         com a linha digitável abaixo ou imprima o boleto.
     </p>
 
@@ -30,7 +30,7 @@
     @endif
 
     @if ($pdfUrl)
-        @include('emails.partials.botao', ['url' => $pdfUrl, 'texto' => 'Abrir boleto PDF', 'cor' => '#F27A2A'])
+        @include('emails.partials.botao', ['url' => $pdfUrl, 'texto' => 'Abrir boleto PDF', 'cor' => ($marcaEmail ?? [])['cor'] ?? '#F27A2A'])
     @endif
 
     @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])

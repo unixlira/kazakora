@@ -77,7 +77,10 @@ class SendOrderShippedWhatsAppJob implements ShouldQueue
 
         $nome = Str::of(trim((string) ($order->shipping_name ?: $order->user?->name)))->explode(' ')->first() ?: 'cliente';
         $previsao = self::previsao($this->previsao);
-        $imagem = WhatsAppNumeros::template($loja, 'pedido_enviado_imagem') ?: asset('images/whatsapp/pedido-enviado.jpg');
+        // FerraKora sai com o banner dela (marca nova, 14/11/2026); antes, sem imagem configurada, ia o da KazaKora.
+        $imagem = WhatsAppNumeros::template($loja, 'pedido_enviado_imagem') ?: asset($loja === WhatsAppNumeros::FERRAKORA
+            ? 'images/whatsapp/pedido-enviado-ferrakora-v3.jpg'
+            : 'images/whatsapp/pedido-enviado.jpg');
 
         try {
             $response = $client->paraLoja($loja)->sendTemplate(

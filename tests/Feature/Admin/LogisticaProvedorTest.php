@@ -528,6 +528,7 @@ class LogisticaProvedorTest extends TestCase
     /** Contrato dos Correios respondendo o preço dado para PAC e SEDEX. */
     private function contratoDosCorreiosCobrando(?float $preco): void
     {
+        config(['melhorenvio.comparar_correios' => true]);
         $tokens = Mockery::mock(\App\Services\Correios\CorreiosTokenService::class);
         $tokens->shouldReceive('isConfigured')->andReturn(true);
         $this->app->instance(\App\Services\Correios\CorreiosTokenService::class, $tokens);
@@ -580,6 +581,19 @@ class LogisticaProvedorTest extends TestCase
         $envio = app(LojaShippingDriver::class)->confirmShipping($this->pedidoDoSite());
         $this->assertSame('Melhor Envio Jadlog Package', $envio['shipping_method']);
 
+    }
+
+    public function test_comparacao_com_os_correios_fica_desligada_por_padrao(): void
+    {
+        $this->assertFalse(config('melhorenvio.comparar_correios'));
+
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $this->contratoDosCorreiosCobrando(1.00);
+        config(['melhorenvio.comparar_correios' => false]);
+
+        $this->assertSame('Melhor Envio Jadlog Package', app(LojaShippingDriver::class)->confirmShipping($this->pedidoDoSite())['shipping_method']);
     }
 
     public function test_pre_postagem_recusada_pelos_correios_volta_para_o_melhor_envio(): void

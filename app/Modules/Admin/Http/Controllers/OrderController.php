@@ -18,6 +18,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\CustoDoFrete;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\TipoDeEnvio;
 use App\Notifications\OrderStatusUpdated;
@@ -100,6 +101,7 @@ class OrderController extends Controller
                 'user:id,name,email',
                 'invoice:id,order_id,status,serie,numero,motivo_rejeicao',
                 'latestCorreiosPrePostagem',
+                'melhorEnvioEnvio',
                 // Tipo de envio (Flex, Mercado Envios, Full...) na coluna Envios.
                 'channelShipment:id,order_id,channel,shipping_method',
             ])
@@ -777,6 +779,8 @@ class OrderController extends Controller
                 'frete_embutido' => $order->frete_embutido_amount !== null ? (float) $order->frete_embutido_amount : null,
                 'turbo' => $order->shipping_carrier_name === FreteEmbutido::TURBO,
                 'frete' => (float) $order->shipping_cost,
+                // Quanto a loja paga de frete (2026-11-14): frete grátis para o cliente tem custo para a loja.
+                'frete_custo' => CustoDoFrete::doPedido($order),
                 'cupom' => $order->coupon_code,
                 // discount_amount já soma Pix e desconto da plataforma (mesma
                 // conta da área do cliente, CheckoutController::showOrder).

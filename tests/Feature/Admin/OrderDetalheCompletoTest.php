@@ -105,4 +105,37 @@ class OrderDetalheCompletoTest extends TestCase
                 ->where('detalhe.valores.turbo', false)
                 ->etc());
     }
+
+    /** 2026-11-14: frete grátis para o cliente tem custo para a loja; o pedido mostra o valor e a transportadora do Melhor Envio. */
+    public function test_pedido_com_frete_gratis_mostra_o_custo_do_frete_e_a_transportadora(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $order = Order::create([
+            'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_STORE, 'site_origem' => Order::SITE_FERRAKORA,
+            'shipping_name' => 'Luiz', 'shipping_email' => 'luiz@exemplo.com', 'shipping_phone' => '61999999999',
+            'shipping_zip' => '73100-030', 'shipping_street' => 'Rua 1', 'shipping_number' => '25',
+            'shipping_neighborhood' => 'Lago Oeste', 'shipping_city' => 'Brasília', 'shipping_state' => 'DF',
+            'subtotal' => 138.24, 'shipping_cost' => 0, 'shipping_carrier_name' => 'Frete Grátis', 'total' => 121.66,
+        ]);
+
+        // Sem transportadora escolhida nem pré-postagem: não inventa custo.
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('detalhe.valores.frete_custo', null));
+
+        \App\Modules\Marketplace\Models\MelhorEnvioEnvio::create([
+            'order_id' => $order->id, 'status' => \App\Modules\Marketplace\Models\MelhorEnvioEnvio::STATUS_COTADA,
+            'servico_id' => 33, 'servico' => 'JeT Standard', 'preco' => 22.60, 'prazo_dias' => 4, 'peso_g' => 2750,
+        ]);
+
+        $this->actingAs($admin)->get("/admin/pedidos/{$order->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('detalhe.valores.frete', 0)
+                ->where('detalhe.valores.frete_custo.valor', 22.6)
+                ->where('detalhe.valores.frete_custo.servico', 'JeT Standard')
+                ->where('detalhe.valores.frete_custo.situacao', 'cotado')
+                ->where('detalhe.envio.curto', 'JeT Standard')
+                ->where('detalhe.envio.label', 'Melhor Envio — JeT Standard'));
+    }
 }

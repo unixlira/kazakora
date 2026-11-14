@@ -115,6 +115,11 @@ class EmailsFerraKoraTest extends TestCase
         $novaSenha = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
         $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $novaSenha);
 
+        // Quem já criou a própria senha recebe o boas-vindas sem senha temporária.
+        $semSenha = (new FerraKoraBoasVindas($cliente))->render();
+        $this->assertStringNotContainsString('Senha temporária', $semSenha);
+        $this->assertStringContainsString('a senha que você criou', $semSenha);
+
         // A KazaKora continua com o laranja dela.
         $this->assertStringContainsString('border-bottom: 4px solid #f27a2a', view('emails.welcome', ['user' => \App\Models\User::factory()->make(), 'senhaTemporaria' => null])->render());
     }

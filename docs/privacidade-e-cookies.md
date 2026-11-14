@@ -222,6 +222,14 @@ rolagem máxima, e o pedido criado (servidor).
 - Base legal: legítimo interesse (melhorar a tela de compra), dado mínimo e
   pseudônimo. Leitura só pelo comando `php artisan checkout:funil --dias=7`
   (equipe e robôs fora).
+- **FerraKora (2026-11-14):** a tela `/seguro-pagamento` de lá manda os
+  mesmos eventos, com a mesma lista fechada, para
+  `POST /api/ferrakora/checkout/eventos` (`OutroSiteCheckoutEventosController`),
+  aceitos só dos domínios em `services.ferrakora.origens`. Ficam na mesma
+  tabela com `site = ferrakora` (a loja fica com `site` nulo). O visitante é
+  o código tirado do IP, igual ao das visitas da FerraKora; o IP em si não é
+  gravado aqui. Sem cookie novo e sem terceiros. Leitura:
+  `php artisan checkout:funil --site=ferrakora`. Mesmo prazo de 6 meses.
 
 ### Carrinho abandonado (`lead_checkout`, pedido 2026-10-24)
 Quem preenche a Identificação do checkout e clica em "Ir para Entrega" (e de

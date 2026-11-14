@@ -51,7 +51,7 @@ class CheckoutEvento extends Model
 
     public const PEDIDO_CRIADO = 'pedido_criado';
 
-    protected $fillable = ['visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem'];
+    protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem'];
 
     /**
      * Mesmo visitante do log de visitas (TrackSiteVisit, Cookies::visitante):
@@ -67,10 +67,10 @@ class CheckoutEvento extends Model
      * Origem da visita (Instagram, Meta Ads, Google...): a última de fora da
      * loja que o log de visitas registrou para o visitante nas últimas 24 h.
      */
-    public static function origemDaVisita(string $visitante): ?string
+    public static function origemDaVisita(string $visitante, string $site = SiteVisit::SITE_LOJA): ?string
     {
         $visitas = SiteVisit::query()
-            ->where('site', SiteVisit::SITE_LOJA)
+            ->where('site', $site)
             ->where('visitor_id', $visitante)
             ->where('created_at', '>=', now()->subDay());
 
@@ -94,6 +94,29 @@ class CheckoutEvento extends Model
                 'dispositivo' => TrackSiteVisit::dispositivo((string) $request->userAgent()),
             ]);
         }, null, false);
+    }
+
+    /**
+     * Visitante de outro site (FerraKora, Beauty Kora): sem cookie em outro
+     * domínio, é o mesmo código tirado do IP que a visita grava
+     * (OutroSiteVisitaController). O IP em si não entra em checkout_eventos.
+     */
+    public static function visitanteDeOutroSite(Request $request): string
+    {
+        $ip = $request->ip();
+
+        return $ip !== null ? substr(md5($ip), 0, 32) : 'anonimo';
+    }
+
+    /** Pedido criado pelo checkout de outro site (servidor), para o funil daquele site. */
+    public static function pedidoCriadoEmOutroSite(Request $request, string $site): void
+    {
+        rescue(fn () => self::create([
+            'site' => $site,
+            'visitor_id' => self::visitanteDeOutroSite($request),
+            'evento' => self::PEDIDO_CRIADO,
+            'dispositivo' => TrackSiteVisit::dispositivo((string) $request->userAgent()),
+        ]), null, false);
     }
 
     /** Pedido criado pelo checkout (servidor). $visitante calculado antes de criar o pedido. */

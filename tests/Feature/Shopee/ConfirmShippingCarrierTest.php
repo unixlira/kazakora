@@ -26,6 +26,15 @@ class ConfirmShippingCarrierTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+        Http::fake([
+            '*/api/v2/logistics/get_tracking_number*' => Http::response(['response' => ['tracking_number' => 'BR-TEST-SHOPEE-ORDER-1']]),
+        ]);
+    }
+
     private function makeConnectedAccount(): void
     {
         MarketplaceAccount::create([

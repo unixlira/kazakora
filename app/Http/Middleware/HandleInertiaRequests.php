@@ -72,6 +72,26 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            'jornadaSessao' => function () use ($request) {
+                if ($request->is('admin*') || ! \App\Modules\Analytics\Support\JornadaSnapshot::habilitada()) {
+                    return null;
+                }
+                if (! $request->session()->has('jornada_sessao')) {
+                    $request->session()->put('jornada_sessao', bin2hex(random_bytes(16)));
+                }
+                return $request->session()->get('jornada_sessao');
+            },
+            'jornadaCarrinho' => function () use ($request) {
+                if ($request->is('admin*') || ! \App\Modules\Analytics\Support\JornadaSnapshot::habilitada()) {
+                    return null;
+                }
+                // Apenas IDs/quantidades/preços do carrinho real, nunca o modelo completo ou PII.
+                $items = app(CartManager::class)->items();
+                return ['currency' => 'BRL', 'subtotal' => (int) round($items->sum('subtotal') * 100),
+                    'discount' => null, 'shipping' => null, 'interest' => null, 'total' => null,
+                    'items' => $items->take(20)->map(fn ($i) => ['product_id' => $i['product']->id,
+                        'quantity' => $i['quantity'], 'unit_price' => $i['quantity'] > 0 ? (int) round($i['subtotal'] / $i['quantity'] * 100) : 0])->values()->all()];
+            },
             'auth' => [
                 'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials', 'deve_trocar_senha'),
             ],

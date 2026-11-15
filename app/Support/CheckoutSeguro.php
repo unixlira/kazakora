@@ -38,7 +38,7 @@ class CheckoutSeguro
 
     /** O que a compra precisa levar de um endereço para o outro. */
     // meta_fbclid (2026-10-25): o clique do anúncio vai junto para o _fbc e a API de Conversões.
-    private const CHAVES_SESSAO = ['cart', 'compra_direta', 'checkout_draft', 'checkout_version', 'frete_embutido', 'meta_fbclid'];
+    private const CHAVES_SESSAO = ['cart', 'compra_direta', 'checkout_draft', 'checkout_version', 'frete_embutido', 'meta_fbclid', 'jornada_sessao'];
 
     /** Endereço da loja sem o www. ("kazakora.com"), se o checkout seguro estiver ligado para ela. */
     public static function lojaComSeguro(string $host): ?string

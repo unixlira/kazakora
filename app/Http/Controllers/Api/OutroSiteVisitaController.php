@@ -54,6 +54,10 @@ class OutroSiteVisitaController extends Controller
         }
 
         $userAgent = (string) $request->userAgent();
+        $journey = $request->query('jornada_sessao');
+        if ($journey !== null && (! is_string($journey) || preg_match('/^[a-f0-9]{32}$/D', $journey) !== 1)) {
+            return response('', 422);
+        }
         if (str_starts_with($userAgent, 'Mozilla/') && preg_match(TrackSiteVisit::BOT_PATTERN, $userAgent) !== 1) {
             $pagina = $request->query('p');
             if (! is_string($pagina) || $pagina === '') {
@@ -72,8 +76,8 @@ class OutroSiteVisitaController extends Controller
 
             SiteVisit::query()->create([
                 'site' => $site,
-                // Sem cookie em outro domínio: o visitante é o IP.
-                'visitor_id' => $ip !== null ? substr(md5($ip), 0, 32) : 'anonimo',
+                // Jornada nova: identidade aleatória; preserva só o fallback legado.
+                'visitor_id' => $journey ?? ($ip !== null ? substr(md5($ip), 0, 32) : 'anonimo'),
                 'ip' => $ip,
                 // O aviso passa pela Cloudflare do kazakora.com: localização do visitante.
                 ...LocalizacaoDaVisita::doRequest($request),
@@ -100,7 +104,7 @@ class OutroSiteVisitaController extends Controller
 
             // Lugar aproximado do IP, igual à loja (2026-10-24); a "sessão" é o visitante.
             if ($ip !== null) {
-                $visitante = substr(md5($ip), 0, 32);
+                $visitante = $journey ?? substr(md5($ip), 0, 32);
                 rescue(fn () => app(GeoDoVisitante::class)->registrar($request, $site, $visitante, $visitante), null, false);
             }
         }

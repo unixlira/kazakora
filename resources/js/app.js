@@ -1,4 +1,5 @@
 import '../css/app.css';
+import { instalarJornada } from '@/Shared/jornadaCarrinho.mjs';
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { rastrearPagina } from '@/Shared/pixelMeta';
@@ -21,6 +22,7 @@ createInertiaApp({
             .use(plugin)
             .mount(el);
         liberarImagensDepoisDaPrimeiraPintura();
+        instalarJornada(router, props.initialPage);
 
         // Pixel da Meta (Shared/pixelMeta.js): desde 2026-10-26 roda sem esperar
         // o OK de cookies (sem faixa; aceite no Finalizar pedido e nos Termos de Uso).

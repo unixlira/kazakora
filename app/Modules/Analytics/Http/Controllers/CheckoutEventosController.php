@@ -60,6 +60,10 @@ class CheckoutEventosController extends Controller
         $origem = collect($eventos)->contains('evento', 'abriu') ? CheckoutEvento::origemDaVisita($visitante) : null;
 
         foreach ($eventos as $evento) {
+            if (isset($evento['jornada'])) {
+                \App\Modules\Analytics\Support\JornadaSnapshot::gravar([...$base, 'origem' => CheckoutEvento::origemDaVisita($visitante)], $evento);
+                continue;
+            }
             CheckoutEvento::create([
                 ...$base,
                 'evento' => $evento['evento'],
@@ -115,6 +119,9 @@ class CheckoutEventosController extends Controller
     /** @param  array<string, mixed>  $e */
     private function eventoValido(array $e): bool
     {
+        if (isset($e['jornada'])) {
+            return \App\Modules\Analytics\Support\JornadaSnapshot::valido($e);
+        }
         $nome = $e['evento'] ?? null;
         if (! is_string($nome) || ! in_array($nome, CheckoutEvento::EVENTOS_DO_NAVEGADOR, true)) {
             return false;

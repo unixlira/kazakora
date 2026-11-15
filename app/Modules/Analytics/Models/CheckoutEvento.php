@@ -51,7 +51,9 @@ class CheckoutEvento extends Model
 
     public const PEDIDO_CRIADO = 'pedido_criado';
 
-    protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem'];
+    protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem', 'jornada_chave', 'jornada'];
+
+    protected $casts = ['jornada' => 'array'];
 
     /**
      * Mesmo visitante do log de visitas (TrackSiteVisit, Cookies::visitante):

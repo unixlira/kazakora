@@ -1,4 +1,5 @@
 <script setup>
+import { snapshot, registrarJornada } from '@/Shared/jornadaCarrinho.mjs';
 import { rastrearPurchase } from '@/Shared/pixelMeta';
 // Checkout v2 (pedido 2026-10-10): uma tela só, sem topo e rodapé da loja,
 // feita pra fechar a venda, resumo do pedido ao lado. Desde 2026-10-23 no
@@ -935,7 +936,24 @@ const tentarDeNovo = () => router.visit('/finalizacao');
 // ---------- Medição ----------
 // Só na tela de preencher: com o pedido já criado (QR do Pix, cartão) não mede.
 const NOME_PAGAMENTO = { pix: 'pix', card: 'cartao', boleto: 'boleto' };
-watch(metodo, (novo) => medicao.registrar('pagamento', { campo: NOME_PAGAMENTO[novo] ?? 'pix' }, `pagamento:${novo}`));
+const snapshotCheckout = () => snapshot({ items: itens.value, subtotal: subtotalAtual.value,
+    discountAmount: descontoCupom.value + descontoPix.value + descontoPlataforma.value,
+    shipping: entregaEscolhida.value && !freteCarregando.value ? valorFrete.value : null,
+    total: metodo.value === 'pix' ? totalAPagar.value : null });
+let ultimoSnapshotCheckout;
+onMounted(() => { ultimoSnapshotCheckout = snapshotCheckout(); registrarJornada('preco_exibido', ultimoSnapshotCheckout); });
+watch(() => [subtotalAtual.value, descontoCupom.value, descontoPix.value, valorFrete.value], () => {
+    const depois = snapshotCheckout();
+    registrarJornada('preco_exibido', ultimoSnapshotCheckout ?? depois, depois, 'observado', 'desconhecido');
+    ultimoSnapshotCheckout = depois;
+});
+watch(metodo, (novo) => {
+    medicao.registrar('pagamento', { campo: NOME_PAGAMENTO[novo] ?? 'pix' }, `pagamento:${novo}`);
+    const depois = snapshotCheckout();
+    const forma = NOME_PAGAMENTO[novo];
+    if (['pix', 'cartao', 'boleto'].includes(forma)) registrarJornada('pagamento_intencao', ultimoSnapshotCheckout ?? depois, depois, 'intent', forma);
+    ultimoSnapshotCheckout = depois;
+});
 watch(erros, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
 watch(serverErrors, (lista) => Object.keys(lista ?? {}).forEach((chave) => medicao.erro(campoDoErro(chave))));
 watch(cepError, (mensagem) => { if (mensagem) medicao.erro('cep'); });

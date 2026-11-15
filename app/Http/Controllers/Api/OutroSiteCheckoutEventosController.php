@@ -60,6 +60,12 @@ class OutroSiteCheckoutEventosController extends Controller
         $origem = collect($eventos)->contains('evento', 'abriu') ? CheckoutEvento::origemDaVisita($visitante, $site) : null;
 
         foreach ($eventos as $evento) {
+            if (isset($evento['jornada'])) {
+                // New journey events use a random session, never an IP-derived identity.
+                $session = $evento['jornada']['sessao'];
+                \App\Modules\Analytics\Support\JornadaSnapshot::gravar([...$base, 'visitor_id' => $session, 'origem' => CheckoutEvento::origemDaVisita($session, $site)], $evento);
+                continue;
+            }
             CheckoutEvento::create([
                 ...$base,
                 'evento' => $evento['evento'],

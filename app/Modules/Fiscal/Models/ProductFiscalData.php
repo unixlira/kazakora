@@ -4,7 +4,9 @@ namespace App\Modules\Fiscal\Models;
 
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\Fiscal\NcmValidatorService;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class ProductFiscalData extends Model
 {
@@ -15,6 +17,42 @@ class ProductFiscalData extends Model
     public const EMBALAGEM_CAIXA = 'caixa';
 
     public const EMBALAGEM_ENVELOPE = 'envelope';
+
+    /**
+     * NCM que não existe na tabela oficial não grava, venha de onde vier
+     * (2026-11-15). A tela do admin já validava, mas a clonagem da Kicool, a
+     * importação da Shopee e escrita por tarefa gravavam direto: o produto 53
+     * ficou com 84629920 e a nota do pedido #4162 foi rejeitada (778) com o
+     * cliente já pago. Aqui o NCM inválido é descartado e fica o anterior
+     * (ou vazio, em cadastro novo), com aviso no log. Fonte oficial fora do
+     * ar não bloqueia nada (ver NcmValidatorService).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $fiscal) {
+            if (! $fiscal->isDirty('ncm') || blank($fiscal->ncm)) {
+                return;
+            }
+
+            // Nos testes a consulta à tabela oficial fica desligada, salvo
+            // no teste desta trava (que liga a chave e simula o validador).
+            if (! config('fiscal.validar_ncm_ao_gravar', ! app()->runningUnitTests())) {
+                return;
+            }
+
+            if (app(NcmValidatorService::class)->isValid((string) $fiscal->ncm)) {
+                return;
+            }
+
+            Log::warning('fiscal.ncm.inexistente_descartado', [
+                'product_id' => $fiscal->product_id,
+                'ncm_recusado' => $fiscal->ncm,
+                'ncm_mantido' => $fiscal->getOriginal('ncm'),
+            ]);
+
+            $fiscal->ncm = $fiscal->getOriginal('ncm');
+        });
+    }
 
     protected $fillable = [
         'product_id',

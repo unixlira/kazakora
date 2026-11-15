@@ -98,4 +98,23 @@ class SendOrderReceiptEmailJobTest extends TestCase
         Mail::assertNothingSent();
         $this->assertSame(1, OrderEmailLog::where('order_id', $order->id)->count());
     }
+
+    /** Pedido #4162 (2026-11-15): o primeiro recibo saiu sem a nota; quando ela é autorizada, sai mais um com o PDF. */
+    public function test_reenvia_uma_vez_com_a_nota_quando_o_primeiro_saiu_sem_ela(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        $order = $this->makeOrder();
+        OrderEmailLog::create(['order_id' => $order->id, 'mailable' => 'order_confirmation', 'attempt' => 1, 'status' => OrderEmailLog::STATUS_SENT, 'invoice_attached' => false]);
+        $danfePath = "invoices/{$order->id}/danfe-test.pdf";
+        Storage::disk('local')->put($danfePath, '%PDF-1.3 fake');
+        Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 1, 'danfe_path' => $danfePath]);
+
+        SendOrderReceiptEmailJob::dispatchSync($order->id);
+        SendOrderReceiptEmailJob::dispatchSync($order->id);
+
+        Mail::assertSent(OrderConfirmation::class, 1);
+        $this->assertSame(1, OrderEmailLog::where('order_id', $order->id)->where('invoice_attached', true)->count());
+    }
 }

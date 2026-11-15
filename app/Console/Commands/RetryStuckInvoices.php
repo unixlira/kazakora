@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Fiscal\Services\FechamentoFiscalService;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
@@ -86,7 +87,7 @@ class RetryStuckInvoices extends Command
         $orders = Order::query()
             ->with('invoice')
             ->where('status', Order::STATUS_PAID)
-            ->whereNotIn('origin', array_merge($delegadosAoBling, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE]))
+            ->whereNotIn('origin', array_merge($delegadosAoBling, [Order::ORIGIN_MANUAL_INVOICE]))
             ->when($canal, fn ($query) => $query->where('origin', $canal))
             // Full do Mercado Livre: a nota é do ML, não está travada (ver
             // MercadoLivreFull). Sem isto voltaria à fila a cada 15 min.
@@ -107,7 +108,8 @@ class RetryStuckInvoices extends Command
             // pedido do carrinho nunca tem nota própria, e o carrinho
             // bloqueado espera o contador — nenhum dos dois é nota travada,
             // e sem isto ocupariam o teto da rodada a cada 15 min.
-            ->reject(fn (Order $order) => $pack->cobertoPor($order) || $pack->motivoDeBloqueio($order));
+            ->reject(fn (Order $order) => $pack->cobertoPor($order) || $pack->motivoDeBloqueio($order))
+            ->reject(fn (Order $order) => $this->lojaSemCorrecaoNoCadastro($order));
 
         // TRAVA REAL 2026-09-07, aprendida na primeira execução: rodei isto
         // com BLING_INVOICE_ISSUER_CHANNELS vazio e ele varreu 94 notas do
@@ -195,6 +197,37 @@ class RetryStuckInvoices extends Command
         ]);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Venda do site (KazaKora e FerraKora) com a nota REJEITADA: só tenta de
+     * novo depois que alguém corrigiu o cadastro fiscal de um dos produtos.
+     *
+     * Até 2026-11-15 a loja ficava fora desta varredura inteira, e a nota do
+     * pedido #4162 (rejeição 778, NCM inexistente) ficou 10 horas parada
+     * depois de o NCM ser corrigido, com o cliente sem etiqueta. Rejeição de
+     * venda do site é quase sempre dado do cadastro: reenviar igual só
+     * repete a rejeição e gasta número de nota. Por isso a nota rejeitada
+     * espera a correção; nota pendente ou nunca emitida entra sempre.
+     */
+    private function lojaSemCorrecaoNoCadastro(Order $order): bool
+    {
+        if ($order->origin !== Order::ORIGIN_STORE || $order->invoice?->status !== Invoice::STATUS_REJECTED) {
+            return false;
+        }
+
+        $rejeitadaEm = $order->invoice->updated_at;
+
+        if ($rejeitadaEm === null) {
+            return false;
+        }
+
+        $produtos = $order->items()->whereNotNull('product_id')->pluck('product_id');
+
+        return ! ProductFiscalData::query()
+            ->whereIn('product_id', $produtos)
+            ->where('updated_at', '>', $rejeitadaEm)
+            ->exists();
     }
 
     /**

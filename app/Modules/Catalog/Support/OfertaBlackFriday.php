@@ -29,6 +29,39 @@ class OfertaBlackFriday
 {
     public const SELO = 'Black Friday';
 
+    /** Só apresentação: não altera conteúdo cadastrado nem cálculo comercial.
+     * Converte economia monetária apenas quando coincide com um desconto real
+     * e sua base de preço "de" é inequívoca, incluindo frete embutido.
+     */
+    public static function comparativoPercentual(?array $comparativo, iterable $produtos): ?array
+    {
+        if (empty($comparativo['oferta']['faixas']) || strcasecmp($comparativo['oferta']['selo'] ?? '', self::SELO) !== 0) {
+            return $comparativo;
+        }
+        $percentuais = [];
+        foreach ($produtos as $produto) {
+            $base = (float) $produto->preco_de;
+            $economia = round($base - (float) $produto->final_price, 2);
+            if ($base <= 0 || $economia <= 0 || $produto->emOferta()) {
+                continue;
+            }
+            $chave = (int) round($economia * 100);
+            $pct = rtrim(rtrim(number_format($economia / $base * 100, 2, ',', '.'), '0'), ',').'%';
+            $percentuais[$chave][$pct] = true;
+        }
+        foreach ($comparativo['oferta']['faixas'] as &$faixa) {
+            $faixa['valor'] = preg_replace_callback('/R\$\s*([\d.]+,\d{2})(?=\s+(?:de desconto|off)\b)/iu', function (array $match) use ($percentuais): string {
+                $centavos = (int) round((float) str_replace([ '.', ',' ], [ '', '.' ], $match[1]) * 100);
+                $opcoes = array_keys($percentuais[$centavos] ?? []);
+
+                return count($opcoes) === 1 ? $opcoes[0] : $match[0];
+            }, $faixa['valor'] ?? '');
+        }
+        unset($faixa);
+
+        return $comparativo;
+    }
+
     /**
      * @param  int  $livros  quantos livros digitais a página deste produto mostra
      * @param  bool  $outroSite  true na FerraKora (cupom só da KazaKora não vale lá)

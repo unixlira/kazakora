@@ -1,6 +1,8 @@
 // Internal, fail-open measurement. Never import marketing SDKs or form payloads.
 const cents = (v) => v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * 100);
 export function snapshot(p = {}) {
+    if (p.jornadaCarrinho && !Array.isArray(p.items)) return p.jornadaCarrinho;
+    if (!Array.isArray(p.items)) return null;
     return { currency: 'BRL', subtotal: cents(p.subtotal), discount: cents(p.discountAmount),
         shipping: cents(p.shipping), interest: cents(p.interest), total: cents(p.total),
         items: (p.items ?? []).slice(0, 20).map(i => ({ product_id: Number(i.product.id), quantity: Number(i.quantity), unit_price: cents(i.unit_price ?? (i.subtotal != null && i.quantity > 0 ? i.subtotal / i.quantity : i.product.final_price)) })) };
@@ -12,14 +14,11 @@ function hex() {
 }
 let memorySession;
 function session() {
-    try {
-        let id = sessionStorage.getItem('kazakora_jornada');
-        if (!/^[a-f0-9]{32}$/.test(id ?? '')) sessionStorage.setItem('kazakora_jornada', id = hex());
-        return id;
-    } catch { return memorySession ??= hex(); }
+    return memorySession;
 }
 export function registrarJornada(evento, antes, depois = antes, estado = 'observado', motivo = 'navegacao') {
     try {
+        if (!/^[a-f0-9]{32}$/.test(session() ?? '')) return;
         const e = { evento, jornada: { id: hex(), sessao: session(), estado, motivo, antes, depois } };
         const body = JSON.stringify({ pagina: session().slice(0, 12), eventos: [e] });
         if (new TextEncoder().encode(body).length > 8192) return;
@@ -28,6 +27,7 @@ export function registrarJornada(evento, antes, depois = antes, estado = 'observ
     } catch { /* Measurement cannot break buying. */ }
 }
 export function instalarJornada(router, initial, send) {
+    memorySession = initial?.props?.jornadaSessao;
     let current = initial;
     let pending = null;
     const emit = (evento, antes, depois, estado, motivo) => {
@@ -65,6 +65,7 @@ export function instalarJornada(router, initial, send) {
     router.on('invalid', () => { pending = null; });
     router.on('exception', () => { pending = null; });
     router.on('success', ({detail:{page}}) => {
+        memorySession = page?.props?.jornadaSessao ?? memorySession;
         if (pending) emit(pending.event,pending.before,snapshot(page.props),'observado',pending.reason);
         pending = null;
         current = page;

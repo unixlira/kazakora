@@ -305,7 +305,7 @@ class SiteVisitLogController extends Controller
             ->unique('path')->keyBy('path');
 
         $journey = \App\Modules\Analytics\Models\CheckoutEvento::query()
-            ->when($doSite === 'kazakora', fn ($q) => $q->whereNull('site'), fn ($q) => $q->where('site', $doSite))
+            ->when($doSite === 'kazakora', fn ($q) => $q->where(fn ($s) => $s->whereNull('site')->orWhere('site', 'kazakora')), fn ($q) => $q->where('site', $doSite))
             ->whereIn('visitor_id', (clone $query)->select('visitor_id')->distinct())
             ->where('created_at', '>=', $de)->where('created_at', '<', $fim)
             ->whereNotNull('jornada')->orderByDesc('id')->limit(300)->get()->reverse()->values();

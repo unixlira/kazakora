@@ -502,8 +502,8 @@ const confirmarApagar = () => {
                         <ol class="mt-3 max-h-80 space-y-2 overflow-auto text-xs">
                             <li v-for="e in detalhe.dados.jornada.timeline" :key="e.id" class="rounded border border-[var(--surface-border)] p-2">
                                 <strong>{{ e.evento }}</strong> · {{ e.jornada.estado }} · {{ e.quando }} · {{ e.jornada.motivo }}
-                                <div>Total: {{ e.jornada.antes.total == null ? 'não informado' : moeda(e.jornada.antes.total / 100) }} → {{ e.jornada.depois.total == null ? 'não informado' : moeda(e.jornada.depois.total / 100) }}</div>
-                                <div v-for="item in e.jornada.depois.items" :key="item.product_id">ID {{ item.product_id }} · {{ item.quantity }}× · {{ moeda(item.unit_price / 100) }}</div>
+                                <div>Total: {{ e.jornada.antes?.total == null ? 'não informado' : moeda(e.jornada.antes.total / 100) }} → {{ e.jornada.depois?.total == null ? 'não informado' : moeda(e.jornada.depois.total / 100) }}</div>
+                                <div v-for="item in (e.jornada.depois?.items ?? [])" :key="item.product_id">ID {{ item.product_id }} · {{ item.quantity }}× · {{ moeda(item.unit_price / 100) }}</div>
                                 <details><summary>Snapshot antes/depois (centavos)</summary><pre class="overflow-auto whitespace-pre-wrap">{{ JSON.stringify({ antes: e.jornada.antes, depois: e.jornada.depois }, null, 2) }}</pre></details>
                             </li>
                         </ol>

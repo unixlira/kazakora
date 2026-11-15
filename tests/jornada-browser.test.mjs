@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { snapshot, instalarJornada } from '../resources/js/Shared/jornadaCarrinho.mjs';
+test('PDP sem cesta não inventa vazio; retorno autoritativo vence props ausentes', () => {
+ assert.equal(snapshot({product:{id:1}}),null);
+ const handlers={}, sent=[];
+ instalarJornada({on:(n,f)=>handlers[n]=f},{component:'Catalog/ProductDetailV2',props:{product:{id:1}}},e=>sent.push(e));
+ handlers.start({detail:{visit:{method:'post',url:'/carrinho',data:{product_id:1,quantity:2}}}});
+ handlers.success({detail:{page:{component:'Catalog/ProductDetailV2',props:{jornadaCarrinho:{currency:'BRL',subtotal:2000,discount:null,shipping:null,interest:null,total:null,items:[{product_id:1,quantity:2,unit_price:1000}]}}}}});
+ assert.equal(sent.at(-1).jornada.depois.items[0].quantity,2);
+ assert.equal(sent.at(-1).jornada.depois.subtotal,2000);
+});
 test('snapshot conserva IDs reais e desconhecidos, nunca dados pessoais', () => {
  const p = snapshot({items:[{product:{id:91,final_price:12.34,name:'private'},quantity:2}],total:24.68});
  assert.equal(p.shipping,null); assert.equal(p.interest,null); assert.equal(p.total,2468);

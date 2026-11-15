@@ -31,6 +31,9 @@ final class JornadaSnapshot
 
     private static function preco(mixed $p): bool
     {
+        if ($p === null) {
+            return true;
+        }
         $keys = ['currency', 'subtotal', 'discount', 'shipping', 'interest', 'total', 'items'];
         if (! is_array($p) || array_diff(array_keys($p), $keys) !== [] || array_diff($keys, array_keys($p)) !== [] || $p['currency'] !== 'BRL') {
             return false;
@@ -63,6 +66,9 @@ final class JornadaSnapshot
     /** Append-only on retries, including conflicting payloads. Unique index handles concurrency. */
     public static function gravar(array $base, array $evento): void
     {
+        if (! self::habilitada()) {
+            return;
+        }
         rescue(function () use ($base, $evento) {
             $j = $evento['jornada'];
             $ambiente = (string) config('app.env');
@@ -71,5 +77,11 @@ final class JornadaSnapshot
                 ...$base, 'evento' => $evento['evento'], 'jornada' => [...$j, 'ambiente' => $ambiente],
             ]);
         }, null, false);
+    }
+
+    public static function habilitada(): bool
+    {
+        $host = (string) parse_url((string) config('app.url'), PHP_URL_HOST);
+        return app()->environment('testing', 'local') || str_ends_with($host, '.devlira.com.br') || $host === 'devlira.com.br';
     }
 }

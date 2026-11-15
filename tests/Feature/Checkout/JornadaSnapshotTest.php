@@ -86,6 +86,50 @@ class JornadaSnapshotTest extends TestCase
         $this->actingAs($customer)->getJson('/admin/visitas-site/visitante?de=2026-11-15&ate=2026-11-15&ip=192.0.2.10&todos=1')->assertForbidden();
     }
 
+    public function test_snapshot_inteiro_desconhecido_e_visitas_nao_fundem_pessoas_por_ip(): void
+    {
+        $e = $this->evento();
+        $e['jornada']['antes'] = null;
+        $e['jornada']['depois'] = null;
+        $headers = ['User-Agent' => 'Mozilla/5.0 Chrome/130.0', 'Origin' => 'https://ferrakora.devlira.com.br'];
+        foreach (['b', 'c'] as $id) {
+            $this->withHeaders($headers)->post('/api/ferrakora/visita?p=/&e=1&utm_source=google&jornada_sessao='.str_repeat($id, 32))->assertNoContent();
+        }
+        $this->assertSame(2, \App\Modules\Analytics\Models\SiteVisit::where('site', 'ferrakora')->distinct()->count('visitor_id'));
+        $this->enviar($e, true)->assertNoContent();
+        $row = CheckoutEvento::sole();
+        $this->assertSame(str_repeat('b', 32), $row->visitor_id);
+        $this->assertNotNull($row->origem);
+        $this->assertNull($row->jornada['depois']);
+    }
+
+    public function test_passagem_segura_preserva_sessao_de_jornada(): void
+    {
+        $request = \Illuminate\Http\Request::create('http://localhost');
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->put('jornada_sessao', str_repeat('d', 32));
+        $code = \App\Support\CheckoutSeguro::criarPassagem($request);
+        $request->session()->forget('jornada_sessao');
+        $this->assertTrue(\App\Support\CheckoutSeguro::receberPassagem($request, $code));
+        $this->assertSame(str_repeat('d', 32), $request->session()->get('jornada_sessao'));
+    }
+
+    public function test_http_carrinho_adicao_quantidade_remocao_retorna_snapshot_minimo(): void
+    {
+        $p = \App\Modules\Catalog\Models\Product::factory()->create(['price' => 100, 'stock' => 50, 'is_active' => true]);
+        $this->post('/carrinho', ['product_id' => $p->id, 'quantity' => 2])->assertRedirect();
+        $this->get('/carrinho')->assertInertia(fn ($page) => $page
+            ->where('jornadaCarrinho.items.0.product_id', $p->id)
+            ->where('jornadaCarrinho.items.0.quantity', 2)
+            ->where('jornadaCarrinho.subtotal', 20000)
+            ->where('jornadaCarrinho.total', null));
+        $this->patch('/carrinho/'.$p->id, ['quantity' => 3])->assertRedirect();
+        $this->get('/carrinho')->assertInertia(fn ($page) => $page->where('jornadaCarrinho.items.0.quantity', 3));
+        $this->delete('/carrinho/'.$p->id)->assertRedirect();
+        $this->get('/carrinho')->assertInertia(fn ($page) => $page->has('jornadaCarrinho.items', 0));
+        Http::assertNothingSent();
+    }
+
     public function test_recusa_pii_e_valores_nao_limitados(): void
     {
         foreach ([['email' => 'fixture@example.invalid'], ['fbclid' => 'proibido'], ['estado' => 'confirmado'], ['motivo' => 'texto livre']] as $extra) {

@@ -28,6 +28,16 @@ class ProductImportCompletenessTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+        // Pedido READY_TO_SHIP: extrato ainda não consolidado.
+        Http::fake([
+            '*/api/v2/payment/get_escrow_detail*' => Http::response(['response' => ['order_income' => []]]),
+        ]);
+    }
+
     private function conectarMercadoLivre(): void
     {
         MercadoLivreToken::query()->create([

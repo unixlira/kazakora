@@ -10,6 +10,8 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\EtiquetaMelhorEnvioComMarca;
+use App\Modules\Marketplace\Support\EtiquetaOcr;
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Marketplace\Support\FreteMaisBarato;
 use App\Modules\Marketplace\Support\J3FlexLabel;
 use App\Modules\Marketplace\Support\LabelProcessingService;
@@ -138,6 +140,24 @@ class LojaShippingDriver implements MarketplaceChannelDriver
                         ->map(fn ($i) => ['sku' => $i->product?->sku, 'quantidade' => (int) $i->quantity])
                         ->all(),
                 );
+                // Conferência por OCR (pedido do Lira em 15/11/2026, #4198): se
+                // a marca do Melhor Envio ainda aparece, a etiqueta não vai
+                // para a impressora e o admin é avisado. Sem OCR no servidor,
+                // não bloqueia (só fica no log).
+                if (app(EtiquetaOcr::class)->temMarcaDoMelhorEnvio($pdf) === true) {
+                    Log::warning('melhorenvio.etiqueta_com_marca_me', ['order_id' => $order->id, 'servico' => $envio->servico]);
+                    app(AlertasAdmin::class)->disparar(
+                        AlertasAdmin::ETIQUETA_MARCA,
+                        'pedido-'.$order->id,
+                        "Etiqueta do pedido #{$order->id} ainda com o Melhor Envio",
+                        "A troca pelo logo da loja não pegou na etiqueta {$envio->servico}. Ela não foi impressa; a original está no pedido.",
+                        "/admin/pedidos/{$order->id}",
+                    );
+
+                    return ['ready' => false, 'contents' => null, 'content_type' => null];
+                }
+                app(AlertasAdmin::class)->resolver(AlertasAdmin::ETIQUETA_MARCA, 'pedido-'.$order->id);
+
                 try {
                     $pdf = app(LabelProcessingService::class)->encaixarNaFolha($pdf);
                 } catch (\Throwable $e) {

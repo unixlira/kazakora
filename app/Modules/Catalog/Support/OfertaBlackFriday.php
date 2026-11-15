@@ -35,7 +35,7 @@ class OfertaBlackFriday
      */
     public static function comparativoPercentual(?array $comparativo, iterable $produtos): ?array
     {
-        if (empty($comparativo['oferta']['faixas'])) {
+        if (empty($comparativo['oferta']['faixas']) || strcasecmp($comparativo['oferta']['selo'] ?? '', self::SELO) !== 0) {
             return $comparativo;
         }
         $percentuais = [];

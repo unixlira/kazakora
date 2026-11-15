@@ -1,4 +1,5 @@
 <script setup>
+import { abrirEstoqueSessao, salvarEstoqueSessao } from '@/Shared/estoqueSessao';
 import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // Página de produto v2 (pedido 2026-10-09): mesmo layout da página de
 // produto da izeshop que o Lira mandou como referência — faixa amarela,
@@ -359,6 +360,95 @@ const seloPix = computed(() => {
 });
 // Total com a quantidade escolhida no Pix (kits).
 const totalPix = computed(() => precoPixPara(precoBase.value, unitPriceForQuantity(quantity.value), quantity.value));
+// Barra promocional: sorteio independente do estoque real; estado por produto e sessão.
+const ESTOQUE_BAIXO = 50;
+const ESTOQUE_SORTEIO_MIN = 7;
+const ESTOQUE_SORTEIO_MAX = 36;
+const estoqueReal = computed(() => (faltaVariacao.value
+    ? Math.max(0, ...opcoesVariacao.value.map((variant) => Number(variant.stock) || 0))
+    : Number(selecionada.value.stock) || 0));
+const estoqueBaixo = ref(null);
+const estoqueBarra = ref(ESTOQUE_BAIXO);
+const estoqueFundo = ref(false);
+const estoqueVermelho = ref(false);
+let estoqueTimers = [];
+const pararEstoque = () => {
+    estoqueTimers.forEach((id) => clearTimeout(id));
+    estoqueTimers = [];
+};
+const depois = (ms, fn) => estoqueTimers.push(setTimeout(fn, ms));
+const ESTOQUE_DESCIDA_MS = 1200;
+// No celular a barra fica abaixo da dobra e a animação acabava antes de a
+// pessoa chegar nela (Lira, 2026-10-23: "não aparece"). Lá ela espera cheia,
+// com o número sorteado, e só roda quando a barra chega na faixa do meio da
+// tela (30% centrais). Uma vez por página; trocar a variação depois roda na hora.
+const estoqueEl = ref(null);
+const ESTOQUE_ESPERA_MEIO = '(max-width: 900px)';
+let estoqueVisto = false;
+let observadorEstoque = null;
+const esperaMeio = () => !estoqueVisto && 'IntersectionObserver' in window && window.matchMedia?.(ESTOQUE_ESPERA_MEIO).matches;
+const rodarEstoque = (numero) => {
+    pararEstoque();
+    const produto = props.product.id;
+    depois(60, () => {
+        estoqueBarra.value = numero;
+        salvarEstoqueSessao(produto, { numero, barra: numero, vermelho: false });
+    });
+    if (numero < 2) return;
+    const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
+    depois(parada, () => {
+        const salvo = salvarEstoqueSessao(produto, { numero: numero - 1, barra: numero - 1, vermelho: true });
+        estoqueFundo.value = true;
+        estoqueVermelho.value = true;
+        estoqueBaixo.value = salvo.numero;
+        estoqueBarra.value = salvo.barra;
+    });
+};
+const pararObservadorEstoque = () => {
+    observadorEstoque?.disconnect();
+    observadorEstoque = null;
+};
+watch(estoqueEl, (el) => {
+    pararObservadorEstoque();
+    if (!el || !esperaMeio()) return;
+    observadorEstoque = new IntersectionObserver(([entrada]) => {
+        // Também dispara se a barra já passou do meio (rolagem rápida ou link com âncora).
+        const passou = entrada.rootBounds && entrada.boundingClientRect.top < entrada.rootBounds.top;
+        if (estoqueVisto || !(entrada.isIntersecting || passou)) return;
+        estoqueVisto = true;
+        pararObservadorEstoque();
+        if (estoqueBaixo.value) rodarEstoque(estoqueBaixo.value);
+    }, { rootMargin: '-35% 0px -35% 0px', threshold: 0 });
+    observadorEstoque.observe(el);
+});
+const animarEstoque = () => {
+    pararEstoque();
+    pararObservadorEstoque();
+    estoqueVisto = false;
+    estoqueFundo.value = false;
+    if (estoqueReal.value < 1) {
+        estoqueBaixo.value = null;
+        return;
+    }
+    const estado = abrirEstoqueSessao(props.product.id, () => ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1)));
+    const numero = estado.numero;
+    estoqueBaixo.value = numero;
+    estoqueVermelho.value = estado.vermelho;
+    if (!estado.novo || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        estoqueVisto = true;
+        estoqueBarra.value = numero;
+        salvarEstoqueSessao(props.product.id, { ...estado, barra: numero });
+        return;
+    }
+    estoqueBarra.value = ESTOQUE_BAIXO;
+    if (esperaMeio()) return;
+    rodarEstoque(numero);
+};
+onMounted(animarEstoque);
+onUnmounted(() => { pararEstoque(); pararObservadorEstoque(); });
+watch([() => props.product.id, () => estoqueReal.value > 0], animarEstoque);
+const barraEstoque = computed(() => Math.max(4, Math.round((estoqueBarra.value / ESTOQUE_BAIXO) * 100)));
+
 // Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
 const inStock = computed(() => (faltaVariacao.value
     ? opcoesVariacao.value.some((variant) => variant.stock > 0)
@@ -929,6 +1019,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </form>
 
                             <template v-if="inStock">
+                                <div v-if="estoqueBaixo" ref="estoqueEl" class="estoque-baixo">
+                                    <p><b>Só <span class="num" :class="{ fundo: estoqueFundo, vermelho: estoqueVermelho }">{{ estoqueBaixo }}</span> {{ estoqueBaixo === 1 ? 'unidade' : 'unidades' }}!</b></p>
+                                    <div class="estoque-barra" role="progressbar" :aria-valuenow="estoqueBaixo" aria-valuemin="0" :aria-valuemax="ESTOQUE_BAIXO" :aria-label="`Estoque: ${estoqueBaixo} unidades`">
+                                        <span :style="{ width: `${barraEstoque}%` }"></span>
+                                    </div>
+                                </div>
                                 <p v-if="faixasVisiveis.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong><span v-if="totalPix !== null" class="total-pix"> ou <b>{{ formatPrice(totalPix) }}</b> no Pix</span></p>
                             </template>
                             <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
@@ -1842,4 +1938,29 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
     .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }
 }
+
+/* Pré-requisitos visuais exclusivos da barra promocional. */
+.pd2 .estoque-baixo { margin: 12px 0 0; }
+.pd2 .estoque-baixo p { margin: 0 0 6px; font-size: 15px; color: var(--navy); }
+.pd2 .estoque-baixo b { color: var(--blue); font-weight: 700; }
+.pd2 .estoque-baixo i { color: #f97316; }
+.dark .pd2 .estoque-baixo p { color: var(--text); }
+.pd2 .estoque-barra { height: 8px; border-radius: 9999px; background: #dbe4f7; overflow: hidden; }
+.dark .pd2 .estoque-barra { background: rgba(255, 255, 255, .15); }
+.pd2 .estoque-barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--navy), var(--blue)); position: relative; overflow: hidden; transition: width 1.2s ease-in-out; }
+.pd2 .estoque-barra span::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; animation: estoque-listras 1s linear infinite; }
+@keyframes estoque-listras { to { background-position: 22.6px 0; } }
+.dark .pd2 .estoque-barra span { background: var(--blue); }
+.pd2 .compra .estoque-baixo { margin: 34px 0 10px; }
+.pd2 .compra .estoque-baixo p { margin: 0 0 6px; text-align: center; font-size: 13.5px; color: #111; line-height: 1.4; }
+.pd2 .compra .estoque-baixo b { color: #111; font-weight: 700; }
+.pd2 .compra .estoque-baixo p { font-weight: 700; }
+.pd2 .compra .estoque-baixo .num { display: inline-block; padding: 0 3px; border-radius: 4px; color: inherit; }
+.pd2 .compra .estoque-baixo .num.fundo { animation: estoque-fundo 1s ease-in; }
+@keyframes estoque-fundo { from { background-color: #e11d2a; color: #fff; } to { background-color: transparent; color: #e11d2a; } }
+.pd2 .compra .estoque-baixo .num.vermelho { color: #e11d2a; }
+.pd2 .compra .estoque-barra { height: 9px; border-radius: 999px; background: #dedede; }
+.pd2 .compra .estoque-barra span { background: #000; }
+.pd2 .compra .estoque-barra span::after { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .1) 0 8px, transparent 8px 16px); background-size: 22.6px 100%; }
+@media (prefers-reduced-motion: reduce) { .pd2 .estoque-barra span, .pd2 .estoque-barra span::after, .pd2 .compra .estoque-baixo .num.fundo { animation: none; transition: none; } }
 </style>

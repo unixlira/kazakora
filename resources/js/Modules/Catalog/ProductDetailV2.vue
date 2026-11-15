@@ -1,5 +1,6 @@
 <script setup>
 import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
+import { abrirEstoqueSessao, salvarEstoqueSessao } from '@/Shared/estoqueSessao';
 // Página de produto v2 (pedido 2026-10-09): mesmo layout da página de
 // produto da izeshop que o Lira mandou como referência — faixa amarela,
 // galeria + box de compra fixo à direita (60/40), cards brancos arredondados,
@@ -396,14 +397,19 @@ let observadorEstoque = null;
 const esperaMeio = () => !estoqueVisto && 'IntersectionObserver' in window && window.matchMedia?.(ESTOQUE_ESPERA_MEIO).matches;
 const rodarEstoque = (numero) => {
     pararEstoque();
-    depois(60, () => { estoqueBarra.value = numero; });
+    const produto = props.product.id;
+    depois(60, () => {
+        estoqueBarra.value = numero;
+        salvarEstoqueSessao(produto, { numero, barra: numero, vermelho: false });
+    });
     if (numero < 2) return;
     const parada = 60 + ESTOQUE_DESCIDA_MS + 3000;
     depois(parada, () => {
+        const salvo = salvarEstoqueSessao(produto, { numero: numero - 1, barra: numero - 1, vermelho: true });
         estoqueFundo.value = true;
         estoqueVermelho.value = true;
-        estoqueBaixo.value = numero - 1;
-        estoqueBarra.value = numero - 1;
+        estoqueBaixo.value = salvo.numero;
+        estoqueBarra.value = salvo.barra;
     });
 };
 const pararObservadorEstoque = () => {
@@ -425,26 +431,30 @@ watch(estoqueEl, (el) => {
 });
 const animarEstoque = () => {
     pararEstoque();
+    pararObservadorEstoque();
+    estoqueVisto = false;
     estoqueFundo.value = false;
-    estoqueVermelho.value = false;
     if (estoqueReal.value < 1) {
         estoqueBaixo.value = null;
         return;
     }
-    const numero = ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1));
+    const estado = abrirEstoqueSessao(props.product.id, () => ESTOQUE_SORTEIO_MIN + Math.floor(Math.random() * (ESTOQUE_SORTEIO_MAX - ESTOQUE_SORTEIO_MIN + 1)));
+    const numero = estado.numero;
     estoqueBaixo.value = numero;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    estoqueVermelho.value = estado.vermelho;
+    if (!estado.novo || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        estoqueVisto = true;
         estoqueBarra.value = numero;
+        salvarEstoqueSessao(props.product.id, { ...estado, barra: numero });
         return;
     }
-    // Pinta a barra cheia primeiro; o recolhimento sai no tick seguinte para a transição rodar.
     estoqueBarra.value = ESTOQUE_BAIXO;
     if (esperaMeio()) return;
     rodarEstoque(numero);
 };
 onMounted(animarEstoque);
 onUnmounted(() => { pararEstoque(); pararObservadorEstoque(); });
-watch(() => [selecionada.value.id, estoqueReal.value], animarEstoque);
+watch([() => props.product.id, () => estoqueReal.value > 0], animarEstoque);
 const barraEstoque = computed(() => Math.max(4, Math.round((estoqueBarra.value / ESTOQUE_BAIXO) * 100)));
 // Só cita o que vale para o produto: frete grátis e desconto do Pix.
 const complementoEstoque = computed(() => {

@@ -26,6 +26,30 @@ use Throwable;
  */
 class LeadsDigitados
 {
+    /**
+     * Abrir o checkout já vira lead, sem nada digitado (pedido do Lira em
+     * 15/11/2026): a cliente da luminária abriu, ficou 8 s e saiu, e a tela
+     * de Leads não mostrou nada. A linha nasce com os produtos, o valor e a
+     * origem; os campos chegam depois, na mesma linha.
+     */
+    public const ABRIU = 'abriu';
+
+    public function registrarAbertura(Request $request): ?Lead
+    {
+        try {
+            $campos = [];
+            if ($user = $request->user()) {
+                $campos = ['nome' => $user->name, 'email' => $user->email];
+            }
+
+            return $this->gravar($request, $campos, self::ABRIU, true);
+        } catch (Throwable $e) {
+            Log::warning('checkout.lead_abertura.falhou', ['erro' => $e::class]);
+
+            return null;
+        }
+    }
+
     public function __construct(private readonly LeadsDoCheckout $checkout)
     {
     }
@@ -106,7 +130,8 @@ class LeadsDigitados
     {
         try {
             $dados = array_filter(self::normalizar($campos), fn ($v) => $v !== null);
-            if ($dados === [] || $itens === [] || $sessao === '') {
+            // Abrir o checkout já vira lead (pedido do Lira em 15/11/2026): campo "abriu", sem dados.
+            if (($dados === [] && $ultimoCampo !== self::ABRIU) || $itens === [] || $sessao === '') {
                 return null;
             }
 
@@ -171,14 +196,14 @@ class LeadsDigitados
         ];
     }
 
-    private function gravar(Request $request, array $campos, ?string $ultimoCampo): ?Lead
+    private function gravar(Request $request, array $campos, ?string $ultimoCampo, bool $abertura = false): ?Lead
     {
         if (! $request->hasSession()) {
             return null;
         }
 
         $dados = array_filter(self::normalizar($campos), fn ($v) => $v !== null);
-        if ($dados === []) {
+        if ($dados === [] && ! $abertura) {
             return null;
         }
 

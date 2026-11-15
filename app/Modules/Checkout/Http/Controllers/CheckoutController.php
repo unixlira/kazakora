@@ -2039,6 +2039,10 @@ class CheckoutController extends Controller
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
         // Visitas ao site (2026-11-12): a visita desta tela guarda o valor e os itens do checkout.
         \App\Modules\Analytics\Support\PrecoVisto::guardarCheckout($request, $cartItems);
+        // Leads (15/11/2026): abrir o checkout já cria a linha, mesmo sem nada digitado.
+        if ($request->isMethod('get') && $cartItems->isNotEmpty()) {
+            app(\App\Modules\Checkout\Support\LeadsDigitados::class)->registrarAbertura($request);
+        }
 
         return [
             'items' => $cartItems,

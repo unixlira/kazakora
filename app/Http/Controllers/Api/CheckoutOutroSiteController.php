@@ -229,6 +229,7 @@ abstract class CheckoutOutroSiteController extends Controller
             $dados = $request->validate([
                 ...$this->regrasDosItens(),
                 'sessao' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
+                'jornada_sessao' => ['nullable', 'string', 'regex:/^[a-f0-9]{32}$/D'],
                 'campo' => ['nullable', 'string', 'max:20'],
                 ...array_fill_keys(Lead::CAMPOS, ['nullable', 'string', 'max:300']),
             ]);
@@ -245,7 +246,7 @@ abstract class CheckoutOutroSiteController extends Controller
                     'subtotal' => round((float) $item['subtotal'], 2),
                 ])->values()->all();
 
-            $leads->registrarDeOutroSite($request, $this->checkout->site(), $dados['sessao'], $dados, $dados['campo'] ?? null, $itens);
+            $leads->registrarDeOutroSite($request, $this->checkout->site(), $dados['sessao'], $dados, $dados['campo'] ?? null, $itens, $dados['jornada_sessao'] ?? null);
         }, null, false);
 
         return response()->noContent();

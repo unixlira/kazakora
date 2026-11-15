@@ -191,7 +191,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
                 ...$bloco,
                 'imagem_url' => isset($bloco['imagem']) && $bloco['imagem'] !== null ? $fotos->get((int) $bloco['imagem'])?->url : null,
             ])->values()->all(),
-            'comparativo' => $conteudo->comparativo,
+            'comparativo' => OfertaBlackFriday::comparativoPercentual(
+                $conteudo->comparativo, collect([$pai])->concat(Product::query()->where('parent_product_id', $pai->id)->get()),
+            ),
             'beneficios' => $conteudo->beneficios ?? [],
             'duvidas' => $conteudo->duvidas ?? [],
             'fonte' => $conteudo->fonte,

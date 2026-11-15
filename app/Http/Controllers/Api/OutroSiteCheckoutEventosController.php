@@ -60,6 +60,10 @@ class OutroSiteCheckoutEventosController extends Controller
         $origem = collect($eventos)->contains('evento', 'abriu') ? CheckoutEvento::origemDaVisita($visitante, $site) : null;
 
         foreach ($eventos as $evento) {
+            if (isset($evento['jornada'])) {
+                \App\Modules\Analytics\Support\JornadaSnapshot::gravar($base, $evento);
+                continue;
+            }
             CheckoutEvento::create([
                 ...$base,
                 'evento' => $evento['evento'],

@@ -1,4 +1,5 @@
 <script setup>
+import { snapshot, registrarJornada } from '@/Shared/jornadaCarrinho.mjs';
 import { abrirEstoqueSessao, salvarEstoqueSessao } from '@/Shared/estoqueSessao';
 import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // Página de produto v2 (pedido 2026-10-09): mesmo layout da página de
@@ -674,6 +675,19 @@ let pararMedicao = null;
 onMounted(() => { pararMedicao = medirRolagem(props.product.id); });
 onUnmounted(() => pararMedicao?.());
 
+const precoDaJornada = () => snapshot({ items: [{ product: precoBase.value, quantity: quantity.value, unit_price: unitPriceForQuantity(quantity.value) }], subtotal: currentTotal.value, total: currentTotal.value });
+let ultimoPrecoJornada;
+onMounted(() => {
+    ultimoPrecoJornada = precoDaJornada();
+    registrarJornada('produto_visto', ultimoPrecoJornada);
+    registrarJornada('preco_exibido', ultimoPrecoJornada);
+});
+watch(() => [precoBase.value.id, currentTotal.value, quantity.value], () => {
+    const depois = precoDaJornada();
+    const antes = ultimoPrecoJornada ?? depois;
+    registrarJornada(antes.items[0]?.product_id !== depois.items[0]?.product_id ? 'variante_escolhida' : 'preco_exibido', antes, depois, 'observado', antes.items[0]?.product_id !== depois.items[0]?.product_id ? 'variante' : 'quantidade');
+    ultimoPrecoJornada = depois;
+});
 const buyingNow = ref(false);
 
 // "Comprar": finalização só com este produto, sem colocar no carrinho

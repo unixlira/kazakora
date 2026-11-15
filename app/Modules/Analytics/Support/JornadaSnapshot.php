@@ -7,7 +7,7 @@ use App\Modules\Analytics\Models\CheckoutEvento;
 /** Internal analytics only: no marketing dispatch, arbitrary strings or form values. */
 final class JornadaSnapshot
 {
-    public const EVENTOS = ['pagina_vista', 'produto_visto', 'variante_escolhida', 'carrinho_adicionar', 'carrinho_remover', 'carrinho_quantidade', 'carrinho_visto', 'checkout_inicio', 'frete_cotado', 'cupom_aceito', 'cupom_recusado', 'preco_exibido'];
+    public const EVENTOS = ['pagina_vista', 'produto_visto', 'variante_escolhida', 'carrinho_adicionar', 'carrinho_remover', 'carrinho_quantidade', 'carrinho_visto', 'checkout_inicio', 'frete_cotado', 'cupom_aceito', 'cupom_recusado', 'preco_exibido', 'pagamento_intencao'];
 
     public static function valido(array $e): bool
     {
@@ -23,8 +23,9 @@ final class JornadaSnapshot
                 return false;
             }
         }
-        return in_array($j['estado'] ?? null, ['intent', 'observado'], true)
-            && in_array($j['motivo'] ?? null, ['quantidade', 'adicao', 'remocao', 'variante', 'frete', 'cupom', 'navegacao', 'desconhecido'], true)
+        return ($e['evento'] !== 'pagamento_intencao' || (($j['estado'] ?? null) === 'intent' && in_array($j['motivo'] ?? null, ['pix', 'cartao', 'boleto'], true)))
+            && in_array($j['estado'] ?? null, ['intent', 'observado'], true)
+            && in_array($j['motivo'] ?? null, ['quantidade', 'adicao', 'remocao', 'variante', 'frete', 'cupom', 'navegacao', 'desconhecido', 'pix', 'cartao', 'boleto'], true)
             && self::preco($j['antes'] ?? null) && self::preco($j['depois'] ?? null);
     }
 
@@ -35,6 +36,10 @@ final class JornadaSnapshot
             return false;
         }
         foreach (['subtotal', 'discount', 'shipping', 'interest', 'total'] as $key) {
+            // Unknown is not free. Browser snapshots never certify server totals.
+            if ($p[$key] === null) {
+                continue;
+            }
             if (! is_int($p[$key]) || $p[$key] < 0 || $p[$key] > 100000000) {
                 return false;
             }

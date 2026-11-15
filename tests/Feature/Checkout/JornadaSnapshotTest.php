@@ -56,6 +56,36 @@ class JornadaSnapshotTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_custos_desconhecidos_e_intencao_segura_nao_sao_confirmacao(): void
+    {
+        $e = $this->evento();
+        $e['evento'] = 'pagamento_intencao';
+        $e['jornada']['estado'] = 'intent';
+        $e['jornada']['motivo'] = 'pix';
+        $e['jornada']['depois']['shipping'] = null;
+        $this->enviar($e)->assertNoContent();
+        $this->assertNull(CheckoutEvento::sole()->jornada['depois']['shipping']);
+        $e['jornada']['estado'] = 'observado';
+        $this->enviar($e)->assertStatus(422);
+    }
+
+    public function test_olho_retorna_jornada_por_sessao_sem_pii(): void
+    {
+        $this->travelTo('2026-11-15 15:00:00');
+        $e = $this->evento();
+        $e['evento'] = 'carrinho_adicionar';
+        $this->enviar($e)->assertNoContent();
+        $visitor = CheckoutEvento::sole()->visitor_id;
+        \App\Modules\Analytics\Models\SiteVisit::create(['site' => 'kazakora', 'visitor_id' => $visitor,
+            'ip' => '192.0.2.10', 'path' => '/carrinho', 'consentiu' => false]);
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        $this->actingAs($admin)->getJson('/admin/visitas-site/visitante?de=2026-11-15&ate=2026-11-15&ip=192.0.2.10&todos=1')
+            ->assertOk()->assertJsonPath('jornada.sessoes.0.adicoes', 1)
+            ->assertJsonPath('jornada.timeline.0.jornada.depois.total', 20000);
+        $customer = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_CUSTOMER]);
+        $this->actingAs($customer)->getJson('/admin/visitas-site/visitante?de=2026-11-15&ate=2026-11-15&ip=192.0.2.10&todos=1')->assertForbidden();
+    }
+
     public function test_recusa_pii_e_valores_nao_limitados(): void
     {
         foreach ([['email' => 'fixture@example.invalid'], ['fbclid' => 'proibido'], ['estado' => 'confirmado'], ['motivo' => 'texto livre']] as $extra) {

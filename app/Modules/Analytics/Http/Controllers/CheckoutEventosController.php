@@ -61,7 +61,7 @@ class CheckoutEventosController extends Controller
 
         foreach ($eventos as $evento) {
             if (isset($evento['jornada'])) {
-                \App\Modules\Analytics\Support\JornadaSnapshot::gravar($base, $evento);
+                \App\Modules\Analytics\Support\JornadaSnapshot::gravar([...$base, 'origem' => CheckoutEvento::origemDaVisita($visitante)], $evento);
                 continue;
             }
             CheckoutEvento::create([

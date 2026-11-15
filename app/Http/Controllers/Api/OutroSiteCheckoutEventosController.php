@@ -61,7 +61,8 @@ class OutroSiteCheckoutEventosController extends Controller
 
         foreach ($eventos as $evento) {
             if (isset($evento['jornada'])) {
-                \App\Modules\Analytics\Support\JornadaSnapshot::gravar($base, $evento);
+                // New journey events use a random session, never an IP-derived identity.
+                \App\Modules\Analytics\Support\JornadaSnapshot::gravar([...$base, 'visitor_id' => $evento['jornada']['sessao']], $evento);
                 continue;
             }
             CheckoutEvento::create([

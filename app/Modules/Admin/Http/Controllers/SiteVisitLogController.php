@@ -304,7 +304,22 @@ class SiteVisitLogController extends Controller
             ->get(['path', 'preco_visto', 'frete_visto', 'itens_vistos'])
             ->unique('path')->keyBy('path');
 
+        $journey = \App\Modules\Analytics\Models\CheckoutEvento::query()
+            ->when($doSite === 'kazakora', fn ($q) => $q->whereNull('site'), fn ($q) => $q->where('site', $doSite))
+            ->whereIn('visitor_id', (clone $query)->select('visitor_id')->distinct())
+            ->where('created_at', '>=', $de)->where('created_at', '<', $fim)
+            ->whereNotNull('jornada')->orderByDesc('id')->limit(300)->get()->reverse()->values();
+
         return response()->json([
+            'jornada' => [
+                'limite' => 300,
+                'sessoes' => $journey->groupBy('jornada.sessao')->map(fn ($events, $session) => [
+                    'sessao' => $session,
+                    'adicoes' => $events->where('evento', 'carrinho_adicionar')->where('jornada.estado', 'observado')->count(),
+                    'remocoes' => $events->where('evento', 'carrinho_remover')->where('jornada.estado', 'observado')->count(),
+                ])->values(),
+                'timeline' => $journey->map(fn ($e) => ['id' => $e->id, 'quando' => $e->created_at?->toIso8601String(), 'evento' => $e->evento, 'origem' => $e->origem, 'proveniencia' => 'browser', 'jornada' => $e->jornada]),
+            ],
             'rotas' => [
                 'distintas' => $rotas->count(),
                 'lista' => $rotas->take(self::MAX_ROTAS)->map(fn ($r) => [

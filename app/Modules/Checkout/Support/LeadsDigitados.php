@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Support;
 
 use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\JornadaSnapshot;
 use App\Modules\Checkout\Models\Lead;
 use App\Modules\Checkout\Models\Order;
 use App\Support\SiteAtual;
@@ -102,7 +103,7 @@ class LeadsDigitados
      * @param  array<string, mixed>  $campos
      * @param  list<array<string, mixed>>  $itens  no formato de LeadsDoCheckout::itensDoCarrinho()
      */
-    public function registrarDeOutroSite(Request $request, string $site, string $sessao, array $campos, ?string $ultimoCampo, array $itens): ?Lead
+    public function registrarDeOutroSite(Request $request, string $site, string $sessao, array $campos, ?string $ultimoCampo, array $itens, ?string $jornadaSessao = null): ?Lead
     {
         try {
             $dados = array_filter(self::normalizar($campos), fn ($v) => $v !== null);
@@ -112,6 +113,13 @@ class LeadsDigitados
 
             $sessionId = mb_substr($site.'-'.$sessao, 0, 100);
             $visitante = $request->ip() !== null ? substr(md5($request->ip()), 0, 32) : null;
+            $origem = (string) ($request->headers->get('origin') ?: $request->headers->get('referer'));
+            $host = preg_replace('/^www\./', '', strtolower((string) parse_url($origem, PHP_URL_HOST)));
+            if ($site === 'ferrakora' && JornadaSnapshot::habilitada()
+                && in_array($host, ['ferrakora.devlira.com.br', 'seguro.ferrakora.devlira.com.br'], true)
+                && $jornadaSessao !== null && preg_match('/^[a-f0-9]{32}$/D', $jornadaSessao) === 1) {
+                $visitante = $jornadaSessao;
+            }
 
             $valores = [
                 ...$dados,

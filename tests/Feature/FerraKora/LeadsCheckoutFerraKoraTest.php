@@ -65,6 +65,50 @@ class LeadsCheckoutFerraKoraTest extends TestCase
         $this->assertSame(Lead::STATUS_ABERTO, $lead->status);
     }
 
+    public function test_jornada_liga_origem_e_utm_sem_fundir_pessoas_no_mesmo_ip(): void
+    {
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        config(['services.ferrakora.origens' => 'ferrakora.devlira.com.br']);
+        foreach (['a', 'b'] as $id) {
+            SiteVisit::create(['site' => 'ferrakora', 'visitor_id' => str_repeat($id, 32), 'ip' => '127.0.0.1',
+                'path' => '/', 'origem' => 'meta_ads', 'utm_source' => 'fixture-'.$id,
+                'utm_medium' => 'cpc', 'utm_campaign' => 'campaign-'.$id, 'consentiu' => false]);
+            // Outro site não pode fornecer atribuição ao lead Ferra.
+            SiteVisit::create(['site' => 'beautykora', 'visitor_id' => str_repeat($id, 32), 'path' => '/',
+                'utm_source' => 'wrong-site', 'consentiu' => false]);
+            foreach (['nome' => 'Pessoa Fixture '.$id, 'email' => $id.'@example.invalid'] as $campo => $valor) {
+                $this->withHeader('Origin', 'https://ferrakora.devlira.com.br')->postJson('/api/ferrakora/checkout/lead', [
+                    'itens' => $this->itens(), 'sessao' => 'legacy-'.$id, 'jornada_sessao' => str_repeat($id, 32),
+                    'campo' => $campo, $campo => $valor,
+                ])->assertNoContent();
+            }
+            $lead = Lead::where('session_id', 'ferrakora-legacy-'.$id)->sole();
+            $this->assertSame(str_repeat($id, 32), $lead->visitor_id);
+            $this->assertSame('fixture-'.$id, $lead->utm_source);
+            $this->assertSame('meta_ads', $lead->origem);
+            $this->assertSame('cpc', $lead->utm_medium);
+            $this->assertSame('campaign-'.$id, $lead->utm_campaign);
+            $this->assertSame($id.'@example.invalid', $lead->email);
+        }
+        $this->assertSame(2, Lead::count());
+        \Illuminate\Support\Facades\Http::assertNothingSent();
+    }
+
+    public function test_jornada_invalida_nao_grava_e_origem_errada_nao_reutiliza_visita(): void
+    {
+        config(['services.ferrakora.origens' => 'ferrakora.devlira.com.br']);
+        foreach (['bad', ['a'], str_repeat('A', 32)] as $invalid) {
+            $this->postJson('/api/ferrakora/checkout/lead', ['itens' => $this->itens(), 'sessao' => 'invalid',
+                'nome' => 'Pessoa Fixture', 'jornada_sessao' => $invalid])->assertNoContent();
+        }
+        $this->assertSame(0, Lead::count());
+        $this->withHeader('Origin', 'https://wrong.invalid')->postJson('/api/ferrakora/checkout/lead', [
+            'itens' => $this->itens(), 'sessao' => 'wrong', 'nome' => 'Pessoa Fixture',
+            'jornada_sessao' => str_repeat('a', 32),
+        ])->assertNoContent();
+        $this->assertSame(substr(md5('127.0.0.1'), 0, 32), Lead::sole()->visitor_id);
+    }
+
     public function test_dado_ruim_nunca_quebra_o_checkout(): void
     {
         $this->postJson('/api/ferrakora/checkout/lead', ['itens' => $this->itens(), 'sessao' => 'aba"; drop', 'cep' => '01310100'])->assertNoContent();

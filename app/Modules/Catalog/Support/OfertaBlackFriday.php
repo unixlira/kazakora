@@ -46,13 +46,14 @@ class OfertaBlackFriday
                 continue;
             }
             $chave = (int) round($economia * 100);
-            $pct = rtrim(rtrim(number_format($economia / $base * 100, 2, ',', '.'), '0'), ',').'%';
-            $percentuais[$chave][$pct] = true;
+            // Mantém a precisão anterior para detectar bases ambíguas; só a exibição perde as casas.
+            $pct = round($economia / $base * 100, 2);
+            $percentuais[$chave][(string) $pct] = (int) floor($pct).'%';
         }
         foreach ($comparativo['oferta']['faixas'] as &$faixa) {
             $faixa['valor'] = preg_replace_callback('/R\$\s*([\d.]+,\d{2})(?=\s+(?:de desconto|off)\b)/iu', function (array $match) use ($percentuais): string {
                 $centavos = (int) round((float) str_replace([ '.', ',' ], [ '', '.' ], $match[1]) * 100);
-                $opcoes = array_keys($percentuais[$centavos] ?? []);
+                $opcoes = array_values($percentuais[$centavos] ?? []);
 
                 return count($opcoes) === 1 ? $opcoes[0] : $match[0];
             }, $faixa['valor'] ?? '');

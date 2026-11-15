@@ -81,7 +81,7 @@ class EtiquetaComMarcaTest extends TestCase
 
     public function test_ferrakora_sai_com_o_logo_preto_e_branco_dela(): void
     {
-        $this->assertSame('images/marca/logo-ferrakora-etiqueta.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
+        $this->assertSame('images/marca/logo-ferrakora-etiqueta-v2.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
         $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::KAZAKORA));
         $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(null));
 

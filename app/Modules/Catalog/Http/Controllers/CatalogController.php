@@ -467,6 +467,15 @@ class CatalogController extends Controller
         // e os produtos de Vender › Promoções (2026-10-21), em cache.
         $promocoes = PromocoesDoProduto::paraPagina($product);
 
+        // Cópia de apresentação: preserva o anúncio no banco e todos os preços.
+        if ($version === 2 && $product->adContent) {
+            $conteudoCard = clone $product->adContent;
+            $conteudoCard->comparativo = OfertaBlackFriday::comparativoPercentual(
+                $conteudoCard->comparativo, collect([$product])->concat($variations),
+            );
+            $product->setRelation('adContent', $conteudoCard);
+        }
+
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).

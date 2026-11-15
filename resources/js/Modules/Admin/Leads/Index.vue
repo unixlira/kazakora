@@ -52,13 +52,23 @@ const abas = [
 
 const columns = [
     {
+        // Coluna própria do projeto (pedido do Lira em 15/11/2026).
+        id: 'projeto',
+        header: 'Projeto',
+        enableSorting: false,
+        meta: { cellClass: 'whitespace-nowrap' },
+        cell: ({ row }) => h('span', {
+            class: ['inline-block rounded px-2 py-0.5 text-xs font-semibold', row.original.site === 'ferrakora' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'],
+        }, nomeDoSite(row.original.site)),
+    },
+    {
         id: 'cliente',
         header: 'Cliente',
         enableSorting: false,
         cell: ({ row }) => h('div', {}, [
             h('div', { class: 'flex items-center gap-1.5 font-medium' }, [
                 row.original.agora ? h('span', { class: 'inline-block h-2 w-2 animate-pulse rounded-full bg-green-500', title: 'No checkout agora' }) : null,
-                row.original.nome ?? 'Sem nome',
+                row.original.nome ?? (row.original.email || row.original.telefone || row.original.cpf || row.original.cep ? 'Sem nome' : 'Só abriu o checkout'),
             ]),
             h('div', { class: 'text-xs text-slate-400' }, row.original.cpf ? maskCpfCnpj(row.original.cpf) : 'Sem CPF'),
         ]),
@@ -101,12 +111,9 @@ const columns = [
     },
     {
         id: 'origem',
-        header: 'Loja / origem',
+        header: 'Origem',
         enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'text-xs' }, [
-            h('div', { class: 'font-medium' }, nomeDoSite(row.original.site)),
-            h('div', { class: 'text-slate-400' }, [row.original.origem, row.original.utm_source].filter(Boolean).join(' · ') || '-'),
-        ]),
+        cell: ({ row }) => h('div', { class: 'text-xs text-slate-500' }, [row.original.origem, row.original.utm_source, row.original.utm_campaign].filter(Boolean).join(' · ') || '-'),
     },
     {
         id: 'quando',
@@ -153,7 +160,7 @@ const columns = [
         </div>
 
         <div class="mb-3 flex flex-wrap items-center gap-2">
-            <label class="text-sm text-slate-600" for="filtro-site">Loja</label>
+            <label class="text-sm text-slate-600" for="filtro-site">Projeto</label>
             <select id="filtro-site" class="rounded-md border border-slate-300 px-2 py-1 text-sm" :value="filters.site ?? ''" @change="visit({ site: $event.target.value || null })">
                 <option value="">Todas</option>
                 <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.nome }}</option>

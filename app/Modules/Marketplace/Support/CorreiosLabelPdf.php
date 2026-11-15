@@ -37,6 +37,8 @@ class CorreiosLabelPdf
      * FerraKora (pedido do Lira 2026-10-28: pedido da FerraKora saía com o
      * nome KazaKora e sem o logo dela) 420x135 px → 28 x 9 mm: o logo
      * oficial é 3D, então vai em cinza sobre preto, como no topo do site.
+     * 14/11/2026: trocado pelo logo da marca nova ("FerraKora" do site), em
+     * preto sobre branco, no mesmo arquivo e tamanho.
      */
     private const LOGOS = [
         'amazon' => ['arquivo' => 'etiquetas/amazon.png', 'largura' => 18.0],

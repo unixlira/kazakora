@@ -21,11 +21,13 @@ class EtiquetaMelhorEnvioComMarca
     private const LOGO = 'images/marca/logo-kazakora-fiel.png';
 
     /**
-     * Logo da FerraKora para a térmica: o do site é metal e fogo para fundo
-     * escuro e some no papel. Este é o mesmo desenho (martelo no F, serra no
-     * O) só em preto sobre branco, sem degradê.
+     * Logo da FerraKora para a térmica. Desde 14/11/2026 é o da marca nova
+     * (o "FerraKora" verde-limão e índigo do site), todo em preto sobre
+     * branco: a térmica imprime uma cor só e o verde sairia claro demais. O
+     * antigo (martelo no F, serra no O) saiu na etiqueta do #4162 e o Lira
+     * mandou trocar. Arquivo novo de propósito, para nada guardar o velho.
      */
-    private const LOGO_FERRAKORA = 'images/marca/logo-ferrakora-etiqueta.png';
+    private const LOGO_FERRAKORA = 'images/marca/logo-ferrakora-etiqueta-v2.png';
 
     /**
      * Área do logo do Melhor Envio por modelo, em fração da página

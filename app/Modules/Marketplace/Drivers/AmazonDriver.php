@@ -11,7 +11,10 @@ use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Marketplace\Exceptions\PagamentoAmazonPendenteException;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Support\AmazonDbaShipping;
+use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\PagamentoAmazon;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
@@ -22,6 +25,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 /**
  * Amazon (Selling Partner API / SP-API) — docs:
@@ -409,12 +413,67 @@ class AmazonDriver extends AbstractMarketplaceDriver
             throw new PagamentoAmazonPendenteException("Etiqueta não gerada: pagamento do pedido {$order->external_order_id} ainda não confirmado na Amazon.");
         }
 
-        return app(AmazonDbaShipping::class)->agendar($order);
+        $correios = app(CorreiosAutoShipping::class);
+
+        // Pedido que já caiu no plano B: segue pelos Correios, sem tentar o DBA de novo.
+        if ($prePostagem = $correios->geradaPara($order)) {
+            return $this->peloContratoDosCorreios($order, $prePostagem);
+        }
+
+        try {
+            return app(AmazonDbaShipping::class)->agendar($order);
+        } catch (Throwable $e) {
+            if (! self::dbaNaoAceitaOPedido($e)) {
+                throw $e;
+            }
+
+            // Plano B (Lira, 15/11/2026, #4186: "isso não deve ser manual...
+            // só quero que essa merda não fique travada"): a Amazon recusou o
+            // Easy Ship para este pedido ("operation is not supported for the
+            // given order", envio de SP para Porto Alegre). Sem DBA não há
+            // etiqueta da Amazon: sai pelo contrato dos Correios, como em
+            // outubro, imprime sozinha e o rastreio é confirmado na Amazon
+            // (ConfirmAmazonShipment).
+            Log::warning('amazon.dba_recusado_vai_correios', ['order_id' => $order->id, 'motivo' => mb_substr($e->getMessage(), 0, 200)]);
+            app(\App\Modules\Checkout\Support\OrderFulfillmentTimeline::class)->record(
+                $order,
+                OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                'A Amazon não aceita o Ponto de Envio (DBA) para este pedido; a etiqueta sai pelo contrato dos Correios.',
+            );
+
+            return $this->peloContratoDosCorreios($order, $correios->confirm($order));
+        }
     }
 
-    /** Etiqueta do DBA baixada no agendamento (AmazonDbaShipping). */
+    /** A recusa do Easy Ship que não muda tentando de novo: o pedido não é elegível ao DBA. */
+    public static function dbaNaoAceitaOPedido(Throwable $e): bool
+    {
+        return str_contains(mb_strtolower($e->getMessage()), 'not supported for the given order');
+    }
+
+    /** @return array{external_shipment_id: ?string, tracking_code: ?string, shipping_method: string, status: string} */
+    private function peloContratoDosCorreios(Order $order, CorreiosPrePostagem $prePostagem): array
+    {
+        \App\Jobs\ConfirmAmazonShipment::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
+
+        return [
+            'external_shipment_id' => $prePostagem->correios_id,
+            'tracking_code' => $prePostagem->codigo_objeto,
+            'shipping_method' => 'Correios '.$prePostagem->service_label.' (contrato)',
+            'status' => 'confirmed',
+        ];
+    }
+
+    /** Etiqueta do DBA baixada no agendamento (AmazonDbaShipping), ou a dos Correios no plano B. */
     public function fetchLabel(Order $order): array
     {
+        $correios = app(CorreiosAutoShipping::class);
+        $prePostagem = $correios->geradaPara($order);
+        if ($prePostagem && ! $correios->problemaDaEtiqueta($order, $prePostagem)) {
+            return ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf'];
+        }
+
         $etiqueta = app(AmazonDbaShipping::class)->etiqueta($order);
 
         return $etiqueta !== null

@@ -125,10 +125,8 @@ class EtiquetaMelhorEnvioComMarca
      */
     public function aplicar(string $pdf, ?string $servico, ?int $orderId = null, ?string $site = null, array $itens = []): string
     {
-        $modelo = self::modelo($servico);
-        if (! $modelo || ! isset(self::AREAS[$modelo])) {
-            Log::channel(config('melhorenvio.log_channel'))->info('melhorenvio.logo_sem_posicao', ['order_id' => $orderId, 'servico' => $servico]);
-
+        $layout = $this->layout($pdf, $servico, $orderId);
+        if ($layout === null) {
             return $pdf;
         }
 
@@ -148,43 +146,50 @@ class EtiquetaMelhorEnvioComMarca
                 $fpdi->useTemplate($modeloPdf, 0, 0, $w, $h);
 
                 if ($i === 1) {
-                    [$x0, $y0, $x1, $y1] = self::AREAS[$modelo];
                     $fpdi->SetFillColor(255, 255, 255);
-                    $fpdi->Rect($x0 * $w, $y0 * $h, ($x1 - $x0) * $w, ($y1 - $y0) * $h, 'F');
-
-                    $logo = public_path(self::logo($site));
-
-                    // Logo centrado na área, ocupando 90% da largura dela (ou
-                    // 90% da altura, se o desenho for alto demais para a área).
-                    [$lw, $lh] = getimagesize($logo);
-                    $largura = ($x1 - $x0) * $w * 0.9;
-                    $altura = $largura * $lh / $lw;
-                    if ($altura > ($y1 - $y0) * $h * 0.9) {
-                        $altura = ($y1 - $y0) * $h * 0.9;
-                        $largura = $altura * $lw / $lh;
+                    foreach ($layout['cobrir'] as [$cx0, $cy0, $cx1, $cy1]) {
+                        $fpdi->Rect($cx0 * $w, $cy0 * $h, ($cx1 - $cx0) * $w, ($cy1 - $cy0) * $h, 'F');
                     }
-                    $fpdi->Image(
-                        $logo,
-                        ($x0 + $x1) / 2 * $w - $largura / 2,
-                        ($y0 + $y1) / 2 * $h - $altura / 2,
-                        $largura,
-                        $altura,
-                    );
 
-                    if (isset(self::REMETENTE[$modelo])) {
-                        [$rx0, $ry0, $rx1, $ry1, $base] = self::REMETENTE[$modelo];
+                    if ($layout['logo'] !== null) {
+                        [$x0, $y0, $x1, $y1] = $layout['logo'];
+                        $logo = public_path(self::logo($site));
+
+                        // Logo centrado na área, ocupando 90% da largura dela (ou
+                        // 90% da altura, se o desenho for alto demais para a área).
+                        [$lw, $lh] = getimagesize($logo);
+                        $largura = ($x1 - $x0) * $w * 0.9;
+                        $altura = $largura * $lh / $lw;
+                        if ($altura > ($y1 - $y0) * $h * 0.9) {
+                            $altura = ($y1 - $y0) * $h * 0.9;
+                            $largura = $altura * $lw / $lh;
+                        }
+                        $fpdi->Image(
+                            $logo,
+                            ($x0 + $x1) / 2 * $w - $largura / 2,
+                            ($y0 + $y1) / 2 * $h - $altura / 2,
+                            $largura,
+                            $altura,
+                        );
+                    }
+
+                    if ($layout['remetente'] !== null) {
+                        [$rx0, $ry0, $rx1, $ry1, $base, $comRotulo] = $layout['remetente'];
                         $fpdi->Rect($rx0 * $w, $ry0 * $h, ($rx1 - $rx0) * $w, ($ry1 - $ry0) * $h, 'F');
                         $fpdi->SetTextColor(0, 0, 0);
-                        $fpdi->SetFont('Helvetica', 'B', 15);
-                        $rotulo = 'REMETENTE: ';
-                        $fpdi->Text(0.0365 * $w, $base * $h, $rotulo);
-                        $recuo = $fpdi->GetStringWidth($rotulo);
+                        $recuo = 0.0;
+                        if ($comRotulo) {
+                            $fpdi->SetFont('Helvetica', 'B', 15);
+                            $rotulo = 'REMETENTE: ';
+                            $fpdi->Text(0.0365 * $w, $base * $h, $rotulo);
+                            $recuo = $fpdi->GetStringWidth($rotulo);
+                        }
                         $fpdi->SetFont('Helvetica', '', 15);
                         $fpdi->Text(0.0365 * $w + $recuo, $base * $h, self::remetente($site));
                     }
 
-                    if ($itens !== [] && isset(self::ITENS[$modelo])) {
-                        [$ix0, $linha, $ix1, $primeira, $limite] = self::ITENS[$modelo];
+                    if ($itens !== [] && $layout['itens'] !== null) {
+                        [$ix0, $linha, $ix1, $primeira, $limite] = $layout['itens'];
                         $fpdi->SetDrawColor(0, 0, 0);
                         $fpdi->SetLineWidth(1);
                         $fpdi->Line($ix0 * $w, $linha * $h, $ix1 * $w, $linha * $h);
@@ -226,5 +231,37 @@ class EtiquetaMelhorEnvioComMarca
         } finally {
             @unlink($arquivo);
         }
+    }
+
+    /**
+     * O que cobrir e onde escrever. Modelo medido (J&T, Correios) usa as
+     * posições medidas; qualquer outra transportadora (Loggi no #4198, Jadlog,
+     * LATAM...) é lida por OCR (EtiquetaOcr). null = sai como veio.
+     *
+     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: ?array{0: float, 1: float, 2: float, 3: float}, remetente: ?array{0: float, 1: float, 2: float, 3: float, 4: float, 5: bool}, itens: ?array{0: float, 1: float, 2: float, 3: float, 4: float}}|null
+     */
+    private function layout(string $pdf, ?string $servico, ?int $orderId): ?array
+    {
+        $modelo = self::modelo($servico);
+        if ($modelo && isset(self::AREAS[$modelo])) {
+            return [
+                'cobrir' => [self::AREAS[$modelo]],
+                'logo' => self::AREAS[$modelo],
+                'remetente' => isset(self::REMETENTE[$modelo]) ? [...self::REMETENTE[$modelo], true] : null,
+                'itens' => self::ITENS[$modelo] ?? null,
+            ];
+        }
+
+        $palavras = app(EtiquetaOcr::class)->palavras($pdf);
+        if ($palavras === null) {
+            Log::channel(config('melhorenvio.log_channel'))->warning('melhorenvio.logo_sem_posicao', ['order_id' => $orderId, 'servico' => $servico, 'ocr' => 'indisponivel']);
+
+            return null;
+        }
+
+        $layout = EtiquetaOcr::layout($palavras);
+        Log::channel(config('melhorenvio.log_channel'))->info('melhorenvio.logo_por_ocr', ['order_id' => $orderId, 'servico' => $servico, 'logo' => $layout['logo'], 'remetente' => $layout['remetente'] !== null, 'itens' => $layout['itens'] !== null]);
+
+        return $layout['cobrir'] === [] && $layout['remetente'] === null && $layout['itens'] === null ? null : $layout;
     }
 }

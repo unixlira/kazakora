@@ -93,6 +93,58 @@
         </p>
     @endif
 
+    {{-- Plataformas x E-commerces (pedido do Lira em 16/11/2026): mesma conta, somada por grupo (GruposDeCanais) --}}
+    @if (! empty($resultado['grupos']['mes']))
+        @php
+            $semAds = \App\Modules\Financeiro\Support\GruposDeCanais::SEM_ADS_INTEGRADO;
+            $pct = fn ($v) => $v === null ? '—' : number_format((float) $v, 1, ',', '.').'%';
+        @endphp
+        <p style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #111827;">Plataformas e E-commerces</p>
+        <p style="margin: 0 0 10px; font-size: 12px; color: #6b7280;">Marketplaces separados dos sites próprios. Mês = {{ ucfirst($resultado['data']->translatedFormat('F')) }} até {{ $resultado['data']->format('d/m') }}.</p>
+        @foreach ($resultado['grupos']['mes'] as $chave => $grupoMes)
+            @php
+                $grupoDia = $resultado['grupos']['dia'][$chave]['total'] ?? \App\Modules\Financeiro\Support\GruposDeCanais::metricas([]);
+                $t = $grupoMes['total'];
+                $semAdsNoGrupo = array_values(array_filter(array_keys($grupoMes['canais']), fn ($c) => in_array($c, $semAds, true) && (($grupoMes['canais'][$c]['pedidos'] ?? 0) > 0)));
+            @endphp
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 14px; background-color: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px;">
+                <tr><td style="padding: 12px 14px;">
+                    <div style="font-size: 13px; font-weight: 800; color: #111827; text-transform: uppercase; letter-spacing: 0.04em;">{{ $grupoMes['nome'] }}</div>
+                    <div style="margin: 2px 0 8px; font-size: 12px; color: #4b5563;">
+                        Dia: lucro <strong style="color: {{ $cor($grupoDia['lucro']) }};">{{ $brl($grupoDia['lucro']) }}</strong> · receita {{ $brl($grupoDia['receita']) }} · ADS {{ $brl($grupoDia['ads']) }} · {{ $grupoDia['pedidos'] }} {{ $grupoDia['pedidos'] === 1 ? 'pedido' : 'pedidos' }}<br>
+                        Mês: lucro <strong style="color: {{ $cor($t['lucro']) }};">{{ $brl($t['lucro']) }}</strong> · receita {{ $brl($t['receita']) }} · ADS {{ $brl($t['ads']) }} ({{ $pct($t['ads_pct']) }}) · margem {{ $pct($t['margem_pct']) }} · {{ $t['pedidos'] }} pedidos
+                    </div>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 12px; color: #374151; border-collapse: collapse;">
+                        <tr style="color: #6b7280; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em;">
+                            <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb;">Canal (mês)</td>
+                            <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Receita</td>
+                            <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">ADS</td>
+                            <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Lucro</td>
+                            <td style="padding: 4px 0; border-bottom: 2px solid #e5e7eb; text-align: right;">Ped.</td>
+                        </tr>
+                        @foreach ($grupoMes['canais'] as $canal => $linha)
+                            @continue(! \App\Modules\Financeiro\Support\GruposDeCanais::temValor($linha))
+                            <tr>
+                                <td style="padding: 4px 0; border-bottom: 1px solid #f1f2f4;">{{ \App\Modules\Financeiro\Support\GruposDeCanais::nomeDoCanal($canal) }}</td>
+                                <td style="padding: 4px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap;">{{ $brl($linha['receita']) }}</td>
+                                <td style="padding: 4px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap;">{{ in_array($canal, $semAds, true) ? 'sem integração' : $brl($linha['ads']).' · '.$pct($linha['ads_pct']) }}</td>
+                                <td style="padding: 4px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; font-weight: 700; color: {{ $cor($linha['lucro']) }};">{{ $brl($linha['lucro']) }}</td>
+                                <td style="padding: 4px 0; border-bottom: 1px solid #f1f2f4; text-align: right;">{{ $linha['pedidos'] }}</td>
+                            </tr>
+                        @endforeach
+                    </table>
+                    @if ($semAdsNoGrupo !== [])
+                        <div style="margin-top: 6px; font-size: 11px; color: #92400e;">⚠️ {{ implode(', ', array_map(fn ($c) => \App\Modules\Financeiro\Support\GruposDeCanais::nomeDoCanal($c), $semAdsNoGrupo)) }} sem integração de ADS: o anúncio aparece zerado e o lucro fica maior que o real.</div>
+                    @endif
+                    @if ($chave === \App\Modules\Financeiro\Support\GruposDeCanais::ECOMMERCES)
+                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">ADS dos sites = gasto da Meta (conta da KazaKora e conta da FerraKora).</div>
+                    @endif
+                </td></tr>
+            </table>
+        @endforeach
+        <div style="margin: -4px 0 22px;"></div>
+    @endif
+
     {{-- Dias que mudaram depois de enviados (anúncio, taxa real, cancelamento, devolução) --}}
     @php($revisoes = $resultado['revisoes'] ?? [])
     @if ($revisoes !== [])

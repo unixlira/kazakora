@@ -660,6 +660,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
+    // Clientes dos sites (pedido do Lira 2026-11-16): contas criadas na KazaKora e na FerraKora. Só leitura.
+    Route::middleware('permission:pedidos.view')->prefix('clientes-dos-sites')->name('clientes-dos-sites.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'index'])->name('listar');
+        Route::get('exportar', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'exportar'])->middleware('throttle:10,1')->name('exportar');
+        Route::get('{site}/{cliente}', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'show'])
+            ->whereIn('site', ['kazakora', 'ferrakora'])->whereNumber('cliente')->name('exibir');
+    });
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');

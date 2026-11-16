@@ -13,12 +13,26 @@ const props = defineProps({
 
 const monthFilter = ref(props.filters.mes ?? '');
 const searchFilter = ref(props.filters.pedido ?? '');
+const situacaoFilter = ref(props.filters.situacao ?? '');
 
 const applyFilters = () => {
     router.get('/admin/correios', {
         mes: monthFilter.value || undefined,
         pedido: searchFilter.value || undefined,
+        situacao: situacaoFilter.value || undefined,
     }, { preserveState: true, preserveScroll: true, replace: true });
+};
+
+// Filtro rápido "Expiradas / não postadas" (2026-11-16): liga e desliga.
+const toggleNaoPostadas = () => {
+    situacaoFilter.value = situacaoFilter.value === 'nao_postadas' ? '' : 'nao_postadas';
+    applyFilters();
+};
+
+const clearFilters = () => {
+    searchFilter.value = '';
+    situacaoFilter.value = '';
+    applyFilters();
 };
 
 const destroy = async (item) => {
@@ -62,7 +76,26 @@ const destroy = async (item) => {
                 @click="applyFilters">
                 Filtrar
             </button>
+            <button type="button"
+                class="rounded-lg border px-4 py-2 text-sm font-medium"
+                :class="situacaoFilter === 'nao_postadas'
+                    ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300'
+                    : 'border-[var(--surface-border)] text-slate-600 hover:bg-[var(--surface-muted)] dark:text-slate-300'"
+                @click="toggleNaoPostadas">
+                <i class="fas fa-triangle-exclamation mr-1.5"></i>
+                Expiradas / não postadas
+            </button>
+            <button v-if="filters.todoHistorico" type="button"
+                class="rounded-lg px-3 py-2 text-sm text-slate-500 hover:text-primary"
+                @click="clearFilters">
+                Limpar
+            </button>
         </div>
+
+        <p v-if="filters.todoHistorico" class="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            <i class="fas fa-circle-info mr-1"></i>
+            Com busca ou filtro rápido a lista mostra todo o histórico; o mês não é usado.
+        </p>
 
         <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <table class="w-full text-left text-sm">
@@ -73,6 +106,7 @@ const destroy = async (item) => {
                         <th class="px-4 py-3">Serviço</th>
                         <th class="px-4 py-3">Valor</th>
                         <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Nos Correios</th>
                         <th class="px-4 py-3">Gerado em</th>
                         <th class="px-4 py-3">Ações</th>
                     </tr>
@@ -89,6 +123,13 @@ const destroy = async (item) => {
                         <td class="px-4 py-3">
                             <StatusBadge :status="item.status" context="correios" />
                         </td>
+                        <td class="px-4 py-3">
+                            <template v-if="item.situacao">
+                                <StatusBadge :label="item.situacaoLabel" :tone="item.situacaoTone" />
+                                <span v-if="item.codigoObjeto" class="block pt-1 font-mono text-xs text-slate-400">{{ item.codigoObjeto }}</span>
+                            </template>
+                            <span v-else class="text-slate-400">—</span>
+                        </td>
                         <td class="px-4 py-3 text-slate-500">{{ item.createdAt ?? '—' }}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
@@ -100,8 +141,9 @@ const destroy = async (item) => {
                     </tr>
 
                     <tr v-if="props.items.data.length === 0">
-                        <td colspan="7" class="px-4 py-10 text-center text-slate-400">
-                            Nenhuma pré-postagem gerada nesse mês{{ filters.pedido ? ' pra essa busca' : '' }}.
+                        <td colspan="8" class="px-4 py-10 text-center text-slate-400">
+                            <template v-if="filters.todoHistorico">Nenhuma pré-postagem encontrada em todo o histórico.</template>
+                            <template v-else>Nenhuma pré-postagem gerada nesse mês.</template>
                         </td>
                     </tr>
                 </tbody>

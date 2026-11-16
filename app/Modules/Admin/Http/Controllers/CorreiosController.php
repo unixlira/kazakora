@@ -11,6 +11,7 @@ use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\DevolucaoPacCaso;
 use App\Services\Correios\CorreiosPrePostagemService;
+use App\Services\Correios\CorreiosRastroService;
 use App\Services\Correios\Exceptions\CorreiosException;
 use App\Services\Correios\Exceptions\CorreiosNotConfiguredException;
 use Illuminate\Http\JsonResponse;
@@ -61,22 +62,31 @@ class CorreiosController extends Controller
     public function index(Request $request): Response
     {
         $today = Carbon::today();
+        // "!" zera o dia: sem ele, no dia 31 "2026-02" viraria março.
         $selectedMonth = $request->filled('mes')
-            ? Carbon::createFromFormat('Y-m', $request->string('mes'))
+            ? Carbon::createFromFormat('!Y-m', $request->string('mes'))
             : $today;
 
-        $search = $request->string('pedido')->toString() ?: null;
+        $search = trim(ltrim($request->string('pedido')->trim()->toString(), '#')) ?: null;
+        $situacao = $request->string('situacao')->toString() === 'nao_postadas' ? 'nao_postadas' : null;
+
+        // Busca e filtro rápido olham TODO o histórico (pedido do Lira
+        // 2026-11-16: AP623701379BR era de 16/10 e não aparecia em novembro).
+        // Só a lista sem filtro fica presa ao mês.
+        $todoHistorico = $search !== null || $situacao !== null;
 
         $items = CorreiosPrePostagem::query()
-            ->whereBetween('created_at', [$selectedMonth->copy()->startOfMonth(), $selectedMonth->copy()->endOfMonth()])
-            // Agrupado num where(closure) — orWhere solto aqui escaparia do
-            // whereBetween acima (viraria "no mês OU bate a busca", não "no
-            // mês E bate a busca").
+            ->when(! $todoHistorico, fn ($query) => $query
+                ->whereBetween('created_at', [$selectedMonth->copy()->startOfMonth(), $selectedMonth->copy()->endOfMonth()]))
+            // Agrupado num where(closure): um orWhere solto escaparia dos
+            // outros filtros.
             ->when($search, fn ($query) => $query->where(fn ($inner) => $inner
                 ->where('customer_name', 'like', "%{$search}%")
                 ->orWhere('external_order_id', 'like', "%{$search}%")
-                ->orWhere('order_id', $search)
-                ->orWhere('codigo_objeto', 'like', "%{$search}%")))
+                ->orWhere('codigo_objeto', 'like', "%{$search}%")
+                ->when(ctype_digit($search), fn ($q) => $q->orWhere('order_id', (int) $search))
+                ->orWhereHas('order', fn ($order) => $order->where('external_order_id', 'like', "%{$search}%"))))
+            ->when($situacao, fn ($query) => $query->expiradaOuNaoPostada())
             ->orderByDesc('id')
             ->paginate(25)
             ->withQueryString()
@@ -87,6 +97,8 @@ class CorreiosController extends Controller
             'filters' => [
                 'mes' => $selectedMonth->format('Y-m'),
                 'pedido' => $search,
+                'situacao' => $situacao,
+                'todoHistorico' => $todoHistorico,
             ],
         ]);
     }
@@ -440,7 +452,123 @@ class CorreiosController extends Controller
             'status' => $item->status,
             'codigoObjeto' => $item->codigo_objeto,
             'createdAt' => $item->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+            ...$this->presentSituacao($item),
         ];
+    }
+
+    /**
+     * Selo da situação nos Correios (pedido do Lira 2026-11-16), lida do
+     * rastreio pelo correios:acompanhar-pre-postagens.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentSituacao(CorreiosPrePostagem $item): array
+    {
+        $situacao = $item->situacaoNosCorreios();
+        $selo = $situacao ? CorreiosPrePostagem::SITUACOES[$situacao] ?? null : null;
+        $data = fn ($valor) => $valor?->timezone('America/Sao_Paulo')->format('d/m/Y H:i');
+
+        return [
+            'situacao' => $situacao,
+            'situacaoLabel' => $selo['label'] ?? null,
+            'situacaoTone' => $selo['tone'] ?? null,
+            'ultimoEvento' => $item->rastreio_ultimo_evento,
+            'postadaEm' => $data($item->postada_em),
+            'entregueEm' => $data($item->entregue_em),
+            'expiradaEm' => $data($item->expirada_em),
+            'consultadoEm' => $data($item->rastreio_consultado_em),
+        ];
+    }
+
+    /**
+     * Linha do tempo da etiqueta: o que o sistema sabe (gerada, cancelada) e
+     * os eventos do rastreio, do mais antigo para o mais recente.
+     *
+     * @return array<int, array{data: ?string, descricao: string, local: ?string, tom: string}>
+     */
+    private function historico(CorreiosPrePostagem $item): array
+    {
+        $formata = fn ($valor) => $valor ? Carbon::parse($valor)->timezone('America/Sao_Paulo')->format('d/m/Y H:i') : null;
+        $linhas = [[
+            'data' => $formata($item->created_at),
+            'descricao' => $item->status === CorreiosPrePostagem::STATUS_ERRO ? 'Tentativa de gerar a etiqueta (falhou)' : 'Etiqueta gerada no sistema',
+            'local' => null,
+            'tom' => $item->status === CorreiosPrePostagem::STATUS_ERRO ? 'red' : 'gray',
+            'ordem' => $item->created_at?->getTimestamp() ?? 0,
+        ]];
+
+        foreach (array_reverse($item->rastreio_eventos ?? []) as $evento) {
+            $descricao = (string) ($evento['descricao'] ?? 'Evento dos Correios');
+            $linhas[] = [
+                'data' => $formata($evento['data'] ?? null),
+                'descricao' => $descricao,
+                'local' => $evento['local'] ?? null,
+                'tom' => match (true) {
+                    CorreiosRastroService::ehExpiracao($descricao) => 'red',
+                    in_array($evento['codigo'] ?? '', ['BDE', 'BDI', 'BDR'], true) && ($evento['tipo'] ?? '') === '01' => 'green',
+                    default => 'blue',
+                },
+                'ordem' => isset($evento['data']) ? Carbon::parse($evento['data'])->getTimestamp() : PHP_INT_MAX - 1,
+            ];
+        }
+
+        // Sem a lista de eventos (consulta antiga), as datas gravadas.
+        if (($item->rastreio_eventos ?? []) === []) {
+            foreach ([
+                [$item->postada_em, 'Postada na agência', 'blue'],
+                [$item->entregue_em, 'Entregue', 'green'],
+                [$item->expirada_em, 'Etiqueta expirada', 'red'],
+            ] as [$quando, $descricao, $tom]) {
+                if ($quando) {
+                    $linhas[] = ['data' => $formata($quando), 'descricao' => $descricao, 'local' => null, 'tom' => $tom, 'ordem' => $quando->getTimestamp()];
+                }
+            }
+        }
+
+        if ($item->status === CorreiosPrePostagem::STATUS_CANCELADA) {
+            $linhas[] = ['data' => $formata($item->updated_at), 'descricao' => 'Cancelada nos Correios', 'local' => null, 'tom' => 'gray', 'ordem' => $item->updated_at?->getTimestamp() ?? PHP_INT_MAX];
+        }
+
+        usort($linhas, fn ($a, $b) => $a['ordem'] <=> $b['ordem']);
+
+        return array_map(fn ($linha) => array_diff_key($linha, ['ordem' => true]), $linhas);
+    }
+
+    /**
+     * Outra pré-postagem do mesmo cliente, mesmo CEP e número, gerada no
+     * mesmo dia (pedido do Lira 2026-11-16: #3181 e #3180 da mesma cliente
+     * tiveram duas etiquetas e só uma caixa foi postada).
+     *
+     * @return array<int, array{id: int, codigoObjeto: ?string, externalOrderId: ?string, orderId: ?int, situacaoLabel: ?string}>
+     */
+    private function possiveisDuplicadas(CorreiosPrePostagem $item): array
+    {
+        if ($item->status === CorreiosPrePostagem::STATUS_ERRO || ! $item->created_at) {
+            return [];
+        }
+
+        $soDigitos = fn (?string $valor) => preg_replace('/\D+/', '', (string) $valor);
+        $nome = mb_strtolower(trim((string) $item->customer_name));
+
+        return CorreiosPrePostagem::query()
+            ->whereKeyNot($item->getKey())
+            ->where('status', '!=', CorreiosPrePostagem::STATUS_ERRO)
+            ->where('devolucao', (bool) $item->devolucao)
+            ->whereBetween('created_at', [$item->created_at->copy()->startOfDay(), $item->created_at->copy()->endOfDay()])
+            ->get()
+            ->filter(fn (CorreiosPrePostagem $outra) => mb_strtolower(trim((string) $outra->customer_name)) === $nome
+                && $soDigitos($outra->zip) === $soDigitos($item->zip)
+                && mb_strtolower(trim((string) $outra->number)) === mb_strtolower(trim((string) $item->number)))
+            ->map(fn (CorreiosPrePostagem $outra) => [
+                'id' => $outra->id,
+                'codigoObjeto' => $outra->codigo_objeto,
+                'externalOrderId' => $outra->external_order_id,
+                'orderId' => $outra->order_id,
+                'status' => $outra->status,
+                'situacaoLabel' => $this->presentSituacao($outra)['situacaoLabel'],
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -487,6 +615,8 @@ class CorreiosController extends Controller
             'correiosId' => $item->correios_id,
             'qrPayload' => $item->qr_payload,
             'errorMessage' => $item->error_message,
+            'historico' => $this->historico($item),
+            'duplicadas' => $this->possiveisDuplicadas($item),
         ];
     }
 

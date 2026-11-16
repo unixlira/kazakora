@@ -95,18 +95,15 @@
 
     {{-- Plataformas x E-commerces (pedido do Lira em 16/11/2026): mesma conta, somada por grupo (GruposDeCanais) --}}
     @if (! empty($resultado['grupos']['mes']))
-        @php
-            $semAds = \App\Modules\Financeiro\Support\GruposDeCanais::SEM_ADS_INTEGRADO;
-            $pct = fn ($v) => $v === null ? '—' : number_format((float) $v, 1, ',', '.').'%';
-        @endphp
+        {{-- Variáveis em linha: o arquivo já usa a forma curta, e misturar com o bloco quebra o Blade. --}}
+        @php($semAds = \App\Modules\Financeiro\Support\GruposDeCanais::SEM_ADS_INTEGRADO)
+        @php($pct = fn ($v) => $v === null ? '—' : number_format((float) $v, 1, ',', '.').'%')
         <p style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #111827;">Plataformas e E-commerces</p>
         <p style="margin: 0 0 10px; font-size: 12px; color: #6b7280;">Marketplaces separados dos sites próprios. Mês = {{ ucfirst($resultado['data']->translatedFormat('F')) }} até {{ $resultado['data']->format('d/m') }}.</p>
         @foreach ($resultado['grupos']['mes'] as $chave => $grupoMes)
-            @php
-                $grupoDia = $resultado['grupos']['dia'][$chave]['total'] ?? \App\Modules\Financeiro\Support\GruposDeCanais::metricas([]);
-                $t = $grupoMes['total'];
-                $semAdsNoGrupo = array_values(array_filter(array_keys($grupoMes['canais']), fn ($c) => in_array($c, $semAds, true) && (($grupoMes['canais'][$c]['pedidos'] ?? 0) > 0)));
-            @endphp
+            @php($grupoDia = $resultado['grupos']['dia'][$chave]['total'] ?? \App\Modules\Financeiro\Support\GruposDeCanais::metricas([]))
+            @php($t = $grupoMes['total'])
+            @php($semAdsNoGrupo = array_values(array_filter(array_keys($grupoMes['canais']), fn ($c) => in_array($c, $semAds, true) && (($grupoMes['canais'][$c]['pedidos'] ?? 0) > 0))))
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 14px; background-color: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px;">
                 <tr><td style="padding: 12px 14px;">
                     <div style="font-size: 13px; font-weight: 800; color: #111827; text-transform: uppercase; letter-spacing: 0.04em;">{{ $grupoMes['nome'] }}</div>

@@ -75,7 +75,7 @@ class ClientesDosSitesTest extends TestCase
         $maria = $this->clienteKazaKora(['name' => 'Maria Souza', 'email' => 'maria@cliente.test', 'phone' => '(11) 98765-4321']);
         $maria->forceFill(['recebe_promocoes' => true])->save();
         Address::query()->create([
-            'user_id' => $maria->id, 'recipient_name' => 'Maria', 'zip' => '13010000', 'street' => 'Rua A', 'number' => '10',
+            'user_id' => $maria->id, 'recipient_name' => 'Maria', 'phone' => '11987654321', 'zip' => '13010000', 'street' => 'Rua A', 'number' => '10',
             'neighborhood' => 'Centro', 'city' => 'Campinas', 'state' => 'SP', 'is_default' => true,
         ]);
         $this->pedido(['user_id' => $maria->id], Order::STATUS_PAID, 150, '2026-11-01 10:00:00');
@@ -91,7 +91,7 @@ class ClientesDosSitesTest extends TestCase
         $this->actingAs($this->admin)->get('/admin/clientes-dos-sites')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/ClientesDosSites/Index')
+                ->component('Admin/ClientesDosSites/Index', false)
                 ->where('site', 'kazakora')
                 ->has('clientes.data', 2)
                 ->where('clientes.data', function ($linhas) use ($maria) {
@@ -126,7 +126,7 @@ class ClientesDosSitesTest extends TestCase
         $this->actingAs($this->admin)->get('/admin/clientes-dos-sites?site=ferrakora')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/ClientesDosSites/Index')
+                ->component('Admin/ClientesDosSites/Index', false)
                 ->where('site', 'ferrakora')
                 ->has('clientes.data', 1)
                 ->where('clientes.data.0.email', 'ferra@cliente.test')
@@ -180,7 +180,7 @@ class ClientesDosSitesTest extends TestCase
     {
         $maria = $this->clienteKazaKora(['name' => 'Maria Souza', 'email' => 'maria@cliente.test', 'phone' => '11987654321', 'cpf' => '52998224725']);
         Address::query()->create([
-            'user_id' => $maria->id, 'recipient_name' => 'Maria', 'zip' => '13010000', 'street' => 'Rua A', 'number' => '10',
+            'user_id' => $maria->id, 'recipient_name' => 'Maria', 'phone' => '11987654321', 'zip' => '13010000', 'street' => 'Rua A', 'number' => '10',
             'neighborhood' => 'Centro', 'city' => 'Campinas', 'state' => 'SP', 'is_default' => true,
         ]);
         $pago = $this->pedido(['user_id' => $maria->id], Order::STATUS_PAID, 150);
@@ -194,7 +194,7 @@ class ClientesDosSitesTest extends TestCase
         $this->actingAs($this->admin)->get("/admin/clientes-dos-sites/kazakora/{$maria->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/ClientesDosSites/Show')
+                ->component('Admin/ClientesDosSites/Show', false)
                 ->where('cliente.email', 'maria@cliente.test')
                 ->where('cliente.cpf', '52998224725')
                 ->where('cliente.whatsapp', 'https://wa.me/5511987654321')
@@ -222,7 +222,7 @@ class ClientesDosSitesTest extends TestCase
         $this->actingAs($this->admin)->get("/admin/clientes-dos-sites/ferrakora/{$ferra->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/ClientesDosSites/Show')
+                ->component('Admin/ClientesDosSites/Show', false)
                 ->where('cliente.nome', 'Cliente Ferra')
                 ->missing('cliente.password')
                 ->has('pedidos', 1)

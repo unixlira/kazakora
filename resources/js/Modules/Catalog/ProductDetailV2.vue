@@ -819,7 +819,6 @@ const submitReview = () => {
     });
 };
 
-const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(value));
 </script>
 
 <template>
@@ -1258,7 +1257,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                             <div class="nota-data">
                                 <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                <small>{{ formatDate(review.created_at) }}</small>
                             </div>
                             <template v-if="review.comment">
                                 <p :class="{ 'texto-cortado': textoComprido(review) && !avaliacoesAbertas[review.id] }">{{ review.comment }}</p>

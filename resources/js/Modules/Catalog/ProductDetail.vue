@@ -273,7 +273,6 @@ const submitReview = () => {
     });
 };
 
-const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(value));
 </script>
 
 <template>
@@ -550,7 +549,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <span class="font-medium text-store-fg">
                                     {{ review.reviewer_display_name }}
                                 </span>
-                                <span class="text-xs text-store-fg-faint">{{ formatDate(review.created_at) }}</span>
                             </div>
                             <div class="mt-1 flex items-center gap-0.5">
                                 <i v-for="star in 5" :key="star" class="text-xs" :class="star <= review.rating ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>

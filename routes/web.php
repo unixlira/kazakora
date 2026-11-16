@@ -722,6 +722,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:financeiro.view')->group(function () {
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
+        // Plataformas x E-commerces (pedido do Lira em 16/11/2026): o lucro
+        // dos marketplaces separado do lucro dos sites próprios.
+        Route::get('financeiro/plataformas-e-ecommerces', [\App\Modules\Admin\Http\Controllers\PlataformasEcommercesController::class, 'index'])
+            ->name('financeiro.plataformas-ecommerces');
         // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro por
         // marketplace. Saiu do menu Oportunidades (só dado de mercado).
         Route::get('estatisticas/curva-abc/{canal}', [\App\Modules\Admin\Http\Controllers\EstatisticasController::class, 'curvaAbc'])

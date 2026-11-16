@@ -122,6 +122,9 @@ export const sidebarSections = [
         heading: 'Financeiro',
         items: [
             { label: 'Resultado e margem', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', cor: 'verde', permission: 'financeiro.view' },
+            // Plataformas x E-commerces (pedido do Lira em 16/11/2026): lucro
+            // dos marketplaces separado do lucro dos sites próprios.
+            { label: 'Plataformas e E-commerces', href: '/admin/financeiro/plataformas-e-ecommerces', icon: 'fas fa-shop', cor: 'indigo', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', cor: 'azul', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },

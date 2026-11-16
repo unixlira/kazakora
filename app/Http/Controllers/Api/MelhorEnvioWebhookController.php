@@ -36,7 +36,11 @@ class MelhorEnvioWebhookController extends Controller
         }
 
         $envio = MelhorEnvioEnvio::query()->with('order')->where('me_order_id', $request->input('data.id'))->first();
-        $log->info('melhorenvio.webhook', ['event' => $request->input('event'), 'id' => $request->input('data.id'), 'order_id' => $envio?->order_id]);
+        // Em warning de propósito: a produção só grava warning para cima e,
+        // em 16/11, não dava para ver o que o webhook do #4172 trouxe.
+        $dados = (array) $request->input('data');
+        $log->warning('melhorenvio.webhook', ['event' => $request->input('event'), 'order_id' => $envio?->order_id]
+            + array_intersect_key($dados, array_flip(['id', 'status', 'tracking', 'posted_at', 'delivered_at', 'canceled_at', 'expired_at'])));
 
         // Etiqueta que não é de pedido do site (ou já encerrado) não muda nada aqui.
         if (! $envio || $envio->order?->origin !== Order::ORIGIN_STORE
@@ -44,7 +48,7 @@ class MelhorEnvioWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $resultado = $acompanhamento->refletir($envio, (array) $request->input('data'));
+        $resultado = $acompanhamento->refletir($envio, $dados, (string) $request->input('event'));
 
         return response()->json(['ok' => true, 'resultado' => $resultado]);
     }

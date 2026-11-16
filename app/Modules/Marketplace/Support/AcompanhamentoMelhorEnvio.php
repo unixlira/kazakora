@@ -25,6 +25,14 @@ class AcompanhamentoMelhorEnvio
     /** Postagem ou entrega mais antiga que isso não gera aviso (rodada atrasada). */
     private const AVISO_ATE_HORAS = 72;
 
+    /**
+     * Situações que já são pacote na mão da transportadora. O Melhor Envio
+     * avisa "postado" (e-mail e webhook) antes de preencher o posted_at:
+     * em 16/11 o #4172 ficou horas como "received" sem data e o WhatsApp
+     * não saía. Nesses casos vale a data já gravada ou a hora do aviso.
+     */
+    private const SITUACOES_POSTADO = ['posted', 'received'];
+
     public function __construct(private readonly OrderImportService $pedidos) {}
 
     /**
@@ -32,10 +40,13 @@ class AcompanhamentoMelhorEnvio
      * "data" do webhook) no envio e no pedido. Devolve o que aconteceu:
      * enviados, entregues, cancelados ou sem_mudanca.
      */
-    public function refletir(MelhorEnvioEnvio $envio, array $info): string
+    public function refletir(MelhorEnvioEnvio $envio, array $info, ?string $evento = null): string
     {
         $data = fn (?string $v) => filled($v) ? CarbonImmutable::parse($v, 'UTC')->setTimezone(config('app.timezone')) : null;
         $postadoEm = $data($info['posted_at'] ?? null);
+        if (! $postadoEm && ($evento === 'order.posted' || in_array($info['status'] ?? null, self::SITUACOES_POSTADO, true))) {
+            $postadoEm = $envio->postada_em ? CarbonImmutable::parse($envio->postada_em) : CarbonImmutable::now();
+        }
         $entregueEm = $data($info['delivered_at'] ?? null);
         $canceladoEm = $data($info['canceled_at'] ?? null) ?? $data($info['expired_at'] ?? null);
         $rastreio = $info['tracking'] ?? null;

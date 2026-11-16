@@ -89,6 +89,42 @@ class AcompanharMelhorEnvioTest extends TestCase
         Queue::assertPushed(SendOrderDeliveredWhatsAppJob::class, fn ($j) => $j->orderId === $order->id);
     }
 
+    /** #4172 em 16/11: "received" sem posted_at já é pacote postado. */
+    public function test_recebido_sem_data_de_postagem_vira_enviado_com_whatsapp(): void
+    {
+        $order = $this->pedido();
+        $this->situacao = ['status' => 'received', 'tracking' => 'AE155114115BR', 'posted_at' => null];
+
+        $this->artisan('melhorenvio:acompanhar')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        $this->assertNotNull(MelhorEnvioEnvio::first()->postada_em);
+        Queue::assertPushed(SendOrderShippedWhatsAppJob::class, fn ($j) => $j->orderId === $order->id);
+        Queue::assertPushed(EnviarEmailPedidoEnviadoJob::class);
+
+        // Rodada seguinte, ainda sem data: mantém a data gravada.
+        $gravada = (string) MelhorEnvioEnvio::first()->postada_em;
+        $this->travel(2)->hours();
+        $this->artisan('melhorenvio:acompanhar')->assertSuccessful();
+        $this->assertSame($gravada, (string) MelhorEnvioEnvio::first()->postada_em);
+    }
+
+    public function test_webhook_de_postagem_sem_data_marca_enviado(): void
+    {
+        config(['services.melhorenvio.client_secret' => 'segredo-do-app']);
+        $order = $this->pedido();
+        $corpo = json_encode(['event' => 'order.posted', 'data' => [
+            'id' => self::ME_ID, 'status' => 'released', 'tracking' => 'AE155114115BR', 'posted_at' => null,
+        ]]);
+        $assinatura = base64_encode(hash_hmac('sha256', $corpo, 'segredo-do-app', true));
+
+        $this->call('POST', '/api/melhorenvio/webhook', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_ME_SIGNATURE' => $assinatura], $corpo)
+            ->assertOk()->assertJsonPath('resultado', 'enviados');
+
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        Queue::assertPushed(SendOrderShippedWhatsAppJob::class, fn ($j) => $j->orderId === $order->id);
+    }
+
     public function test_webhook_assinado_marca_enviado_e_assinatura_errada_e_recusada(): void
     {
         config(['services.melhorenvio.client_secret' => 'segredo-do-app']);

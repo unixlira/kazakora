@@ -25,7 +25,10 @@ class CorreiosRastroService
     }
 
     /**
-     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, recebedor: ?string, previsao: ?Carbon, ultimo: ?string}
+     * `eventos` (2026-11-16): a lista toda, do mais recente para o mais
+     * antigo, para o histórico da pré-postagem (correios:acompanhar-pre-postagens).
+     *
+     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, recebedor: ?string, previsao: ?Carbon, ultimo: ?string, eventos: array<int, array{codigo: ?string, tipo: ?string, descricao: ?string, data: ?string, local: ?string}>}
      */
     public function consultar(string $codigo): array
     {
@@ -40,7 +43,10 @@ class CorreiosRastroService
 
         $objeto = $response->json('objetos.0') ?? [];
         $eventos = $objeto['eventos'] ?? [];
-        $movimento = array_values(array_filter($eventos, fn ($e) => ! in_array($e['codigo'] ?? '', self::SEM_MOVIMENTO, true)));
+        // "Etiqueta expirada" (2026-11-16, AP623701379BR) também não é
+        // movimento: o objeto nunca chegou à agência.
+        $movimento = array_values(array_filter($eventos, fn ($e) => ! in_array($e['codigo'] ?? '', self::SEM_MOVIMENTO, true)
+            && ! self::ehExpiracao($e['descricao'] ?? null)));
         // A API devolve do mais recente para o mais antigo.
         $primeiro = end($movimento) ?: null;
 
@@ -56,6 +62,29 @@ class CorreiosRastroService
             'recebedor' => filled($entrega['recebedor']['nome'] ?? null) ? trim($entrega['recebedor']['nome']) : null,
             'previsao' => filled($objeto['dtPrevista'] ?? null) ? Carbon::parse($objeto['dtPrevista'], 'America/Sao_Paulo') : null,
             'ultimo' => $eventos[0]['descricao'] ?? null,
+            'eventos' => array_map(fn ($e) => [
+                'codigo' => $e['codigo'] ?? null,
+                'tipo' => $e['tipo'] ?? null,
+                'descricao' => $e['descricao'] ?? null,
+                'data' => isset($e['dtHrCriado']) ? Carbon::parse($e['dtHrCriado'], 'America/Sao_Paulo')->toIso8601String() : null,
+                'local' => self::local($e['unidade']['endereco'] ?? null),
+            ], array_values($eventos)),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $endereco
+     */
+    private static function local(?array $endereco): ?string
+    {
+        $cidade = trim(implode('/', array_filter([$endereco['cidade'] ?? null, $endereco['uf'] ?? null])));
+
+        return $cidade !== '' ? $cidade : null;
+    }
+
+    /** Evento de etiqueta vencida sem postagem ("Etiqueta expirada"). */
+    public static function ehExpiracao(?string $descricao): bool
+    {
+        return $descricao !== null && preg_match('/expirad/iu', $descricao) === 1;
     }
 }

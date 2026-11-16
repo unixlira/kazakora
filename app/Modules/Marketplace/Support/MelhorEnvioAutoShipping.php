@@ -74,6 +74,8 @@ class MelhorEnvioAutoShipping
                 $this->comprar($envio);
             }
             $this->gerar($envio);
+            // Onde levar o pacote, para o card do KoraSync (2026-11-09).
+            app(PontoDePostagemMelhorEnvio::class)->gravar($envio);
         } catch (Throwable $e) {
             $envio->erro = Str::limit($e->getMessage(), 500, '');
             if ($envio->status !== MelhorEnvioEnvio::STATUS_PAGA && $envio->status !== MelhorEnvioEnvio::STATUS_CARRINHO) {
@@ -108,6 +110,7 @@ class MelhorEnvioAutoShipping
             'servico_id' => $servico['servico_id'],
             'servico' => Str::limit($servico['nome'], 80, ''),
             'preco' => $servico['preco'],
+            'prazo_dias' => $servico['prazo'] ?? null,
             'peso_g' => (int) $pacote['weight_grams'],
             'volume' => $volume,
         ]);
@@ -240,6 +243,7 @@ class MelhorEnvioAutoShipping
             'servico_id' => $servico['servico_id'],
             'servico' => Str::limit($servico['nome'], 80, ''),
             'preco' => $carrinho['price'] ?? $servico['preco'],
+            'prazo_dias' => $servico['prazo'] ?? $envio->prazo_dias,
             'peso_g' => (int) $pacote['weight_grams'],
             'volume' => $volume,
             'erro' => null,
@@ -290,7 +294,7 @@ class MelhorEnvioAutoShipping
             $info = $this->client->post('me/shipment/tracking', ['orders' => [$envio->me_order_id]])[$envio->me_order_id] ?? [];
             $rastreio = $info['tracking'] ?? $info['melhorenvio_tracking'] ?? null;
             if ($rastreio) {
-                $envio->forceFill(['rastreio' => $rastreio])->save();
+                $envio->forceFill(['rastreio' => $rastreio, 'rastreio_me' => $info['melhorenvio_tracking'] ?? null])->save();
             }
         } catch (Throwable $e) {
             Log::channel(config('melhorenvio.log_channel'))->info('melhorenvio.rastreio_indisponivel', ['envio' => $envio->id, 'message' => $e->getMessage()]);

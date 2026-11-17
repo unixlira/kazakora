@@ -14,6 +14,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -374,6 +375,7 @@ class CatalogController extends Controller
         // Ficha técnica (pedido 2026-10-24): sem SKU, categoria e variação.
         $product->setAttribute('ficha_tecnica', FichaTecnica::linhas($product));
         $product->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($product));
+        $product->setAttribute('medidas_embalagem', FichaTecnica::medidasEmbalagem($product));
         $product->setAttribute('reviews_avg_rating', $publico['resumo']['media']);
 
         $user = $request->user();
@@ -407,7 +409,7 @@ class CatalogController extends Controller
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix')->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation))->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($variation)));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix')->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation))->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($variation))->setAttribute('medidas_embalagem', FichaTecnica::medidasEmbalagem($variation)));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -466,6 +468,15 @@ class CatalogController extends Controller
         // e os produtos de Vender › Promoções (2026-10-21), em cache.
         $promocoes = PromocoesDoProduto::paraPagina($product);
 
+        // Cópia de apresentação: preserva o anúncio no banco e todos os preços.
+        if ($version === 2 && $product->adContent) {
+            $conteudoCard = clone $product->adContent;
+            $conteudoCard->comparativo = OfertaBlackFriday::comparativoPercentual(
+                $conteudoCard->comparativo, collect([$product])->concat($variations),
+            );
+            $product->setRelation('adContent', $conteudoCard);
+        }
+
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
@@ -506,6 +517,12 @@ class CatalogController extends Controller
             'sorteios' => $promocoes['sorteios'],
             'livrosDigitais' => $promocoes['livrosDigitais'],
             'livrosQuadro' => $promocoes['livrosQuadro'],
+            // Card de Black Friday acima do preço em todo produto (14/11/2026): o padrão, para quem não
+            // tem oferta própria no cadastro. Só afirma o que o checkout dá para este produto.
+            'ofertaPadrao' => OfertaBlackFriday::padrao(
+                $product,
+                count($promocoes['livrosDigitais']),
+            ),
             // Condições e botão para a página da promoção de cada quadro (2026-10-21).
             'quadrosPromocao' => $promocoes['quadros'],
             'relatedProducts' => $relatedProducts->values(),

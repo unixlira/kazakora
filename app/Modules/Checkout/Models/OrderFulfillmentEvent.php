@@ -35,6 +35,12 @@ class OrderFulfillmentEvent extends Model
     /** Entregue em mãos ao entregador do Flex — a hora que a caixa saiu daqui. */
     public const STEP_HANDED_TO_CARRIER = 'handed_to_carrier';
 
+    /**
+     * Endereço de entrega alterado depois da compra (Lira, 2026-11-17, #4246).
+     * context: digitado_pela_cliente, corrigido_para, motivo, por (ver EnderecoDoPedido).
+     */
+    public const STEP_ADDRESS_CHANGED = 'address_changed';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

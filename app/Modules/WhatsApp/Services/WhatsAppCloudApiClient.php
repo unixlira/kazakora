@@ -142,6 +142,8 @@ class WhatsAppCloudApiClient
                 ->attach('file', $handle, basename($absolutePath), ['Content-Type' => $mimeType])
                 ->post($this->graphUrl('media'), [
                     'messaging_product' => 'whatsapp',
+                    // A Meta pede o tipo também como campo do formulário, não só no arquivo.
+                    'type' => $mimeType,
                 ]);
         } finally {
             fclose($handle);
@@ -159,7 +161,8 @@ class WhatsAppCloudApiClient
         return (string) $mediaId;
     }
 
-    public function sendMedia(string $to, string $mediaType, string $mediaId, ?string $caption = null, ?string $filename = null): array
+    /** $voz: áudio gravado pelo atendente (ogg/opus do ConversorDeVoz) vai como nota de voz. */
+    public function sendMedia(string $to, string $mediaType, string $mediaId, ?string $caption = null, ?string $filename = null, bool $voz = false): array
     {
         if (! in_array($mediaType, ['image', 'video', 'audio', 'document'], true)) {
             throw new RuntimeException('Tipo de mídia inválido para WhatsApp.');
@@ -169,6 +172,10 @@ class WhatsAppCloudApiClient
         // Áudio não aceita legenda na API.
         if (filled($caption) && $mediaType !== 'audio') {
             $media['caption'] = $caption;
+        }
+        // Nota de voz: sem isto o áudio gravado chegava e não baixava (14/11/2026).
+        if ($voz && $mediaType === 'audio') {
+            $media['voice'] = true;
         }
         // Sem filename o cliente recebe o documento como "Untitled".
         if (filled($filename) && $mediaType === 'document') {

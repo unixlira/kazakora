@@ -54,14 +54,19 @@ class SendOrderReceiptEmailJob implements ShouldQueue, ShouldBeUnique
     {
         $order = Order::with(['invoice', 'user'])->findOrFail($this->orderId);
 
-        if (OrderEmailLog::query()->where('order_id', $order->id)->where('status', OrderEmailLog::STATUS_SENT)->exists()) {
-            // Idempotente: esse pedido já teve o recibo enviado com sucesso.
-            return;
-        }
-
         $invoiceAttached = $order->invoice?->status === Invoice::STATUS_AUTHORIZED
             && $order->invoice->danfe_path
             && Storage::disk('local')->exists($order->invoice->danfe_path);
+
+        $enviados = OrderEmailLog::query()->where('order_id', $order->id)->where('status', OrderEmailLog::STATUS_SENT);
+
+        // Idempotente: o recibo já saiu. A exceção (2026-11-15, pedido #4162):
+        // o primeiro saiu SEM a nota porque ela foi rejeitada, e quando a nota
+        // enfim foi autorizada o cliente ficou sem recebê-la. Nesse caso sai
+        // mais um, uma vez só, com a nota anexada.
+        if ((clone $enviados)->exists() && (! $invoiceAttached || (clone $enviados)->where('invoice_attached', true)->exists())) {
+            return;
+        }
 
         // Achado real 2026-08-08 (pedido #189, mesma investigação da
         // correção de CPF): pedido de marketplace nunca tem Order::user

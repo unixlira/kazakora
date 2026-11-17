@@ -71,6 +71,25 @@ class LeadsDigitadosTest extends TestCase
         $this->assertSame(0, LeadCheckout::count());
     }
 
+    /** Pedido do Lira em 15/11/2026: quem abre o checkout e sai sem digitar também aparece em Leads. */
+    public function test_abrir_o_checkout_ja_cria_o_lead_e_os_campos_entram_na_mesma_linha(): void
+    {
+        $this->noCarrinho(221);
+
+        $this->get('/finalizacao')->assertOk();
+
+        $lead = Lead::sole();
+        $this->assertSame('kazakora', $lead->site);
+        $this->assertNull($lead->nome);
+        $this->assertSame(1, (int) $lead->quantidade_itens);
+        $this->assertGreaterThan(0, (float) $lead->subtotal);
+
+        $this->get('/finalizacao')->assertOk();
+        $this->postJson('/finalizacao/lead-campo', ['nome' => 'Ana', 'campo' => 'nome'])->assertNoContent();
+
+        $this->assertSame('Ana', Lead::sole()->nome);
+    }
+
     public function test_campo_apagado_nao_apaga_o_que_ja_se_sabia(): void
     {
         $this->noCarrinho();

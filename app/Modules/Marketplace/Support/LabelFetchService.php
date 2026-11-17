@@ -151,7 +151,10 @@ class LabelFetchService
         // pelo código de rastreio. Detecta a extensão pela assinatura real
         // dos bytes, não pelo content_type do canal (já visto vindo inútil,
         // "application/force-download").
-        $rawContents = $contents;
+        // Melhor Envio (2026-11-14, #4172): o driver devolve a etiqueta já com
+        // o logo da loja e manda junto a original, como veio do Melhor Envio.
+        // É a original que fica guardada aqui (botão "Etiqueta original" do pedido).
+        $rawContents = $etiquetaJ3 === null && is_string($label['original'] ?? null) ? $label['original'] : $contents;
         $rawExtension = match (true) {
             str_starts_with($rawContents, "PK\x03\x04") => 'zip',
             str_starts_with($rawContents, '%PDF-') => 'pdf',

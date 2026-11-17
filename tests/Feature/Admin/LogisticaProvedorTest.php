@@ -525,6 +525,108 @@ class LogisticaProvedorTest extends TestCase
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/me/cart') && $r['service'] === 3);
     }
 
+    /** Contrato dos Correios respondendo o preço dado para PAC e SEDEX. */
+    private function contratoDosCorreiosCobrando(?float $preco): void
+    {
+        config(['melhorenvio.comparar_correios' => true]);
+        $tokens = Mockery::mock(\App\Services\Correios\CorreiosTokenService::class);
+        $tokens->shouldReceive('isConfigured')->andReturn(true);
+        $this->app->instance(\App\Services\Correios\CorreiosTokenService::class, $tokens);
+
+        $precos = Mockery::mock(\App\Modules\Checkout\Services\CorreiosFreightQuoteService::class);
+        $precos->shouldReceive('priceFor')->andReturn($preco);
+        $this->app->instance(\App\Modules\Checkout\Services\CorreiosFreightQuoteService::class, $precos);
+    }
+
+    public function test_contrato_dos_correios_mais_barato_leva_a_etiqueta_mesmo_com_melhor_envio_conectado(): void
+    {
+        // Caso real #4172 (14/11): SEDEX pelo Melhor Envio R$ 16,53, contrato R$ 14,98.
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $this->contratoDosCorreiosCobrando(1.00);
+
+        $pre = new \App\Modules\Marketplace\Models\CorreiosPrePostagem(['service_label' => 'SEDEX (contrato)']);
+        $pre->correios_id = 'PR123';
+        $pre->codigo_objeto = 'AE155114115BR';
+        $correios = Mockery::mock(CorreiosAutoShipping::class);
+        $correios->shouldReceive('geradaPara')->andReturnNull();
+        $correios->shouldReceive('confirm')->once()->andReturn($pre);
+        $this->app->instance(CorreiosAutoShipping::class, $correios);
+
+        $order = $this->pedidoDoSite();
+        (new CotarFreteDoPedidoJob($order->id))->handle(app(MelhorEnvioAutoShipping::class));
+        $this->assertNotNull(app(MelhorEnvioAutoShipping::class)->doPedido($order));
+
+        $envio = app(LojaShippingDriver::class)->confirmShipping($order->fresh());
+
+        $this->assertSame('Correios SEDEX (contrato)', $envio['shipping_method']);
+        $this->assertSame('AE155114115BR', $envio['tracking_code']);
+        // Nada comprado no Melhor Envio e a cotação dele sai do pedido.
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/me/cart'));
+        $this->assertNull(app(MelhorEnvioAutoShipping::class)->doPedido($order));
+    }
+
+    public function test_melhor_envio_mais_barato_continua_no_melhor_envio(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $correios = Mockery::mock(CorreiosAutoShipping::class);
+        $correios->shouldReceive('geradaPara')->andReturnNull();
+        $correios->shouldNotReceive('confirm');
+        $this->app->instance(CorreiosAutoShipping::class, $correios);
+
+        $this->contratoDosCorreiosCobrando(9999.00);
+        $envio = app(LojaShippingDriver::class)->confirmShipping($this->pedidoDoSite());
+        $this->assertSame('Melhor Envio Jadlog Package', $envio['shipping_method']);
+
+    }
+
+    public function test_comparacao_com_os_correios_fica_desligada_por_padrao(): void
+    {
+        $this->assertFalse(config('melhorenvio.comparar_correios'));
+
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $this->contratoDosCorreiosCobrando(1.00);
+        config(['melhorenvio.comparar_correios' => false]);
+
+        $this->assertSame('Melhor Envio Jadlog Package', app(LojaShippingDriver::class)->confirmShipping($this->pedidoDoSite())['shipping_method']);
+    }
+
+    public function test_pre_postagem_recusada_pelos_correios_volta_para_o_melhor_envio(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $this->contratoDosCorreiosCobrando(1.00);
+        $order = $this->pedidoDoSite();
+        \App\Modules\Marketplace\Models\CorreiosPrePostagem::create([
+            'order_id' => $order->id, 'origin' => 'loja', 'customer_name' => 'Cliente', 'zip' => '29823000', 'street' => 'Rua X',
+            'number' => '10', 'neighborhood' => 'Centro', 'city' => 'Água Doce do Norte', 'state' => 'ES', 'service_code' => '03220',
+            'service_label' => 'SEDEX (contrato)', 'weight_grams' => 450, 'dimension_format' => '2', 'content_items' => [],
+            'status' => \App\Modules\Marketplace\Models\CorreiosPrePostagem::STATUS_ERRO, 'error_message' => 'PPN-055',
+        ]);
+
+        $this->assertSame('Melhor Envio Jadlog Package', app(LojaShippingDriver::class)->confirmShipping($order)['shipping_method']);
+    }
+
+    public function test_contrato_dos_correios_sem_preco_nao_trava_a_etiqueta_do_melhor_envio(): void
+    {
+        config(['services.j3.site' => false]);
+        $this->contaMelhorEnvio();
+        FreteProvedor::ativar(FreteProvedor::MELHOR_ENVIO);
+        $correios = Mockery::mock(CorreiosAutoShipping::class);
+        $correios->shouldReceive('geradaPara')->andReturnNull();
+        $correios->shouldNotReceive('confirm');
+        $this->app->instance(CorreiosAutoShipping::class, $correios);
+
+        $this->contratoDosCorreiosCobrando(null);
+        $this->assertSame('Melhor Envio Jadlog Package', app(LojaShippingDriver::class)->confirmShipping($this->pedidoDoSite())['shipping_method']);
+    }
+
     public function test_caixa_acima_do_limite_dos_correios_sai_pelo_melhor_envio_com_correios_conectados(): void
     {
         // Caso real #3978 (09/11): árvore de Natal em caixa de 115 cm, PPN-055 nos Correios.

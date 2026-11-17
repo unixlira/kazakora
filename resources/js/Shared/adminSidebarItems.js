@@ -122,6 +122,9 @@ export const sidebarSections = [
         heading: 'Financeiro',
         items: [
             { label: 'Resultado e margem', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', cor: 'verde', permission: 'financeiro.view' },
+            // Plataformas x E-commerces (pedido do Lira em 16/11/2026): lucro
+            // dos marketplaces separado do lucro dos sites próprios.
+            { label: 'Plataformas e E-commerces', href: '/admin/financeiro/plataformas-e-ecommerces', icon: 'fas fa-shop', cor: 'indigo', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', cor: 'azul', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },
@@ -183,7 +186,11 @@ export const sidebarSections = [
             // alerta vermelho que não some no clique e acende o título da seção.
             { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'atendimentoMkplace', alertaFixo: true },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos', alertaNoTitulo: true },
+            // Cancelamentos (2026-11-17): cliente pediu para cancelar compra já postada.
+            { label: 'Cancelamentos', href: '/admin/cancelamentos', icon: 'fas fa-ban', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'cancelamentosPendentes', alertaNoTitulo: true },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
+            // Clientes dos sites (2026-11-16): contas criadas na KazaKora e na FerraKora, só leitura.
+            { label: 'Clientes dos sites', href: '/admin/clientes-dos-sites', icon: 'fas fa-id-card', cor: 'azul', permission: 'pedidos.view' },
             { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },
             // Leads (2026-11-06): o que o cliente digita no checkout, campo a campo, em tempo real.
             { label: 'Leads', href: '/admin/leads', icon: 'fas fa-user-clock', cor: 'laranja', permission: 'pedidos.view' },

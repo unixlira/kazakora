@@ -45,7 +45,7 @@
             <td align="center" style="padding: 32px 16px;">
                 <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);">
                     <tr>
-                        <td style="background-color: {{ $marcaEmail['fundo_topo'] }}; padding: 26px 32px 22px; text-align: center; border-bottom: 4px solid #f27a2a;">
+                        <td style="background-color: {{ $marcaEmail['fundo_topo'] }}; padding: 26px 32px 22px; text-align: center; border-bottom: 4px solid {{ $marcaEmail['cor'] ?? '#f27a2a' }};">
                             <a href="{{ $marcaEmail['site'] }}" target="_blank" style="text-decoration: none;">
                                 <img src="{{ $logoTopo }}" alt="{{ $marcaEmail['nome'] }}" width="190" style="display: inline-block; width: 190px; max-width: 70%; height: auto;">
                             </a>

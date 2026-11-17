@@ -73,6 +73,7 @@ class WhatsAppInboxController extends Controller
     {
         $query = $conversation->messages()
             ->whereIn('direction', ['inbound', 'outbound'])
+            ->where('type', '!=', 'reaction')
             ->orderByDesc('id')
             ->limit(self::MESSAGE_PAGE);
 
@@ -81,6 +82,7 @@ class WhatsAppInboxController extends Controller
         }
 
         $messages = $query->get()->reverse()->values();
+        $reacoes = $this->reacoes($conversation->id);
 
         // Cliente e vendas só ao abrir a conversa (não a cada página de mensagens antigas).
         $extra = [];
@@ -92,7 +94,7 @@ class WhatsAppInboxController extends Controller
 
         return response()->json([
             'conversation' => $this->conversationPayload($conversation) + $extra,
-            'messages' => $messages->map(fn ($m) => $this->messagePayload($m)),
+            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes)),
             'hasMore' => $messages->count() === self::MESSAGE_PAGE,
         ]);
     }
@@ -217,16 +219,18 @@ class WhatsAppInboxController extends Controller
             $messages = WhatsAppMessage::query()
                 ->where('conversation_id', (int) $request->query('conversation'))
                 ->whereIn('direction', ['inbound', 'outbound'])
+                ->where('type', '!=', 'reaction')
                 ->where('updated_at', '>=', $since)
                 ->orderBy('id')
                 ->limit(200)
                 ->get();
         }
+        $reacoes = $request->filled('conversation') ? $this->reacoes((int) $request->query('conversation')) : [];
 
         return response()->json([
             'serverTime' => $now->toISOString(),
             'conversations' => $conversations->map(fn ($c) => $this->conversationPayload($c)),
-            'messages' => $messages->map(fn ($m) => $this->messagePayload($m)),
+            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes)),
         ]);
     }
 
@@ -352,7 +356,7 @@ class WhatsAppInboxController extends Controller
         $this->humanTakesOver($conversation);
 
         try {
-            $message = $outbox->sendMedia($conversation, $type, $path, $mime, $request->user()->name, $request->user()->id, $caption, $name);
+            $message = $outbox->sendMedia($conversation, $type, $path, $mime, $request->user()->name, $request->user()->id, $caption, $name, $request->boolean('gravacao'));
         } finally {
             if ($temporary) {
                 @unlink($temporary);
@@ -587,7 +591,32 @@ class WhatsAppInboxController extends Controller
         ];
     }
 
-    private function messagePayload(WhatsAppMessage $m): array
+    /**
+     * Reações do cliente por wa_message_id da mensagem reagida. Vale a última
+     * de cada pessoa; emoji vazio = reação removida.
+     *
+     * @return array<string, list<string>>
+     */
+    private function reacoes(int $conversationId): array
+    {
+        $porAlvo = [];
+        WhatsAppMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->where('type', 'reaction')
+            ->orderBy('id')
+            ->get(['direction', 'payload'])
+            ->each(function (WhatsAppMessage $r) use (&$porAlvo) {
+                $alvo = $r->payload['reaction']['message_id'] ?? null;
+                if ($alvo) {
+                    $porAlvo[$alvo][$r->direction] = (string) ($r->payload['reaction']['emoji'] ?? '');
+                }
+            });
+
+        return array_map(fn ($emojis) => array_values(array_filter($emojis, 'filled')), $porAlvo);
+    }
+
+    /** @param  array<string, list<string>>  $reacoes */
+    private function messagePayload(WhatsAppMessage $m, array $reacoes = []): array
     {
         $payload = $m->payload ?? [];
 
@@ -604,6 +633,7 @@ class WhatsAppInboxController extends Controller
             'fileName' => $payload['document']['filename'] ?? null,
             'transcription' => $payload['transcription'] ?? null,
             'error' => $m->status === 'failed' ? ($payload['error'] ?? null) : null,
+            'reactions' => $reacoes[$m->wa_message_id] ?? [],
         ];
     }
 }

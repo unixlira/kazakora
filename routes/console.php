@@ -22,6 +22,10 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue
 // e manda o WhatsApp "saiu para entrega" e "foi entregue" (AcompanharRastreioLoja).
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
+// Pré-postagens dos Correios (2026-11-16, AP623701379BR expirou sem ninguém
+// ver): grava postada/entregue/expirada de cada etiqueta gerada nos últimos
+// 60 dias, até 150 consultas por rodada (AcompanharPrePostagensCorreios).
+Schedule::command('correios:acompanhar-pre-postagens')->cron('40 */2 * * *')->withoutOverlapping(110);
 // Pedido do site com etiqueta do Melhor Envio (2026-11-09, #3978): o mesmo
 // fluxo pela API do Melhor Envio (rastreio, postado, entregue, WhatsApp).
 Schedule::command('melhorenvio:acompanhar')->everyThirtyMinutes()->withoutOverlapping(25);

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
+use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
@@ -510,6 +511,11 @@ abstract class CheckoutOutroSite
 
                 $this->stock->adjust($item['product'], -$item['quantity'], StockMovement::TYPE_SALE, reason: "Pedido #{$order->id}", reference: $order);
             }
+
+            // Transportadora do Melhor Envio escolhida no pedido, como no checkout da
+            // KazaKora (2026-11-14: pedido da FerraKora ficava sem transportadora e
+            // sem o custo do frete, e o admin não mostrava a mais barata).
+            CotarFreteDoPedidoJob::dispatch($order->id)->afterCommit();
 
             if ($metodo === Payment::METHOD_PIX) {
                 $mp = $this->mercadoPago->createPixPayment($total, $this->pagador($pagador, $order), "order-{$order->id}-payment-1", "order:{$order->id}:payment:1");

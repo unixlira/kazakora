@@ -31,6 +31,46 @@ class EtiquetaComMarcaTest extends TestCase
         $this->assertStringContainsString('577.50 813.00', $novo);
     }
 
+    public function test_correios_ganha_o_logo_e_a_linha_do_remetente_sem_telefone(): void
+    {
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios SEDEX'));
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios PAC'));
+        $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('SEDEX'));
+        $this->assertNull(EtiquetaMelhorEnvioComMarca::modelo('Jadlog .Package'));
+
+        $original = $this->pdf();
+        $novo = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1);
+
+        $this->assertNotSame($original, $novo);
+        $this->assertStringContainsString('/Image', $novo);
+        $this->assertStringContainsString('577.50 813.00', $novo);
+        // Telefone de atendimento de cada loja, nunca o do cadastro da empresa.
+        $this->assertSame('KazaKora, Tel: (11) 96572-3990', EtiquetaMelhorEnvioComMarca::remetente(null));
+        $this->assertSame('FerraKora, Tel: (11) 92720-6026', EtiquetaMelhorEnvioComMarca::remetente(SiteAtual::FERRAKORA));
+        $this->assertSame('11965723990', EtiquetaMelhorEnvioComMarca::telefone(SiteAtual::KAZAKORA));
+        $this->assertSame('11927206026', EtiquetaMelhorEnvioComMarca::telefone(SiteAtual::FERRAKORA));
+    }
+
+    public function test_correios_lista_sku_e_quantidade_abaixo_do_remetente(): void
+    {
+        $original = $this->pdf();
+        $sem = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1);
+        $com = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1, null, [
+            ['sku' => 'TRAV-CERV-01', 'quantidade' => 2],
+            ['sku' => null, 'quantidade' => 1],
+        ]);
+
+        // Stream do PDF sem compressão nos testes do FPDF: o texto aparece.
+        $this->assertGreaterThan(strlen($sem), strlen($com));
+        $this->assertStringContainsString('577.50 813.00', $com);
+        $this->assertArrayHasKey('correios', EtiquetaMelhorEnvioComMarca::ITENS);
+
+        // J&T: SKU e quantidade no rodapé, abaixo do logo (#4162).
+        $jetSem = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1);
+        $jetCom = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1, null, [['sku' => 'KIC-PF36V-2B-SR', 'quantidade' => 1]]);
+        $this->assertGreaterThan(strlen($jetSem), strlen($jetCom));
+    }
+
     public function test_transportadora_sem_posicao_medida_sai_como_veio(): void
     {
         $original = $this->pdf();
@@ -41,7 +81,7 @@ class EtiquetaComMarcaTest extends TestCase
 
     public function test_ferrakora_sai_com_o_logo_preto_e_branco_dela(): void
     {
-        $this->assertSame('images/marca/logo-ferrakora-etiqueta.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
+        $this->assertSame('images/marca/logo-ferrakora-etiqueta-v2.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
         $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::KAZAKORA));
         $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(null));
 

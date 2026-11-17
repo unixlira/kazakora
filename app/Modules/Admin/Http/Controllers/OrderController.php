@@ -10,6 +10,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
+use App\Modules\Checkout\Support\EnderecoDoPedido;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 use App\Modules\Checkout\Support\SituacaoDoPagamento;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\CustoDoFrete;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\TipoDeEnvio;
 use App\Notifications\OrderStatusUpdated;
@@ -100,6 +102,7 @@ class OrderController extends Controller
                 'user:id,name,email',
                 'invoice:id,order_id,status,serie,numero,motivo_rejeicao',
                 'latestCorreiosPrePostagem',
+                'melhorEnvioEnvio',
                 // Tipo de envio (Flex, Mercado Envios, Full...) na coluna Envios.
                 'channelShipment:id,order_id,channel,shipping_method',
             ])
@@ -327,6 +330,35 @@ class OrderController extends Controller
         return back()->with('success', $era
             ? 'Pedido voltou a contar como venda.'
             : 'Pedido marcado como amostra: não conta no faturamento nem nas vendas.');
+    }
+
+    /**
+     * Corrigir o endereço de entrega (Lira, 2026-11-17, #4246): grava na
+     * linha do tempo o que a cliente digitou e o endereço novo, e guarda o
+     * original no pedido na primeira alteração (EnderecoDoPedido).
+     */
+    public function updateEndereco(Request $request, Order $order, EnderecoDoPedido $endereco): RedirectResponse
+    {
+        $validated = $request->validate([
+            'shipping_recipient_name' => ['nullable', 'string', 'max:255'],
+            'shipping_zip' => ['required', 'string', 'max:9'],
+            'shipping_street' => ['required', 'string', 'max:255'],
+            'shipping_number' => ['required', 'string', 'max:20'],
+            'shipping_complement' => ['nullable', 'string', 'max:255'],
+            'shipping_neighborhood' => ['required', 'string', 'max:255'],
+            'shipping_city' => ['required', 'string', 'max:255'],
+            'shipping_state' => ['required', 'string', 'size:2'],
+            'motivo' => ['nullable', 'string', 'max:300'],
+        ]);
+
+        $motivo = $validated['motivo'] ?? null;
+        unset($validated['motivo']);
+
+        if (! $endereco->alterar($order, $validated, $motivo, $request->user())) {
+            return back()->with('success', 'O endereço já estava assim: nada mudou.');
+        }
+
+        return back()->with('success', 'Endereço de entrega alterado. O endereço que a cliente digitou ficou no histórico do pedido.');
     }
 
     public function reenviarEstorno(Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
@@ -581,6 +613,10 @@ class OrderController extends Controller
 
             if ($alternativo !== $caminho && Storage::disk('local')->exists($alternativo)) {
                 $caminho = $alternativo;
+            } elseif (str_ends_with((string) $shipment->raw_label_path, '.pdf') && Storage::disk('local')->exists($shipment->raw_label_path)) {
+                // Melhor Envio (2026-11-14): a etiqueta como veio dele, sem o
+                // logo da loja, fica no arquivo bruto do envio.
+                $caminho = $shipment->raw_label_path;
             }
         }
 
@@ -742,6 +778,8 @@ class OrderController extends Controller
                 'uf' => $order->shipping_state,
                 'cep' => $order->shipping_zip,
             ],
+            // O que a cliente digitou, quando o endereço foi alterado depois (2026-11-17).
+            'endereco_digitado' => $order->endereco_digitado,
             'amostra_em' => $order->amostra_em,
             'canal' => [
                 'origin' => $order->origin,
@@ -777,6 +815,12 @@ class OrderController extends Controller
                 'frete_embutido' => $order->frete_embutido_amount !== null ? (float) $order->frete_embutido_amount : null,
                 'turbo' => $order->shipping_carrier_name === FreteEmbutido::TURBO,
                 'frete' => (float) $order->shipping_cost,
+                // Quanto a loja paga de frete (2026-11-14): frete grátis para o cliente tem custo para a loja.
+                'frete_custo' => CustoDoFrete::doPedido($order),
+                // Etiqueta do Melhor Envio guardada como veio dele (2026-11-14): botão "Etiqueta original".
+                'etiqueta_original' => $order->origin === Order::ORIGIN_STORE
+                    && $order->melhorEnvioEnvio !== null
+                    && str_ends_with((string) $order->channelShipment?->raw_label_path, '.pdf'),
                 'cupom' => $order->coupon_code,
                 // discount_amount já soma Pix e desconto da plataforma (mesma
                 // conta da área do cliente, CheckoutController::showOrder).

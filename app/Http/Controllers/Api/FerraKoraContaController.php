@@ -16,8 +16,9 @@ use Illuminate\Support\Str;
 /**
  * Conta do site FerraKora (pedido 2026-10-14). Desde 2026-10-15 é separada da
  * KazaKora (tabela ferrakora_clientes): quem compra no checkout do FerraKora
- * ganha conta aqui, com senha sorteada, e cria a senha dele em "Esqueci minha
- * senha". O site guarda o token e manda como Bearer (AuthenticateFerraKoraCliente).
+ * ganha conta aqui, com a senha temporária do e-mail de boas-vindas (desde
+ * 2026-10-29; antes, senha sorteada e "Esqueci minha senha", que segue valendo
+ * para essas contas antigas). O site guarda o token e manda como Bearer (AuthenticateFerraKoraCliente).
  */
 class FerraKoraContaController extends Controller
 {
@@ -111,7 +112,7 @@ class FerraKoraContaController extends Controller
         }
 
         DB::table('ferrakora_senha_tokens')->where('email', $email)->delete();
-        $cliente->forceFill(['password' => $dados['password'], 'senha_definida' => true])->save();
+        $cliente->forceFill(['password' => $dados['password'], 'senha_definida' => true, 'deve_trocar_senha' => false])->save();
         FerraKoraSessao::encerrarTodas($cliente);
 
         return $this->comSessao($cliente, $request);

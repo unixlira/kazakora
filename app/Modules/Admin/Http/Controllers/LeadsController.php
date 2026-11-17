@@ -63,6 +63,7 @@ class LeadsController extends Controller
                 'status' => $lead->status,
                 'origem' => $lead->origem,
                 'utm_source' => $lead->utm_source,
+                'utm_campaign' => $lead->utm_campaign,
                 'agora' => $lead->status === Lead::STATUS_ABERTO && $lead->updated_at?->gte(now()->subMinutes(self::MINUTOS_AGORA)),
                 'pedido' => $lead->order ? ['id' => $lead->order->id, 'numero' => $lead->order->external_order_id] : null,
                 'criado_em' => $lead->created_at?->toIso8601String(),

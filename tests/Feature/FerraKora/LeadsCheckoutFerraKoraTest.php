@@ -98,4 +98,15 @@ class LeadsCheckoutFerraKoraTest extends TestCase
         $this->assertSame(Lead::STATUS_CONVERTIDO, $lead->status);
         $this->assertSame($resposta->json('pedido.id'), $lead->order_id);
     }
+
+    /** FerraKora manda "abriu" ao abrir o checkout, sem nenhum campo (15/11/2026). */
+    public function test_abrir_o_checkout_da_ferrakora_cria_o_lead(): void
+    {
+        $this->postJson('/api/ferrakora/checkout/lead', ['itens' => $this->itens(), 'sessao' => 'aba-abriu', 'campo' => 'abriu'])->assertNoContent();
+        $this->postJson('/api/ferrakora/checkout/lead', ['itens' => $this->itens(), 'sessao' => 'aba-vazia'])->assertNoContent();
+
+        $lead = Lead::sole();
+        $this->assertSame('ferrakora', $lead->site);
+        $this->assertNull($lead->nome);
+    }
 }

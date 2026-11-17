@@ -562,6 +562,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/reenviar-estorno', [AdminOrderController::class, 'reenviarEstorno'])
         ->name('pedidos.reenviar-estorno')
         ->middleware('permission:pedidos.edit');
+    // Corrigir o endereço de entrega com histórico do digitado (2026-11-17, #4246).
+    Route::patch('pedidos/{order}/endereco', [AdminOrderController::class, 'updateEndereco'])
+        ->name('pedidos.endereco')
+        ->middleware('permission:pedidos.edit');
     // Marca ou desmarca o pedido como amostra: fora do faturamento e das vendas (Lira, 2026-11-12, #4108).
     Route::post('pedidos/{order}/amostra', [AdminOrderController::class, 'amostra'])
         ->name('pedidos.amostra')
@@ -660,6 +664,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
+    // Clientes dos sites (pedido do Lira 2026-11-16): contas criadas na KazaKora e na FerraKora. Só leitura.
+    Route::middleware('permission:pedidos.view')->prefix('clientes-dos-sites')->name('clientes-dos-sites.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'index'])->name('listar');
+        Route::get('exportar', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'exportar'])->middleware('throttle:10,1')->name('exportar');
+        Route::get('{site}/{cliente}', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'show'])
+            ->whereIn('site', ['kazakora', 'ferrakora'])->whereNumber('cliente')->name('exibir');
+    });
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');
@@ -722,6 +733,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:financeiro.view')->group(function () {
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
+        // Plataformas x E-commerces (pedido do Lira em 16/11/2026): o lucro
+        // dos marketplaces separado do lucro dos sites próprios.
+        Route::get('financeiro/plataformas-e-ecommerces', [\App\Modules\Admin\Http\Controllers\PlataformasEcommercesController::class, 'index'])
+            ->name('financeiro.plataformas-ecommerces');
         // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro por
         // marketplace. Saiu do menu Oportunidades (só dado de mercado).
         Route::get('estatisticas/curva-abc/{canal}', [\App\Modules\Admin\Http\Controllers\EstatisticasController::class, 'curvaAbc'])
@@ -983,6 +998,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('suporte/{chamado}/humano', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'humano'])->whereNumber('chamado')->name('suporte.humano');
         Route::patch('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'atualizar'])->whereNumber('chamado')->name('suporte.atualizar');
         Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
+        // Atendimento > Cancelamentos (2026-11-17): pedidos de cancelamento de compra já postada.
+        Route::get('cancelamentos', [\App\Modules\Suporte\Http\Controllers\AdminCancelamentosController::class, 'index'])->name('cancelamentos.listar');
+        Route::post('cancelamentos/{solicitacao}/resolver', [\App\Modules\Suporte\Http\Controllers\AdminCancelamentosController::class, 'resolver'])->whereNumber('solicitacao')->name('cancelamentos.resolver');
         // Chat da Shopee (2026-10-25): conversas do sellerchat. Enviar só por ação do atendente.
         Route::get('chat-shopee', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'index'])->name('chat-shopee.index');
         Route::get('chat-shopee/pendentes', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'pendentes'])->name('chat-shopee.pendentes');

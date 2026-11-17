@@ -28,7 +28,7 @@ class ResultadoDiario
     }
 
     /**
-     * @return array{data: Carbon, dia: array, mes: array, dias: list<array>, aliquota: float, vencimento_das: Carbon}
+     * @return array{data: Carbon, dia: array, mes: array, dias: list<array>, grupos: array{dia: array, mes: array}, aliquota: float, vencimento_das: Carbon}
      */
     public function calcular(Carbon $data): array
     {
@@ -63,6 +63,12 @@ class ResultadoDiario
                 'pedidos' => (int) array_sum(array_column($dias, 'pedidos')),
             ],
             'dias' => $dias,
+            // Plataformas x E-commerces (pedido do Lira em 16/11/2026): a
+            // mesma conta (porCanal) somada pelos grupos de GruposDeCanais.
+            'grupos' => [
+                'dia' => GruposDeCanais::agrupar($this->margem->porCanal($data->copy(), $data->copy()->addDay())),
+                'mes' => GruposDeCanais::agrupar($this->margem->porCanal($data->copy()->startOfMonth(), $data->copy()->addDay())),
+            ],
             'aliquota' => $this->aliquota(),
             // DAS vence no dia 20 do mês seguinte (Simples Nacional).
             'vencimento_das' => $data->copy()->startOfMonth()->addMonth()->day(20),

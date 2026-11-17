@@ -9,6 +9,12 @@ use RuntimeException;
  * Áudio gravado no navegador (Chrome grava webm/opus, Safari mp4/aac) para
  * ogg/opus, o único formato que o WhatsApp mostra como nota de voz.
  * Devolve o caminho de um arquivo temporário; quem chama apaga depois.
+ *
+ * Formato testado com o Lira em 14/11/2026: em 48 kHz e 32 kbps o áudio
+ * chegava ao cliente mas não baixava ("erro ao baixar"), mesmo com o arquivo
+ * íntegro na Meta. O que baixa e toca é mono, 16 kHz, 24 kbps, quadros de
+ * 20 ms, enviado com audio.voice = true (WhatsAppCloudApiClient::sendMedia).
+ * Em m4a e mp3 também chega, mas como arquivo de áudio, não como nota de voz.
  */
 class ConversorDeVoz
 {
@@ -18,7 +24,7 @@ class ConversorDeVoz
         $saida = $base.'.ogg';
 
         $comando = sprintf(
-            '%s -y -loglevel error -i %s -vn -ac 1 -ar 48000 -c:a libopus -b:a 32k -application voip %s 2>&1',
+            '%s -y -loglevel error -i %s -vn -ac 1 -ar 16000 -c:a libopus -b:a 24k -application voip -frame_duration 20 -vbr on %s 2>&1',
             escapeshellcmd(Ffmpeg::binario()),
             escapeshellarg($origem),
             escapeshellarg($saida),

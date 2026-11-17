@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
  */
 class FunilDoCheckout extends Command
 {
-    protected $signature = 'checkout:funil {--dias=7 : Quantos dias para trás (contando hoje)}';
+    protected $signature = 'checkout:funil {--dias=7 : Quantos dias para trás (contando hoje)} {--site=kazakora : kazakora (a /finalizacao da loja) ou ferrakora (o /seguro-pagamento de lá)}';
 
     protected $description = 'Funil do checkout: quem abriu, rolou, focou, preencheu, clicou Finalizar e fez pedido';
 
@@ -31,7 +31,10 @@ class FunilDoCheckout extends Command
         $dias = max(1, (int) $this->option('dias'));
         $inicio = now()->subDays($dias - 1)->startOfDay();
 
+        // Loja = site nulo (linhas de antes de 14/11/2026 e a /finalizacao); outro site grava o nome.
+        $site = strtolower(trim((string) $this->option('site'))) ?: SiteVisit::SITE_LOJA;
         $eventos = CheckoutEvento::query()
+            ->when($site === SiteVisit::SITE_LOJA, fn ($q) => $q->whereNull('site'), fn ($q) => $q->where('site', $site))
             ->where('created_at', '>=', $inicio)
             ->get(['visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem', 'created_at']);
 
@@ -39,7 +42,7 @@ class FunilDoCheckout extends Command
             ->filter(fn (Collection $doVisitante) => $doVisitante->contains('evento', 'abriu'))
             ->map(fn (Collection $doVisitante) => $this->resumo($doVisitante));
 
-        $this->info("Funil do checkout de {$inicio->format('d/m/Y')} a ".now()->format('d/m/Y').' (só gente de fora, por visitante)');
+        $this->info('Funil do checkout'.($site === SiteVisit::SITE_LOJA ? '' : " ({$site})")." de {$inicio->format('d/m/Y')} a ".now()->format('d/m/Y').' (só gente de fora, por visitante)');
 
         if ($visitantes->isEmpty()) {
             $this->line('Ninguém abriu a finalização no período.');

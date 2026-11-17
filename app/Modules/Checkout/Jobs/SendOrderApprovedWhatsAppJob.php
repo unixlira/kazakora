@@ -95,9 +95,9 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
         $nomeCompleto = trim((string) ($order->shipping_name ?: $order->user?->name)) ?: 'cliente';
         $nome = Str::of($nomeCompleto)->explode(' ')->first();
         $email = $order->shipping_email ?: $order->user?->email ?: 'não informado';
-        // FerraKora tem banner próprio (tema grafite e laranja, logo dela e selo Reclame Aqui, 2026-10-29).
+        // FerraKora tem banner próprio; desde 14/11/2026 o da marca nova (índigo e verde-limão, logo novo), pedido do Lira.
         $imagem = WhatsAppNumeros::template($loja, 'pedido_aprovado_imagem') ?: asset($loja === WhatsAppNumeros::FERRAKORA
-            ? 'images/whatsapp/confirmacao-pedido-ferrakora-v2.jpg'
+            ? 'images/whatsapp/confirmacao-pedido-ferrakora-v3.jpg'
             : 'images/whatsapp/confirmacao-pedido.jpg');
 
         try {

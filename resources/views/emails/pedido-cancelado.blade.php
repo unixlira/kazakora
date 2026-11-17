@@ -7,7 +7,7 @@
     @include('emails.partials.titulo', ['texto' => "Pedido {$order->numero} cancelado"])
 
     <p style="margin: 0 0 18px; text-align: center; color: #374151;">
-        Olá, {{ $order->shipping_name }}. Seu pedido <strong style="color: #F27A2A;">{{ $order->numero }}</strong> foi cancelado e não será enviado.
+        Olá, {{ $order->shipping_name }}. Seu pedido <strong style="color: {{ ($marcaEmail ?? [])['cor'] ?? '#F27A2A' }};">{{ $order->numero }}</strong> foi cancelado e não será enviado.
     </p>
 
     @if ($valorEstornado > 0)

@@ -10,6 +10,9 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\EtiquetaMelhorEnvioComMarca;
+use App\Modules\Marketplace\Support\EtiquetaOcr;
+use App\Modules\Admin\Support\AlertasAdmin;
+use App\Modules\Marketplace\Support\FreteMaisBarato;
 use App\Modules\Marketplace\Support\J3FlexLabel;
 use App\Modules\Marketplace\Support\LabelProcessingService;
 use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
@@ -125,8 +128,36 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             // ACHADO REAL 2026-11-09 (#3978): a etiqueta do Melhor Envio vem
             // numa folha de 204 x 287 mm; a térmica 10x15 recebeu, marcou
             // impresso e não saiu nada. Encaixa no papel como a do TikTok.
+            $original = $pdf;
             if ($pdf) {
-                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($pdf, $envio->servico, $order->id, $order->site_origem);
+                $pdf = app(EtiquetaMelhorEnvioComMarca::class)->aplicar(
+                    $pdf,
+                    $envio->servico,
+                    $order->id,
+                    $order->site_origem,
+                    // SKU e quantidade abaixo do remetente (pedido do Lira 14/11).
+                    $order->loadMissing('items.product')->items
+                        ->map(fn ($i) => ['sku' => $i->product?->sku, 'quantidade' => (int) $i->quantity])
+                        ->all(),
+                );
+                // Conferência por OCR (pedido do Lira em 15/11/2026, #4198): se
+                // a marca do Melhor Envio ainda aparece, a etiqueta não vai
+                // para a impressora e o admin é avisado. Sem OCR no servidor,
+                // não bloqueia (só fica no log).
+                if (app(EtiquetaOcr::class)->temMarcaDoMelhorEnvio($pdf) === true) {
+                    Log::warning('melhorenvio.etiqueta_com_marca_me', ['order_id' => $order->id, 'servico' => $envio->servico]);
+                    app(AlertasAdmin::class)->disparar(
+                        AlertasAdmin::ETIQUETA_MARCA,
+                        'pedido-'.$order->id,
+                        "Etiqueta do pedido #{$order->id} ainda com o Melhor Envio",
+                        "A troca pelo logo da loja não pegou na etiqueta {$envio->servico}. Ela não foi impressa; a original está no pedido.",
+                        "/admin/pedidos/{$order->id}",
+                    );
+
+                    return ['ready' => false, 'contents' => null, 'content_type' => null];
+                }
+                app(AlertasAdmin::class)->resolver(AlertasAdmin::ETIQUETA_MARCA, 'pedido-'.$order->id);
+
                 try {
                     $pdf = app(LabelProcessingService::class)->encaixarNaFolha($pdf);
                 } catch (\Throwable $e) {
@@ -135,7 +166,7 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             }
 
             return $pdf
-                ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf']
+                ? ['ready' => true, 'contents' => $pdf, 'content_type' => 'application/pdf', 'original' => $original]
                 : ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 
@@ -170,8 +201,18 @@ class LojaShippingDriver implements MarketplaceChannelDriver
             return false;
         }
 
-        return FreteProvedor::doPedido($order->site_origem) === FreteProvedor::MELHOR_ENVIO
-            || $this->caixaForaDosCorreios($order);
+        // Caixa que os Correios recusam: só o Melhor Envio leva.
+        if ($this->caixaForaDosCorreios($order)) {
+            return true;
+        }
+
+        if (FreteProvedor::doPedido($order->site_origem) !== FreteProvedor::MELHOR_ENVIO) {
+            return false;
+        }
+
+        // 2026-11-14 (#4172): com o Melhor Envio conectado, o contrato dos
+        // Correios ainda leva a etiqueta quando cobra menos pelo mesmo pacote.
+        return ! app(FreteMaisBarato::class)->correiosGanha($order);
     }
 
     /**

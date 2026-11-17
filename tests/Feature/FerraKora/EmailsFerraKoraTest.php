@@ -6,6 +6,7 @@ use App\Modules\Checkout\Mail\BoletoAguardandoPagamento;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Mail\FerraKoraBoasVindas;
 use App\Modules\FerraKora\Mail\FerraKoraNovaSenha;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,7 +41,7 @@ class EmailsFerraKoraTest extends TestCase
             new OrderConfirmation($order),
         ] as $mail) {
             $html = $mail->render();
-            $this->assertStringContainsString('/images/marca/ferrakora-email.png', $html);
+            $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $html);
             $this->assertStringContainsString('alt="FerraKora"', $html);
             $this->assertStringContainsString('https://ferrakora.devlira.com.br/meus-pedidos', $html);
             $this->assertStringNotContainsString(route('pedidos.meus'), $html);
@@ -91,10 +92,55 @@ class EmailsFerraKoraTest extends TestCase
         $cliente = FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'phone' => '11999999999', 'password' => 'senha12345']);
         $html = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
 
-        $this->assertStringContainsString('/images/marca/ferrakora-email.png', $html);
+        $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $html);
         $this->assertStringContainsString('alt="FerraKora"', $html);
         $this->assertStringContainsString('https://wa.me/5511927206026', $html);
         $this->assertStringContainsString('https://ferrakora.devlira.com.br/nova-senha?token=x', $html);
         $this->assertStringNotContainsString('alt="KazaKora"', $html);
+    }
+
+    /** 2026-11-14: boas-vindas e nova senha com o logo e o índigo da FerraKora, sem o laranja da KazaKora. */
+    public function test_boas_vindas_do_ferrakora_com_logo_e_cor_da_ferrakora(): void
+    {
+        $cliente = FerraKoraCliente::query()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'phone' => '11999999999', 'password' => 'senha12345']);
+
+        $boasVindas = (new FerraKoraBoasVindas($cliente, 'Abc123XyZ9'))->render();
+        $this->assertStringContainsString('/images/marca/ferrakora-email-v2.png', $boasVindas);
+        $this->assertStringContainsString('alt="FerraKora"', $boasVindas);
+        $this->assertStringContainsString('Abc123XyZ9', $boasVindas);
+        $this->assertStringContainsString('border-bottom: 4px solid #271E91', $boasVindas);
+        $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $boasVindas);
+        $this->assertStringNotContainsString('alt="KazaKora"', $boasVindas);
+
+        $novaSenha = (new FerraKoraNovaSenha($cliente, 'https://ferrakora.devlira.com.br/nova-senha?token=x'))->render();
+        $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $novaSenha);
+
+        // Quem já criou a própria senha recebe o boas-vindas sem senha temporária.
+        $semSenha = (new FerraKoraBoasVindas($cliente))->render();
+        $this->assertStringNotContainsString('Senha temporária', $semSenha);
+        $this->assertStringContainsString('a senha que você criou', $semSenha);
+
+        // A KazaKora continua com o laranja dela.
+        $this->assertStringContainsString('border-bottom: 4px solid #f27a2a', view('emails.welcome', ['user' => \App\Models\User::factory()->make(), 'senhaTemporaria' => null])->render());
+    }
+
+    /** 2026-11-14: e-mails de pedido da FerraKora sem o laranja da KazaKora no número do pedido e nos botões. */
+    public function test_emails_de_pedido_do_ferrakora_sem_o_laranja_da_kazakora(): void
+    {
+        $ferrakora = $this->pedido(Order::SITE_FERRAKORA);
+        $kazakora = $this->pedido(null);
+
+        foreach ([
+            fn (Order $order) => new PixAguardandoPagamento($order, 100.0, 'pix-copia'),
+            fn (Order $order) => new BoletoAguardandoPagamento($order, 100.0, '2379', 'https://mp/boleto'),
+            fn (Order $order) => new OrderConfirmation($order),
+            fn (Order $order) => new \App\Modules\Checkout\Mail\PedidoCancelado($order),
+        ] as $email) {
+            $html = $email($ferrakora)->render();
+            $this->assertStringNotContainsStringIgnoringCase('#f27a2a', $html);
+            $this->assertStringContainsString('#271E91', $html);
+            $this->assertStringNotContainsString('alt="KazaKora"', $html);
+            $this->assertStringContainsStringIgnoringCase('#f27a2a', $email($kazakora)->render());
+        }
     }
 }

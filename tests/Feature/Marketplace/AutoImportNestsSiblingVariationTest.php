@@ -25,6 +25,21 @@ class AutoImportNestsSiblingVariationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+        // Pedido READY_TO_SHIP: extrato ainda não consolidado.
+        Http::fake([
+            '*/api/v2/payment/get_escrow_detail*' => Http::response(['response' => ['order_income' => []]]),
+            '*/api/v2/product/get_model_list*item_id=58213072403*' => Http::response(['response' => ['model' => [[
+                'model_id' => 228810643303, 'model_name' => '8 Polegadas',
+                'price_info' => [['current_price' => 39.90]],
+                'stock_info_v2' => ['summary_info' => ['total_available_stock' => 20]],
+            ]]]]),
+        ]);
+    }
+
     private function connectShopee(): void
     {
         MarketplaceAccount::create([

@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
+use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\DescontoPix;
@@ -156,7 +157,12 @@ class CatalogoFerraKora extends CatalogoOutroSite
 
         $pai = Product::query()->with(['images', 'adContent'])->find((int) Str::after($produto['id'], self::PREFIXO_PRODUTO));
 
-        return [...$produto, 'conteudo' => $pai ? $this->conteudoDaPagina($pai) : null];
+        return [
+            ...$produto,
+            'conteudo' => $pai ? $this->conteudoDaPagina($pai) : null,
+            // Card de Black Friday padrão (14/11/2026), para o produto sem oferta própria no cadastro.
+            'oferta_padrao' => $pai ? OfertaBlackFriday::padrao($pai, outroSite: true) : null,
+        ];
     }
 
     /**
@@ -185,7 +191,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
                 ...$bloco,
                 'imagem_url' => isset($bloco['imagem']) && $bloco['imagem'] !== null ? $fotos->get((int) $bloco['imagem'])?->url : null,
             ])->values()->all(),
-            'comparativo' => $conteudo->comparativo,
+            'comparativo' => OfertaBlackFriday::comparativoPercentual(
+                $conteudo->comparativo, collect([$pai])->concat(Product::query()->where('parent_product_id', $pai->id)->get()),
+            ),
             'beneficios' => $conteudo->beneficios ?? [],
             'duvidas' => $conteudo->duvidas ?? [],
             'fonte' => $conteudo->fonte,

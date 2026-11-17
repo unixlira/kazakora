@@ -30,6 +30,22 @@ return [
     // Nome do remetente na etiqueta (CNPJ e endereço continuam os da empresa).
     'remetente' => env('MELHORENVIO_REMETENTE', 'KazaKora'),
 
+    // Comparar com o contrato dos Correios antes de comprar a etiqueta
+    // (2026-11-14, #4172). DESLIGADO por padrão: a diferença que motivou a
+    // regra (R$ 16,53 x R$ 14,98) era o valor declarado. O Melhor Envio
+    // cota com seguro do valor do pedido e a consulta ao contrato, sem; pelo
+    // mesmo pacote sem seguro os dois cobram igual. Ligar só depois de o
+    // Lira decidir se os pedidos saem com ou sem valor declarado.
+    'comparar_correios' => (bool) env('MELHORENVIO_COMPARAR_CORREIOS', false),
+
+    // Telefone do remetente (2026-11-14, #4172): o de atendimento de cada
+    // loja (o mesmo do rodapé do site e dos e-mails), nunca o do cadastro da
+    // empresa, que é o pessoal do dono e saiu impresso na etiqueta do SEDEX.
+    'telefones' => [
+        'kazakora' => env('MELHORENVIO_TELEFONE', '11965723990'),
+        'ferrakora' => env('MELHORENVIO_TELEFONE_FERRAKORA', '11927206026'),
+    ],
+
     // Onde levar os pacotes (2026-11-09): ponto que aceita quase todas as
     // transportadoras, a 200 m da loja (Pegaki DISTRIBUE, Rua Florianópolis,
     // 198A). Transportadora que ele não aceita vai na agência mais próxima

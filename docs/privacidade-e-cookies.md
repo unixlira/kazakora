@@ -222,6 +222,14 @@ rolagem máxima, e o pedido criado (servidor).
 - Base legal: legítimo interesse (melhorar a tela de compra), dado mínimo e
   pseudônimo. Leitura só pelo comando `php artisan checkout:funil --dias=7`
   (equipe e robôs fora).
+- **FerraKora (2026-11-14):** a tela `/seguro-pagamento` de lá manda os
+  mesmos eventos, com a mesma lista fechada, para
+  `POST /api/ferrakora/checkout/eventos` (`OutroSiteCheckoutEventosController`),
+  aceitos só dos domínios em `services.ferrakora.origens`. Ficam na mesma
+  tabela com `site = ferrakora` (a loja fica com `site` nulo). O visitante é
+  o código tirado do IP, igual ao das visitas da FerraKora; o IP em si não é
+  gravado aqui. Sem cookie novo e sem terceiros. Leitura:
+  `php artisan checkout:funil --site=ferrakora`. Mesmo prazo de 6 meses.
 
 ### Carrinho abandonado (`lead_checkout`, pedido 2026-10-24)
 Quem preenche a Identificação do checkout e clica em "Ir para Entrega" (e de
@@ -246,6 +254,25 @@ o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
   venda já está no pedido. Prazo em `config/loja.php`
   (`LOJA_LEAD_CHECKOUT_DIAS_GUARDA`, padrão 90 dias). Falta citar na Política
   de Privacidade pública.
+
+### Clientes dos sites (`/admin/clientes-dos-sites`, pedido 2026-11-16)
+Tela do admin com as contas criadas na KazaKora (`users`, só `role =
+customer`) e na FerraKora (`ferrakora_clientes`): cadastro, endereços,
+pedidos, último acesso e os leads/carrinhos ligados pelo e-mail, CPF ou
+telefone. **Não coleta nada novo**: só lê o que já existe.
+- Permissão `pedidos.view` (a mesma de Clientes e Leads). Só leitura: nada é
+  enviado, editado ou apagado. Hash de senha, `remember_token` e token de
+  sessão da FerraKora nunca vão para a tela.
+- Último acesso: KazaKora = última página vista logado (`site_visits`, some
+  junto com o usuário aos 6 meses); FerraKora = último uso de uma sessão ainda
+  guardada (`ferrakora_sessoes`).
+- O WhatsApp é só um link `wa.me` que abre a conversa; quem escreve é a
+  pessoa da equipe. Base legal do contato: execução do contrato (art. 7º V)
+  para pedido; oferta só para quem aceita promoções (`recebe_promocoes`).
+- **Exportar CSV** leva o que está filtrado (nome, e-mail, telefone, CPF,
+  cidade, pedidos). Cada exportação fica na Auditoria (`audit_logs`, ação
+  `export`, entidade `ClientesDosSites`: quem, quando, site, filtro e IP).
+  O arquivo baixado é dado pessoal: não mandar para fora da equipe.
 
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Medição do checkout (`checkout_eventos`) com mais de 6 meses: apagada.

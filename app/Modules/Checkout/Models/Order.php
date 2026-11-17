@@ -348,6 +348,8 @@ class Order extends Model
     {
         return [
             'amostra_em' => 'datetime',
+            // Endereço original da compra, gravado na 1ª alteração (EnderecoDoPedido).
+            'endereco_digitado' => 'array',
             'subtotal' => 'decimal:2',
             'shipping_cost' => 'decimal:2',
             'discount_amount' => 'decimal:2',

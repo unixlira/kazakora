@@ -549,6 +549,7 @@ const highlights = computed(() => {
 
 // Medidas da embalagem no fim da descrição (pedido 2026-10-25), no lugar da
 // tabela Informação adicional; seguem a variação escolhida.
+const medidasEmbalagem = computed(() => selecionada.value.medidas_embalagem ?? props.product.medidas_embalagem ?? null);
 const dimensoesEmbalagem = computed(() => selecionada.value.dimensoes_embalagem ?? props.product.dimensoes_embalagem ?? null);
 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
@@ -1148,7 +1149,19 @@ const submitReview = () => {
                                 </div>
                             </div>
 
-                            <p v-if="dimensoesEmbalagem" class="dimensoes-embalagem"><strong>Dimensões da embalagem:</strong> {{ dimensoesEmbalagem }}</p>
+                            <!-- Quadro de medidas (pedido 2026-11-17: "3C x 25L x 25A CM" corrido ficava feio). -->
+                            <div v-if="medidasEmbalagem" class="medidas-embalagem">
+                                <p class="medidas-titulo">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></svg>
+                                    Dimensões da embalagem
+                                </p>
+                                <dl class="medidas-grade">
+                                    <div><dt>Comprimento</dt><dd>{{ medidasEmbalagem.comprimento }}<span>cm</span></dd></div>
+                                    <div><dt>Largura</dt><dd>{{ medidasEmbalagem.largura }}<span>cm</span></dd></div>
+                                    <div><dt>Altura</dt><dd>{{ medidasEmbalagem.altura }}<span>cm</span></dd></div>
+                                </dl>
+                            </div>
+                            <p v-else-if="dimensoesEmbalagem" class="dimensoes-embalagem"><strong>Dimensões da embalagem:</strong> {{ dimensoesEmbalagem }}</p>
                         </section>
 
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
@@ -1601,6 +1614,15 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 /* conteúdo */
 .pd2 .descricao { color: #000; }
 .pd2 .dimensoes-embalagem { margin: 16px 0 0; font-size: 15px; color: #000; }
+.pd2 .medidas-embalagem { margin: 24px 0 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #f7f8fa; }
+.pd2 .medidas-titulo { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #000; }
+.pd2 .medidas-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.pd2 .medidas-grade > div { min-width: 0; padding: 10px 6px; border-radius: 10px; background: #fff; border: 1px solid var(--line); text-align: center; }
+.pd2 .medidas-grade dt { font-size: 12px; color: #6b7280; }
+.pd2 .medidas-grade dd { margin: 2px 0 0; font-size: 20px; font-weight: 700; color: #000; font-variant-numeric: tabular-nums; }
+.pd2 .medidas-grade dd span { margin-left: 3px; font-size: 13px; font-weight: 500; color: #6b7280; }
+.dark .pd2 .medidas-embalagem, .dark .pd2 .medidas-grade > div { background: transparent; }
+.dark .pd2 .medidas-titulo, .dark .pd2 .medidas-grade dd { color: var(--text); }
 .dark .pd2 .dimensoes-embalagem { color: var(--text); }
 .dark .pd2 .descricao { color: var(--text); }
 .pd2 .descricao h3 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }

@@ -61,6 +61,22 @@ class FichaTecnica
      */
     public static function dimensoesEmbalagem(Product $produto): ?string
     {
+        $medidas = self::medidasEmbalagem($produto);
+
+        return $medidas === null
+            ? null
+            : $medidas['comprimento'].'C x '.$medidas['largura'].'L x '.$medidas['altura'].'A CM';
+    }
+
+    /**
+     * As mesmas medidas separadas, para a página montar o quadro com
+     * comprimento, largura e altura (pedido 2026-11-17: o texto corrido
+     * "3C x 25L x 25A CM" ficava feio).
+     *
+     * @return array{comprimento: string, largura: string, altura: string}|null
+     */
+    public static function medidasEmbalagem(Product $produto): ?array
+    {
         $fiscal = self::medidas($produto);
 
         $comprimento = (float) $fiscal?->profundidade_cm;
@@ -71,7 +87,11 @@ class FichaTecnica
             return null;
         }
 
-        return self::numero($comprimento).'C x '.self::numero($largura).'L x '.self::numero($altura).'A CM';
+        return [
+            'comprimento' => self::numero($comprimento),
+            'largura' => self::numero($largura),
+            'altura' => self::numero($altura),
+        ];
     }
 
     public static function voltagem(Product $produto): ?string

@@ -76,6 +76,7 @@ class FichaTecnicaTest extends TestCase
         $semMedida = Product::factory()->create();
 
         $this->assertSame('28C x 8L x 23A CM', FichaTecnica::dimensoesEmbalagem($produto->fresh()));
+        $this->assertSame(['comprimento' => '28', 'largura' => '8', 'altura' => '23'], FichaTecnica::medidasEmbalagem($produto->fresh()));
         $this->assertNull(FichaTecnica::dimensoesEmbalagem($semMedida->fresh()));
 
         $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page

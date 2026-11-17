@@ -81,10 +81,10 @@ class EnviarAuditoriaSemanal extends Command
         $brl = fn ($v) => number_format((float) $v, 2, ',', '.');
         $this->line('Semana de '.$resultado['de']->format('d/m/Y').' a '.$resultado['ate']->copy()->subDay()->format('d/m/Y'));
         $this->table(
-            ['Canal', 'Pedidos', 'Caiu', 'Imposto', 'Fornecedor', 'Insumos', 'Frete próprio', 'Lucro'],
+            ['Canal', 'Pedidos', 'Caiu', 'ADS', 'Imposto', 'Fornecedor', 'Insumos', 'Frete próprio', 'Lucro'],
             [
-                ...array_map(fn (array $c) => [$c['nome'], $c['pedidos'], $brl($c['depositado']), $brl($c['imposto']), $brl($c['fornecedor']), $brl($c['insumos']), $brl($c['frete_proprio']), $brl($c['sobra'])], array_values($resultado['canais'])),
-                ['TOTAL', $resultado['total']['pedidos'], $brl($resultado['total']['depositado']), $brl($resultado['total']['imposto']), $brl($resultado['total']['fornecedor']), $brl($resultado['total']['insumos']), $brl($resultado['total']['frete_proprio']), $brl($resultado['total']['sobra'])],
+                ...array_map(fn (array $c) => [$c['nome'], $c['pedidos'], $brl($c['depositado']), $brl($c['ads']), $brl($c['imposto']), $brl($c['fornecedor']), $brl($c['insumos']), $brl($c['frete_proprio']), $brl($c['sobra'])], array_values($resultado['canais'])),
+                ['TOTAL', $resultado['total']['pedidos'], $brl($resultado['total']['depositado']), $brl($resultado['total']['ads']), $brl($resultado['total']['imposto']), $brl($resultado['total']['fornecedor']), $brl($resultado['total']['insumos']), $brl($resultado['total']['frete_proprio']), $brl($resultado['total']['sobra'])],
             ],
         );
         foreach ($resultado['avisos'] as $aviso) {

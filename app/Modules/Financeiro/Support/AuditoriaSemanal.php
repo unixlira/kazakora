@@ -29,8 +29,17 @@ use Illuminate\Support\Facades\DB;
  *  - mercado_livre: pagamentos do Mercado Pago aprovados com liberação na
  *    semana (liquido − reembolsado).
  *  - shopee: carteira da Shopee pela API (get_wallet_transaction_list), tudo
- *    menos saque: repasse de pedido (ESCROW_VERIFIED_ADD), estornos e o que a
- *    Shopee desconta do saldo (recarga de Shopee Ads).
+ *    menos saque e recarga de Shopee Ads: repasse de pedido
+ *    (ESCROW_VERIFIED_ADD) e estornos. Vale o que entrou na carteira, mesmo
+ *    que ainda não tenha sido sacado.
+ *  - sites KazaKora e FerraKora (pedido do Lira em 17/11/2026): pedidos
+ *    pagos na semana, pelo líquido do Mercado Pago (sem o pagamento
+ *    conciliado, o total do pedido).
+ *
+ * ADS fica em coluna própria (17/11/2026: a recarga do Shopee Ads dentro do
+ * "caiu" fez a Shopee aparecer com R$ 330 quando entraram R$ 1.983):
+ * gasto do dia em channel_ad_spends (Shopee Ads, Mercado Ads, Meta da
+ * KazaKora e da FerraKora) e o GMV Max que o TikTok desconta no extrato.
  *
  * Para cada pedido pago no depósito:
  *  - fornecedor = custo dos produtos (ContributionMargin::custoSql);
@@ -38,7 +47,7 @@ use Illuminate\Support\Facades\DB;
  *    total do pedido);
  *  - insumos = R$ por pedido embalado (o Full do ML não embala aqui);
  *  - frete próprio = etiqueta dos Correios/Melhor Envio que a loja pagou.
- * Sobra = depositado − fornecedor − imposto − insumos − frete próprio.
+ * Sobra = caiu − ADS − fornecedor − imposto − insumos − frete próprio.
  *
  * Um pedido só entra na separação quando o que foi pago por ele na semana
  * (linhas de pedido do extrato, repasse da Shopee, pagamento do ML) fica
@@ -52,10 +61,26 @@ class AuditoriaSemanal
         Order::ORIGIN_AMAZON => 'Amazon',
         Order::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
         Order::ORIGIN_SHOPEE => 'Shopee',
+        Order::ORIGIN_STORE => 'Site KazaKora',
+        Order::SITE_FERRAKORA => 'Site FerraKora',
     ];
+
+    /** Canal da auditoria => canal do gasto de ADS em channel_ad_spends. */
+    private const ADS_DO_CANAL = [
+        Order::ORIGIN_SHOPEE => ['shopee'],
+        Order::ORIGIN_MERCADO_LIVRE => ['mercado_livre'],
+        Order::ORIGIN_STORE => ['meta_ads'],
+        Order::SITE_FERRAKORA => ['ferrakora'],
+    ];
+
+    /** Linha do extrato do TikTok que é anúncio (GMV Max), não venda. */
+    private const TIKTOK_ADS = '/an[uú]ncio|GMV/i';
 
     /** Lançamentos da carteira da Shopee que são saque (dinheiro saindo para o banco), não depósito. */
     private const SHOPEE_SAQUE = '/WITHDRAW|PIX_TRANSFER|BANK_TRANSFER/i';
+
+    /** Recarga do Shopee Ads tirada do saldo: o gasto entra na coluna ADS (channel_ad_spends). */
+    private const SHOPEE_RECARGA_ADS = '/^SPM_/i';
 
     /** Extrato sem lançamento novo há mais dias que isso vira aviso. */
     private const DIAS_EXTRATO_PARADO = 4;
@@ -86,11 +111,14 @@ class AuditoriaSemanal
             Order::ORIGIN_AMAZON => $this->doExtrato(Order::ORIGIN_AMAZON, 'RELEASED', 'Order', $de, $ate),
             Order::ORIGIN_MERCADO_LIVRE => $this->doMercadoLivre($de, $ate),
             Order::ORIGIN_SHOPEE => $this->daShopee($de, $ate),
+            Order::ORIGIN_STORE => $this->doSite(Order::ORIGIN_STORE, $de, $ate),
+            Order::SITE_FERRAKORA => $this->doSite(Order::SITE_FERRAKORA, $de, $ate),
         ];
 
         $avisos = [];
         foreach ($canais as $canal => &$dados) {
-            $dados = [...$dados, ...$this->separar($canal, $dados['pedidos_ids'], (float) $dados['depositado'])];
+            $dados['ads'] = round(($dados['ads'] ?? 0.0) + $this->adsDoCanal($canal, $de, $ate), 2);
+            $dados = [...$dados, ...$this->separar($canal, $dados['pedidos_ids'], (float) $dados['depositado'] - (float) $dados['ads'])];
             $dados['nome'] = self::CANAIS[$canal];
             unset($dados['pedidos_ids']);
             foreach ($dados['avisos'] as $aviso) {
@@ -99,7 +127,7 @@ class AuditoriaSemanal
         }
         unset($dados);
 
-        $campos = ['depositado', 'fornecedor', 'imposto', 'insumos', 'frete_proprio', 'sobra', 'pedidos'];
+        $campos = ['depositado', 'ads', 'fornecedor', 'imposto', 'insumos', 'frete_proprio', 'sobra', 'pedidos'];
         $total = [];
         foreach ($campos as $campo) {
             $total[$campo] = round(array_sum(array_column($canais, $campo)), 2);
@@ -132,6 +160,9 @@ class AuditoriaSemanal
             ->where('settlement_date', '>=', $de->toDateString())
             ->where('settlement_date', '<', $ate->toDateString())
             ->get(['transaction_type', 'external_order_id', 'payout_amount']);
+        // GMV Max: o TikTok desconta do repasse, mas é ADS (coluna própria).
+        $anuncios = $linhas->filter(fn ($l) => preg_match(self::TIKTOK_ADS, (string) $l->transaction_type) === 1);
+        $linhas = $linhas->reject(fn ($l) => preg_match(self::TIKTOK_ADS, (string) $l->transaction_type) === 1);
 
         // Pedido pago na semana = o que teve repasse positivo somando as linhas dele (ver pagos()).
         $pagos = self::pagos($linhas->where('transaction_type', $tipoPedido)->map(fn ($l) => [(string) $l->external_order_id, (float) $l->payout_amount]));
@@ -151,6 +182,7 @@ class AuditoriaSemanal
 
         return [
             'depositado' => round((float) $linhas->sum('payout_amount'), 2),
+            'ads' => round(-(float) $anuncios->sum('payout_amount'), 2),
             'lancamentos' => $linhas->count(),
             // O que o canal descontou dentro do próprio repasse (GMV Max, estornos).
             'descontos' => round((float) $linhas->where('payout_amount', '<', 0)->sum('payout_amount'), 2),
@@ -210,6 +242,7 @@ class AuditoriaSemanal
         }
 
         $depositos = $transacoes->reject(fn (array $t) => preg_match(self::SHOPEE_SAQUE, (string) ($t['transaction_type'] ?? '')) === 1
+            || preg_match(self::SHOPEE_RECARGA_ADS, (string) ($t['transaction_type'] ?? '')) === 1
             || ($t['status'] ?? 'COMPLETED') !== 'COMPLETED');
         // Repasse e estorno do mesmo pedido somam: só o que ficou positivo na semana é pedido pago.
         $pagos = self::pagos($depositos->filter(fn (array $t) => filled($t['order_sn'] ?? null))->map(fn (array $t) => [(string) $t['order_sn'], (float) ($t['amount'] ?? 0)]));
@@ -224,12 +257,56 @@ class AuditoriaSemanal
         return [
             'depositado' => round((float) $depositos->sum(fn (array $t) => (float) ($t['amount'] ?? 0)), 2),
             'lancamentos' => $depositos->count(),
-            // Recarga de Shopee Ads e outros descontos tirados do saldo.
+            // Ajustes e estornos que a Shopee tirou do saldo (a recarga de ADS fica fora).
             'descontos' => round((float) $depositos->filter(fn (array $t) => (float) ($t['amount'] ?? 0) < 0)->sum(fn (array $t) => (float) $t['amount']), 2),
             'pedidos_ids' => array_values(array_unique($ids)),
             'sem_pedido' => round($semPedido, 2),
             'avisos' => $avisos,
         ];
+    }
+
+    /**
+     * Site (KazaKora ou FerraKora): pedidos pagos na semana. Caiu = líquido do
+     * Mercado Pago menos o reembolsado; pedido sem pagamento conciliado entra
+     * pelo total. O frete que a loja pagou sai em separar() (frete próprio).
+     *
+     * @return array{depositado: float, lancamentos: int, descontos: float, pedidos_ids: list<int>, sem_pedido: float, avisos: list<string>}
+     */
+    private function doSite(string $canal, Carbon $de, Carbon $ate): array
+    {
+        $pedidos = Order::filtrarCanal(DB::table('orders'), $canal)
+            ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $de)
+            ->where('orders.created_at', '<', $ate)
+            ->selectRaw('orders.id, orders.total, (SELECT SUM(mp.liquido - mp.reembolsado) FROM mercado_pago_pagamentos mp'
+                ." WHERE mp.order_id = orders.id AND mp.status = 'approved') as liquido_mp")
+            ->get();
+
+        $semMp = $pedidos->whereNull('liquido_mp')->count();
+
+        return [
+            'depositado' => round((float) $pedidos->sum(fn ($p) => $p->liquido_mp !== null ? (float) $p->liquido_mp : (float) $p->total), 2),
+            'lancamentos' => $pedidos->count(),
+            'descontos' => 0.0,
+            'pedidos_ids' => $pedidos->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'sem_pedido' => 0.0,
+            'avisos' => $semMp > 0 ? ["{$semMp} pedido(s) sem pagamento conciliado no Mercado Pago: entraram pelo total, sem a taxa do Mercado Pago."] : [],
+        ];
+    }
+
+    /** Gasto de ADS do canal na semana (channel_ad_spends, o mesmo do Financeiro). */
+    private function adsDoCanal(string $canal, Carbon $de, Carbon $ate): float
+    {
+        $canais = self::ADS_DO_CANAL[$canal] ?? [];
+        if ($canais === []) {
+            return 0.0;
+        }
+
+        return (float) DB::table('channel_ad_spends')
+            ->whereIn('channel', $canais)
+            ->where('date', '>=', $de->toDateString())
+            ->where('date', '<', $ate->toDateString())
+            ->sum('spend');
     }
 
     /** @return Collection<int, array<string, mixed>> */

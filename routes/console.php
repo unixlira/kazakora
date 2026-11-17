@@ -61,11 +61,11 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 Schedule::command('loja:resultado-diario')->dailyAt('06:30')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 // Auditoria semanal do dinheiro que caiu (pedido do Lira em 12/11/2026): toda
-// segunda às 14h, quanto TikTok, Amazon, Mercado Livre e Shopee depositaram na
-// semana fechada e quanto separar para imposto, fornecedor, insumos e lucro.
-// À tarde, para o extrato do TikTok e a conciliação do Mercado Pago da manhã
-// já terem entrado. Primeira: 16/11/2026 (semana de 09 a 15/11).
-Schedule::command('financeiro:auditoria-semanal')->weeklyOn(1, '14:00')->withoutOverlapping(60);
+// segunda de manhã (pedido de 17/11), a semana anterior fechada: quanto TikTok,
+// Amazon, Mercado Livre, Shopee e os sites KazaKora/FerraKora renderam, o ADS
+// e quanto separar para imposto, fornecedor, insumos e lucro. 08:00, depois
+// da conciliação do Mercado Pago (05:40) e do gasto de ADS (06:00).
+Schedule::command('financeiro:auditoria-semanal')->weeklyOn(1, '08:00')->withoutOverlapping(60);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.
 Schedule::command('loja:nota-etiqueta-pendentes')->hourlyAt(10)->withoutOverlapping(30);

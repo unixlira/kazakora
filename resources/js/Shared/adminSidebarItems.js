@@ -27,8 +27,11 @@ export const sidebarSections = [
         heading: 'Painel',
         direto: true,
         items: [
-            { label: 'Fluxo de Caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', cor: 'verde', permission: 'financeiro.view' },
-            { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-square-poll-vertical', cor: 'indigo', permission: 'relatorios.view' },
+            // Marketplaces x E-commerces (Lira, 17/11/2026): "separa tudo, de um
+            // lado só marketplaces, do outro meus e-commerces, nunca somar".
+            // Cada item abre o painel do grupo (Resultado, Vendas, Indicadores...).
+            { label: 'Marketplaces', href: '/admin/painel/marketplaces', icon: 'fas fa-store', cor: 'verde', permission: ['financeiro.view', 'relatorios.view'] },
+            { label: 'E-commerces', href: '/admin/painel/ecommerces', icon: 'fas fa-cart-shopping', cor: 'indigo', permission: ['financeiro.view', 'relatorios.view'] },
         ],
     },
     {
@@ -122,9 +125,8 @@ export const sidebarSections = [
         heading: 'Financeiro',
         items: [
             { label: 'Resultado e margem', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', cor: 'verde', permission: 'financeiro.view' },
-            // Plataformas x E-commerces (pedido do Lira em 16/11/2026): lucro
-            // dos marketplaces separado do lucro dos sites próprios.
-            { label: 'Plataformas e E-commerces', href: '/admin/financeiro/plataformas-e-ecommerces', icon: 'fas fa-shop', cor: 'indigo', permission: 'financeiro.view' },
+            // Plataformas e E-commerces (16/11/2026) saiu do menu em 17/11/2026:
+            // virou a seção "Mês a mês" de Painel › Marketplaces / E-commerces.
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', cor: 'azul', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },

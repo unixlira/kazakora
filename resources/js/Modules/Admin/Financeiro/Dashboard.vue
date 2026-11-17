@@ -6,6 +6,9 @@ import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const props = defineProps({
+    // Marketplaces x E-commerces (Lira, 17/11/2026): a tela é de um grupo só.
+    grupo: { type: String, default: 'marketplaces' },
+    grupoNome: { type: String, default: 'Marketplaces' },
     summary: { type: Object, required: true },
     netProfit: { type: Object, required: true },
     walletBalances: { type: Object, default: () => ({}) },
@@ -16,6 +19,8 @@ const props = defineProps({
     settlementSummary: { type: Object, default: () => ({ available: false, month: { channels: [], totals: {} }, allTime: { channels: [], totals: {} } }) },
     marketplaceMetrics: { type: Object, default: () => ({ month: [] }) },
 });
+
+const mkt = computed(() => props.grupo === 'marketplaces');
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatShortDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
@@ -105,10 +110,22 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
 </script>
 
 <template>
-    <Head title="Resultado e margem" />
+    <Head :title="`Resultado e margem · ${grupoNome}`" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Resultado e margem</h1>
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h1 class="text-2xl font-bold">Resultado e margem · {{ grupoNome }}</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Só {{ mkt ? 'Mercado Livre, Shopee, TikTok Shop, Amazon e Shein' : 'KazaKora, FerraKora e Beauty Kora' }}. Os dois grupos nunca somam.</p>
+            </div>
+            <nav class="flex gap-2" aria-label="Grupo">
+                <Link v-for="g in [{ k: 'marketplaces', n: 'Marketplaces' }, { k: 'ecommerces', n: 'E-commerces' }]" :key="g.k"
+                    :href="`/admin/dashboard-financeiro?grupo=${g.k}`"
+                    class="rounded-full px-4 py-1.5 text-sm font-semibold"
+                    :class="grupo === g.k ? 'bg-primary text-white' : 'bg-[var(--surface-muted)] text-slate-500 hover:text-[var(--surface-foreground)]'"
+                    :aria-current="grupo === g.k ? 'page' : undefined">{{ g.n }}</Link>
+            </nav>
+        </div>
 
         <!-- Pedido explícito 2026-08-27: cards do topo em duas linhas de 3,
              para não ficar espremido. Ordem atual: valor bruto vitalício no
@@ -140,7 +157,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
             Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }}, taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> e o imposto do Simples ({{ formatPercent(summary.taxRate ?? 0) }} sobre a nota) {{ formatPrice(summary.taxMonth ?? 0) }} para chegar no lucro líquido.
         </div>
 
-        <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>
+        <h2 class="mb-3 text-xl font-bold">Lucro líquido por {{ mkt ? 'Marketplace' : 'site' }} · Mês Atual</h2>
         <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
             Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma, custo dos itens vendidos e imposto do Simples.
         </p>
@@ -188,6 +205,8 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
             </div>
         </div>
 
+        <!-- Saldo e repasses são das carteiras dos marketplaces: só no grupo Marketplaces (17/11/2026). -->
+        <template v-if="mkt">
         <!-- Saldo disponível pra saque em cada plataforma — a soma das duas
              (Saldo Atual) mudou pra Visão Geral, pedido explícito
              2026-08-10. -->
@@ -250,6 +269,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         <p class="mb-6 text-xs text-slate-400">
             Fonte: {{ receivableProjection.source || 'carteiras e extratos disponíveis' }}. Conforme novas vendas forem liquidadas/importadas, os valores avançam para as próximas janelas.
         </p>
+        </template>
 
         <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="border-b border-[var(--surface-border)] px-4 py-4">
@@ -341,6 +361,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         </p>
 
 
+        <template v-if="mkt">
         <h2 class="mb-3 mt-8 text-xl font-bold">Extratos reais de Marketplace</h2>
         <div v-if="settlementRows.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="border-b border-[var(--surface-border)] px-4 py-4">
@@ -393,6 +414,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         <p v-else class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-400">
             Nenhum relatório financeiro de marketplace importado ainda.
         </p>
+        </template>
 
         <!-- Gasto com anúncio por canal -->
         <h2 class="mb-3 text-xl font-bold">Gasto com Anúncio</h2>
@@ -424,7 +446,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
             Nenhum gasto com anúncio sincronizado ainda — roda <code class="rounded bg-[var(--surface-muted)] px-1">php artisan ads:sync-spend</code> ou aguarda a sincronização automática das 6h.
         </p>
 
-        <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+        <div v-if="mkt" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="border-b border-[var(--surface-border)] px-4 py-4">
                 <h3 class="text-base font-semibold">Gasto com anúncio por dia (últimos 14 dias)</h3>
                 <p class="text-xs text-slate-400">Total do período: {{ formatPrice(totalAdSpend14Days) }}</p>

@@ -55,7 +55,7 @@ const aplicarDatas = () => {
         <label for="fluxo-canal" class="flex shrink-0 items-center gap-1.5 text-xs text-[var(--texto-suave)]">
             Canal
             <select id="fluxo-canal" :value="filtro.canal ?? ''" class="campo-filtro" @change="emit('mudar', { canal: $event.target.value || null })">
-                <option value="">Todos os canais</option>
+                <option value="">Todos de {{ filtro.grupoNome }}</option>
                 <option v-for="c in canais" :key="c.value" :value="c.value">{{ c.label }}</option>
             </select>
         </label>

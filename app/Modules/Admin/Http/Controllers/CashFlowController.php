@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Financeiro\Support\AlertasFinanceiros;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
@@ -33,6 +34,12 @@ use Inertia\Response;
  * - Lançamentos: entradas e saídas digitadas à mão, filtradas pelo período.
  *
  * Só a aba aberta é calculada: cada aba manda as próprias props.
+ *
+ * Marketplaces x E-commerces (pedido do Lira em 17/11/2026: "separa tudo,
+ * métricas somadas só dos marketplaces de um lado, meus e-commerces do
+ * outro"): a tela é sempre de UM grupo (/admin/painel/marketplaces ou
+ * /admin/painel/ecommerces, ver GruposDeCanais). Nenhum número soma os dois
+ * grupos; o filtro de canal só oferece canais do grupo aberto.
  */
 class CashFlowController extends Controller
 {
@@ -56,9 +63,18 @@ class CashFlowController extends Controller
 
     public function __construct(private ContributionMargin $margem) {}
 
-    public function index(Request $request): Response
+    /** Endereço antigo (/admin/fluxo-de-caixa): vai para o painel do grupo do canal filtrado. */
+    public function antigo(Request $request): \Illuminate\Http\RedirectResponse
     {
-        $filtro = $this->filtro($request);
+        $canal = (string) ($request->query('canal') ?? $request->query('platform') ?? '');
+        $query = (string) $request->server('QUERY_STRING');
+
+        return redirect()->to('/admin/painel/'.GruposDeCanais::slugDoCanal($canal ?: null).'/resultado'.($query ? '?'.$query : ''));
+    }
+
+    public function index(Request $request, string $grupo = 'marketplaces'): Response
+    {
+        $filtro = $this->filtro($request, $grupo);
         $aba = $filtro['aba'];
 
         $props = [
@@ -89,8 +105,11 @@ class CashFlowController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function filtro(Request $request): array
+    private function filtro(Request $request, string $grupo): array
     {
+        $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'marketplaces';
+        $canaisGrupo = GruposDeCanais::canais($grupo);
+
         $hoje = Carbon::today();
         $data = function (?string $valor): ?Carbon {
             if ($valor === null || $valor === '') {
@@ -111,7 +130,7 @@ class CashFlowController extends Controller
         $fim = $ate->copy()->addDay();
 
         $canal = (string) ($request->query('canal') ?? $request->query('platform') ?? '');
-        $canal = array_key_exists($canal, self::CANAIS) ? $canal : null;
+        $canal = array_key_exists($canal, self::CANAIS) && in_array($canal, $canaisGrupo, true) ? $canal : null;
 
         $comparar = (string) $request->query('comparar', 'mes_passado');
         $comparar = in_array($comparar, ['mes_passado', 'anterior', 'nenhum'], true) ? $comparar : 'mes_passado';
@@ -140,6 +159,11 @@ class CashFlowController extends Controller
         };
 
         return [
+            'grupo' => $grupo,
+            'canaisGrupo' => $canaisGrupo,
+            // O que entra na conta: o canal escolhido ou o grupo inteiro (lista).
+            'escopo' => $canal ?? $canaisGrupo,
+            'urlBase' => '/admin/painel/'.$grupo.'/resultado',
             'aba' => $aba,
             'de' => $de,
             'ate' => $ate,
@@ -152,6 +176,10 @@ class CashFlowController extends Controller
             'compFim' => $compAte?->copy()->addDay(),
             'compRotulo' => $compRotulo ? $compRotulo.' ('.$compDe->format('d/m').' a '.$compAte->format('d/m').')' : null,
             'publico' => [
+                'grupo' => $grupo,
+                'grupoNome' => GruposDeCanais::NOMES[GruposDeCanais::SLUGS[$grupo]],
+                'grupoDescricao' => GruposDeCanais::DESCRICOES[GruposDeCanais::SLUGS[$grupo]],
+                'urlBase' => '/admin/painel/'.$grupo.'/resultado',
                 'aba' => $aba,
                 'de' => $de->toDateString(),
                 'ate' => $ate->toDateString(),
@@ -180,7 +208,7 @@ class CashFlowController extends Controller
             ->all();
 
         return collect(array_unique([...self::CANAIS_FIXOS, ...$comVenda, ...array_filter([$f['canal']])]))
-            ->filter(fn ($c) => isset(self::CANAIS[$c]))
+            ->filter(fn ($c) => isset(self::CANAIS[$c]) && in_array($c, $f['canaisGrupo'], true))
             ->map(fn ($c) => ['value' => $c, 'label' => self::CANAIS[$c]])
             ->values()
             ->all();
@@ -203,6 +231,8 @@ class CashFlowController extends Controller
     private function propsResumo(array $f): array
     {
         $canal = $f['canal'];
+        $escopo = $f['escopo'];
+        $soEscopo = fn (array $porCanal) => array_intersect_key($porCanal, array_flip((array) $escopo));
         $memo = [];
         $uma = function (string $chave, \Closure $calc) use (&$memo) {
             return $memo[$chave] ??= $calc();
@@ -210,22 +240,22 @@ class CashFlowController extends Controller
 
         $porCanal = fn () => $uma('porCanal', fn () => $this->margem->porCanal($f['de'], $f['fim']));
         $qualidade = fn () => $uma('qualidade', fn () => ContributionMargin::qualidadeTaxas($f['de'], $f['fim']));
-        $resumo = fn () => $uma('resumo', function () use ($f, $canal, $porCanal) {
-            $atual = $this->numeros($f['de'], $f['fim'], $canal, $porCanal());
-            $comparacao = $f['compDe'] ? $this->numeros($f['compDe'], $f['compFim'], $canal) : null;
+        $resumo = fn () => $uma('resumo', function () use ($f, $escopo, $porCanal) {
+            $atual = $this->numeros($f['de'], $f['fim'], $escopo, $porCanal());
+            $comparacao = $f['compDe'] ? $this->numeros($f['compDe'], $f['compFim'], $escopo) : null;
 
             return ['atual' => $atual, 'comparacao' => $comparacao, 'aliquota' => ContributionMargin::aliquotaSimples(),
                 'adsMeta' => (float) config('loja.ads_meta_percentual', 4), 'adsLimite' => (float) config('loja.ads_alerta_percentual', 6)];
         });
-        $pendencias = fn () => $uma('pendencias', fn () => $this->pendencias($f['de'], $f['fim'], $canal));
+        $pendencias = fn () => $uma('pendencias', fn () => $this->pendencias($f['de'], $f['fim'], $escopo));
         $das = fn () => $uma('das', fn () => app(PrevisaoDeCaixa::class)->das());
 
         return [
             'resumo' => $resumo,
-            'canais' => function () use ($porCanal, $qualidade, $canal) {
-                $linhas = $porCanal();
+            'canais' => function () use ($porCanal, $qualidade, $canal, $soEscopo, $f) {
+                $linhas = $soEscopo($porCanal());
                 if ($canal === null) {
-                    foreach (self::CANAIS_FIXOS as $fixo) {
+                    foreach (array_intersect(self::CANAIS_FIXOS, $f['canaisGrupo']) as $fixo) {
                         $linhas[$fixo] ??= ContributionMargin::contaVazia();
                     }
                 } else {
@@ -242,9 +272,9 @@ class CashFlowController extends Controller
                     ->values()
                     ->all();
             },
-            'serie' => function () use ($f, $canal) {
-                $atual = $this->margem->serie($f['de'], $f['fim'], $f['agrupar'], $canal);
-                $anterior = $f['compDe'] ? $this->margem->serie($f['compDe'], $f['compFim'], $f['agrupar'], $canal) : [];
+            'serie' => function () use ($f, $escopo) {
+                $atual = $this->margem->serie($f['de'], $f['fim'], $f['agrupar'], $escopo);
+                $anterior = $f['compDe'] ? $this->margem->serie($f['compDe'], $f['compFim'], $f['agrupar'], $escopo) : [];
 
                 return collect($atual)->values()->map(fn ($b, $i) => [
                     'inicio' => $b['inicio'],
@@ -257,28 +287,21 @@ class CashFlowController extends Controller
                     'comparacaoInicio' => $anterior[$i]['inicio'] ?? null,
                 ])->all();
             },
-            'previsao' => fn () => app(PrevisaoDeCaixa::class)->proximosDias(),
-            'qualidade' => function () use ($qualidade, $pendencias, $canal) {
-                $q = $qualidade();
-                if ($canal !== null) {
-                    $q = array_intersect_key($q, [$canal => true]);
-                }
+            // Carteiras e repasses são dos marketplaces: os próximos dias só
+            // aparecem no painel de Marketplaces.
+            'previsao' => fn () => $f['grupo'] === 'marketplaces' ? app(PrevisaoDeCaixa::class)->proximosDias() : null,
+            'qualidade' => function () use ($qualidade, $pendencias, $soEscopo) {
+                $q = $soEscopo($qualidade());
 
                 return [
                     'canais' => collect($q)->map(fn ($l, $c) => ['canal' => $c, 'nome' => self::CANAIS[$c] ?? $c] + $l)->values()->all(),
                     'pendencias' => $pendencias(),
                 ];
             },
-            'alertas' => function () use ($f, $canal, $porCanal, $qualidade, $pendencias, $resumo, $das) {
+            'alertas' => function () use ($f, $canal, $porCanal, $qualidade, $pendencias, $resumo, $das, $soEscopo) {
                 $r = $resumo();
-                $linhas = $porCanal();
-                if ($canal !== null) {
-                    $linhas = array_intersect_key($linhas, [$canal => true]);
-                }
-                $q = $qualidade();
-                if ($canal !== null) {
-                    $q = array_intersect_key($q, [$canal => true]);
-                }
+                $linhas = $soEscopo($porCanal());
+                $q = $soEscopo($qualidade());
                 $p = $pendencias();
 
                 return app(AlertasFinanceiros::class)->gerar([
@@ -291,7 +314,7 @@ class CashFlowController extends Controller
                     'rotuloComparacao' => $f['compRotulo'],
                     'qualidade' => $q,
                     'semCusto' => $p['semCusto'],
-                    'linkSemCusto' => '/admin/fluxo-de-caixa?'.http_build_query(array_filter([
+                    'linkSemCusto' => $f['urlBase'].'?'.http_build_query(array_filter([
                         'aba' => 'vendas', 'sem_custo' => 1, 'de' => $f['de']->toDateString(), 'ate' => $f['ate']->toDateString(), 'canal' => $canal,
                     ])),
                     'notasCanceladas' => $p['notasCanceladas'],
@@ -306,14 +329,13 @@ class CashFlowController extends Controller
      *
      * @return array<string, float|int>
      */
-    private function numeros(Carbon $desde, Carbon $fim, ?string $canal, ?array $porCanal = null): array
+    private function numeros(Carbon $desde, Carbon $fim, string|array $escopo, ?array $porCanal = null): array
     {
         $porCanal ??= $this->margem->porCanal($desde, $fim);
-        $conta = $this->margem->conta($desde, $fim, $canal);
+        $conta = $this->margem->conta($desde, $fim, $escopo);
         $base = ContributionMargin::baseImposto($desde, $fim);
-        $pedidos = $canal === null
-            ? (int) array_sum(array_column($porCanal, 'pedidos'))
-            : (int) ($porCanal[$canal]['pedidos'] ?? 0);
+        $canais = array_flip((array) $escopo);
+        $pedidos = (int) array_sum(array_column(array_intersect_key($porCanal, $canais), 'pedidos'));
 
         return [
             'receita' => (float) $conta['receita'],
@@ -329,9 +351,9 @@ class CashFlowController extends Controller
             'imposto' => (float) $conta['imposto'],
             'lucro' => (float) $conta['lucro'],
             'pedidos' => $pedidos,
-            'vendas_brutas' => ContributionMargin::vendasBrutas($desde, $fim, $canal),
-            'faturamento_nota' => round($canal === null ? array_sum($base) : (float) ($base[$canal] ?? 0), 2),
-            'pedidos_site' => $canal === null || $canal === Order::ORIGIN_STORE ? (int) ($porCanal[Order::ORIGIN_STORE]['pedidos'] ?? 0) : null,
+            'vendas_brutas' => ContributionMargin::vendasBrutas($desde, $fim, $escopo),
+            'faturamento_nota' => round(array_sum(array_intersect_key($base, $canais)), 2),
+            'pedidos_site' => isset($canais[Order::ORIGIN_STORE]) ? (int) ($porCanal[Order::ORIGIN_STORE]['pedidos'] ?? 0) : null,
         ];
     }
 
@@ -341,7 +363,7 @@ class CashFlowController extends Controller
      *
      * @return array{semCusto: int, notasCanceladas: array{quantidade: int, valor: float}, semNota: int}
      */
-    private function pendencias(Carbon $desde, Carbon $fim, ?string $canal): array
+    private function pendencias(Carbon $desde, Carbon $fim, string|array $canal): array
     {
         $vendas = fn () => DB::table('orders')
             ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
@@ -411,7 +433,7 @@ class CashFlowController extends Controller
             if ($memo !== null) {
                 return $memo;
             }
-            $conta = $this->margem->porItem($f['de'], $f['fim'], $f['canal']);
+            $conta = $this->margem->porItem($f['de'], $f['fim'], $f['escopo']);
             $todas = collect($conta['linhas']);
 
             $termo = mb_strtolower(trim($search));

@@ -14,7 +14,8 @@ const props = defineProps({
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const filterState = reactive({ from: props.filters.from, to: props.filters.to });
+const filterState = reactive({ from: props.filters.from, to: props.filters.to, grupo: props.filters.grupo ?? 'marketplaces' });
+const trocarGrupo = (g) => { filterState.grupo = g; applyFilters(); };
 
 const applyFilters = () => {
     router.get('/admin/relatorios', filterState, { preserveState: true });
@@ -37,7 +38,16 @@ const productColumns = [
     <Head title="Relatórios" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Relatórios de vendas</h1>
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <h1 class="text-2xl font-bold">Relatórios de vendas · {{ filterState.grupo === 'ecommerces' ? 'E-commerces' : 'Marketplaces' }}</h1>
+            <!-- Marketplaces x E-commerces (Lira, 17/11/2026): nunca os dois somados. -->
+            <nav class="flex gap-2" aria-label="Grupo">
+                <button v-for="g in [{ k: 'marketplaces', n: 'Marketplaces' }, { k: 'ecommerces', n: 'E-commerces' }]" :key="g.k" type="button"
+                    class="rounded-full px-4 py-1.5 text-sm font-semibold"
+                    :class="filterState.grupo === g.k ? 'bg-primary text-white' : 'bg-[var(--surface-muted)] text-slate-500 hover:text-[var(--surface-foreground)]'"
+                    :aria-pressed="filterState.grupo === g.k" @click="trocarGrupo(g.k)">{{ g.n }}</button>
+            </nav>
+        </div>
 
         <div class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
             <div>

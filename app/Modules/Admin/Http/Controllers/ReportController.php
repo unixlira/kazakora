@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -17,9 +18,16 @@ class ReportController extends Controller
         $from = $request->filled('from') ? Carbon::parse($request->string('from')) : Carbon::today()->subDays(29);
         $to = $request->filled('to') ? Carbon::parse($request->string('to'))->endOfDay() : Carbon::today()->endOfDay();
 
+        // Marketplaces x E-commerces (Lira, 17/11/2026): o relatório é de um
+        // grupo só, nunca dos dois somados.
+        $grupo = (string) $request->query('grupo', 'marketplaces');
+        $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'marketplaces';
+        $canais = GruposDeCanais::canais($grupo);
+
         $orders = Order::query()
             ->whereNot('status', Order::STATUS_CANCELLED)
-            ->whereBetween('created_at', [$from, $to]);
+            ->whereBetween('created_at', [$from, $to])
+            ->doCanal($canais);
 
         // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
         // varrendo todo painel de métricas atrás do mesmo tipo de bug já
@@ -40,6 +48,7 @@ class ReportController extends Controller
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereNot('orders.status', Order::STATUS_CANCELLED)
             ->whereBetween('orders.created_at', [$from, $to])
+            ->where(fn ($q) => Order::filtrarCanal($q, $canais))
             ->selectRaw('order_items.product_name, SUM(order_items.quantity) as quantity_sold, SUM(order_items.subtotal) as revenue')
             ->groupBy('order_items.product_name')
             ->orderByDesc('quantity_sold')
@@ -47,7 +56,7 @@ class ReportController extends Controller
             ->get();
 
         return Inertia::render('Admin/Relatorios/Index', [
-            'filters' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'filters' => ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'grupo' => $grupo],
             'salesByDay' => $salesByDay,
             'topProducts' => $topProducts,
             'summary' => [

@@ -330,6 +330,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
+    // Painel por grupo (Lira, 17/11/2026): Marketplaces ou E-commerces, abre o
+    // Resultado (financeiro) ou os Indicadores, conforme a permissão.
+    Route::get('painel/{grupo}', [DashboardController::class, 'grupo'])
+        ->whereIn('grupo', array_keys(\App\Modules\Financeiro\Support\GruposDeCanais::SLUGS))
+        ->name('painel.grupo');
     // Botões de ação do diagnóstico do Cauê (pedido 2026-10-14): mexem na Shopee, só admin.
     Route::post('diagnostico/shopee/acao', [DiagnosticoAcaoController::class, 'shopee'])->middleware('admin')->name('diagnostico.shopee.acao');
     Route::get('diagnostico/shopee/{itemId}/modelos', [DiagnosticoAcaoController::class, 'modelos'])->middleware('admin')->name('diagnostico.shopee.modelos');
@@ -681,7 +686,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Gestão
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
-        Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+        // Marketplaces x E-commerces (Lira, 17/11/2026): Indicadores é sempre
+        // de um grupo; o endereço antigo leva para o grupo do canal.
+        Route::get('indicadores', [KpiController::class, 'antigo'])->name('indicadores.ver');
+        Route::get('painel/{grupo}/indicadores', [KpiController::class, 'index'])
+            ->whereIn('grupo', array_keys(\App\Modules\Financeiro\Support\GruposDeCanais::SLUGS))
+            ->name('painel.indicadores');
         // Radar (2026-10-12): uma tela só, no grupo Oportunidades do menu.
         // Submenu TikTok / Mercado Livre / Google (pedido do Lira 2026-10-12):
         // a mesma tela mostrando só o bloco daquela fonte.
@@ -745,7 +755,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Arquivos financeiros do TikTok enviados à mão (2026-10-11).
         Route::get('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'index'])->name('arquivos-tiktok.listar');
         Route::post('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'store'])->name('arquivos-tiktok.enviar');
-        Route::get('fluxo-de-caixa', [CashFlowController::class, 'index'])->name('fluxo-de-caixa.listar');
+        // Marketplaces x E-commerces (Lira, 17/11/2026): o Fluxo de Caixa é
+        // sempre de um grupo (Resultado do painel); o endereço antigo redireciona.
+        Route::get('fluxo-de-caixa', [CashFlowController::class, 'antigo'])->name('fluxo-de-caixa.listar');
+        Route::get('painel/{grupo}/resultado', [CashFlowController::class, 'index'])
+            ->whereIn('grupo', array_keys(\App\Modules\Financeiro\Support\GruposDeCanais::SLUGS))
+            ->name('painel.resultado');
         Route::get('anuncios/recargas', [AdsRechargeController::class, 'index'])->name('anuncios.recargas.listar');
         // Menu Publicidade (2026-10-12): resumo de gasto de ADS por canal.
         Route::get('publicidade', [\App\Modules\Admin\Http\Controllers\PublicidadeController::class, 'index'])->name('publicidade.ver');

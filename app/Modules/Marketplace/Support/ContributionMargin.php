@@ -463,7 +463,7 @@ class ContributionMargin
      *
      * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, insumos: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float, cobrancas: float, insumos_lancados: float}}
      */
-    public function porItem(Carbon $desde, Carbon $ate, ?string $canal = null): array
+    public function porItem(Carbon $desde, Carbon $ate, string|array|null $canal = null): array
     {
         $taxas = DB::table('order_channel_fees')
             ->selectRaw('order_id, SUM(fee_amount) as total, MAX(CASE WHEN source = ? THEN 1 ELSE 0 END) as estimada', [OrderChannelFee::SOURCE_ESTIMATE])
@@ -547,8 +547,17 @@ class ContributionMargin
             ->values()
             ->all();
 
-        $ml = $canal === null || $canal === Order::ORIGIN_MERCADO_LIVRE;
+        // Grupo (lista de canais, Marketplaces/E-commerces): a parte do canal
+        // é a soma da de cada canal da lista.
+        $lista = is_array($canal) ? array_values(array_unique($canal)) : ($canal === null ? null : [$canal]);
+        $ml = $lista === null || in_array(Order::ORIGIN_MERCADO_LIVRE, $lista, true);
         $cobrancas = self::cobrancasSemPedido($desde, $ate);
+        $adsExtrato = self::adsDoExtrato($desde, $ate);
+        $canaisAds = $lista === null ? null : array_values(array_unique(array_merge(...array_map(
+            fn ($c) => $c === Order::ORIGIN_STORE ? [$c, PlataformaDeAnuncio::META] : [$c], $lista ?: ['__nenhum__']))));
+        $somaLista = fn (array $valores) => $lista === null
+            ? array_sum($valores)
+            : array_sum(array_map(fn ($c) => (float) ($valores[$c] ?? 0), $lista));
 
         return [
             'linhas' => $linhas,
@@ -556,15 +565,15 @@ class ContributionMargin
                 'ads' => round((float) ChannelAdSpend::query()
                     ->where('date', '>=', $desde->toDateString())
                     ->where('date', '<', $ate->toDateString())
-                    ->when($canal, fn ($q) => $q->whereIn('channel', $canal === Order::ORIGIN_STORE ? [$canal, PlataformaDeAnuncio::META] : [$canal]))
-                    ->sum('spend') + ($canal === null ? array_sum(self::adsDoExtrato($desde, $ate)) : (self::adsDoExtrato($desde, $ate)[$canal] ?? 0)), 2),
+                    ->when($canaisAds !== null, fn ($q) => $q->whereIn('channel', $canaisAds))
+                    ->sum('spend') + $somaLista($adsExtrato), 2),
                 'flex' => $ml ? (float) app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'] : 0.0,
                 'bonificacoes' => $ml ? self::bonificacoes($desde, $ate) : 0.0,
-                'cobrancas' => round($canal === null ? array_sum($cobrancas) : ($cobrancas[$canal] ?? 0), 2),
+                'cobrancas' => round($somaLista($cobrancas), 2),
                 // Tela Insumos (pedido do Lira em 12/11/2026): custo da operação inteira.
-                'insumos_lancados' => $canal === null
+                'insumos_lancados' => $lista === null
                     ? self::insumosLancados($desde, $ate)
-                    : (float) (self::insumosLancadosPorCanal($desde, $ate)[$canal] ?? 0),
+                    : round($somaLista(self::insumosLancadosPorCanal($desde, $ate)), 2),
             ],
         ];
     }
@@ -751,7 +760,7 @@ class ContributionMargin
      * Vendas brutas (Fluxo de Caixa, 2026-10-19): o que os clientes pagaram,
      * com frete (orders.total), das mesmas vendas efetivas da receita.
      */
-    public static function vendasBrutas(Carbon $desde, Carbon $ate, ?string $canal = null): float
+    public static function vendasBrutas(Carbon $desde, Carbon $ate, string|array|null $canal = null): float
     {
         return round((float) DB::table('orders')
             ->whereIn('orders.status', self::REVENUE_STATUSES)
@@ -779,10 +788,29 @@ class ContributionMargin
      *
      * @return array<string, float|int>
      */
-    public function conta(Carbon $desde, Carbon $ate, ?string $canal = null): array
+    public function conta(Carbon $desde, Carbon $ate, string|array|null $canal = null): array
     {
         if ($canal === null) {
             return $this->periodo($desde, $ate);
+        }
+
+        // Grupo (Marketplaces ou E-commerces): soma das linhas de porCanal()
+        // dos canais dele, campo a campo. Nenhuma conta nova.
+        if (is_array($canal)) {
+            $porCanal = $this->porCanal($desde, $ate);
+            $soma = self::contaVazia();
+            foreach (array_unique($canal) as $um) {
+                foreach ($porCanal[$um] ?? [] as $campo => $valor) {
+                    if (is_numeric($valor)) {
+                        $soma[$campo] = ($soma[$campo] ?? 0) + $valor;
+                    }
+                }
+            }
+            foreach ($soma as $campo => $valor) {
+                $soma[$campo] = $campo === 'pedidos' ? (int) $valor : round((float) $valor, 2);
+            }
+
+            return $soma;
         }
 
         return array_merge(self::contaVazia(), $this->porCanal($desde, $ate)[$canal] ?? []);
@@ -797,7 +825,7 @@ class ContributionMargin
      *
      * @return list<array<string, mixed>>
      */
-    public function serie(Carbon $desde, Carbon $ate, string $agrupamento = 'dia', ?string $canal = null): array
+    public function serie(Carbon $desde, Carbon $ate, string $agrupamento = 'dia', string|array|null $canal = null): array
     {
         $hoje = Carbon::today();
         $baldes = [];
@@ -817,7 +845,7 @@ class ContributionMargin
             [$inicio, $fim] = $balde;
             $calcular = fn () => $this->conta($inicio, $fim, $canal);
             $conta = $fim->lte($hoje)
-                ? \Illuminate\Support\Facades\Cache::remember('cm:serie:'.($canal ?? 'todos').':'.$inicio->toDateTimeString().':'.$fim->toDateTimeString(), now()->addMinutes(10), $calcular)
+                ? \Illuminate\Support\Facades\Cache::remember('cm:serie:'.(is_array($canal) ? implode(',', $canal) : ($canal ?? 'todos')).':'.$inicio->toDateTimeString().':'.$fim->toDateTimeString(), now()->addMinutes(10), $calcular)
                 : $calcular();
 
             return ['inicio' => $inicio->toDateString(), 'fim' => $fim->copy()->subDay()->toDateString()] + $conta;

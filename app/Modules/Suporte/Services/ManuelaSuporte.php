@@ -6,6 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Suporte\Models\Chamado;
 use App\Modules\Suporte\Models\MensagemSuporte;
+use App\Modules\Suporte\Models\SolicitacaoCancelamento;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Support\ManuelaSaudacao;
@@ -60,10 +61,17 @@ class ManuelaSuporte
         }
     }
 
+    /** Compra já postada: o botão registra a solicitação, não cancela (2026-11-17). */
+    public const CANCELAR_POSTADO = 'Seu pedido já foi postado, então o cancelamento passa pela nossa equipe: toque no botão "Cancelar Pedido" nesta página, escolha o motivo e envie. Sua solicitação chega direto para a equipe, que vai te responder por aqui. 💛';
+
+    public const CANCELAMENTO_JA_SOLICITADO = 'Sua solicitação de cancelamento já está com a nossa equipe, que vai te responder por aqui. 💛';
+
     /**
-     * Cliente pedindo para cancelar compra que ele mesmo pode cancelar
-     * (Lira, 2026-10-18): resposta fixa apontando o botão, sem chamado e
-     * sem depender da IA (sem Gemini, a resposta padrão abria chamado).
+     * Cliente pedindo para cancelar compra que ainda tem o botão (Lira,
+     * 2026-10-18): resposta fixa apontando o botão, sem chamado e sem
+     * depender da IA (sem Gemini, a resposta padrão abria chamado). Desde
+     * 2026-11-17, compra já postada: o botão só registra a solicitação para
+     * a equipe, e a resposta diz isso (nada de "cancela na hora").
      *
      * @return array{resposta: string, abrir_chamado: bool, assunto: ?string, prioridade: ?string, resumo: ?string}|null
      */
@@ -76,8 +84,15 @@ class ManuelaSuporte
             return null;
         }
 
+        $cancelamento = app(CancelamentoDoPedido::class);
+        $resposta = match (true) {
+            SolicitacaoCancelamento::query()->where('order_id', $chamado->order->id)->where('status', SolicitacaoCancelamento::PENDENTE)->exists() => self::CANCELAMENTO_JA_SOLICITADO,
+            $cancelamento->postagemParaOCliente($chamado->order) !== null => self::CANCELAR_POSTADO,
+            default => 'Você cancela na hora, sem esperar a equipe: toque no botão "Cancelar Pedido" no topo desta página, escolha o motivo e confirme. 💛 Se já pagou, o valor volta pela mesma forma de pagamento e a confirmação chega no seu e-mail.',
+        };
+
         return [
-            'resposta' => 'Você cancela na hora, sem esperar a equipe: toque no botão "Cancelar Pedido" no topo desta página, escolha o motivo e confirme. 💛 Se já pagou, o valor volta pela mesma forma de pagamento e a confirmação chega no seu e-mail.',
+            'resposta' => $resposta,
             'abrir_chamado' => false,
             'assunto' => null,
             'prioridade' => null,
@@ -169,11 +184,16 @@ TXT;
      * Cancelamento sem intermediário (Lira, 2026-10-18): se a compra ainda
      * pode ser cancelada pelo cliente, a Manuela manda usar o botão
      * "Cancelar pedido" da página da compra, que cancela na hora. Chamado só
-     * quando o botão não serve mais (compra já enviada ou de marketplace).
+     * quando o botão não serve mais (compra de marketplace). Compra já
+     * postada (2026-11-17): o botão continua, mas registra a solicitação.
      */
     private function orientacaoDeCancelamento(?Order $order): string
     {
         $bloqueio = $order ? app(CancelamentoDoPedido::class)->bloqueioDoCliente($order) : 'Nenhum pedido vinculado.';
+
+        if ($bloqueio === null && app(CancelamentoDoPedido::class)->postagemParaOCliente($order) !== null) {
+            return 'esta compra JÁ FOI POSTADA, então o cancelamento não é mais imediato: passa pela equipe. Se o cliente quiser cancelar, explique que é só tocar no botão "Cancelar Pedido" desta página, escolher o motivo e enviar; isso registra a solicitação e a equipe responde por aqui. NUNCA diga que cancela na hora, nem prometa cancelamento, estorno ou prazo. NÃO abra chamado para isso (o botão já abre).';
+        }
 
         if ($bloqueio === null) {
             return 'esta compra ainda pode ser cancelada pelo próprio cliente, na hora e sem atendente. Se ele quiser cancelar, explique que é só clicar no botão "Cancelar Pedido" no topo desta mesma página da compra, escolher o motivo e enviar; o cancelamento é imediato e o valor pago volta pela mesma forma de pagamento. NÃO abra chamado para isso.';

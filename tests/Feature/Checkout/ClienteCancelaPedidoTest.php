@@ -296,20 +296,25 @@ class ClienteCancelaPedidoTest extends TestCase
             fn (PedidoCanceladoPeloClienteNotification $aviso) => str_contains($aviso->toArray($admin)['body'], 'tire o pacote da bancada'));
     }
 
-    public function test_pedido_enviado_nao_cancela(): void
+    /** Enviado = postado (2026-11-17): o botão continua e vira solicitação, sem cancelar. */
+    public function test_pedido_enviado_vira_solicitacao_e_nao_cancela(): void
     {
+        Queue::fake();
         [$order, , $cliente] = $this->compra(['status' => Order::STATUS_SHIPPED]);
 
         $this->actingAs($cliente)
             ->get("/pedidos/{$order->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('pedido.cancelamento.pode', false)
+                ->where('pedido.cancelamento.pode', true)
+                ->where('pedido.cancelamento.postado', true)
                 ->etc());
 
         $this->actingAs($cliente)
             ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra'])
-            ->assertSessionHas('error');
+            ->assertSessionHas('success', \App\Modules\Suporte\Services\SolicitacoesDeCancelamento::MENSAGEM_AO_CLIENTE);
 
         $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        $this->assertDatabaseCount('cancelamento_solicitacoes', 1);
+        Queue::assertNotPushed(ProcessarCancelamentoDoPedidoJob::class);
     }
 }

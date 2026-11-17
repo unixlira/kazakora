@@ -15,6 +15,7 @@ use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Suporte\Services\SolicitacoesDeCancelamento;
 use App\Notifications\OrderStatusUpdated;
 use App\Notifications\PedidoCanceladoPeloClienteNotification;
 use Illuminate\Support\Carbon;
@@ -44,6 +45,8 @@ class CancelamentoDoPedido
         private readonly InvoiceService $invoices,
         private readonly OrderPaymentFinalizer $finalizer,
         private readonly PackDoPedido $pack,
+        private readonly PostagemDoPedido $postagem,
+        private readonly SolicitacoesDeCancelamento $solicitacoes,
     ) {
     }
 
@@ -153,10 +156,12 @@ class CancelamentoDoPedido
     }
 
     /**
-     * Por que o cliente não pode cancelar sozinho agora (null = pode).
-     * Desde 2026-10-18 (Lira, depois do teste da Giovanna) o cancelamento é
-     * imediato, sem passar pelo suporte: só fica de fora compra de
-     * marketplace e a que já saiu para entrega (aí é devolução).
+     * Por que o botão "Cancelar pedido" não aparece para o cliente (null =
+     * aparece). Desde 2026-10-18 (Lira, depois do teste da Giovanna) o
+     * cancelamento é imediato, sem passar pelo suporte; desde 2026-11-17 a
+     * compra já postada também mostra o botão, mas ele vira solicitação
+     * para a equipe (ver postagemParaOCliente()). Só fica de fora compra
+     * já cancelada e a de marketplace.
      */
     public function bloqueioDoCliente(Order $order): ?string
     {
@@ -168,9 +173,18 @@ class CancelamentoDoPedido
             return 'Esta compra só pode ser cancelada pelo canal onde foi feita.';
         }
 
-        return $this->jaSaiu($order->status)
-            ? 'Esta compra já saiu para entrega e não pode mais ser cancelada. Se quiser devolver, fale com o suporte.'
-            : null;
+        return null;
+    }
+
+    /**
+     * O pacote já foi postado? Se sim, o cancelamento do cliente vira
+     * solicitação (Lira, 2026-11-17). Ver PostagemDoPedido.
+     *
+     * @return array{fonte: string, postado_em: ?Carbon, rastreio: ?string}|null
+     */
+    public function postagemParaOCliente(Order $order): ?array
+    {
+        return $this->postagem->encontrar($order);
     }
 
     /**
@@ -186,12 +200,22 @@ class CancelamentoDoPedido
      * EstornarPedidoCanceladoJob e, depois dele, EnviarEmailDeCancelamentoJob
      * (o e-mail diz quanto foi estornado, por isso vem em seguida).
      *
-     * @return array{ok: bool, erro: ?string}
+     * Pacote já postado (Lira, 2026-11-17): o mesmo botão NÃO cancela.
+     * Registra a solicitação num chamado do suporte, avisa os admins e
+     * devolve a mensagem para o cliente (SolicitacoesDeCancelamento).
+     *
+     * @return array{ok: bool, erro: ?string, solicitacao: bool, mensagem: ?string}
      */
     public function solicitarPeloCliente(Order $order, User $cliente, string $motivo): array
     {
         if ($bloqueio = $this->bloqueioDoCliente($order)) {
-            return ['ok' => false, 'erro' => $bloqueio];
+            return ['ok' => false, 'erro' => $bloqueio, 'solicitacao' => false, 'mensagem' => null];
+        }
+
+        if ($postagem = $this->postagemParaOCliente($order)) {
+            $registro = $this->solicitacoes->registrar($order, $cliente, $motivo, $postagem);
+
+            return ['ok' => true, 'erro' => null, 'solicitacao' => true, 'mensagem' => $registro['mensagem']];
         }
 
         // Etiqueta impressa ou pré-postagem gerada não seguram mais o
@@ -207,7 +231,7 @@ class CancelamentoDoPedido
         $statusAnterior = $this->marcarCancelado($order, 'Cancelado pelo cliente: '.trim($motivo), $cliente->id);
 
         if ($statusAnterior === null) {
-            return ['ok' => false, 'erro' => 'Esta compra já está cancelada.'];
+            return ['ok' => false, 'erro' => 'Esta compra já está cancelada.', 'solicitacao' => false, 'mensagem' => null];
         }
 
         $order->refresh();
@@ -224,7 +248,7 @@ class CancelamentoDoPedido
             new EnviarEmailDeCancelamentoJob($order->id),
         ])->dispatch();
 
-        return ['ok' => true, 'erro' => null];
+        return ['ok' => true, 'erro' => null, 'solicitacao' => false, 'mensagem' => null];
     }
 
     /**

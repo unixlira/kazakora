@@ -152,6 +152,8 @@ class HandleInertiaRequests extends Middleware
                     'emailsSiteNaoLidos' => rescue(fn () => \App\Modules\Contato\Models\MensagemContato::query()->naoLidas()->count(), 0, false),
                     // Suporte: chamados abertos esperando a equipe (pedido 2026-10-11).
                     'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
+                    // Cancelamentos de compra já postada esperando a equipe (2026-11-17).
+                    'cancelamentosPendentes' => rescue(fn () => \App\Modules\Suporte\Models\SolicitacaoCancelamento::pendentes(), 0, false),
                     // Perguntas dos marketplaces esperando uma pessoa (Perguntas MK Place).
                     'perguntasMkplace' => $perguntasMkplace = rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->aguardandoHumano()->count(), 0, false),
                     // Criativos de anúncio esperando o Lira (Marketing › Validação de criativos).

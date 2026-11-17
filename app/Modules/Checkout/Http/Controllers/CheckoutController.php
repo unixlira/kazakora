@@ -1241,11 +1241,16 @@ class CheckoutController extends Controller
                 'status' => $order->status,
                 'criado_em' => $order->created_at?->toIso8601String(),
                 'etapas' => $order->etapas(),
-                // Botão "Cancelar pedido" (2026-10-17): só aparece enquanto
-                // a etiqueta não saiu; depois disso, o aviso manda ao suporte.
+                // Botão "Cancelar pedido" (2026-10-17). Desde 2026-11-17, com
+                // o pacote já postado, o mesmo botão vira solicitação para a
+                // equipe (postado = true) e a pendente aparece embaixo dele.
                 'cancelamento' => $order->status === Order::STATUS_CANCELLED ? null : [
                     'pode' => ($bloqueio = $cancelamento->bloqueioDoCliente($order)) === null,
                     'bloqueio' => $bloqueio,
+                    'postado' => $bloqueio === null && $cancelamento->postagemParaOCliente($order) !== null,
+                    'solicitacao' => ($pendente = app(\App\Modules\Suporte\Services\SolicitacoesDeCancelamento::class)->pendenteDoPedido($order))
+                        ? ['status' => $pendente->status, 'em' => $pendente->solicitado_em?->toIso8601String()]
+                        : null,
                     'estorno' => $order->payments->contains(fn ($pagamento) => in_array($pagamento->status, [\App\Modules\Checkout\Models\Payment::STATUS_CAPTURED, \App\Modules\Checkout\Models\Payment::STATUS_AUTHORIZED], true)),
                 ],
                 'itens' => $order->items->map(fn ($item) => [
@@ -1334,6 +1339,11 @@ class CheckoutController extends Controller
 
         if (! $resultado['ok']) {
             return back()->with('error', $resultado['erro']);
+        }
+
+        // Já postado (2026-11-17): nada foi cancelado, a equipe responde no chat.
+        if ($resultado['solicitacao']) {
+            return back()->with('success', $resultado['mensagem']);
         }
 
         return back()->with('success', 'Recebemos o seu pedido de cancelamento e ele já está sendo processado. Assim que terminar, enviamos a confirmação para o seu e-mail.');

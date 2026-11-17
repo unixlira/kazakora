@@ -155,7 +155,9 @@ class SuporteTest extends TestCase
 
         $this->assertStringContainsString('botão "Cancelar Pedido"', $instrucoes[0]);
         $this->assertStringContainsString('NÃO abra chamado para isso', $instrucoes[0]);
-        $this->assertStringContainsString('não está disponível', $instrucoes[1]);
+        // Enviado = já postado (2026-11-17): o botão registra a solicitação, não cancela na hora.
+        $this->assertStringContainsString('JÁ FOI POSTADA', $instrucoes[1]);
+        $this->assertStringNotContainsString('cancelamento é imediato', $instrucoes[1]);
     }
 
     public function test_pedido_de_cancelamento_aponta_o_botao_sem_abrir_chamado_mesmo_sem_ia(): void

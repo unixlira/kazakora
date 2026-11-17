@@ -186,6 +186,8 @@ export const sidebarSections = [
             // alerta vermelho que não some no clique e acende o título da seção.
             { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-comment-dots', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'atendimentoMkplace', alertaFixo: true },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos', alertaNoTitulo: true },
+            // Cancelamentos (2026-11-17): cliente pediu para cancelar compra já postada.
+            { label: 'Cancelamentos', href: '/admin/cancelamentos', icon: 'fas fa-ban', cor: 'vermelho', permission: 'pedidos.view', badgeKey: 'cancelamentosPendentes', alertaNoTitulo: true },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
             // Clientes dos sites (2026-11-16): contas criadas na KazaKora e na FerraKora, só leitura.
             { label: 'Clientes dos sites', href: '/admin/clientes-dos-sites', icon: 'fas fa-id-card', cor: 'azul', permission: 'pedidos.view' },

@@ -42,6 +42,12 @@ class WhatsAppMessage extends Model
     /** Texto curto pra lista de conversas (igual ao WhatsApp: "📷 Foto"). */
     public function preview(): string
     {
+        if ($this->type === 'reaction') {
+            $emoji = $this->payload['reaction']['emoji'] ?? $this->body;
+
+            return filled($emoji) ? "Reagiu com {$emoji}" : 'Removeu a reação';
+        }
+
         $label = match ($this->type) {
             'image' => '📷 Foto',
             'video' => '🎥 Vídeo',

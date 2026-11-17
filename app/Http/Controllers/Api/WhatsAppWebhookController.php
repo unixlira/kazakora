@@ -81,6 +81,12 @@ class WhatsAppWebhookController extends Controller
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings, $loja);
                     $handled++;
 
+                    // Reação (👍 ❤️ 🙏) não é mensagem: vira um selo na mensagem
+                    // reagida e não chama a Manuela.
+                    if ($stored->type === 'reaction') {
+                        continue;
+                    }
+
                     // Botão "Falar com Atendente" do aviso de pedido enviado.
                     if (ChamarAtendentePedido::interpretar($message['button']['payload'] ?? null)) {
                         if ($stored->wasRecentlyCreated) {
@@ -164,6 +170,7 @@ class WhatsAppWebhookController extends Controller
             ?? $message['interactive']['list_reply']['title']
             ?? $message[$type]['caption']
             ?? $message['document']['filename']
+            ?? $message['reaction']['emoji']
             ?? (isset($message['location']) ? trim(($message['location']['name'] ?? '').' '.($message['location']['address'] ?? '')) ?: null : null);
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp'], config('app.timezone')) : now();
         $waId = $message['from'];
@@ -202,6 +209,16 @@ class WhatsAppWebhookController extends Controller
 
         if ($stored->wasRecentlyCreated) {
             $conversation->registerMessage($stored);
+            // Quem responde ou reage já viu o que mandamos antes: tique azul,
+            // mesmo que a Meta não mande o "read" de cada uma.
+            $this->marcarLidasAte($conversation->id, $stored->id);
+            if ($type === 'reaction') {
+                // Atualiza a mensagem reagida pra tela buscar o selo no próximo poll.
+                WhatsAppMessage::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->where('wa_message_id', $message['reaction']['message_id'] ?? null)
+                    ->update(['updated_at' => now()]);
+            }
         }
 
         return [$conversation->fresh(), $stored];
@@ -212,10 +229,22 @@ class WhatsAppWebhookController extends Controller
         $message = WhatsAppMessage::query()->where('wa_message_id', $status['id'] ?? null)->first();
 
         if ($message) {
+            $novo = $status['status'] ?? $message->status;
+            // A Meta não garante a ordem: um "delivered" atrasado não pode
+            // apagar o azul de quem já leu.
+            if ($this->rank($novo) < $this->rank($message->status)) {
+                return;
+            }
+
             $message->update([
-                'status' => $status['status'] ?? $message->status,
+                'status' => $novo,
                 'payload' => array_merge($message->payload ?? [], ['status_payload' => $status]),
             ]);
+
+            // Leu esta = leu as anteriores (a Meta costuma avisar só a última).
+            if (in_array($novo, ['read', 'played'], true)) {
+                $this->marcarLidasAte($message->conversation_id, $message->id);
+            }
 
             return;
         }
@@ -234,6 +263,30 @@ class WhatsAppWebhookController extends Controller
             'payload' => ['status' => $status, 'webhook' => $payload['object'] ?? null],
             'received_at' => now(),
         ]);
+    }
+
+    /** Ordem do tique: enviando < ✓ < ✓✓ < azul. "failed" só vale antes de entregar. */
+    private function rank(?string $status): int
+    {
+        return match ($status) {
+            'sent' => 1,
+            'failed' => 1,
+            'delivered' => 2,
+            'read' => 3,
+            'played' => 4,
+            default => 0,
+        };
+    }
+
+    /** Mensagens nossas com ✓ ou ✓✓ até esta (inclusive anteriores) viram lidas. */
+    private function marcarLidasAte(int $conversationId, int $ateId): void
+    {
+        WhatsAppMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->where('direction', 'outbound')
+            ->where('id', '<', $ateId)
+            ->whereIn('status', ['sent', 'delivered'])
+            ->update(['status' => 'read', 'updated_at' => now()]);
     }
 
     private function signatureIsValid(Request $request): bool

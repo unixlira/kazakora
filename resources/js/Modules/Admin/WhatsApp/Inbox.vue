@@ -930,6 +930,7 @@ function hourMinute(iso) {
 function tickTitle(message) {
     return {
         read: 'Lida',
+        played: 'Ouvida',
         delivered: 'Entregue',
         sent: 'Enviada',
         failed: message.error || 'Falhou',
@@ -1260,6 +1261,7 @@ function linkify(text) {
                                     :class="[
                                         item.message.direction === 'outbound' ? 'wa-bubble-out' : 'wa-bubble-in',
                                         item.first && (item.message.direction === 'outbound' ? 'rounded-tr-none' : 'rounded-tl-none'),
+                                        item.message.reactions?.length ? 'mb-4' : '',
                                     ]"
                                 >
                                     <svg v-if="item.first && item.message.direction === 'inbound'" viewBox="0 0 8 13" width="8" height="13" class="wa-tail -left-2"><path d="M8 0H1.4C.3 0-.3 1.3.5 2.1L8 11.6z" /></svg>
@@ -1296,12 +1298,20 @@ function linkify(text) {
                                     <span class="wa-meta absolute bottom-[3px] right-[7px] flex items-center gap-[3px]">
                                         {{ hourMinute(item.message.at) }}
                                         <span v-if="item.message.direction === 'outbound'" :title="tickTitle(item.message)" class="inline-flex">
-                                            <svg v-if="item.message.status === 'read' || item.message.status === 'delivered'" viewBox="0 0 18 11" width="16" height="11" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" :class="item.message.status === 'read' ? 'text-[#53bdeb]' : 'wa-tick'" stroke="currentColor"><path d="M1 5.8l3.3 3.4L11.2 1.6" /><path d="M7.4 8.6l.7.6L15.2 1.6" /></svg>
+                                            <svg v-if="['read', 'played', 'delivered'].includes(item.message.status)" viewBox="0 0 18 11" width="16" height="11" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" :class="item.message.status === 'delivered' ? 'wa-tick' : 'text-[#53bdeb]'" stroke="currentColor"><path d="M1 5.8l3.3 3.4L11.2 1.6" /><path d="M7.4 8.6l.7.6L15.2 1.6" /></svg>
                                             <svg v-else-if="item.message.status === 'sent'" viewBox="0 0 13 11" width="12" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="wa-tick"><path d="M1 5.8l3.3 3.4L11.2 1.6" /></svg>
                                             <svg v-else-if="item.message.status === 'failed'" viewBox="0 0 16 16" width="14" height="14" class="text-red-500"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M8 4.2v4.6M8 11.2v.4" stroke="#fff" stroke-width="1.7" stroke-linecap="round" /></svg>
                                             <svg v-else viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" :class="item.message.status === 'draft_no_token' ? 'text-amber-500' : 'wa-tick'"><circle cx="8" cy="8" r="6.3" /><path d="M8 4.6V8l2.3 1.5" /></svg>
                                         </span>
                                     </span>
+
+                                    <!-- Reação do cliente, como no WhatsApp: selo no canto de baixo -->
+                                    <span
+                                        v-if="item.message.reactions?.length"
+                                        class="wa-reaction absolute -bottom-[18px]"
+                                        :class="item.message.direction === 'outbound' ? 'right-2' : 'left-2'"
+                                        :title="'Reação do cliente: ' + item.message.reactions.join(' ')"
+                                    >{{ item.message.reactions.join('') }}</span>
                                 </div>
                             </div>
                         </template>
@@ -1726,6 +1736,7 @@ function linkify(text) {
     pointer-events: none;
 }
 .wa-story-lg::before { inset: -9px; padding: 5px; }
+.wa-reaction { display: inline-flex; align-items: center; height: 24px; padding: 0 6px; border-radius: 9999px; background: var(--wa-panel, #fff); box-shadow: 0 1px 2px rgba(11, 20, 26, 0.18); font-size: 15px; line-height: 1; }
 .wa-unread { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 9999px; background: var(--wa-unread); padding: 0 6px; font-size: 12px; font-weight: 600; color: #fff; }
 .wa-muted { color: var(--wa-muted); }
 

@@ -49,7 +49,7 @@ class DashboardRevenueByChannelTest extends TestCase
         $lastMonthOrder = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 999.99, 'total' => 999.99]);
         $lastMonthOrder->forceFill(['created_at' => now()->subMonthNoOverflow()])->save();
 
-        $response = $this->actingAs($this->admin())->get('/admin/indicadores?aba=hoje-e-mes');
+        $response = $this->actingAs($this->admin())->get('/admin/painel/marketplaces/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
@@ -71,7 +71,7 @@ class DashboardRevenueByChannelTest extends TestCase
         $oldOrder = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 500, 'total' => 500]);
         $oldOrder->forceFill(['created_at' => now()->subMonths(2)])->save();
 
-        $response = $this->actingAs($this->admin())->get('/admin/indicadores?aba=hoje-e-mes');
+        $response = $this->actingAs($this->admin())->get('/admin/painel/marketplaces/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page

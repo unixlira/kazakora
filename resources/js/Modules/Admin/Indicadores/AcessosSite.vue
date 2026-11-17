@@ -12,6 +12,8 @@ import { computed, ref } from 'vue';
 
 const props = defineProps({
     aba: { type: String, default: 'acessos' },
+    // Visitas são dos sites próprios: sempre no grupo E-commerces (17/11/2026).
+    grupo: { type: String, default: 'ecommerces' },
     visitantes: {
         type: Object,
         default: () => ({ mes: '', meses: [], mesAtual: true, dias: [], visitantesMes: 0, paginasMes: 0, visitantesHoje: 0, paginasHoje: 0, mediaDia: 0, melhorDia: null }),
@@ -35,7 +37,7 @@ const visitColors = computed(() => ({ bar: '#a3d9b8', today: '#198754', line: '#
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
-    router.get('/admin/indicadores', { aba: props.aba, mes: mesVisitas.value }, {
+    router.get(`/admin/painel/${props.grupo}/indicadores`, { aba: props.aba, mes: mesVisitas.value }, {
         only: ['visitantes'],
         preserveScroll: true,
         preserveState: true,

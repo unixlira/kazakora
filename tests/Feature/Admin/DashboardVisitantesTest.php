@@ -56,7 +56,7 @@ class DashboardVisitantesTest extends TestCase
         $this->visita('duda', '2026-10-11 14:02:00', null, 1, true, '5.5.5.5');
 
         // Hoje: ana(3), bia, carla, IP 4.4.4.4 (2), duda (2) = 5 visitantes, 9 páginas.
-        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-10')
             ->where('visitantes.visitantesHoje', 5)
             ->where('visitantes.paginasHoje', 9)
@@ -72,7 +72,7 @@ class DashboardVisitantesTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $this->visita('caio', '2026-09-20 10:00:00', null, 2);
 
-        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/indicadores?aba=acessos&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-09')
             ->where('visitantes.mesAtual', false)
             ->where('visitantes.visitantesHoje', null)
@@ -97,14 +97,14 @@ class DashboardVisitantesTest extends TestCase
         $this->visita(md5('3.3.3.3'), '2026-10-11 12:00:00', null, 1, false, '3.3.3.3', 'ferrakora');
         $this->visita(md5('3.3.3.3'), '2026-09-30 12:00:00', null, 1, false, '3.3.3.3', 'ferrakora');
 
-        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
             ->where('aba', 'acessos')
             ->where('visitantes.site', 'kazakora')
             ->where('visitantes.visitantesHoje', 1)
             ->where('visitantes.paginasMes', 2)
             ->where('visitantes.meses', ['2026-10']));
 
-        $this->actingAs($admin)->get('/admin/indicadores?aba=visitas-ferrakora')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/indicadores?aba=visitas-ferrakora')->assertOk()->assertInertia(fn ($page) => $page
             ->where('aba', 'visitas-ferrakora')
             ->where('visitantes.site', 'ferrakora')
             ->where('visitantes.visitantesHoje', 2)
@@ -112,7 +112,7 @@ class DashboardVisitantesTest extends TestCase
             ->where('visitantes.paginasMes', 4)
             ->where('visitantes.meses', ['2026-10', '2026-09']));
 
-        $this->actingAs($admin)->get('/admin/indicadores?aba=visitas-ferrakora&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/indicadores?aba=visitas-ferrakora&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-09')
             ->where('visitantes.visitantesMes', 1));
     }

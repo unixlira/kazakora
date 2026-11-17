@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Support\Indicadores;
 
 use App\Models\User;
+use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
@@ -26,9 +27,18 @@ class SerieDiaria
     public const DIAS = 60;
 
     /**
+     * $grupo (pedido do Lira, 17/11/2026: "marketplaces de um lado, meus
+     * e-commerces do outro, nunca somar os dois"): lista de canais do grupo
+     * (GruposDeCanais::canais()); a série só traz esses canais, então o
+     * "Todos os canais" da tela é a soma do grupo. O ADS da Meta entra no
+     * kazakora.com, como em ContributionMargin::porCanal(). Visitantes são
+     * os do site kazakora.com: só vêm quando a loja está no grupo (zerados
+     * nos marketplaces). Null = todos os canais (comportamento antigo).
+     *
+     * @param  list<string>|null  $grupo
      * @return array{dias: list<string>, canais: array<string, array<string, list<float|int>>>, visitantes: list<int>}
      */
-    public function gerar(): array
+    public function gerar(?array $grupo = null): array
     {
         $ate = Carbon::today();
         $desde = $ate->copy()->subDays(self::DIAS);
@@ -36,18 +46,20 @@ class SerieDiaria
         for ($d = $desde->copy(); $d->lt($ate); $d->addDay()) {
             $dias[] = $d->toDateString();
         }
-        $canais = array_keys(PainelDeAlertas::CANAIS);
+        $canais = $grupo ?? array_keys(PainelDeAlertas::CANAIS);
         $vazio = array_fill(0, count($dias), 0);
         $pos = array_flip($dias);
         $serie = [];
-        $por = function (string $canal, string $campo, string $dia, float|int $valor) use (&$serie, $pos, $vazio) {
+        $por = function (string $canal, string $campo, string $dia, float|int $valor, bool $somar = false) use (&$serie, $pos, $vazio) {
             $dia = substr($dia, 0, 10);
             if (! isset($pos[$dia])) {
                 return;
             }
             $serie[$canal] ??= [];
             $serie[$canal][$campo] ??= $vazio;
-            $serie[$canal][$campo][$pos[$dia]] = $valor;
+            // Somar: Meta + kazakora.com no mesmo dia; inteiro continua inteiro.
+            $atual = $serie[$canal][$campo][$pos[$dia]];
+            $serie[$canal][$campo][$pos[$dia]] = $somar ? (is_float($valor) ? round($atual + $valor, 2) : $atual + $valor) : $valor;
         };
 
         DB::table('orders')
@@ -74,22 +86,30 @@ class SerieDiaria
                 $por($l->canal, 'cancelados', (string) $l->dia, (int) $l->cancelados);
             });
 
+        // Grupo (17/11/2026): a Meta é o ADS do kazakora.com; sem grupo a
+        // série fica como era (a tela não mostra a chave da Meta).
+        $comMeta = $grupo !== null && in_array(Order::ORIGIN_STORE, $grupo, true);
         ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())->where('date', '<', $ate->toDateString())
+            ->when($grupo !== null, fn ($q) => $q->whereIn('channel', $comMeta ? [...$grupo, PlataformaDeAnuncio::META] : $grupo))
             ->selectRaw('channel, date, SUM(impressions) as impressoes, SUM(clicks) as cliques, SUM(attributed_orders) as pedidos, SUM(attributed_gmv) as venda, SUM(spend) as gasto')
             ->groupBy('channel', 'date')
             ->toBase()->get()
-            ->each(function ($l) use ($por) {
+            ->each(function ($l) use ($por, $comMeta) {
                 $dia = Carbon::parse($l->date)->toDateString();
-                $por($l->channel, 'ads_gasto', $dia, round((float) $l->gasto, 2));
-                $por($l->channel, 'ads_venda', $dia, round((float) $l->venda, 2));
-                $por($l->channel, 'ads_pedidos', $dia, (int) $l->pedidos);
-                $por($l->channel, 'impressoes', $dia, (int) $l->impressoes);
-                $por($l->channel, 'cliques', $dia, (int) $l->cliques);
+                $canal = $comMeta && $l->channel === PlataformaDeAnuncio::META ? Order::ORIGIN_STORE : $l->channel;
+                $por($canal, 'ads_gasto', $dia, round((float) $l->gasto, 2), true);
+                $por($canal, 'ads_venda', $dia, round((float) $l->venda, 2), true);
+                $por($canal, 'ads_pedidos', $dia, (int) $l->pedidos, true);
+                $por($canal, 'impressoes', $dia, (int) $l->impressoes, true);
+                $por($canal, 'cliques', $dia, (int) $l->cliques, true);
             });
 
-        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->all();
         $visitantes = $vazio;
+        if ($grupo !== null && ! in_array(Order::ORIGIN_STORE, $grupo, true)) {
+            return ['dias' => $dias, 'canais' => $serie, 'visitantes' => $visitantes];
+        }
+        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->all();
         SiteVisit::soDeFora(SiteVisit::visitantesPorDia(
             SiteVisit::query()->daLoja()->where('created_at', '>=', $desde)->where('created_at', '<', $ate),
             $equipe,

@@ -16,6 +16,8 @@ export const CHANNEL_LABELS = {
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',
     amazon: 'Amazon',
+    // Shein (17/11/2026): canal do grupo Marketplaces nos Indicadores.
+    shein: 'Shein',
     ferrakora: 'FerraKora',
     beautykora: 'Beauty Kora',
 };
@@ -23,8 +25,8 @@ export const CHANNEL_LABELS = {
 export const CHANNEL_ORDER = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja'];
 
 export const CHANNEL_COLORS = {
-    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
-    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
+    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', shein: '#7c3aed', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
+    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', shein: '#8b5cf6', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 
 // Tema grafite: neutros quentes; destaque grafite no claro e laranja no escuro.

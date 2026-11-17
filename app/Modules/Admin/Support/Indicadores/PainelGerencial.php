@@ -29,35 +29,46 @@ class PainelGerencial
      * mês a mês por canal e a faixa de faturamento por canal. Sem
      * financeiro.view o lucro não sai do servidor.
      *
+     * $canais (pedido do Lira, 17/11/2026: "marketplaces de um lado, meus
+     * e-commerces do outro, nunca somar os dois"): lista de canais do grupo
+     * (GruposDeCanais::canais()). Todo cartão e gráfico fica só desses
+     * canais; o lucro vem de ContributionMargin::conta() do grupo, nunca de
+     * periodo(), que soma tudo. Null = todos os canais (comportamento antigo).
+     *
+     * @param  list<string>|null  $canais
      * @return array<string, mixed>
      */
-    public function hojeEMes(bool $comLucro): array
+    public function hojeEMes(bool $comLucro, ?array $canais = null): array
     {
         $today = Carbon::today();
         $startOfMonth = Carbon::today()->startOfMonth();
-        $conta = $comLucro ? app(ContributionMargin::class)->periodo($startOfMonth, $today->copy()->addDay()) : null;
+        $conta = $comLucro ? app(ContributionMargin::class)->conta($startOfMonth, $today->copy()->addDay(), $canais) : null;
+        $vendas = fn () => $this->vendas($canais);
 
         $stats = [
             // Pedidos = vendas confirmadas (auditoria 2026-10-11).
-            'ordersCount' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->count(),
+            'ordersCount' => $vendas()->count(),
             // Faturamento do mês pela receita oficial (subtotal, sem frete;
             // ver ContributionMargin::receitaSql()).
-            'revenue' => (float) Order::query()->vendaEfetiva()
+            'revenue' => (float) $vendas()
                 ->where('created_at', '>=', $startOfMonth)
-                ->whereIn('status', self::PAID_STATUSES)
                 ->sum(DB::raw(ContributionMargin::receitaSql())),
-            'ordersToday' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->whereDate('created_at', $today)->count(),
-            'ordersMonth' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->where('created_at', '>=', $startOfMonth)->count(),
-            'revenueToday' => (float) Order::query()->vendaEfetiva()
+            'ordersToday' => $vendas()->whereDate('created_at', $today)->count(),
+            'ordersMonth' => $vendas()->where('created_at', '>=', $startOfMonth)->count(),
+            'revenueToday' => (float) $vendas()
                 ->whereDate('created_at', $today)
-                ->whereIn('status', self::PAID_STATUSES)
                 ->sum(DB::raw(ContributionMargin::receitaSql())),
-            'revenueTotal' => (float) Order::query()->vendaEfetiva()
-                ->whereIn('status', self::PAID_STATUSES)
+            'revenueTotal' => (float) $vendas()
                 ->sum(DB::raw(ContributionMargin::receitaSql())),
             'returnsMonth' => StockMovement::query()
                 ->where('type', StockMovement::TYPE_RETURN)
                 ->where('created_at', '>=', $startOfMonth)
+                // Grupo (17/11/2026): só a devolução ligada a pedido de um
+                // canal do grupo. Movimento manual, sem pedido, não é de
+                // canal nenhum e fica fora das duas telas.
+                ->when($canais !== null, fn ($q) => $q
+                    ->where('reference_type', (new Order)->getMorphClass())
+                    ->whereIn('reference_id', Order::query()->doCanal($canais)->select('id')))
                 ->distinct()
                 ->count('product_id'),
         ];
@@ -71,29 +82,46 @@ class PainelGerencial
             ];
         }
 
-        $analytics = $this->analytics($today, $conta !== null ? (float) $conta['lucro'] : null);
+        $analytics = $this->analytics($today, $conta !== null ? (float) $conta['lucro'] : null, $canais);
 
         return [
             'stats' => $stats,
             'analytics' => $analytics,
-            'revenueByChannel' => $this->revenueByChannel($startOfMonth),
+            'revenueByChannel' => $this->revenueByChannel($startOfMonth, $canais),
+            // A faixa "Faturamento por canal" mostra só os canais do grupo.
+            'canais' => $canais,
         ];
     }
 
     /**
-     * Aba "Produtos": mais vendidos (30 dias) e curva A/B (90 dias).
+     * Vendas confirmadas (pagas/enviadas/concluídas, sem notas de
+     * devolução), só dos canais do grupo quando há lista.
      *
+     * @param  list<string>|null  $canais
+     */
+    private function vendas(?array $canais): \Illuminate\Database\Eloquent\Builder
+    {
+        return Order::query()->vendaEfetiva()
+            ->whereIn('status', self::PAID_STATUSES)
+            ->when($canais !== null, fn ($q) => $q->doCanal($canais));
+    }
+
+    /**
+     * Aba "Produtos": mais vendidos (30 dias) e curva A/B (90 dias).
+     * Com $canais (grupo, 17/11/2026), só as vendas dos canais do grupo.
+     *
+     * @param  list<string>|null  $canais
      * @return array{topProducts: list<array>, abcCurve: array}
      */
-    public function produtos(): array
+    public function produtos(?array $canais = null): array
     {
         return [
-            'topProducts' => $this->vendasPorProduto(Carbon::today()->subDays(29))
+            'topProducts' => $this->vendasPorProduto(Carbon::today()->subDays(29), $canais)
                 ->sortByDesc('quantity')
                 ->take(10)
                 ->values()
                 ->all(),
-            'abcCurve' => $this->curvaAbc(Carbon::today()->subDays(89)),
+            'abcCurve' => $this->curvaAbc(Carbon::today()->subDays(89), $canais),
         ];
     }
 
@@ -103,12 +131,12 @@ class PainelGerencial
      * como produto próprio — é ela que tem estoque. Item sem produto
      * cadastrado agrupa pelo nome.
      *
+     * @param  list<string>|null  $canais
      * @return \Illuminate\Support\Collection<int, array{id: ?int, name: string, color: ?string, quantity: int, revenue: float}>
      */
-    public function vendasPorProduto(Carbon $desde): \Illuminate\Support\Collection
+    public function vendasPorProduto(Carbon $desde, ?array $canais = null): \Illuminate\Support\Collection
     {
-        $pedidos = Order::query()->vendaEfetiva()
-            ->whereIn('status', self::PAID_STATUSES)
+        $pedidos = $this->vendas($canais)
             ->where('created_at', '>=', $desde)
             ->select('id');
 
@@ -134,13 +162,14 @@ class PainelGerencial
      * das faixas são as mesmas do menu Oportunidades: CurvaAbc, com as
      * variações (cores) do mesmo produto juntas numa linha (2026-10-12).
      *
+     * @param  list<string>|null  $canais
      * @return array{total: float, a: list<array>, b: list<array>}
      */
-    public function curvaAbc(Carbon $desde): array
+    public function curvaAbc(Carbon $desde, ?array $canais = null): array
     {
         $curva = app(CurvaAbc::class);
         $produtos = $curva->classificar($curva->agrupar(app(ContributionMargin::class)
-            ->porItem($desde, Carbon::tomorrow())['linhas']));
+            ->porItem($desde, Carbon::tomorrow(), $canais)['linhas']));
 
         $linha = fn (array $p) => [
             'id' => $p['id'],
@@ -158,15 +187,15 @@ class PainelGerencial
         ];
     }
 
-    public function revenueByChannel(Carbon $startOfMonth): array
+    /** @param  list<string>|null  $canais */
+    public function revenueByChannel(Carbon $startOfMonth, ?array $canais = null): array
     {
         // subtotal, não total — ver comentário em index() sobre frete não
         // ser receita do vendedor.
-        return Order::query()->vendaEfetiva()
+        return $this->vendas($canais)
             ->where('created_at', '>=', $startOfMonth)
             // Canal de métrica (2026-10-14): FerraKora e Beauty Kora saem do "site".
             ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
-            ->whereIn('status', self::PAID_STATUSES)
             ->groupBy('canal')
             ->get()
             ->map(fn ($row) => ['origin' => $row->canal, 'total' => (float) $row->total])
@@ -184,9 +213,12 @@ class PainelGerencial
      * (dia 1 ao dia N) — comparar o mês parcial com o mês anterior inteiro
      * faria todo começo de mês parecer queda.
      *
+     * $canais (17/11/2026): só os pedidos dos canais do grupo.
+     *
+     * @param  list<string>|null  $canais
      * @return array<string, mixed>
      */
-    public function analytics(Carbon $today, ?float $lucro): array
+    public function analytics(Carbon $today, ?float $lucro, ?array $canais = null): array
     {
         $inicioMes = $today->copy()->startOfMonth();
         $inicioMesAnterior = $inicioMes->copy()->subMonthNoOverflow();
@@ -197,8 +229,7 @@ class PainelGerencial
 
         // Uma leitura só dos pedidos dos últimos 12 meses; o resto agrega
         // em PHP (evita função de data específica de banco).
-        $pedidos = Order::query()->vendaEfetiva()
-            ->whereIn('status', self::PAID_STATUSES)
+        $pedidos = $this->vendas($canais)
             ->where('created_at', '>=', $inicio12Meses)
             ->selectRaw('id, origin, created_at, '.Order::canalSql().' as canal, '.ContributionMargin::receitaSql().' as receita')
             ->get()
@@ -263,7 +294,7 @@ class PainelGerencial
                     $canal => round(($porMes[$mes->format('Y-m')] ?? collect())->where('canal', $canal)->sum('receita'), 2),
                 ])->all(),
             ])->filter(fn ($linha) => array_sum($linha['canais']) > 0)->values()->all(),
-            'categorias' => $this->faturamentoPorCategoria($today->copy()->subDays(89)),
+            'categorias' => $this->faturamentoPorCategoria($today->copy()->subDays(89), $canais),
         ];
     }
 
@@ -271,12 +302,12 @@ class PainelGerencial
      * Faturamento por categoria do produto (90 dias): as 6 maiores e o
      * resto em "Outras" — mais que isso vira arco-íris ilegível.
      *
+     * @param  list<string>|null  $canais
      * @return list<array{nome: string, receita: float}>
      */
-    private function faturamentoPorCategoria(Carbon $desde): array
+    private function faturamentoPorCategoria(Carbon $desde, ?array $canais = null): array
     {
-        $pedidos = Order::query()->vendaEfetiva()
-            ->whereIn('status', self::PAID_STATUSES)
+        $pedidos = $this->vendas($canais)
             ->where('created_at', '>=', $desde)
             ->select('id');
 

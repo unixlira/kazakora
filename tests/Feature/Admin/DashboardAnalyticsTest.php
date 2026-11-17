@@ -46,7 +46,7 @@ class DashboardAnalyticsTest extends TestCase
         $this->venda('2026-09-03 10:00', 200);
         $this->venda('2026-09-20 10:00', 1000);
 
-        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/indicadores?aba=hoje-e-mes');
+        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/painel/marketplaces/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page

@@ -11,13 +11,13 @@
 @endphp
 
 @section('title', 'Auditoria da semana')
-@section('preheader', 'Caiu '.$brl($total['depositado']).' · imposto '.$brl($total['imposto']).' · fornecedor '.$brl($total['fornecedor']).' · insumos '.$brl($total['insumos']).' · lucro '.$brl($total['sobra']))
+@section('preheader', 'Caiu '.$brl($total['depositado']).' · ADS '.$brl($total['ads']).' · imposto '.$brl($total['imposto']).' · fornecedor '.$brl($total['fornecedor']).' · insumos '.$brl($total['insumos']).' · lucro '.$brl($total['sobra']))
 
 @section('content')
     @include('emails.partials.titulo', ['icone' => '🧾', 'texto' => 'Dinheiro que caiu de '.$de.' a '.$ate])
 
     <p style="margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #374151; text-align: center;">
-        Semana fechada de segunda a domingo. Do que os canais depositaram, separe:
+        Semana fechada de segunda a domingo. Do que caiu nos canais e nos sites, separe:
     </p>
 
     {{-- O que separar, no total --}}
@@ -25,8 +25,12 @@
         <tr><td style="padding: 16px 18px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                    <td style="font-size: 14px; color: #111827; padding: 4px 0;">Caiu na conta (os 4 canais)</td>
+                    <td style="font-size: 14px; color: #111827; padding: 4px 0;">Caiu (marketplaces + sites)</td>
                     <td style="font-size: 18px; font-weight: 800; text-align: right; color: #111827;">{{ $brl($total['depositado']) }}</td>
+                </tr>
+                <tr>
+                    <td style="font-size: 14px; color: #be185d; padding: 4px 0;">ADS da semana (Shopee, Mercado Livre, Meta, GMV Max)</td>
+                    <td style="font-size: 16px; font-weight: 700; text-align: right; color: #be185d;">{{ $brl($total['ads']) }}</td>
                 </tr>
                 <tr>
                     <td style="font-size: 14px; color: #c2410c; padding: 4px 0;">Separar para imposto (Simples {{ $aliquota }}%)</td>
@@ -57,7 +61,7 @@
     {{-- Por canal --}}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 18px; border-collapse: collapse;">
         <tr>
-            @foreach (['Canal', 'Caiu', 'Imposto', 'Fornecedor', 'Insumos', 'Lucro'] as $i => $titulo)
+            @foreach (['Canal', 'Caiu', 'ADS', 'Imposto', 'Fornecedor', 'Insumos', 'Lucro'] as $i => $titulo)
                 <th style="padding: 8px 6px; border-bottom: 2px solid #111827; font-size: 11px; text-transform: uppercase; color: #4b5563; text-align: {{ $i === 0 ? 'left' : 'right' }};">{{ $titulo }}</th>
             @endforeach
         </tr>
@@ -72,6 +76,7 @@
                     </div>
                 </td>
                 <td style="{{ $celula }} font-weight: 700;">{{ $brl($canal['depositado']) }}</td>
+                <td style="{{ $celula }} color: #be185d;">{{ $brl($canal['ads']) }}</td>
                 <td style="{{ $celula }} color: #c2410c;">{{ $brl($canal['imposto']) }}</td>
                 <td style="{{ $celula }} color: #1d4ed8;">{{ $brl($canal['fornecedor']) }}</td>
                 <td style="{{ $celula }} color: #6d28d9;">{{ $brl($canal['insumos']) }}</td>

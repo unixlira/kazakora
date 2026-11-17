@@ -78,6 +78,32 @@ class AuditoriaSemanalTest extends TestCase
         ]);
     }
 
+    private function gastoAds(string $canal, string $dia, float $valor): void
+    {
+        DB::table('channel_ad_spends')->insert(['date' => $dia, 'channel' => $canal, 'spend' => $valor, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    public function test_sites_kazakora_e_ferrakora_ficam_separados_com_o_meta_de_cada_um(): void
+    {
+        $kz = $this->pedido('loja', 'KZ-1', 150, 60, nota: 150);
+        $kz->forceFill(['created_at' => '2026-11-11 10:00:00'])->save();
+        $fk = $this->pedido('loja', 'FK-1', 120, 50, nota: 120);
+        $fk->forceFill(['created_at' => '2026-11-12 10:00:00', 'site_origem' => 'ferrakora'])->save();
+        // Pago pelo Mercado Pago: vale o líquido (sem a taxa).
+        DB::table('mercado_pago_pagamentos')->insert(['mp_payment_id' => 'mp-kz', 'status' => 'approved', 'canal' => 'loja', 'order_id' => $kz->id,
+            'valor' => 150, 'liquido' => 145, 'reembolsado' => 0, 'data_criacao' => '2026-11-11 10:00:00', 'created_at' => now(), 'updated_at' => now()]);
+        $this->gastoAds('meta_ads', '2026-11-11', 30);
+        $this->gastoAds('ferrakora', '2026-11-12', 10);
+
+        $canais = $this->semana()['canais'];
+
+        $this->assertSame([145.0, 30.0, 1], [$canais['loja']['depositado'], $canais['loja']['ads'], $canais['loja']['pedidos']]);
+        $this->assertSame(47.0, $canais['loja']['sobra']); // 145 − 30 − 60 − 6 − 2
+        // FerraKora sem pagamento conciliado: entra pelo total.
+        $this->assertSame([120.0, 10.0, 1], [$canais['ferrakora']['depositado'], $canais['ferrakora']['ads'], $canais['ferrakora']['pedidos']]);
+        $this->assertSame('Site FerraKora', $canais['ferrakora']['nome']);
+    }
+
     private function semana(): array
     {
         return app(AuditoriaSemanal::class)->calcular(...AuditoriaSemanal::semanaFechada());
@@ -99,7 +125,7 @@ class AuditoriaSemanalTest extends TestCase
         $this->pedido('tiktok_shop', 'TT-2', 60, 25);
         $this->extrato('tiktok_shop', 'Pagos', 'Pedido', 'TT-1', '2026-11-09', 70);
         $this->extrato('tiktok_shop', 'Pagos', 'Pedido', 'TT-2', '2026-11-15', 45);
-        // GMV Max descontado no próprio extrato: baixa o que caiu.
+        // GMV Max descontado no próprio extrato: é ADS (coluna própria), não venda.
         $this->extrato('tiktok_shop', 'Pagos', 'Pagamento de GMV para anúncios do TikTok', null, '2026-11-12', -15);
         // Fora da semana, ainda não pago e outra semana: não entram.
         $this->extrato('tiktok_shop', 'Pagos', 'Pedido', 'TT-1', '2026-11-16', 999);
@@ -108,15 +134,16 @@ class AuditoriaSemanalTest extends TestCase
 
         $tiktok = $this->semana()['canais']['tiktok_shop'];
 
-        $this->assertSame(100.0, $tiktok['depositado']); // 70 + 45 − 15
-        $this->assertSame(-15.0, $tiktok['descontos']);
+        $this->assertSame(115.0, $tiktok['depositado']); // 70 + 45
+        $this->assertSame(15.0, $tiktok['ads']);
+        $this->assertSame(0.0, $tiktok['descontos']);
         $this->assertSame(2, $tiktok['pedidos']);
         $this->assertSame(65.0, $tiktok['fornecedor']);
         // 4% da nota de R$ 90 + 4% do total de R$ 60 (sem nota).
         $this->assertSame(6.0, $tiktok['imposto']);
         $this->assertSame(1, $tiktok['sem_nota']);
         $this->assertSame(4.0, $tiktok['insumos']);
-        $this->assertSame(25.0, $tiktok['sobra']); // 100 − 65 − 6 − 4
+        $this->assertSame(25.0, $tiktok['sobra']); // 115 − 15 de ADS − 65 − 6 − 4
         $this->assertSame($a->id > 0, true);
     }
 
@@ -181,9 +208,12 @@ class AuditoriaSemanalTest extends TestCase
         $this->assertSame(124.0, $ml['sobra']);
     }
 
-    public function test_shopee_le_a_carteira_sem_os_saques_e_desconta_a_recarga_de_ads(): void
+    public function test_shopee_le_a_carteira_sem_os_saques_e_o_ads_vai_para_a_coluna_ads(): void
     {
         $this->pedido('shopee', 'SH-1', 80, 30, nota: 75);
+        // Gasto do Shopee Ads na semana (o que vale como ADS; a recarga da carteira não entra no "caiu").
+        $this->gastoAds('shopee', '2026-11-10', 20);
+        $this->gastoAds('shopee', '2026-11-16', 999);
         $this->carteira = [
             ['transaction_id' => 1, 'status' => 'COMPLETED', 'transaction_type' => 'ESCROW_VERIFIED_ADD', 'amount' => 61.39, 'order_sn' => 'SH-1'],
             ['transaction_id' => 2, 'status' => 'COMPLETED', 'transaction_type' => 'SPM_DEDUCT', 'amount' => -20, 'order_sn' => ''],
@@ -194,12 +224,13 @@ class AuditoriaSemanalTest extends TestCase
 
         $shopee = $this->semana()['canais']['shopee'];
 
-        $this->assertSame(41.39, $shopee['depositado']);
-        $this->assertSame(-20.0, $shopee['descontos']);
+        $this->assertSame(61.39, $shopee['depositado']);
+        $this->assertSame(20.0, $shopee['ads']);
+        $this->assertSame(0.0, $shopee['descontos']);
         $this->assertSame(1, $shopee['pedidos']);
         $this->assertSame(30.0, $shopee['fornecedor']);
         $this->assertSame(3.0, $shopee['imposto']);
-        $this->assertSame(6.39, $shopee['sobra']); // 41,39 − 30 − 3 − 2
+        $this->assertSame(6.39, $shopee['sobra']); // 61,39 − 20 de ADS − 30 − 3 − 2
     }
 
     public function test_carteira_da_shopee_fora_do_ar_vira_aviso_e_nao_zero_silencioso(): void

@@ -24,12 +24,12 @@ class DashboardController extends Controller
     {
         $user = $request->user();
         if ($request->filled('mes') && Permissions::has($user, 'relatorios.view')) {
-            return redirect()->to('/admin/indicadores?'.http_build_query(['aba' => 'acessos', 'mes' => (string) $request->query('mes')]));
+            return redirect()->to('/admin/painel/ecommerces/indicadores?'.http_build_query(['aba' => 'acessos', 'mes' => (string) $request->query('mes')]));
         }
 
         $destino = match (true) {
-            Permissions::has($user, 'financeiro.view') => '/admin/fluxo-de-caixa',
-            Permissions::has($user, 'relatorios.view') => '/admin/indicadores',
+            Permissions::has($user, 'financeiro.view') => '/admin/painel/marketplaces/resultado',
+            Permissions::has($user, 'relatorios.view') => '/admin/painel/marketplaces/indicadores',
             // Pedidos não tem permissão própria na rota: toda a equipe vê.
             default => '/admin/pedidos',
         };
@@ -37,5 +37,18 @@ class DashboardController extends Controller
         $query = (string) $request->server('QUERY_STRING');
 
         return redirect()->to($destino.($query ? '?'.$query : ''));
+    }
+
+    /** Item do menu Marketplaces / E-commerces: Resultado se vê financeiro, senão Indicadores. */
+    public function grupo(Request $request, string $grupo): RedirectResponse
+    {
+        $user = $request->user();
+        $destino = match (true) {
+            Permissions::has($user, 'financeiro.view') => "/admin/painel/{$grupo}/resultado",
+            Permissions::has($user, 'relatorios.view') => "/admin/painel/{$grupo}/indicadores",
+            default => '/admin/pedidos',
+        };
+
+        return redirect()->to($destino);
     }
 }

@@ -40,8 +40,18 @@ final class GruposDeCanais
         ],
     ];
 
+    /**
+     * Endereço de cada grupo no menu Painel do admin (pedido do Lira em
+     * 17/11/2026: "métricas só marketplaces de um lado, meus e-commerces do
+     * outro, nunca somar os dois"): /admin/painel/{slug}.
+     */
+    public const SLUGS = [
+        'marketplaces' => self::PLATAFORMAS,
+        'ecommerces' => self::ECOMMERCES,
+    ];
+
     public const NOMES = [
-        self::PLATAFORMAS => 'Plataformas',
+        self::PLATAFORMAS => 'Marketplaces',
         self::ECOMMERCES => 'E-commerces',
         self::OUTROS => 'Outros',
     ];
@@ -61,6 +71,20 @@ final class GruposDeCanais
 
     /** Campos de porCanal() que são somados no grupo. */
     private const CAMPOS = ['pedidos', 'receita', 'custo_produtos', 'taxas', 'frete', 'insumos', 'ads', 'bonificacoes', 'margem', 'imposto', 'lucro'];
+
+    /** Canais de um grupo pela chave ('plataformas') ou pelo slug ('marketplaces'). */
+    public static function canais(string $grupo): array
+    {
+        return self::GRUPOS[self::SLUGS[$grupo] ?? $grupo] ?? [];
+    }
+
+    /** Slug de URL do grupo ('marketplaces'/'ecommerces') de um canal. */
+    public static function slugDoCanal(?string $canal): string
+    {
+        $grupo = $canal ? self::grupoDe($canal) : self::PLATAFORMAS;
+
+        return array_search($grupo, self::SLUGS, true) ?: 'marketplaces';
+    }
 
     public static function grupoDe(string $canal): string
     {

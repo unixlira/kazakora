@@ -7,11 +7,18 @@
  * Clicar numa fatia do "Faturamento por canal" filtra a tela pelo canal.
  *
  * Aba "Visão geral" de Indicadores desde 2026-10-19 (era a tela inteira).
+ *
+ * Por grupo (Lira, 17/11/2026: "nunca somar os dois grupos em nenhum
+ * lugar"): o servidor só manda os canais do grupo (Marketplaces ou
+ * E-commerces), os chips só listam esses canais e o "Todos" é a soma do
+ * grupo. Visitantes e conversão do site só existem nos e-commerces.
  */
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
+    grupo: { type: String, default: 'marketplaces' },
+    canais: { type: Array, default: () => [] },
     painel: { type: Object, required: true },
     paineis: { type: Object, required: true },
     composicao: { type: Object, required: true },
@@ -21,11 +28,14 @@ const props = defineProps({
 
 // Cor fixa por canal, a mesma paleta validada do Gerenciador.
 // FerraKora e Beauty Kora (2026-10-14): canal próprio, só aparecem com dado.
-const CANAIS = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja', 'ferrakora', 'beautykora'];
-const NOMES = { loja: 'KazaKora', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon', ferrakora: 'FerraKora', beautykora: 'Beauty Kora' };
+// Grupo (17/11/2026): só os canais do grupo, na ordem de sempre.
+const TODOS_CANAIS = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'shein', 'loja', 'ferrakora', 'beautykora'];
+const CANAIS = props.canais.length ? TODOS_CANAIS.filter((c) => props.canais.includes(c)) : TODOS_CANAIS;
+const comSiteNoGrupo = CANAIS.includes('loja');
+const NOMES = { loja: 'KazaKora', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon', shein: 'Shein', ferrakora: 'FerraKora', beautykora: 'Beauty Kora' };
 const CORES = {
-    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
-    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
+    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', shein: '#7c3aed', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
+    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', shein: '#8b5cf6', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 const CHROME = {
     light: { grid: '#dddcdb', text: '#5b6066', accent: '#3c4044', context: '#b3aaad', surface: '#ffffff' },
@@ -140,7 +150,8 @@ const cards = computed(() => {
         { rotulo: 'Investimento em ADS', valor: moeda(gasto), var: variacao(gasto, gastoAnt), bom: 'neutro', icone: 'fas fa-bullhorn', cor: '#9a3412' },
         { rotulo: 'ROAS', valor: roas === null ? '—' : um(roas), nota: roas ? `R$ ${um(roas)} vendidos por R$ 1` : null, var: variacao(roas, roasAnt), bom: 'alto', icone: 'fas fa-bullseye', cor: '#eb6834' },
         { rotulo: 'Cancelamento', valor: cancel === null ? '—' : pct(cancel), var: variacao(cancel, cancelAnt), bom: 'baixo', icone: 'fas fa-ban', cor: '#b91c1c' },
-        { rotulo: 'Visitantes do site', valor: comSite && visit ? inteiro(visit.valor) : '—', nota: comSite ? null : 'selecione KazaKora', var: comSite && visit ? visit.variacao : null, bom: 'alto', icone: 'fas fa-users', cor: '#e87ba4' },
+        // Visitantes do site só nos e-commerces (marketplace não tem visita de site).
+        ...(comSiteNoGrupo ? [{ rotulo: 'Visitantes do site', valor: comSite && visit ? inteiro(visit.valor) : '—', nota: comSite ? null : 'selecione KazaKora', var: comSite && visit ? visit.variacao : null, bom: 'alto', icone: 'fas fa-users', cor: '#e87ba4' }] : []),
         { rotulo: 'Alertas críticos', valor: inteiro(criticos), icone: 'fas fa-circle-exclamation', cor: STATUS.critico },
         { rotulo: 'Alertas de atenção', valor: inteiro(atencao), icone: 'fas fa-triangle-exclamation', cor: STATUS.atencao },
     ];
@@ -183,7 +194,7 @@ const METRICAS_DIA = {
     receita: { rotulo: 'Faturamento', fmt: moeda, curto: moedaCurta },
     pedidos: { rotulo: 'Pedidos', fmt: inteiro, curto: inteiro },
     ads_gasto: { rotulo: 'ADS', fmt: moeda, curto: moedaCurta },
-    visitantes: { rotulo: 'Visitantes do site', fmt: inteiro, curto: inteiro },
+    ...(comSiteNoGrupo ? { visitantes: { rotulo: 'Visitantes do site', fmt: inteiro, curto: inteiro } } : {}),
 };
 const metricaDia = ref('receita');
 const modoDia = ref('total');
@@ -297,7 +308,7 @@ const METRICAS_CANAL = [
     ['ctr', 'CTR'], ['cpc', 'CPC'], ['cpa', 'CPA'], ['conversao_ads', 'Conversão ADS'], ['conversao_site', 'Conversão do site'],
 ];
 const metricaCanal = ref('faturamento');
-const opcoesCanal = computed(() => METRICAS_CANAL.filter(([k]) => P.value.canais.some((c) => CANAIS.includes(c.canal) && c.metricas.some((m) => m.chave === k))));
+const opcoesCanal = computed(() => METRICAS_CANAL.filter(([k]) => comSiteNoGrupo || k !== 'conversao_site').filter(([k]) => P.value.canais.some((c) => CANAIS.includes(c.canal) && c.metricas.some((m) => m.chave === k))));
 const linhasCanal = computed(() => ativos.value
     .map((c) => ({ canal: c, m: metrica(c, metricaCanal.value) }))
     .filter((x) => x.m && (x.m.valor !== null || x.m.anterior !== null)));
@@ -463,7 +474,7 @@ const chip = (ativo) => (ativo ? 'bg-primary text-white shadow-sm' : 'text-slate
 
         <div class="mb-5 flex flex-wrap items-center gap-2" role="group" aria-label="Canais">
             <button type="button" class="rounded-full border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium shadow-sm transition"
-                :class="todos ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'" :aria-pressed="todos" @click="selecionados = []">Todos os canais</button>
+                :class="todos ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'" :aria-pressed="todos" @click="selecionados = []">{{ grupo === 'ecommerces' ? 'Todos os e-commerces' : 'Todos os marketplaces' }}</button>
             <button v-for="c in disponiveis" :key="c" type="button"
                 class="inline-flex items-center gap-2 rounded-full border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium shadow-sm transition"
                 :class="!todos && selecionados.includes(c) ? 'ring-2' : todos ? '' : 'opacity-50 hover:opacity-100'"

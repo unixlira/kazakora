@@ -93,9 +93,25 @@ class Order extends Model
      * Filtra uma query (Eloquent ou Query Builder) pelo canal de métrica:
      * 'loja' = site kazakora.com (site_origem nulo); 'ferrakora'/'beautykora'
      * = loja com aquele site_origem; demais = origin.
+     *
+     * Lista de canais (um grupo: Marketplaces ou E-commerces, ver
+     * GruposDeCanais) = pedido de QUALQUER um deles.
      */
-    public static function filtrarCanal($query, string $canal, string $orders = 'orders')
+    public static function filtrarCanal($query, string|array $canal, string $orders = 'orders')
     {
+        if (is_array($canal)) {
+            $canais = array_values(array_unique($canal));
+            if ($canais === []) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query->where(function ($q) use ($canais, $orders) {
+                foreach ($canais as $um) {
+                    $q->orWhere(fn ($sub) => self::filtrarCanal($sub, (string) $um, $orders));
+                }
+            });
+        }
+
         if ($canal === self::ORIGIN_STORE) {
             return $query->where("{$orders}.origin", self::ORIGIN_STORE)->whereNull("{$orders}.site_origem");
         }
@@ -564,7 +580,7 @@ class Order extends Model
     }
 
     /** Canal de métrica (ver canalSql/filtrarCanal). */
-    public function scopeDoCanal($query, string $canal)
+    public function scopeDoCanal($query, string|array $canal)
     {
         return self::filtrarCanal($query, $canal, $this->getTable());
     }

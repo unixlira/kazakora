@@ -155,7 +155,7 @@ class IndicadoresAlertasTest extends TestCase
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->get('/admin/indicadores?dias=30')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores?dias=30')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('painel.dias', 30)
@@ -164,7 +164,7 @@ class IndicadoresAlertasTest extends TestCase
                 ->has('kpis.ordersMonth'));
 
         // Período fora da lista volta para 7.
-        $this->actingAs($admin)->get('/admin/indicadores?dias=999')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores?dias=999')
             ->assertInertia(fn ($page) => $page->where('painel.dias', 7));
     }
 
@@ -177,7 +177,7 @@ class IndicadoresAlertasTest extends TestCase
         $this->pedido('shopee', '2026-10-14 09:00', 999); // hoje fica de fora
         $this->ads('shopee', '2026-10-13', 1000, 30, 2, 150, 25);
 
-        $this->actingAs($admin)->get('/admin/indicadores')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('paineis.7.dias', 7)

@@ -48,7 +48,8 @@ class FinancialDashboardNetProfitTest extends TestCase
     {
         return Order::create(array_merge([
             'status' => Order::STATUS_PAID,
-            'origin' => Order::ORIGIN_STORE,
+            // Mercado Livre: a tela abre no grupo Marketplaces (17/11/2026).
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
             'shipping_name' => 'Cliente',
             'shipping_phone' => '11999999999',
             'shipping_zip' => '01000-000',
@@ -326,5 +327,37 @@ class FinancialDashboardNetProfitTest extends TestCase
                 && $shopee['feeBreakdown']['descontoPlataforma'] == 4.49
                 && $shopee['ordersWithoutRealFee'] === 1;
         }));
+    }
+
+    public function test_marketplaces_e_ecommerces_nunca_somam(): void
+    {
+        // Marketplaces x E-commerces (Lira, 17/11/2026): venda do site só no
+        // grupo E-commerces, venda do ML só no grupo Marketplaces.
+        $this->makeOrder(['subtotal' => 100, 'total' => 100]);
+        $this->makeOrder(['origin' => Order::ORIGIN_STORE, 'subtotal' => 40, 'total' => 40]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 7]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'meta_ads', 'spend' => 3]);
+
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('grupo', 'marketplaces')
+                ->where('summary.grossRevenueMonth', 100)
+                ->where('summary.grossRevenueAllTime', 100)
+                ->where('summary.adSpendMonth', 7)
+                ->where('marketplaceMetrics.month', fn ($c) => ! collect($c)->contains('channel', 'loja'))
+                ->where('adSpendByChannel', fn ($a) => collect($a)->pluck('channel')->all() === ['mercado_livre']));
+
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro?grupo=ecommerces')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('grupo', 'ecommerces')
+                ->where('summary.grossRevenueMonth', 40)
+                ->where('summary.adSpendMonth', 3)
+                ->where('summary.flexCostMonth', 0)
+                ->where('marketplaceMetrics.month', fn ($c) => collect($c)->pluck('channel')->contains('loja')
+                    && ! collect($c)->contains('channel', 'mercado_livre'))
+                ->where('adSpendSeries', [])
+                ->where('walletBalances', []));
     }
 }

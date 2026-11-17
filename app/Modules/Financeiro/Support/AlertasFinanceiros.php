@@ -155,8 +155,8 @@ class AlertasFinanceiros
     private function linksAds(string $canal): array
     {
         return match ($canal) {
-            'shopee' => [['href' => '/admin/publicidade/shopee', 'rotulo' => 'Abrir Shopee Ads'], ['href' => '/admin/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Cauê']],
-            'mercado_livre' => [['href' => '/admin/oportunidades/mercado-livre', 'rotulo' => 'Abrir Mercado Livre'], ['href' => '/admin/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Diego']],
+            'shopee' => [['href' => '/admin/publicidade/shopee', 'rotulo' => 'Abrir Shopee Ads'], ['href' => '/admin/painel/marketplaces/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Cauê']],
+            'mercado_livre' => [['href' => '/admin/oportunidades/mercado-livre', 'rotulo' => 'Abrir Mercado Livre'], ['href' => '/admin/painel/marketplaces/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Diego']],
             default => [['href' => '/admin/publicidade', 'rotulo' => 'Visão geral de ADS']],
         };
     }
@@ -165,8 +165,8 @@ class AlertasFinanceiros
     private function linksPrejuizo(string $canal): array
     {
         return match ($canal) {
-            'shopee' => [['href' => '/admin/oportunidades/shopee', 'rotulo' => 'Oportunidades Shopee'], ['href' => '/admin/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Cauê']],
-            'mercado_livre' => [['href' => '/admin/oportunidades/mercado-livre', 'rotulo' => 'Oportunidades Mercado Livre'], ['href' => '/admin/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Diego']],
+            'shopee' => [['href' => '/admin/oportunidades/shopee', 'rotulo' => 'Oportunidades Shopee'], ['href' => '/admin/painel/marketplaces/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Cauê']],
+            'mercado_livre' => [['href' => '/admin/oportunidades/mercado-livre', 'rotulo' => 'Oportunidades Mercado Livre'], ['href' => '/admin/painel/marketplaces/indicadores?aba=caue-diego', 'rotulo' => 'Ver o Diego']],
             default => [],
         };
     }

@@ -7,6 +7,7 @@
  * (ContributionMargin), a mesma do painel e do e-mail das 23h50.
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import CabecalhoGrupo from '@/Modules/Admin/Painel/CabecalhoGrupo.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/Shared/usePermissions';
 import { formatPercent, formatPrice } from '@/Shared/graficos';
@@ -45,7 +46,9 @@ const props = defineProps({
 });
 
 const { can } = usePermissions();
-const URL_BASE = '/admin/fluxo-de-caixa';
+// Marketplaces x E-commerces (Lira, 17/11/2026): a tela é sempre de um grupo,
+// /admin/painel/{grupo}/resultado. Os lançamentos continuam em /admin/fluxo-de-caixa.
+const URL_BASE = props.filtro.urlBase;
 
 // ---- Navegação: filtros na URL --------------------------------------------
 const filtroBase = (aba = props.filtro.aba) => {
@@ -138,22 +141,20 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
 </script>
 
 <template>
-    <Head title="Fluxo de Caixa" />
+    <Head :title="`${filtro.grupoNome} · Resultado`" />
 
     <AdminLayout>
-        <header class="mb-3 flex flex-wrap items-end justify-between gap-3">
-            <div class="min-w-0">
-                <h1 class="text-2xl font-bold">Fluxo de Caixa</h1>
-                <p class="text-sm text-pretty text-[var(--texto-suave)]">Quanto entrou, quanto sobrou e para onde foi o dinheiro. Conta oficial do lucro (a mesma do painel e do e-mail das 23h50).</p>
-            </div>
-            <button v-if="can('financeiro.create')" type="button"
-                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-emphasis"
-                @click="novoLancamento">
-                <i class="fas fa-plus text-xs" aria-hidden="true"></i> Novo lançamento
-            </button>
-        </header>
+        <CabecalhoGrupo :grupo="filtro.grupo" secao="resultado">
+            <template #acoes>
+                <button v-if="can('financeiro.create')" type="button"
+                    class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-emphasis"
+                    @click="novoLancamento">
+                    <i class="fas fa-plus text-xs" aria-hidden="true"></i> Novo lançamento
+                </button>
+            </template>
+        </CabecalhoGrupo>
 
-        <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Abas do Fluxo de Caixa">
+        <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Abas do Resultado">
             <Link v-for="a in ABAS" :key="a.chave" :href="hrefAba(a.chave)" preserve-scroll
                 class="shrink-0 border-b-2 px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
                 :class="filtro.aba === a.chave ? 'border-[var(--color-primary)] text-[var(--surface-foreground)]' : 'border-transparent text-[var(--texto-suave)] hover:text-[var(--surface-foreground)]'"
@@ -218,8 +219,8 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
             </div>
 
             <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <ProximosDias :previsao="previsao ?? { itens: [] }" :hoje="filtro.hoje" />
-                <QualidadeDados :qualidade="qualidade ?? { canais: [], pendencias: {} }" :link-sem-custo="linkSemCusto" />
+                <ProximosDias v-if="previsao" :previsao="previsao" :hoje="filtro.hoje" />
+                <QualidadeDados :class="{ 'lg:col-span-2': !previsao }" :qualidade="qualidade ?? { canais: [], pendencias: {} }" :link-sem-custo="linkSemCusto" />
             </div>
 
             <p class="text-xs text-[var(--texto-suave)]">

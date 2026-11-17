@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Support\Indicadores;
 
 use App\Models\User;
+use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
@@ -36,6 +37,8 @@ class PainelDeAlertas
         Order::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
         Order::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',
         Order::ORIGIN_AMAZON => 'Amazon',
+        // Shein (17/11/2026): está no grupo Marketplaces; só aparece com dado.
+        Order::ORIGIN_SHEIN => 'Shein',
         // Projetos com métrica própria (2026-10-14): chave de Order::canalSql().
         // Sem ADS próprio em channel_ad_spends, então só vendas e visitas.
         Order::SITE_FERRAKORA => Order::ROTULOS_SITE[Order::SITE_FERRAKORA],
@@ -101,9 +104,23 @@ class PainelDeAlertas
         private readonly EstrategiaShopeeAds $estrategia,
     ) {}
 
-    public function gerar(int $dias = 7): array
+    /**
+     * $doGrupoCanais (pedido do Lira, 17/11/2026: "marketplaces de um lado, meus
+     * e-commerces do outro, nunca somar os dois"): lista de canais do grupo
+     * (GruposDeCanais::canais()). Só entram os canais da lista e os alertas
+     * deles; alerta sem canal (estoque, produto sem custo) é da operação
+     * inteira e aparece nos dois grupos. Null = todos os canais (comando
+     * indicadores:alertas e o comportamento antigo).
+     *
+     * @param  list<string>|null  $doGrupoCanais
+     */
+    public function gerar(int $dias = 7, ?array $doGrupoCanais = null): array
     {
         $dias = in_array($dias, [7, 14, 30], true) ? $dias : 7;
+        $lista = $doGrupoCanais;
+        $doGrupo = fn (?string $canal) => $lista === null || $canal === null || in_array($canal, $lista, true)
+            // ADS da Meta é anúncio do site kazakora.com (ContributionMargin::porCanal()).
+            || ($canal === PlataformaDeAnuncio::META && in_array(Order::ORIGIN_STORE, $lista, true));
         $ate = Carbon::today();
         $desde = $ate->copy()->subDays($dias);
         $antes = $desde->copy()->subDays($dias);
@@ -116,6 +133,9 @@ class PainelDeAlertas
         $alertas = [];
         $canais = [];
         foreach (self::CANAIS as $canal => $nome) {
+            if (! $doGrupo($canal)) {
+                continue;
+            }
             $a = $atual[$canal] ?? null;
             $p = $anterior[$canal] ?? null;
             $metricas = $this->metricasDeVenda($canal, $a, $p, $alertas);
@@ -133,9 +153,13 @@ class PainelDeAlertas
             $canais[] = ['canal' => $canal, 'nome' => $nome, 'metricas' => $metricas];
         }
 
-        $this->outrosSites($desde, $ate, $antes, $alertas, $canais);
-        $this->shopeeCampanhas($desde, $ate, $alertas);
+        $this->outrosSites($desde, $ate, $antes, $alertas, $canais, $doGrupo);
+        if ($doGrupo(Order::ORIGIN_SHOPEE)) {
+            $this->shopeeCampanhas($desde, $ate, $alertas);
+        }
         $this->operacao($alertas);
+        // Alerta de operação de canal fora do grupo (envio atrasado, ADS sem sincronizar) sai.
+        $alertas = array_values(array_filter($alertas, fn ($x) => $doGrupo($x['canal'])));
 
         usort($alertas, fn ($x, $y) => [$x['nivel'] === self::CRITICO ? 0 : 1, -($x['peso'] ?? 0)] <=> [$y['nivel'] === self::CRITICO ? 0 : 1, -($y['peso'] ?? 0)]);
 
@@ -381,9 +405,13 @@ class PainelDeAlertas
     }
 
     /** FerraKora, BeautyKora e os outros sites que avisam visita na mesma tabela. */
-    private function outrosSites(Carbon $desde, Carbon $ate, Carbon $antes, array &$alertas, array &$canais): void
+    private function outrosSites(Carbon $desde, Carbon $ate, Carbon $antes, array &$alertas, array &$canais, ?\Closure $doGrupo = null): void
     {
         foreach (SiteVisit::OUTROS_SITES as $site => $nome) {
+            // Site próprio é do grupo E-commerces (17/11/2026).
+            if ($doGrupo !== null && ! $doGrupo($site)) {
+                continue;
+            }
             // Site com venda já entrou como canal (visitantes e conversão em metricasDoSite).
             if (in_array($site, array_column($canais, 'canal'), true)) {
                 continue;

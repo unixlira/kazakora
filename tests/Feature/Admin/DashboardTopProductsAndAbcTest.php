@@ -51,7 +51,7 @@ class DashboardTopProductsAndAbcTest extends TestCase
         $this->venda($minimo, 50, 100, ['status' => Order::STATUS_CANCELLED]);
         $this->venda($pequeno, 50, 100)->forceFill(['created_at' => now()->subMonths(4)])->save();
 
-        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/indicadores?aba=produtos');
+        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/painel/marketplaces/indicadores?aba=produtos');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page

@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Modules\Marketplace\Support\FlexDeliveryService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -21,8 +23,14 @@ class FinancialDashboardController extends Controller
 {
     private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
-    public function index(PrevisaoDeCaixa $previsao, FlexDeliveryService $flexDelivery): Response
+    public function index(Request $request, PrevisaoDeCaixa $previsao, FlexDeliveryService $flexDelivery): Response
     {
+        // Marketplaces x E-commerces (Lira, 17/11/2026: "separa tudo, nunca
+        // somar os dois"): a tela é de um grupo só (?grupo=marketplaces|ecommerces).
+        $grupo = (string) $request->query('grupo', 'marketplaces');
+        $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'marketplaces';
+        $canaisGrupo = GruposDeCanais::canais($grupo);
+        $ehMarketplace = $grupo === 'marketplaces';
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
 
@@ -289,8 +297,22 @@ class FinancialDashboardController extends Controller
         // afiliado e GMV Max descontados no repasse.
         $margem = app(ContributionMargin::class);
         $amanha = Carbon::tomorrow();
-        $contaMes = $margem->periodo($startOfMonth, $amanha);
-        $contaTotal = $margem->periodo(Carbon::create(2026, 1, 1), $amanha);
+        $contaMes = $margem->conta($startOfMonth, $amanha, $canaisGrupo);
+        $contaTotal = $margem->conta(Carbon::create(2026, 1, 1), $amanha, $canaisGrupo);
+        // Flex é do Mercado Livre e o frete dos Correios é por canal: cada
+        // grupo só vê o seu.
+        $somaGrupo = fn (array $porCanal) => round(array_sum(array_intersect_key($porCanal, array_flip($canaisGrupo))), 2);
+        $correiosCostMonth = $somaGrupo(ContributionMargin::correios($startOfMonth, null, porCanal: true));
+        $correiosCostAllTime = $somaGrupo(ContributionMargin::correios(null, null, porCanal: true));
+        if (! $ehMarketplace) {
+            $flexCostMonth = 0.0;
+            $flexCostAllTime = 0.0;
+        }
+        $shippingCostMonth = round((float) Order::query()->vendaEfetiva()
+            ->whereIn('status', self::REVENUE_STATUSES)
+            ->where('created_at', '>=', $startOfMonth)
+            ->doCanal($canaisGrupo)
+            ->sum('shipping_cost'), 2);
 
         $salesRevenueMonth = $contaMes['receita'];
         $productCostMonth = $contaMes['custo_produtos'];
@@ -319,7 +341,7 @@ class FinancialDashboardController extends Controller
         $netRevenueAfterDeductionsAllTime = round($contaTotal['receita'] - $contaTotal['taxas'] - $contaTotal['frete'] - ($contaTotal['insumos'] ?? 0) + $contaTotal['bonificacoes'] - $contaTotal['ads'], 2);
 
         $settlementSummary = $this->settlementSummary($startOfMonth);
-        $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? []);
+        $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? [], $canaisGrupo);
 
         // Valor de estoque — pedido explícito 2026-08-10: soma de todos os
         // produtos pelo valor pago (cost_price) vezes a quantidade em
@@ -333,6 +355,8 @@ class FinancialDashboardController extends Controller
         $walletBalances = $previsao->walletBalances();
 
         return Inertia::render('Admin/Financeiro/Dashboard', [
+            'grupo' => $grupo,
+            'grupoNome' => GruposDeCanais::NOMES[GruposDeCanais::SLUGS[$grupo]],
             'summary' => [
                 'incomeMonth' => $incomeMonth,
                 'expenseMonth' => $expenseMonth,
@@ -382,8 +406,9 @@ class FinancialDashboardController extends Controller
             // Pago — precisa de escopo de pagamentos que o app não tem
             // hoje, não um bug local; fica null (indisponível) até isso
             // ser resolvido do lado do cadastro do app na Mercado Livre.
-            'walletBalances' => $walletBalances,
-            'receivableProjection' => $previsao->receivableProjection($walletBalances),
+            // Carteiras e repasses: só dos marketplaces.
+            'walletBalances' => $ehMarketplace ? $walletBalances : [],
+            'receivableProjection' => $ehMarketplace ? $previsao->receivableProjection($walletBalances) : ['availableNow' => [], 'periods' => [], 'source' => ''],
             'netProfit' => [
                 'salesRevenueMonth' => $salesRevenueMonth,
                 'productCostMonth' => $productCostMonth,
@@ -420,10 +445,10 @@ class FinancialDashboardController extends Controller
                 // extrato financeiro real foi importado/conciliado.
                 'feeTrackedChannels' => ['mercado_livre', 'shopee', 'tiktok_shop'],
             ],
-            'adSpendByChannel' => $this->adSpendByChannel($startOfMonth),
-            'adSpendSeries' => $this->adSpendSeries($start14),
+            'adSpendByChannel' => $this->adSpendByChannel($startOfMonth, $grupo),
+            'adSpendSeries' => $ehMarketplace ? $this->adSpendSeries($start14) : [],
             'cashFlowSeries' => $this->cashFlowSeries($start14),
-            'settlementSummary' => $settlementSummary,
+            'settlementSummary' => $ehMarketplace ? $settlementSummary : ['available' => false, 'month' => ['channels' => [], 'totals' => []], 'allTime' => ['channels' => [], 'totals' => []]],
             'marketplaceMetrics' => [
                 'month' => $marketplaceMetricsMonth,
             ],
@@ -447,7 +472,7 @@ class FinancialDashboardController extends Controller
      *
      * @param array<int, array<string, mixed>> $settlementChannels
      */
-    private function marketplaceMetrics(Carbon $startOfMonth, float $flexCostMonth, array $settlementChannels): array
+    private function marketplaceMetrics(Carbon $startOfMonth, float $flexCostMonth, array $settlementChannels, ?array $soCanais = null): array
     {
         $channels = [
             'shopee' => 'Shopee',
@@ -462,6 +487,10 @@ class FinancialDashboardController extends Controller
             Order::SITE_FERRAKORA => Order::ROTULOS_SITE[Order::SITE_FERRAKORA],
             Order::SITE_BEAUTYKORA => Order::ROTULOS_SITE[Order::SITE_BEAUTYKORA],
         ];
+        // Só os canais do grupo aberto (Marketplaces x E-commerces, 17/11/2026).
+        if ($soCanais !== null) {
+            $channels = array_intersect_key($channels, array_flip($soCanais));
+        }
 
         $settlementsByChannel = collect($settlementChannels)->keyBy('channel');
         $settlementChannelKeys = $settlementsByChannel->keys()->all();
@@ -895,13 +924,17 @@ class FinancialDashboardController extends Controller
         return DB::query()->fromSub($rows, 'deduped_settlement_ads');
     }
 
-    private function adSpendByChannel(Carbon $startOfMonth): array
+    private function adSpendByChannel(Carbon $startOfMonth, string $grupo = 'marketplaces'): array
     {
+        // ADS da Meta (meta_ads) é do site kazakora.com; 'ferrakora' é a Meta da FerraKora.
+        $grupoDoAds = fn (string $canal) => GruposDeCanais::slugDoCanal($canal === \App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio::META ? Order::ORIGIN_STORE : $canal);
+
         return ChannelAdSpend::query()
             ->selectRaw('channel, SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(attributed_orders) as attributed_orders, SUM(attributed_gmv) as attributed_gmv, SUM(spend) as spend')
             ->where('date', '>=', $startOfMonth)
             ->groupBy('channel')
             ->get()
+            ->filter(fn ($row) => $grupoDoAds((string) $row->channel) === $grupo)
             ->map(fn ($row) => [
                 'channel' => $row->channel,
                 'impressions' => (int) $row->impressions,

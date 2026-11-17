@@ -5,6 +5,10 @@
  * mês, ritmo, faturamento por categoria, mês a mês por canal e a faixa de
  * faturamento por canal. O cartão de lucro só vem do servidor para quem tem
  * financeiro.view (ver PainelGerencial::hojeEMes()).
+ *
+ * Por grupo (Lira, 17/11/2026): tudo aqui é só de Marketplaces ou só de
+ * E-commerces; o servidor manda a lista de canais do grupo (hojeMes.canais)
+ * e a faixa por canal mostra só eles.
  */
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
@@ -17,6 +21,7 @@ import { computed } from 'vue';
 
 const props = defineProps({
     hojeMes: { type: Object, required: true },
+    grupo: { type: String, default: 'marketplaces' },
 });
 
 const { can } = usePermissions();
@@ -55,9 +60,11 @@ const baseOptions = computed(() => ({ animation: { duration: 600 }, plugins: { l
 // ---- Faturamento por canal (faixa vinho) ------------------------------
 const channelStrip = computed(() => {
     const total = revenueByChannel.value.reduce((sum, row) => sum + row.total, 0);
-    const extras = revenueByChannel.value.map((row) => row.origin).filter((o) => !CHANNEL_ORDER.includes(o));
+    // Canais do grupo na ordem de sempre (17/11/2026); sem lista, a ordem antiga.
+    const doGrupo = props.hojeMes?.canais?.length ? sortChannels(props.hojeMes.canais) : CHANNEL_ORDER;
+    const extras = revenueByChannel.value.map((row) => row.origin).filter((o) => !doGrupo.includes(o));
 
-    return [...CHANNEL_ORDER, ...extras].map((origin) => {
+    return [...doGrupo, ...extras].map((origin) => {
         const valor = revenueByChannel.value.find((row) => row.origin === origin)?.total ?? 0;
         return { origin, total: valor, share: total > 0 ? (valor / total) * 100 : 0 };
     });
@@ -157,7 +164,7 @@ const categoryChartOptions = computed(() => ({
 <template>
     <div>
         <h2 class="sr-only">Hoje e mês</h2>
-        <p class="mb-4 text-sm text-[var(--texto-suave)]">Como a loja está hoje e no mês até agora, comparado com os mesmos dias do mês passado.</p>
+        <p class="mb-4 text-sm text-[var(--texto-suave)]">Como {{ grupo === 'ecommerces' ? 'os e-commerces estão' : 'os marketplaces estão' }} hoje e no mês até agora, comparado com os mesmos dias do mês passado.</p>
 
         <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <component :is="can('pedidos.view') ? Link : 'div'" v-bind="can('pedidos.view') ? { href: '/admin/pedidos' } : {}" class="block">
@@ -169,7 +176,7 @@ const categoryChartOptions = computed(() => ({
                 <CardStats stat-subtitle="Faturamento do mês" :stat-title="formatPrice(stats.revenue)" :stat-note="crescimentoNota"
                     stat-icon-name="fas fa-calendar-days" variant="primary" vivid compact />
             </component>
-            <Link v-if="temLucro" href="/admin/fluxo-de-caixa" class="block">
+            <Link v-if="temLucro" :href="`/admin/painel/${grupo}/resultado`" class="block">
                 <CardStats stat-subtitle="Lucro líquido do mês" :stat-title="formatPrice(stats.netProfitMonth)"
                     :stat-note="kpis.margemPercentual === null || kpis.margemPercentual === undefined ? '' : `${formatPercent(kpis.margemPercentual)} do faturamento · já tirado o imposto de ${formatPrice(stats.taxMonth)}`"
                     stat-icon-name="fas fa-wallet" :variant="stats.netProfitMonth >= 0 ? 'success' : 'error'" vivid compact />

@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Financeiro\Support\AlertasFinanceiros;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\OrderChannelFee;
@@ -130,14 +131,17 @@ class FluxoDeCaixaTest extends TestCase
     public function test_resumo_usa_a_conta_oficial_com_comparacao_e_filtro_de_canal(): void
     {
         $this->cenario();
+        // Venda do site: fica fora do painel de Marketplaces (Lira, 17/11/2026).
+        $this->pedido('loja', 500, '2026-10-06 10:00:00', 100, 0);
         $margem = app(ContributionMargin::class);
-        $periodo = $margem->periodo(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-19'));
+        $mkt = GruposDeCanais::canais('marketplaces');
+        $periodo = $margem->conta(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-19'), $mkt);
         $porCanal = $margem->porCanal(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-19'));
-        $setembro = $margem->periodo(Carbon::parse('2026-09-01'), Carbon::parse('2026-09-19'));
+        $setembro = $margem->conta(Carbon::parse('2026-09-01'), Carbon::parse('2026-09-19'), $mkt);
         $admin = $this->admin();
         $igual = fn (float $esperado) => fn ($valor) => abs($valor - $esperado) < 0.001;
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-18')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-18')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('filtro.aba', 'resumo')
@@ -150,15 +154,19 @@ class FluxoDeCaixaTest extends TestCase
                 ->where('filtro.compDe', '2026-09-01')
                 ->where('filtro.compAte', '2026-09-18')
                 ->has('serie', 18)
-                ->where('canais', fn ($canais) => collect($canais)->every(fn ($c) => abs($c['lucro'] - ($porCanal[$c['canal']]['lucro'] ?? 0)) < 0.001))
-                ->where('canais.0.lucro', fn ($lucro) => $lucro == max(array_column($porCanal, 'lucro')))
+                ->where('filtro.grupo', 'marketplaces')
+                ->where('canais', fn ($canais) => collect($canais)->every(fn ($c) => abs($c['lucro'] - ($porCanal[$c['canal']]['lucro'] ?? 0)) < 0.001)
+                    && ! collect($canais)->contains('canal', 'loja'))
+                ->where('canais.0.lucro', fn ($lucro) => $lucro == max(array_column(array_intersect_key($porCanal, array_flip($mkt)), 'lucro')))
+                ->where('resumo.atual.pedidos_site', null)
+                ->where('previsao', fn ($p) => $p !== null)
                 ->where('qualidade.canais', fn ($q) => collect($q)->firstWhere('canal', 'tiktok_shop')['pedidos_estimada'] === 1)
                 // Nenhuma aba alheia é calculada.
                 ->missing('sales')
                 ->missing('entries'));
 
         // Só a Shopee: a conta é a de porCanal()['shopee'].
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-18&canal=shopee&comparar=nenhum')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-18&canal=shopee&comparar=nenhum')
             ->assertInertia(fn ($page) => $page
                 ->where('filtro.canal', 'shopee')
                 ->where('resumo.atual.lucro', $igual($porCanal['shopee']['lucro']))
@@ -168,8 +176,29 @@ class FluxoDeCaixaTest extends TestCase
                 ->has('canais', 1)
                 ->where('canais.0.canal', 'shopee'));
 
+        // Canal de outro grupo no filtro é ignorado: continua o grupo inteiro.
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-18&canal=loja')
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.canal', null)
+                ->where('resumo.atual.pedidos', 5)
+                ->where('canaisFiltro', fn ($c) => ! collect($c)->contains('value', 'loja')));
+
+        // E-commerces: só o site. Nada de marketplace entra.
+        $ecom = $margem->conta(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-19'), GruposDeCanais::canais('ecommerces'));
+        $this->actingAs($admin)->get('/admin/painel/ecommerces/resultado?de=2026-10-01&ate=2026-10-18&comparar=nenhum')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.grupo', 'ecommerces')
+                ->where('resumo.atual.receita', $igual($ecom['receita']))
+                ->where('resumo.atual.lucro', $igual($ecom['lucro']))
+                ->where('resumo.atual.pedidos', 1)
+                ->where('resumo.atual.pedidos_site', 1)
+                ->where('resumo.atual.vendas_brutas', $igual(510))
+                ->where('canais', fn ($canais) => collect($canais)->pluck('canal')->all() === ['loja'])
+                ->where('previsao', null));
+
         // Período anterior: os mesmos 18 dias logo antes.
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-18&comparar=anterior')
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-18&comparar=anterior')
             ->assertInertia(fn ($page) => $page
                 ->where('filtro.compDe', '2026-09-13')
                 ->where('filtro.compAte', '2026-09-30'));
@@ -179,7 +208,7 @@ class FluxoDeCaixaTest extends TestCase
     {
         $this->cenario();
 
-        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-18')
+        $this->actingAs($this->admin())->get('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-18')
             ->assertInertia(fn ($page) => $page->where('alertas', function ($alertas) {
                 $chaves = collect($alertas)->pluck('chave')->all();
                 // ADS Shopee 40 ÷ 350 = 11,4% (> 6%); ML 9 ÷ 300 = 3% (ok).
@@ -225,7 +254,7 @@ class FluxoDeCaixaTest extends TestCase
 
     public function test_periodo_vazio_mostra_zero(): void
     {
-        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa?de=2026-07-01&ate=2026-07-31&agrupar=semana')
+        $this->actingAs($this->admin())->get('/admin/painel/marketplaces/resultado?de=2026-07-01&ate=2026-07-31&agrupar=semana')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('resumo.atual.lucro', 0)
@@ -234,9 +263,9 @@ class FluxoDeCaixaTest extends TestCase
                 ->where('resumo.atual.pedidos', 0)
                 ->where('filtro.agrupar', 'semana')
                 ->where('serie', fn ($serie) => collect($serie)->sum('receita') == 0 && count($serie) === 5)
-                ->where('canais', fn ($canais) => count($canais) === 5 && collect($canais)->sum('lucro') == 0));
+                ->where('canais', fn ($canais) => count($canais) === 4 && collect($canais)->sum('lucro') == 0));
 
-        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa?aba=vendas&de=2026-07-01&ate=2026-07-31')
+        $this->actingAs($this->admin())->get('/admin/painel/marketplaces/resultado?aba=vendas&de=2026-07-01&ate=2026-07-31')
             ->assertInertia(fn ($page) => $page
                 ->has('sales.data', 0)
                 ->where('salesTotals.netProfit', 0)
@@ -250,7 +279,7 @@ class FluxoDeCaixaTest extends TestCase
         $porCanal = app(ContributionMargin::class)->porCanal(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-19'));
 
         foreach ($porCanal as $canal => $conta) {
-            $this->actingAs($this->admin())->get("/admin/fluxo-de-caixa?aba=vendas&de=2026-10-01&ate=2026-10-18&canal={$canal}")
+            $this->actingAs($this->admin())->get("/admin/painel/marketplaces/resultado?aba=vendas&de=2026-10-01&ate=2026-10-18&canal={$canal}")
                 ->assertOk()
                 ->assertInertia(fn ($page) => $page
                     ->where('salesTotals.margemOficial', fn ($m) => abs($m - $conta['margem']) < 0.011)
@@ -258,7 +287,7 @@ class FluxoDeCaixaTest extends TestCase
                     ->where('salesTotals.fee', fn ($t) => abs($t - $conta['taxas']) < 0.011));
         }
 
-        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa?aba=vendas&de=2026-10-01&ate=2026-10-18&taxa_estimada=1')
+        $this->actingAs($this->admin())->get('/admin/painel/marketplaces/resultado?aba=vendas&de=2026-10-01&ate=2026-10-18&taxa_estimada=1')
             ->assertInertia(fn ($page) => $page
                 ->has('sales.data', 1)
                 ->where('sales.data.0.canal', 'tiktok_shop')
@@ -293,16 +322,23 @@ class FluxoDeCaixaTest extends TestCase
 
     public function test_admin_vai_para_o_fluxo_de_caixa_e_quem_nao_ve_lucro_nao(): void
     {
-        $this->actingAs($this->admin())->get('/admin')->assertRedirect('/admin/fluxo-de-caixa');
-        $this->actingAs($this->admin())->get('/admin?de=2026-10-01&ate=2026-10-05')->assertRedirect('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-05');
-        $this->actingAs($this->admin())->get('/admin?mes=2026-09')->assertRedirect('/admin/indicadores?aba=acessos&mes=2026-09');
+        $this->actingAs($this->admin())->get('/admin')->assertRedirect('/admin/painel/marketplaces/resultado');
+        $this->actingAs($this->admin())->get('/admin?de=2026-10-01&ate=2026-10-05')->assertRedirect('/admin/painel/marketplaces/resultado?de=2026-10-01&ate=2026-10-05');
+        $this->actingAs($this->admin())->get('/admin?mes=2026-09')->assertRedirect('/admin/painel/ecommerces/indicadores?aba=acessos&mes=2026-09');
+        // Itens do menu e endereço antigo (Marketplaces x E-commerces, 17/11/2026).
+        $this->actingAs($this->admin())->get('/admin/painel/ecommerces')->assertRedirect('/admin/painel/ecommerces/resultado');
+        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa?de=2026-10-01&canal=ferrakora')->assertRedirect('/admin/painel/ecommerces/resultado?de=2026-10-01&canal=ferrakora');
+        $this->actingAs($this->admin())->get('/admin/fluxo-de-caixa')->assertRedirect('/admin/painel/marketplaces/resultado');
+        $this->actingAs($this->admin())->get('/admin/painel/todos/resultado')->assertNotFound();
 
         $assinante = User::factory()->create(['role' => User::ROLE_SUBSCRIBER]);
         DB::table('role_permissions')->where('role', User::ROLE_SUBSCRIBER)->where('permission', 'financeiro.view')->update(['granted' => false]);
-        $this->actingAs($assinante)->get('/admin')->assertRedirect('/admin/indicadores');
+        $this->actingAs($assinante)->get('/admin')->assertRedirect('/admin/painel/marketplaces/indicadores');
+        $this->actingAs($assinante)->get('/admin/painel/marketplaces')->assertRedirect('/admin/painel/marketplaces/indicadores');
         $this->actingAs($assinante)->get('/admin/fluxo-de-caixa')->assertForbidden();
+        $this->actingAs($assinante)->get('/admin/painel/marketplaces/resultado')->assertForbidden();
         // Indicadores sem financeiro.view: o cartão de lucro não sai do servidor.
-        $this->actingAs($assinante)->get('/admin/indicadores?aba=hoje-e-mes')
+        $this->actingAs($assinante)->get('/admin/painel/marketplaces/indicadores?aba=hoje-e-mes')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->has('hojeMes.stats.revenue')
@@ -329,9 +365,11 @@ class FluxoDeCaixaTest extends TestCase
             'produtos' => 'produtos',
             'acessos' => 'visitantes',
         ];
+        // Visitas são dos sites (E-commerces); o diagnóstico Cauê/Diego, dos marketplaces.
+        $grupoDaAba = fn (string $aba) => $aba === 'acessos' ? 'ecommerces' : 'marketplaces';
 
         foreach ($esperado as $aba => $prop) {
-            $this->actingAs($admin)->get("/admin/indicadores?aba={$aba}")
+            $this->actingAs($admin)->get('/admin/painel/'.$grupoDaAba($aba)."/indicadores?aba={$aba}")
                 ->assertOk()
                 ->assertInertia(function ($page) use ($aba, $prop, $esperado) {
                     $page->where('aba', $aba)->has($prop);
@@ -346,12 +384,15 @@ class FluxoDeCaixaTest extends TestCase
         }
 
         // Sem ?aba= abre a Visão geral; aba desconhecida também.
-        $this->actingAs($admin)->get('/admin/indicadores')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral')->has('painel'));
-        $this->actingAs($admin)->get('/admin/indicadores?aba=xyz')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral'));
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral')->has('painel'));
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores?aba=xyz')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral'));
+        // Endereço antigo leva ao grupo certo.
+        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertRedirect('/admin/painel/ecommerces/indicadores?aba=acessos');
+        $this->actingAs($admin)->get('/admin/indicadores')->assertRedirect('/admin/painel/marketplaces/indicadores');
 
-        // Lucro do mês na aba "Hoje e mês" = conta oficial.
-        $conta = app(ContributionMargin::class)->periodo(Carbon::today()->startOfMonth(), Carbon::tomorrow());
-        $this->actingAs($admin)->get('/admin/indicadores?aba=hoje-e-mes')
+        // Lucro do mês na aba "Hoje e mês" = conta oficial, só do grupo.
+        $conta = app(ContributionMargin::class)->conta(Carbon::today()->startOfMonth(), Carbon::tomorrow(), GruposDeCanais::canais('marketplaces'));
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/indicadores?aba=hoje-e-mes')
             ->assertInertia(fn ($page) => $page->where('hojeMes.stats.netProfitMonth', $conta['lucro']));
     }
 }

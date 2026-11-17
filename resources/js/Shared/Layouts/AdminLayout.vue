@@ -79,7 +79,7 @@ const visibleSections = computed(() =>
     sidebarSections.value
         .map((section) => ({
             ...section,
-            items: section.items.filter((item) => !item.permission || can(item.permission)),
+            items: section.items.filter((item) => !item.permission || (Array.isArray(item.permission) ? item.permission.some((p) => can(p)) : can(item.permission))),
         }))
         .filter((section) => section.items.length > 0),
 );

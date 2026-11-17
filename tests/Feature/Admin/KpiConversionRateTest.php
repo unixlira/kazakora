@@ -58,14 +58,25 @@ class KpiConversionRateTest extends TestCase
             $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => "SHP-{$i}"]);
         }
 
-        $response = $this->actingAs($this->admin())->get('/admin/indicadores');
+        // Marketplaces x E-commerces (17/11/2026): a conversão é do funil do
+        // site, então só existe nos e-commerces, e lá os 5 pedidos Shopee
+        // nem aparecem.
+        $response = $this->actingAs($this->admin())->get('/admin/painel/ecommerces/indicadores');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->where('kpis.uniqueVisitorsMonth', 2)
-            ->where('kpis.ordersMonth', 5)
+            ->where('kpis.ordersMonth', 0)
             // JSON do Inertia serializa 0.0 como 0 (int) — compara o valor, não o tipo.
             ->where('kpis.conversionRate', 0));
+
+        // Nos marketplaces os 5 pedidos contam, mas não há visitante nem conversão.
+        $this->actingAs($this->admin())->get('/admin/painel/marketplaces/indicadores')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('kpis.ordersMonth', 5)
+                ->where('kpis.uniqueVisitorsMonth', null)
+                ->where('kpis.conversionRate', null));
     }
 
     public function test_conversion_rate_counts_only_store_orders_against_site_visitors(): void
@@ -81,7 +92,7 @@ class KpiConversionRateTest extends TestCase
         $this->makeOrder(['origin' => Order::ORIGIN_STORE]);
         $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-1']);
 
-        $response = $this->actingAs($this->admin())->get('/admin/indicadores');
+        $response = $this->actingAs($this->admin())->get('/admin/painel/ecommerces/indicadores');
 
         $response->assertOk();
         // 1 pedido da loja / 4 visitantes = 25%, o pedido Shopee não entra.

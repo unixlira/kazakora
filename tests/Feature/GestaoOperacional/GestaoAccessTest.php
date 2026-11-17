@@ -16,7 +16,8 @@ class GestaoAccessTest extends TestCase
             $user = User::factory()->create(['role' => $role]);
 
             $this->actingAs($user)->get('/admin/relatorios')->assertOk();
-            $this->actingAs($user)->get('/admin/indicadores')->assertOk();
+            $this->actingAs($user)->get('/admin/painel/marketplaces/indicadores')->assertOk();
+            $this->actingAs($user)->get('/admin/painel/ecommerces/indicadores')->assertOk();
             $this->actingAs($user)->get('/admin/dashboard-financeiro')->assertOk();
             $this->actingAs($user)->get('/admin/estoque')->assertOk();
             $this->actingAs($user)->get('/admin/logistica')->assertOk();

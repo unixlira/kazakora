@@ -38,6 +38,12 @@ class OrderFulfillmentEvent extends Model
     /** Entregue pelos Correios: o evento de entrega inteiro do SRO fica no context. */
     public const STEP_DELIVERED = 'delivered';
 
+    /**
+     * Endereço de entrega alterado depois da compra (Lira, 2026-11-17, #4246).
+     * context: digitado_pela_cliente, corrigido_para, motivo, por (ver EnderecoDoPedido).
+     */
+    public const STEP_ADDRESS_CHANGED = 'address_changed';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

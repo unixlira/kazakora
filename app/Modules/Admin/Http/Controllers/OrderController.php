@@ -10,6 +10,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
+use App\Modules\Checkout\Support\EnderecoDoPedido;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 use App\Modules\Checkout\Support\SituacaoDoPagamento;
@@ -329,6 +330,35 @@ class OrderController extends Controller
         return back()->with('success', $era
             ? 'Pedido voltou a contar como venda.'
             : 'Pedido marcado como amostra: não conta no faturamento nem nas vendas.');
+    }
+
+    /**
+     * Corrigir o endereço de entrega (Lira, 2026-11-17, #4246): grava na
+     * linha do tempo o que a cliente digitou e o endereço novo, e guarda o
+     * original no pedido na primeira alteração (EnderecoDoPedido).
+     */
+    public function updateEndereco(Request $request, Order $order, EnderecoDoPedido $endereco): RedirectResponse
+    {
+        $validated = $request->validate([
+            'shipping_recipient_name' => ['nullable', 'string', 'max:255'],
+            'shipping_zip' => ['required', 'string', 'max:9'],
+            'shipping_street' => ['required', 'string', 'max:255'],
+            'shipping_number' => ['required', 'string', 'max:20'],
+            'shipping_complement' => ['nullable', 'string', 'max:255'],
+            'shipping_neighborhood' => ['required', 'string', 'max:255'],
+            'shipping_city' => ['required', 'string', 'max:255'],
+            'shipping_state' => ['required', 'string', 'size:2'],
+            'motivo' => ['nullable', 'string', 'max:300'],
+        ]);
+
+        $motivo = $validated['motivo'] ?? null;
+        unset($validated['motivo']);
+
+        if (! $endereco->alterar($order, $validated, $motivo, $request->user())) {
+            return back()->with('success', 'O endereço já estava assim: nada mudou.');
+        }
+
+        return back()->with('success', 'Endereço de entrega alterado. O endereço que a cliente digitou ficou no histórico do pedido.');
     }
 
     public function reenviarEstorno(Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
@@ -744,6 +774,8 @@ class OrderController extends Controller
                 'uf' => $order->shipping_state,
                 'cep' => $order->shipping_zip,
             ],
+            // O que a cliente digitou, quando o endereço foi alterado depois (2026-11-17).
+            'endereco_digitado' => $order->endereco_digitado,
             'amostra_em' => $order->amostra_em,
             'canal' => [
                 'origin' => $order->origin,

@@ -227,7 +227,7 @@ class AdminListingPaginationTest extends TestCase
         $admin = $this->admin();
         $de = now()->subMonths(3)->startOfMonth()->toDateString();
         $ate = now()->toDateString();
-        $base = "/admin/fluxo-de-caixa?aba=vendas&de={$de}&ate={$ate}";
+        $base = "/admin/painel/marketplaces/resultado?aba=vendas&de={$de}&ate={$ate}";
 
         // Fluxo de Caixa 2026-10-19: as linhas saem de ContributionMargin::porItem
         // (a conta oficial). Receita da Amazon já inclui o frete do comprador,
@@ -277,7 +277,7 @@ class AdminListingPaginationTest extends TestCase
                     ->where('filtro.canal', 'mercado_livre'));
         }
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?aba=vendas&de='.now()->startOfMonth()->toDateString())
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?aba=vendas&de='.now()->startOfMonth()->toDateString())
             ->assertInertia(fn ($page) => $page
                 ->has('sales.data', 1)
                 ->where('salesTotals.netProfit', 22.25));
@@ -315,7 +315,7 @@ class AdminListingPaginationTest extends TestCase
         // Lançamentos ficam na aba própria e seguem o período do topo.
         $periodo = 'aba=lancamentos&de='.now()->subDays(60)->toDateString().'&ate='.now()->toDateString();
 
-        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}")
+        $this->actingAs($admin)->get("/admin/painel/marketplaces/resultado?{$periodo}")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 50)
                 ->where('entries.total', 53)
@@ -324,20 +324,20 @@ class AdminListingPaginationTest extends TestCase
                 ->where('summary.expense', 100.25)
                 ->where('summary.balance', 445.75));
 
-        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}&entries_search=aluguel")
+        $this->actingAs($admin)->get("/admin/painel/marketplaces/resultado?{$periodo}&entries_search=aluguel")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 1)
                 // Busca da tabela não mexe nos cards (igual antes).
                 ->where('summary.income', 546));
 
-        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}&entries_sort=amount&entries_direction=asc&entries_page=2")
+        $this->actingAs($admin)->get("/admin/painel/marketplaces/resultado?{$periodo}&entries_sort=amount&entries_direction=asc&entries_page=2")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 3)
                 ->where('entries.data.2.description', 'Aluguel')
                 ->where('entriesFilter.sort', 'amount'));
 
         // Período curto: só o que caiu nele entra na tabela e nos totais.
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?aba=lancamentos&de='.now()->subDays(2)->toDateString().'&ate='.now()->toDateString())
+        $this->actingAs($admin)->get('/admin/painel/marketplaces/resultado?aba=lancamentos&de='.now()->subDays(2)->toDateString().'&ate='.now()->toDateString())
             ->assertInertia(fn ($page) => $page
                 ->where('entries.total', 3)
                 ->where('summary.income', 21)

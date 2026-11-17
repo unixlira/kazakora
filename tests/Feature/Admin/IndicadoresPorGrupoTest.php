@@ -68,7 +68,7 @@ class IndicadoresPorGrupoTest extends TestCase
         $this->actingAs($this->admin())->get(self::MARKETPLACES)
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/Indicadores/Index')
+                ->component('Admin/Indicadores/Index', false)
                 ->where('grupo', 'marketplaces')
                 ->where('aba', 'visao-geral')
                 ->where('canais', GruposDeCanais::canais('marketplaces'))

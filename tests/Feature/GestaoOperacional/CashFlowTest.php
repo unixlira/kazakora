@@ -36,7 +36,7 @@ class CashFlowTest extends TestCase
     {
         $subscriber = User::factory()->create(['role' => User::ROLE_SUBSCRIBER]);
 
-        $this->actingAs($subscriber)->get('/admin/fluxo-de-caixa')->assertOk();
+        $this->actingAs($subscriber)->get('/admin/painel/marketplaces/resultado')->assertOk();
         $this->actingAs($subscriber)->post('/admin/fluxo-de-caixa', [
             'type' => CashFlowEntry::TYPE_EXPENSE,
             'description' => 'x',

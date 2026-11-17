@@ -265,7 +265,7 @@ class PainelGerencial
             })->all();
         };
 
-        $canais = $pedidos->pluck('canal')->unique()->values();
+        $canaisVistos = $pedidos->pluck('canal')->unique()->values();
         $meses = collect(range(11, 0))->map(fn ($volta) => $inicioMes->copy()->subMonthsNoOverflow($volta));
         $porMes = $pedidos->groupBy(fn ($p) => $p['data']->format('Y-m'));
 
@@ -290,7 +290,7 @@ class PainelGerencial
             ],
             'mensal' => $meses->map(fn (Carbon $mes) => [
                 'mes' => $mes->format('Y-m'),
-                'canais' => $canais->mapWithKeys(fn ($canal) => [
+                'canais' => $canaisVistos->mapWithKeys(fn ($canal) => [
                     $canal => round(($porMes[$mes->format('Y-m')] ?? collect())->where('canal', $canal)->sum('receita'), 2),
                 ])->all(),
             ])->filter(fn ($linha) => array_sum($linha['canais']) > 0)->values()->all(),

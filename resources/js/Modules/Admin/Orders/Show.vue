@@ -52,6 +52,10 @@ const FULFILLMENT_STEP_LABELS = {
     label_generated: 'Etiqueta gerada',
     label_printed: 'Etiqueta impressa',
     delivered: 'Entregue',
+    order_packed: 'Pedido embalado',
+    ready_for_pickup: 'Pronto para coleta',
+    handed_to_carrier: 'Entregue ao entregador',
+    address_changed: 'Endereço alterado',
 };
 
 // Entrega dos Correios (2026-10-29): cada dado do recebimento que o SRO
@@ -103,6 +107,56 @@ const entregaCorreios = (event) => {
         imagens: imagensCorreios(ev),
         bruto: JSON.stringify(ev, null, 2),
     };
+};
+
+// Endereço alterado (2026-11-17, #4246): o context guarda o que a cliente
+// digitou e o novo. O registro do #4246 foi feito à mão, então aceita texto
+// ou objeto com as chaves do endereço.
+const enderecoEmTexto = (valor) => {
+    if (!valor) return '—';
+    if (typeof valor === 'string') return valor;
+    const rua = [valor.rua, valor.numero || 'S/N'].filter(Boolean).join(', ');
+    return [
+        valor.destinatario,
+        valor.complemento ? `${rua} - ${valor.complemento}` : rua,
+        valor.bairro,
+        [valor.cidade, valor.uf].filter(Boolean).join('/'),
+        valor.cep ? `CEP ${valor.cep}` : null,
+    ].filter(Boolean).join(', ');
+};
+
+// Corrigir o endereço de entrega: o backend guarda o original (EnderecoDoPedido).
+const editandoEndereco = ref(false);
+const enderecoForm = useForm({
+    shipping_recipient_name: '',
+    shipping_zip: '',
+    shipping_street: '',
+    shipping_number: '',
+    shipping_complement: '',
+    shipping_neighborhood: '',
+    shipping_city: '',
+    shipping_state: '',
+    motivo: '',
+});
+const abrirEdicaoDoEndereco = () => {
+    const e = props.detalhe?.endereco ?? {};
+    enderecoForm.shipping_recipient_name = props.order.shipping_recipient_name ?? '';
+    enderecoForm.shipping_zip = e.cep ?? '';
+    enderecoForm.shipping_street = e.rua ?? '';
+    enderecoForm.shipping_number = e.numero ?? '';
+    enderecoForm.shipping_complement = e.complemento ?? '';
+    enderecoForm.shipping_neighborhood = e.bairro ?? '';
+    enderecoForm.shipping_city = e.cidade ?? '';
+    enderecoForm.shipping_state = e.uf ?? '';
+    enderecoForm.motivo = '';
+    enderecoForm.clearErrors();
+    editandoEndereco.value = true;
+};
+const salvarEndereco = () => {
+    enderecoForm.patch(`/admin/pedidos/${props.order.id}/endereco`, {
+        preserveScroll: true,
+        onSuccess: () => { editandoEndereco.value = false; },
+    });
 };
 
 const formatPrice = (value) =>
@@ -848,7 +902,13 @@ const cancelInvoice = () => {
                             <div>
                                 <StatusBadge :status="event.status" context="fulfillment" />
                                 <span class="ml-2 font-medium">{{ FULFILLMENT_STEP_LABELS[event.step] ?? event.step }}</span>
-                                <p v-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
+                                <dl v-if="event.step === 'address_changed' && event.context" class="mt-1 space-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <div><dt class="inline font-semibold">Digitado na compra:</dt> <dd class="inline">{{ enderecoEmTexto(event.context.digitado_pela_cliente) }}</dd></div>
+                                    <div><dt class="inline font-semibold">Corrigido para:</dt> <dd class="inline">{{ enderecoEmTexto(event.context.corrigido_para) }}</dd></div>
+                                    <div v-if="event.context.motivo"><dt class="inline font-semibold">Motivo:</dt> <dd class="inline">{{ event.context.motivo }}</dd></div>
+                                    <div v-if="event.context.por"><dt class="inline font-semibold">Por:</dt> <dd class="inline">{{ event.context.por }}</dd></div>
+                                </dl>
+                                <p v-else-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
                                 <div v-if="entregaCorreios(event)" class="mt-2 rounded-lg border border-[var(--surface-border)] p-3 text-xs">
                                     <dl class="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
                                         <template v-for="[rotulo, valor] in entregaCorreios(event).linhas" :key="rotulo">
@@ -958,12 +1018,38 @@ const cancelInvoice = () => {
                 </section>
 
                 <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                    <h2 class="font-semibold">Endereço de entrega</h2>
-                    <p class="mt-2 text-sm">
+                    <div class="flex items-center justify-between gap-2">
+                        <h2 class="font-semibold">Endereço de entrega</h2>
+                        <Can permission="pedidos.edit">
+                            <button v-if="!editandoEndereco" type="button" class="text-xs font-semibold text-primary hover:underline" @click="abrirEdicaoDoEndereco">
+                                <i class="fas fa-pen mr-1"></i>Corrigir
+                            </button>
+                        </Can>
+                    </div>
+                    <form v-if="editandoEndereco" class="mt-2 grid grid-cols-2 gap-2 text-sm" @submit.prevent="salvarEndereco">
+                        <input v-model="enderecoForm.shipping_recipient_name" class="col-span-2 rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Destinatário (opcional)">
+                        <input v-model="enderecoForm.shipping_zip" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="CEP">
+                        <input v-model="enderecoForm.shipping_state" maxlength="2" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1 uppercase" placeholder="UF">
+                        <input v-model="enderecoForm.shipping_street" class="col-span-2 rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Rua">
+                        <input v-model="enderecoForm.shipping_number" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Número">
+                        <input v-model="enderecoForm.shipping_complement" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Complemento">
+                        <input v-model="enderecoForm.shipping_neighborhood" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Bairro">
+                        <input v-model="enderecoForm.shipping_city" class="rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Cidade">
+                        <input v-model="enderecoForm.motivo" class="col-span-2 rounded-md border border-[var(--surface-border)] bg-transparent px-2 py-1" placeholder="Motivo da correção (ex.: cliente pediu no WhatsApp)">
+                        <p v-if="Object.keys(enderecoForm.errors).length" class="col-span-2 text-xs text-red-600">{{ Object.values(enderecoForm.errors)[0] }}</p>
+                        <div class="col-span-2 flex justify-end gap-2">
+                            <button type="button" class="px-3 py-1 text-xs font-semibold text-slate-500" :disabled="enderecoForm.processing" @click="editandoEndereco = false">Cancelar</button>
+                            <button type="submit" class="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-white disabled:opacity-50" :disabled="enderecoForm.processing">Salvar endereço</button>
+                        </div>
+                    </form>
+                    <p v-else class="mt-2 text-sm">
                         <span class="font-medium">{{ d.endereco?.destinatario ?? '—' }}</span><br>
                         {{ d.endereco?.rua }}, {{ d.endereco?.numero || 'S/N' }}<span v-if="d.endereco?.complemento"> - {{ d.endereco.complemento }}</span><br>
                         {{ d.endereco?.bairro }} - {{ d.endereco?.cidade }}/{{ d.endereco?.uf }}<br>
                         CEP {{ d.endereco?.cep }}
+                    </p>
+                    <p v-if="d.endereco_digitado" class="mt-2 rounded-md bg-lightwarning px-2 py-1 text-xs text-warning">
+                        <i class="fas fa-clock-rotate-left mr-1"></i>Endereço alterado depois da compra. Digitado na compra: {{ enderecoEmTexto(d.endereco_digitado) }}
                     </p>
                 </section>
 

@@ -583,6 +583,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/reenviar-estorno', [AdminOrderController::class, 'reenviarEstorno'])
         ->name('pedidos.reenviar-estorno')
         ->middleware('permission:pedidos.edit');
+    // Corrigir o endereço de entrega com histórico do digitado (2026-11-17, #4246).
+    Route::patch('pedidos/{order}/endereco', [AdminOrderController::class, 'updateEndereco'])
+        ->name('pedidos.endereco')
+        ->middleware('permission:pedidos.edit');
     // Marca ou desmarca o pedido como amostra: fora do faturamento e das vendas (Lira, 2026-11-12, #4108).
     Route::post('pedidos/{order}/amostra', [AdminOrderController::class, 'amostra'])
         ->name('pedidos.amostra')
@@ -1014,6 +1018,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('suporte/{chamado}/humano', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'humano'])->whereNumber('chamado')->name('suporte.humano');
         Route::patch('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'atualizar'])->whereNumber('chamado')->name('suporte.atualizar');
         Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
+        // Atendimento > Cancelamentos (2026-11-17): pedidos de cancelamento de compra já postada.
+        Route::get('cancelamentos', [\App\Modules\Suporte\Http\Controllers\AdminCancelamentosController::class, 'index'])->name('cancelamentos.listar');
+        Route::post('cancelamentos/{solicitacao}/resolver', [\App\Modules\Suporte\Http\Controllers\AdminCancelamentosController::class, 'resolver'])->whereNumber('solicitacao')->name('cancelamentos.resolver');
         // Chat da Shopee (2026-10-25): conversas do sellerchat. Enviar só por ação do atendente.
         Route::get('chat-shopee', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'index'])->name('chat-shopee.index');
         Route::get('chat-shopee/pendentes', [\App\Modules\Admin\Http\Controllers\ShopeeChatController::class, 'pendentes'])->name('chat-shopee.pendentes');

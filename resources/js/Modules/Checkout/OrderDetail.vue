@@ -59,7 +59,12 @@ const MOTIVOS = ['Desisti da compra', 'Comprei errado', 'Achei mais barato em ou
 const TEMPO_DA_ETAPA = 900;
 const TEMPO_DO_CHECK = 650;
 const cancelarAberto = ref(false);
-const cancelarFase = ref('form'); // form | etapas | fim
+const cancelarFase = ref('form'); // form | etapas | fim | solicitado
+// Compra já postada (Lira, 2026-11-17): o mesmo botão não cancela, registra a
+// solicitação para a equipe, que responde no chat desta página.
+const jaPostado = computed(() => !!props.pedido.cancelamento?.postado);
+const solicitacaoPendente = computed(() => props.pedido.cancelamento?.solicitacao ?? null);
+const mensagemDaSolicitacao = ref('');
 const etapaIndice = ref(0);
 const etapaFeita = ref(false);
 const cancelarErro = ref(null);
@@ -67,13 +72,13 @@ const cancelarForm = useForm({ motivo: '', detalhe: '' });
 const pagou = computed(() => ['captured', 'authorized', 'succeeded'].includes(props.pedido.pagamento?.status));
 // Lista fixada no Enviar: o pedido recarregado no meio não muda as etapas.
 const etapasDoCancelamento = ref([]);
-const montarEtapas = () => [
+const montarEtapas = () => (jaPostado.value ? ['Registrando a sua solicitação'] : [
     'Registrando o cancelamento',
     ...(props.pedido.nota ? ['Cancelando a nota fiscal'] : []),
     ...(pagou.value ? ['Solicitando o estorno do pagamento'] : []),
     'Devolvendo os produtos ao estoque',
     'Preparando a confirmação por e-mail',
-];
+]);
 let timers = [];
 const limparTimers = () => {
     timers.forEach(clearTimeout);
@@ -109,6 +114,8 @@ const fecharCancelamento = () => {
     if (cancelarFase.value === 'etapas') return;
     limparTimers();
     cancelarAberto.value = false;
+    // A resposta da equipe chega no chat: já deixa ele aberto.
+    if (cancelarFase.value === 'solicitado') chatAberto.value = true;
 };
 const confirmarCancelamento = () => {
     cancelarErro.value = null;
@@ -122,6 +129,16 @@ const confirmarCancelamento = () => {
         .post(`/pedidos/${props.pedido.id}/cancelar`, {
             preserveScroll: true,
             onSuccess: (pagina) => {
+                // Já postado: nada foi cancelado, a solicitação foi registrada.
+                if (jaPostado.value && pagina.props.pedido?.cancelamento?.solicitacao) {
+                    mensagemDaSolicitacao.value = pagina.props.flash?.success
+                        ?? 'Seu pedido já foi postado. Recebemos sua solicitação de cancelamento e nossa equipe vai te responder por aqui.';
+                    depois(Math.max(0, TEMPO_DA_ETAPA - (Date.now() - inicio)), () => {
+                        etapaFeita.value = true;
+                        depois(TEMPO_DO_CHECK, () => { cancelarFase.value = 'solicitado'; });
+                    });
+                    return;
+                }
                 // O controller volta com flash de erro quando a compra já
                 // não pode ser cancelada: o modal volta ao formulário com o motivo.
                 if (pagina.props.pedido?.status !== 'cancelled') {
@@ -241,11 +258,14 @@ onUnmounted(limparTimers);
                             <i class="fas fa-xmark"></i> Cancelar pedido
                         </button>
                         <p v-else class="text-xs text-store-fg-muted">{{ pedido.cancelamento.bloqueio }}</p>
+                        <p v-if="solicitacaoPendente" class="basis-full text-right text-xs text-store-fg-muted">
+                            <i class="fas fa-circle-info mr-1"></i>Recebemos sua solicitação de cancelamento<template v-if="solicitacaoPendente.em"> em {{ dataCurta(solicitacaoPendente.em) }}</template>. Nossa equipe vai te responder no chat do suporte.
+                        </p>
                     </div>
 
                     <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">
                         <div v-if="cancelarFase === 'etapas'" class="flex min-h-[180px] flex-col items-center justify-center gap-5 py-4 text-center" role="status" aria-live="polite">
-                            <p class="text-lg font-bold">Cancelando pedido {{ pedido.numero }}</p>
+                            <p class="text-lg font-bold">{{ jaPostado ? 'Enviando sua solicitação' : `Cancelando pedido ${pedido.numero}` }}</p>
                             <Transition name="cancelar-etapa" mode="out-in">
                                 <div :key="etapaIndice" class="flex flex-col items-center gap-3">
                                     <span class="flex h-14 w-14 items-center justify-center rounded-full text-2xl transition-colors duration-300"
@@ -273,8 +293,19 @@ onUnmounted(limparTimers);
                                 <button type="button" class="mt-2 rounded-full bg-[#0FB930] px-6 py-2 text-sm font-bold text-white hover:brightness-95" @click="fecharCancelamento">Ok</button>
                             </div>
                         </Transition>
+                        <Transition v-else-if="cancelarFase === 'solicitado'" name="cancelar-etapa" appear>
+                            <div class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">
+                                <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#0FB930]/15 text-3xl text-[#0FB930]"><i class="fas fa-circle-check"></i></span>
+                                <p class="text-lg font-bold">Solicitação recebida</p>
+                                <p class="text-sm text-store-fg-muted">{{ mensagemDaSolicitacao }}</p>
+                                <button type="button" class="mt-2 rounded-full bg-[#0FB930] px-6 py-2 text-sm font-bold text-white hover:brightness-95" @click="fecharCancelamento">Ok</button>
+                            </div>
+                        </Transition>
                         <form v-else class="flex flex-col gap-4" @submit.prevent="confirmarCancelamento">
                             <h2 class="flex items-center gap-2 pr-8 text-lg font-bold"><i class="fas fa-circle-xmark text-red-600"></i> Cancelar pedido {{ pedido.numero }}</h2>
+                            <p v-if="jaPostado" class="rounded-xl bg-store-bg-sunken px-3 py-2 text-sm text-store-fg-muted">
+                                <i class="fas fa-truck-fast mr-1"></i> Seu pedido já foi postado. Ao enviar, sua solicitação de cancelamento vai para a nossa equipe, que te responde no chat desta página.
+                            </p>
                             <fieldset class="flex flex-col gap-2">
                                 <legend class="mb-1 text-sm font-semibold">Por que você quer cancelar?</legend>
                                 <label v-for="opcao in MOTIVOS" :key="opcao" class="flex cursor-pointer items-center gap-2 rounded-xl border border-store-border px-3 py-2 text-sm has-[:checked]:border-red-600">

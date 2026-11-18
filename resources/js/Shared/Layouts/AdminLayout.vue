@@ -363,7 +363,7 @@ watch(
                                             ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                         :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
-                                        <span v-if="item.logo" class="flex w-8 shrink-0 justify-center"><img :src="item.logo" alt="" class="icone-logo" /></span>
+                                        <span v-if="item.logo" class="flex w-[15px] shrink-0 justify-center overflow-visible"><img :src="item.logo" alt="" class="icone-logo" /></span>
                                         <i v-else class="w-8 text-center" :class="[item.icon, classeIcone(item), !sidebarCollapsed && !section.direto ? 'text-xs' : 'text-sm']"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"
@@ -390,7 +390,7 @@ watch(
                                                 ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
                                                 : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
-                                            <span v-if="filho.logo" class="flex w-8 shrink-0 justify-center"><img :src="filho.logo" alt="" class="icone-logo" /></span>
+                                            <span v-if="filho.logo" class="flex w-[15px] shrink-0 justify-center overflow-visible"><img :src="filho.logo" alt="" class="icone-logo" /></span>
                                             <i v-else class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
                                         </Link>

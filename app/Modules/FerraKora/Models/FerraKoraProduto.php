@@ -3,6 +3,9 @@
 namespace App\Modules\FerraKora\Models;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Services\CatalogoOutroSite;
+use App\Modules\Catalog\Support\GuardaSlugAntigoDoSite;
+use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -11,11 +14,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class FerraKoraProduto extends Model
 {
+    use GuardaSlugAntigoDoSite;
+
     protected $table = 'ferrakora_produtos';
 
     protected $fillable = [
         'product_id',
         'titulo',
+        // Endereço fixo no site (2026-11-18): preenchido, vale ele em vez do título.
+        'slug',
         'categoria',
         'ordem',
         'ativo',
@@ -28,6 +35,11 @@ class FerraKoraProduto extends Model
             'ordem' => 'integer',
             'ativo' => 'boolean',
         ];
+    }
+
+    public static function catalogo(): CatalogoOutroSite
+    {
+        return app(CatalogoFerraKora::class);
     }
 
     public function product(): BelongsTo

@@ -9,6 +9,7 @@ use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -45,6 +46,21 @@ class FerraKoraCatalogoController extends Controller
         return $produto === null
             ? response()->json(['message' => 'Produto não encontrado.'], 404)
             : $this->semCache(response()->json(['product' => $produto]));
+    }
+
+    /**
+     * Endereço antigo do produto (2026-11-18): o Nginx do ferrakora.com manda
+     * para cá o /produto/<slug>/ que não tem página no build; slug que o
+     * produto já teve responde 301 para o endereço atual, o resto 404 (e o
+     * Nginx entrega o site, que mostra "não encontrado").
+     */
+    public function produtoAntigo(string $slug): Response
+    {
+        $atual = $this->catalogo->slugAtualDoAntigo($slug);
+
+        return $atual === null
+            ? response('', 404)
+            : response('', 301, ['Location' => '/produto/'.$atual.'/', 'Cache-Control' => 'public, max-age=600']);
     }
 
     /**

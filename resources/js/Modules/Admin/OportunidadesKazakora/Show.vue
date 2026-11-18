@@ -2,7 +2,8 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import Termometro from './Termometro.vue';
+import SeloFase from '@/Shared/Components/SeloFase.vue';
+import Termometro from '@/Shared/Components/Termometro.vue';
 
 const props = defineProps({
     oportunidade: { type: Object, required: true },
@@ -13,7 +14,6 @@ const props = defineProps({
 });
 
 const o = computed(() => props.oportunidade);
-const CORES_FASE = { teste: 'bg-blue-50 text-blue-700', validando: 'bg-amber-50 text-amber-700', escala: 'bg-red-50 text-red-700', saturando: 'bg-slate-100 text-slate-600' };
 const CORES_STATUS = { roteirizando: 'bg-blue-50 text-blue-700', roteiro_pronto: 'bg-amber-50 text-amber-700', produzindo: 'bg-blue-50 text-blue-700', pronto: 'bg-emerald-50 text-emerald-700', aprovado: 'bg-emerald-50 text-emerald-700', reprovado: 'bg-slate-100 text-slate-600', erro: 'bg-red-50 text-red-700' };
 const numero = (n) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR'));
 const preco = computed(() => (o.value.preco === null || o.value.preco === undefined ? null : `${o.value.moeda ?? ''} ${Number(o.value.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`.trim()));
@@ -70,7 +70,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <div v-else class="flex aspect-[4/5] items-center justify-center"><i class="fas fa-box text-4xl text-slate-300"></i></div>
             </div>
             <div class="min-w-0 flex-1">
-                <span class="rounded-full px-2 py-0.5 text-xs font-black" :class="CORES_FASE[o.fase]">{{ fases[o.fase]?.rotulo ?? o.fase }}</span>
+                <SeloFase :pontuacao="o.pontuacao" :fase="o.fase" :rotulo="fases[o.fase]?.rotulo" />
                 <h1 class="mt-2 text-xl font-black text-slate-900 sm:text-2xl">{{ o.nome }}</h1>
                 <p class="mt-1 text-sm text-slate-600">{{ o.nicho || 'Sem nicho' }}<span v-if="o.anunciante"> · {{ o.anunciante }}</span><span v-if="o.dominio"> · {{ o.dominio }}</span><span v-if="preco"> · {{ preco }} lá</span></p>
                 <p class="mt-2 text-sm leading-6 text-slate-600">{{ fases[o.fase]?.descricao }}</p>

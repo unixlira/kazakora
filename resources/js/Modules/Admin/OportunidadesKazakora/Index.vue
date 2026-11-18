@@ -2,7 +2,8 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import Termometro from './Termometro.vue';
+import SeloFase from '@/Shared/Components/SeloFase.vue';
+import Termometro from '@/Shared/Components/Termometro.vue';
 
 const props = defineProps({
     oportunidades: { type: Array, default: () => [] },
@@ -24,7 +25,8 @@ const filtradas = computed(() => {
         && (!termo || `${o.nome} ${o.anunciante ?? ''} ${o.dominio ?? ''}`.toLowerCase().includes(termo)));
 });
 
-const CORES_FASE = { teste: 'bg-blue-50 text-blue-700', validando: 'bg-amber-50 text-amber-700', escala: 'bg-red-50 text-red-700', saturando: 'bg-slate-100 text-slate-600' };
+// Nível ilustrativo do ícone em cada cartão de fase (do frio ao quente).
+const NIVEL_FASE = { teste: 20, validando: 55, escala: 95, saturando: 70 };
 const numero = (n) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR', { notation: n >= 10000 ? 'compact' : 'standard' }));
 const dataColeta = computed(() => (props.coletadoEm ? new Date(props.coletadoEm).toLocaleDateString('pt-BR') : null));
 </script>
@@ -50,7 +52,7 @@ const dataColeta = computed(() => (props.coletadoEm ? new Date(props.coletadoEm)
             <button v-for="(f, chave) in fases" :key="chave" type="button" @click="fase = fase === chave ? TODAS : chave"
                 class="rounded-2xl bg-white p-3 text-left shadow-sm ring-1 transition"
                 :class="fase === chave ? 'ring-2 ring-orange-500' : 'ring-slate-100 hover:ring-orange-300'">
-                <span class="rounded-full px-2 py-0.5 text-xs font-black" :class="CORES_FASE[chave]">{{ f.rotulo }}</span>
+                <SeloFase :pontuacao="NIVEL_FASE[chave]" :fase="chave" :rotulo="f.rotulo" />
                 <p class="mt-2 text-2xl font-black text-slate-900">{{ contagem[chave] ?? 0 }}</p>
                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{{ f.descricao }}</p>
             </button>
@@ -79,7 +81,7 @@ const dataColeta = computed(() => (props.coletadoEm ? new Date(props.coletadoEm)
                     <i v-else class="fas fa-box absolute inset-0 m-auto h-6 w-6 text-2xl text-slate-300"></i>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <span class="rounded-full px-2 py-0.5 text-xs font-black" :class="CORES_FASE[o.fase]">{{ fases[o.fase]?.rotulo ?? o.fase }}</span>
+                    <SeloFase :pontuacao="o.pontuacao" :fase="o.fase" :rotulo="fases[o.fase]?.rotulo" />
                     <p class="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-900">{{ o.nome }}</p>
                     <p class="mt-0.5 truncate text-xs text-slate-500">{{ o.nicho || 'Sem nicho' }}<span v-if="o.anunciante"> · {{ o.anunciante }}</span></p>
                     <div class="mt-2 flex flex-wrap gap-1 text-xs font-bold">

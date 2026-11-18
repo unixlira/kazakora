@@ -469,7 +469,7 @@ const confirmarApagar = () => {
                         </ul>
                         <p v-else class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                             Nenhum cookie registrado para este visitante no período. A lista de cookies só é gravada
-                            a partir de 12/10/2026 e somente de quem aceitou os cookies (no checkout). As páginas
+                            a partir de 12/10/2026 e somente de quem aceitou os cookies (no aviso de cookies ou no checkout). As páginas
                             abertas aparecem em Rotas visitadas mesmo sem o aceite.
                         </p>
                         <p class="mt-2 text-xs text-slate-400">

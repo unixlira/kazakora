@@ -8,7 +8,7 @@ const props = defineProps({
     anuncios: { type: Array, default: () => [] },
 });
 
-const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano' };
+const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano', ro: 'Romeno' };
 const preco = computed(() => (props.oferta.preco === null || props.oferta.preco === undefined
     ? null
     : `${props.oferta.moeda ?? ''} ${Number(props.oferta.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()));

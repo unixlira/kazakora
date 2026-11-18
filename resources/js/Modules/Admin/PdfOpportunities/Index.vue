@@ -9,7 +9,7 @@ const props = defineProps({
 });
 
 const TODOS = 'Todos';
-const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano' };
+const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano', ro: 'Romeno' };
 const nomeIdioma = (codigo) => IDIOMAS[codigo] ?? (codigo || '—');
 
 const nicho = ref(TODOS);

@@ -204,6 +204,72 @@ class PdfOportunidadesTest extends TestCase
         Storage::disk('public')->assertMissing('pdf-escolhidos/'.$escolhido->id);
     }
 
+    private function ofertaComAnuncios(int $dias, int $variacoes, array $inicios, string $chave = 'termo.com', int $posicao = 1): PdfOferta
+    {
+        $oferta = PdfOferta::create([
+            'chave' => $chave, 'nome' => 'Oferta '.$chave, 'ativa' => true, 'posicao' => $posicao,
+            'dias_rodando' => $dias, 'variacoes' => $variacoes, 'anuncios_ativos' => $variacoes,
+            'coletado_em' => '2026-11-18 08:00:00',
+        ]);
+        foreach ($inicios as $i => $inicio) {
+            $oferta->anuncios()->create(['ad_archive_id' => $chave.'-'.$i, 'iniciado_em' => $inicio]);
+        }
+
+        return $oferta->load('anuncios');
+    }
+
+    public function test_termometro_usa_a_mesma_metrica_das_oportunidades_kazakora(): void
+    {
+        // Janela de 7 dias antes da coleta (18/11 08:00): 11/11 conta, 10/11 não, depois da coleta não.
+        $oferta = $this->ofertaComAnuncios(77, 6, ['2026-11-11', '2026-11-18', '2026-11-10', '2026-11-19', null]);
+        // dias 77 = 30 · variações 6/10 = 15 · novos 2/3 = 10 · anunciantes 1 = 0 · sem alcance: peso total 80.
+        $this->assertSame(['pontuacao' => 68.8, 'fase' => 'validando', 'novos7d' => 2], $oferta->termometro());
+
+        $this->assertSame('escala', PdfOferta::medirTermometro(10, 12, 3)['fase']);
+        $this->assertSame(56.3, PdfOferta::medirTermometro(10, 12, 3)['pontuacao']);
+        $this->assertSame('saturando', PdfOferta::medirTermometro(90, 4, 0)['fase']);
+        $this->assertSame('teste', PdfOferta::medirTermometro(5, 1, 0)['fase']);
+        // Teto sem alcance nem concorrentes: 87,5.
+        $this->assertSame(87.5, PdfOferta::medirTermometro(500, 500, 50)['pontuacao']);
+    }
+
+    public function test_telas_mostram_o_termometro(): void
+    {
+        $quente = $this->ofertaComAnuncios(120, 40, ['2026-11-12', '2026-11-14', '2026-11-17'], 'quente.com');
+        $fria = $this->ofertaComAnuncios(5, 1, ['2026-11-15'], 'fria.com', 2);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Admin/PdfOpportunities/Index', false)
+                ->has('fases', 4)
+                ->where('ofertas', fn ($ofertas) => collect($ofertas)->pluck('termometro.fase', 'id')->all() == [$quente->id => 'escala', $fria->id => 'teste'])
+                ->where('ofertas.0.termometro.pontuacao', 87.5)
+                ->where('ofertas.0.termometro.novos7d', 3));
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades/'.$quente->id)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Admin/PdfOpportunities/Show', false)
+                ->has('fases', 4)
+                ->where('oferta.termometro.fase', 'escala')
+                ->where('oferta.termometro.novos7d', 3));
+
+        // O clone guarda a foto do dia: o termômetro sai dos dados e anúncios copiados.
+        $this->actingAs($admin)->post('/admin/pdf-oportunidades/'.$quente->id.'/clonar')->assertRedirect();
+        $escolhido = PdfEscolhido::firstOrFail();
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades/escolhidos')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->has('fases', 4)
+                ->where('escolhidos.0.termometro.fase', 'escala')
+                ->where('escolhidos.0.termometro.pontuacao', 87.5));
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades/escolhidos/'.$escolhido->id)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('escolhido.termometro.novos7d', 3)
+                ->where('escolhido.termometro.fase', 'escala'));
+    }
+
     public function test_sem_relatorios_view_nao_clona(): void
     {
         $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();

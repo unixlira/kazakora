@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Services;
 
+use App\Modules\Catalog\Models\OutroSiteSlugAntigo;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FichaTecnica;
 use App\Support\SiteAtual;
@@ -29,6 +30,11 @@ use Illuminate\Support\Str;
  * dele em SiteAtual, então o final_price já traz a relâmpago só deste site;
  * "oferta_relampago" no produto diz qual é ({id, inicio, fim, desconto_pct})
  * ou null, e o preço sem ela vai riscado em prices[0].amount.
+ *
+ * Endereço (2026-11-18): o slug sai do título, a não ser que o registro do
+ * site tenha um slug fixo (coluna slug). Trocar o título (do site ou o nome
+ * do produto) grava o slug anterior em outro_site_slugs_antigos, e produto()
+ * acha o produto também por ele: o site manda o visitante para o atual.
  */
 abstract class CatalogoOutroSite
 {
@@ -181,11 +187,119 @@ abstract class CatalogoOutroSite
             ->all();
     }
 
-    /** Um produto por "kz-<id>" ou pelo slug. null = não está no site. */
+    /**
+     * Um produto por "kz-<id>", pelo slug ou por um slug que ele já teve no
+     * site (2026-11-18; o produto volta com o slug atual). null = não está no site.
+     */
     public function produto(string $idOuSlug): ?array
     {
-        return collect($this->produtos())
-            ->first(fn (array $produto) => $produto['id'] === $idOuSlug || $produto['slug'] === $idOuSlug);
+        $produtos = collect($this->produtos());
+        $achado = $produtos->first(fn (array $produto) => $produto['id'] === $idOuSlug || $produto['slug'] === $idOuSlug);
+
+        if ($achado !== null) {
+            return $achado;
+        }
+
+        $antigo = $this->idPeloSlugAntigo($idOuSlug);
+
+        return $antigo === null ? null : $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$antigo);
+    }
+
+    /**
+     * Slug atual de um produto que já usou $slug no site, para o link antigo
+     * responder 301. null = não é slug antigo (ou é o atual de alguém) ou o
+     * produto saiu do site.
+     */
+    public function slugAtualDoAntigo(string $slug): ?string
+    {
+        $id = $this->idPeloSlugAntigo($slug);
+        $registro = $id === null ? null : $this->modelo()::query()
+            ->where('product_id', $id)
+            ->where('ativo', true)
+            ->whereHas('product', fn ($query) => $query->where('is_active', true))
+            ->first();
+        $atual = $registro === null ? null : $this->slugPublicado($registro);
+
+        return $atual !== null && $atual !== '' && $atual !== $slug ? $atual : null;
+    }
+
+    private function idPeloSlugAntigo(string $slug): ?int
+    {
+        $id = OutroSiteSlugAntigo::query()->where('site', $this->site())->where('slug', $slug)->value('product_id');
+
+        return $id === null ? null : (int) $id;
+    }
+
+    /** Endereço do produto no site: o slug fixo do registro ou, sem ele, o do título. */
+    public static function slugDoTitulo(?string $fixo, string $titulo): string
+    {
+        return filled($fixo) ? Str::slug((string) $fixo) : Str::slug($titulo);
+    }
+
+    /** O slug que o registro publica hoje (o mesmo de montar()), sem montar o produto. */
+    public function slugPublicado(Model $registro): ?string
+    {
+        /** @var Product|null $pai */
+        $pai = Product::query()->find($registro->product_id);
+
+        if ($pai === null) {
+            return null;
+        }
+
+        return self::slugDoTitulo($registro->slug, $registro->titulo ?: $this->tituloDoGrupo($pai, $this->temOpcao($pai)));
+    }
+
+    /**
+     * Guarda o slug que o produto deixou de usar no site. O slug novo deixa
+     * de ser "antigo" de quem quer que seja: agora é o endereço deste produto.
+     */
+    public function registrarTroca(int $productId, ?string $antes, ?string $depois): void
+    {
+        if (filled($antes) && $antes !== $depois) {
+            OutroSiteSlugAntigo::query()->updateOrCreate(['site' => $this->site(), 'slug' => $antes], ['product_id' => $productId]);
+        }
+
+        if (filled($depois)) {
+            OutroSiteSlugAntigo::query()->where('site', $this->site())->where('slug', $depois)->delete();
+        }
+    }
+
+    /**
+     * Nome ou variação do produto mudou (Product::booted). Só muda o endereço
+     * do site quando o título sai do nome: registro sem título próprio e sem
+     * slug fixo.
+     */
+    public function aoRenomearProduto(Product $produto): void
+    {
+        if ($produto->parent_product_id !== null) {
+            return;
+        }
+
+        $registro = $this->modelo()::query()->where('product_id', $produto->id)->first();
+
+        if ($registro === null || filled($registro->titulo) || filled($registro->slug)) {
+            return;
+        }
+
+        $temOpcao = $this->temOpcao($produto);
+        $antigo = (new Product)->forceFill([
+            'name' => $produto->getOriginal('name'),
+            'variation' => $produto->getOriginal('variation'),
+        ]);
+
+        $this->registrarTroca(
+            $produto->id,
+            Str::slug($this->tituloDoGrupo($antigo, $temOpcao)),
+            Str::slug($this->tituloDoGrupo($produto, $temOpcao)),
+        );
+    }
+
+    /** Pai com alguma variação ativa: o título sai sem a variação do pai (montar()). */
+    private function temOpcao(Product $pai): bool
+    {
+        $filhos = Product::query()->where('parent_product_id', $pai->id)->where('is_active', true)->count();
+
+        return ($pai->is_active ? 1 : 0) + $filhos > 1;
     }
 
     private function publicados(): Builder
@@ -280,7 +394,7 @@ abstract class CatalogoOutroSite
             'description' => $this->descricaoHtml((string) $pai->description),
             'thumbnail' => $imagens[0]['url'] ?? null,
             'thumbnail_leve' => $imagens[0]['thumb_url'] ?? null,
-            'slug' => Str::slug($titulo),
+            'slug' => self::slugDoTitulo($registro->slug, $titulo),
             'order' => $registro->ordem,
             'site_product_selection' => null,
             'purchasable' => true,

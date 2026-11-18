@@ -100,6 +100,16 @@ class Product extends Model
             ProductSlugAntigo::query()->where('slug', $product->slug)->delete();
         });
 
+        // Título do FerraKora/Beauty Kora sai do nome: renomear guarda o
+        // endereço antigo do site para ele não dar 404 (2026-11-18).
+        static::updated(function (Product $product) {
+            if ($product->wasChanged(['name', 'variation'])) {
+                foreach ([\App\Modules\FerraKora\Services\CatalogoFerraKora::class, \App\Modules\BeautyKora\Services\CatalogoBeautyKora::class] as $catalogo) {
+                    app($catalogo)->aoRenomearProduto($product);
+                }
+            }
+        });
+
         // Variação vinculada/desvinculada muda de quem ela herda os quadros
         // promocionais (sorteio e livros) guardados em cache.
         static::updated(function (Product $product) {

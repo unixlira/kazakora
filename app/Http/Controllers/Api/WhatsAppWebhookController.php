@@ -189,7 +189,8 @@ class WhatsAppWebhookController extends Controller
             'metadata' => array_merge($conversation->metadata ?? [], ['last_payload_object' => $payload['object'] ?? null]),
         ]);
         // Conversa encerrada volta pra fila quando o cliente escreve de novo.
-        if ($conversation->status === 'resolved') {
+        // Reação (👍 no "obrigada" da Manuela) não reabre (2026-11-18).
+        if ($conversation->status === 'resolved' && $type !== 'reaction') {
             $conversation->status = 'open';
         }
         $conversation->save();

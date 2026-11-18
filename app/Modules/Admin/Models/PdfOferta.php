@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Oferta de infoproduto em PDF vista na Biblioteca de Anúncios da Meta
@@ -28,5 +29,11 @@ class PdfOferta extends Model
     public function anuncios(): HasMany
     {
         return $this->hasMany(PdfOfertaAnuncio::class, 'pdf_oferta_id');
+    }
+
+    /** O clone desta oferta em PDFs Escolhidos, se já foi clonada. */
+    public function escolhido(): HasOne
+    {
+        return $this->hasOne(PdfEscolhido::class, 'pdf_oferta_id');
     }
 }

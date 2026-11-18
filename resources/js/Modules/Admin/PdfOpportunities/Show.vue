@@ -1,7 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     oferta: { type: Object, required: true },
@@ -12,6 +12,11 @@ const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês
 const preco = computed(() => (props.oferta.preco === null || props.oferta.preco === undefined
     ? null
     : `${props.oferta.moeda ?? ''} ${Number(props.oferta.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()));
+const clonando = ref(false);
+const clonar = () => {
+    clonando.value = true;
+    router.post(`/admin/pdf-oportunidades/${props.oferta.id}/clonar`, {}, { preserveScroll: true, onFinish: () => { clonando.value = false; } });
+};
 const totalMidias = computed(() => props.anuncios.reduce((n, a) => n + a.midias.length, 0));
 </script>
 
@@ -35,6 +40,8 @@ const totalMidias = computed(() => props.anuncios.reduce((n, a) => n + a.midias.
             <p v-if="oferta.observacao" class="mt-2 rounded-2xl bg-purple-50 p-3 text-sm leading-6 text-purple-950">{{ oferta.observacao }}</p>
 
             <div class="mt-4 flex flex-wrap gap-2">
+                <Link v-if="oferta.escolhidoId" :href="`/admin/pdf-oportunidades/escolhidos/${oferta.escolhidoId}`" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white"><i class="fas fa-check"></i> Clonado · ver plano</Link>
+                <button v-else type="button" :disabled="clonando" @click="clonar" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-60"><i :class="clonando ? 'fas fa-spinner fa-spin' : 'fas fa-clone'"></i> {{ clonando ? 'Clonando…' : 'Clonar' }}</button>
                 <a v-if="oferta.urlDestino" :href="oferta.urlDestino" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-purple-700 px-4 py-2 text-sm font-black text-white">Página de vendas</a>
                 <a v-if="oferta.paginaBiblioteca" :href="oferta.paginaBiblioteca" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Todos os anúncios do anunciante</a>
             </div>

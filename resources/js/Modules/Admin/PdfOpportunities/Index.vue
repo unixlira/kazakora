@@ -1,12 +1,19 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
     ofertas: { type: Array, default: () => [] },
     coletadoEm: { type: String, default: null },
+    totalEscolhidos: { type: Number, default: 0 },
 });
+
+const clonando = ref(null);
+const clonar = (o) => {
+    clonando.value = o.id;
+    router.post(`/admin/pdf-oportunidades/${o.id}/clonar`, {}, { preserveScroll: true, onFinish: () => { clonando.value = null; } });
+};
 
 const TODOS = 'Todos';
 const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano', ro: 'Romeno' };
@@ -43,7 +50,7 @@ const resumoPaises = (lista) => (lista.length > 4 ? `${lista.slice(0, 4).join(' 
             <p v-if="dataColeta" class="mt-3 text-xs font-semibold text-purple-100/70">Coleta de {{ dataColeta }} · {{ ofertas.length }} ofertas</p>
         </section>
 
-        <section class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <section class="mt-4 grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Nicho
                 <select v-model="nicho" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold normal-case text-slate-700">
                     <option v-for="n in nichos" :key="n" :value="n">{{ n }}</option>
@@ -59,6 +66,11 @@ const resumoPaises = (lista) => (lista.length > 4 ? `${lista.slice(0, 4).join(' 
                     <option v-for="i in idiomas" :key="i" :value="i">{{ i === TODOS ? TODOS : nomeIdioma(i) }}</option>
                 </select>
             </label>
+            <Link href="/admin/pdf-oportunidades/escolhidos"
+                class="flex items-center justify-center gap-2 rounded-xl bg-purple-700 px-3 py-2 text-sm font-black text-white shadow-sm hover:bg-purple-800">
+                <i class="fas fa-star"></i> PDFs Escolhidos
+                <span class="rounded-full bg-white/20 px-2 text-xs">{{ totalEscolhidos }}</span>
+            </Link>
         </section>
 
         <p v-if="!ofertas.length" class="mt-6 rounded-2xl bg-white p-6 text-sm text-slate-500 shadow">
@@ -67,24 +79,36 @@ const resumoPaises = (lista) => (lista.length > 4 ? `${lista.slice(0, 4).join(' 
         <p v-else-if="!filtradas.length" class="mt-6 rounded-2xl bg-white p-6 text-sm text-slate-500 shadow">Nenhuma oferta com esses filtros.</p>
 
         <section class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <Link v-for="o in filtradas" :key="o.id" :href="`/admin/pdf-oportunidades/${o.id}`"
-                class="flex gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100 transition hover:ring-purple-300">
-                <div class="relative h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                    <img v-if="o.miniatura" :src="o.miniatura" alt="" loading="lazy" class="h-full w-full object-cover" />
-                    <i v-else class="fas fa-file-pdf absolute inset-0 m-auto h-6 w-6 text-2xl text-slate-300"></i>
-                    <span class="absolute left-1 top-1 rounded-md bg-black/70 px-1.5 text-xs font-black text-white">#{{ o.posicao ?? '—' }}</span>
-                </div>
-                <div class="min-w-0 flex-1">
-                    <p class="line-clamp-2 text-sm font-black leading-5 text-slate-900">{{ o.nome }}</p>
-                    <p class="mt-0.5 truncate text-xs font-bold uppercase tracking-wide text-purple-700">{{ o.nicho || 'Sem nicho' }} · {{ nomeIdioma(o.idioma) }}</p>
-                    <p class="mt-0.5 truncate text-xs text-slate-500">{{ resumoPaises(o.paises ?? []) }}</p>
-                    <div class="mt-2 flex flex-wrap gap-1.5 text-xs font-bold">
-                        <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">{{ o.anunciosAtivos }} anúncios</span>
-                        <span class="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">{{ o.diasRodando }} dias</span>
-                        <span v-if="preco(o)" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{{ preco(o) }}</span>
+            <article v-for="o in filtradas" :key="o.id"
+                class="flex flex-col rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100 transition hover:ring-purple-300">
+                <Link :href="`/admin/pdf-oportunidades/${o.id}`" class="flex flex-1 gap-3">
+                    <div class="relative h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                        <img v-if="o.miniatura" :src="o.miniatura" alt="" loading="lazy" class="h-full w-full object-cover" />
+                        <i v-else class="fas fa-file-pdf absolute inset-0 m-auto h-6 w-6 text-2xl text-slate-300"></i>
+                        <span class="absolute left-1 top-1 rounded-md bg-black/70 px-1.5 text-xs font-black text-white">#{{ o.posicao ?? '—' }}</span>
                     </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="line-clamp-2 text-sm font-black leading-5 text-slate-900">{{ o.nome }}</p>
+                        <p class="mt-0.5 truncate text-xs font-bold uppercase tracking-wide text-purple-700">{{ o.nicho || 'Sem nicho' }} · {{ nomeIdioma(o.idioma) }}</p>
+                        <p class="mt-0.5 truncate text-xs text-slate-500">{{ resumoPaises(o.paises ?? []) }}</p>
+                        <div class="mt-2 flex flex-wrap gap-1.5 text-xs font-bold">
+                            <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">{{ o.anunciosAtivos }} anúncios</span>
+                            <span class="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">{{ o.diasRodando }} dias</span>
+                            <span v-if="preco(o)" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{{ preco(o) }}</span>
+                        </div>
+                    </div>
+                </Link>
+                <div class="mt-3 flex justify-end">
+                    <Link v-if="o.escolhidoId" :href="`/admin/pdf-oportunidades/escolhidos/${o.escolhidoId}`"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                        <i class="fas fa-check"></i> Clonado · ver
+                    </Link>
+                    <button v-else type="button" :disabled="clonando === o.id" @click="clonar(o)"
+                        class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-purple-700 disabled:opacity-60">
+                        <i :class="clonando === o.id ? 'fas fa-spinner fa-spin' : 'fas fa-clone'"></i> {{ clonando === o.id ? 'Clonando…' : 'Clonar' }}
+                    </button>
                 </div>
-            </Link>
+            </article>
         </section>
     </AdminLayout>
 </template>

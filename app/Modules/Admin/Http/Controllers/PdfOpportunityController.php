@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Admin\Models\PdfEscolhido;
 use App\Modules\Admin\Models\PdfOferta;
 use App\Modules\Admin\Models\PdfOfertaAnuncio;
+use App\Modules\Admin\Support\TermometroOportunidade;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,7 +23,7 @@ class PdfOpportunityController extends Controller
     public function index(): Response
     {
         $ofertas = PdfOferta::query()
-            ->with('escolhido:id,pdf_oferta_id')
+            ->with(['escolhido:id,pdf_oferta_id', 'anuncios:id,pdf_oferta_id,iniciado_em'])
             ->where('ativa', true)
             ->orderByRaw('posicao is null')->orderBy('posicao')->orderByDesc('pontuacao')
             ->limit(100)
@@ -33,6 +34,7 @@ class PdfOpportunityController extends Controller
             'ofertas' => $ofertas,
             'coletadoEm' => PdfOferta::query()->where('ativa', true)->max('coletado_em'),
             'totalEscolhidos' => PdfEscolhido::query()->count(),
+            'fases' => TermometroOportunidade::FASES,
         ]);
     }
 
@@ -46,6 +48,7 @@ class PdfOpportunityController extends Controller
                 'observacao' => $oferta->observacao,
                 'paginaBiblioteca' => $oferta->pagina_id ? 'https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&view_all_page_id='.$oferta->pagina_id : null,
             ],
+            'fases' => TermometroOportunidade::FASES,
             'anuncios' => $oferta->anuncios->map(fn (PdfOfertaAnuncio $a): array => [
                 'id' => $a->id,
                 'adId' => $a->ad_archive_id,
@@ -86,6 +89,7 @@ class PdfOpportunityController extends Controller
             'diasRodando' => $o->dias_rodando,
             'inicioMaisAntigo' => $o->inicio_mais_antigo?->format('d/m/Y'),
             'pontuacao' => (float) $o->pontuacao,
+            'termometro' => $o->termometro(),
             'miniatura' => $this->url($o->miniatura),
             'escolhidoId' => $o->escolhido?->id,
         ];

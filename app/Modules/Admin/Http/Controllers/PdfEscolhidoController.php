@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Admin\Models\PdfEscolhido;
 use App\Modules\Admin\Models\PdfOferta;
 use App\Modules\Admin\Services\PdfClonagemService;
+use App\Modules\Admin\Support\TermometroOportunidade;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,6 +35,7 @@ class PdfEscolhidoController extends Controller
     {
         return Inertia::render('Admin/PdfOpportunities/Escolhidos', [
             'escolhidos' => PdfEscolhido::query()->latest()->get()->map(fn (PdfEscolhido $e): array => $this->resumo($e)),
+            'fases' => TermometroOportunidade::FASES,
         ]);
     }
 
@@ -48,6 +50,7 @@ class PdfEscolhidoController extends Controller
                 'planoAcao' => $escolhido->plano_acao ?? [],
                 'prompt' => $escolhido->prompt_entregavel,
             ],
+            'fases' => TermometroOportunidade::FASES,
             'anuncios' => collect($escolhido->anuncios ?? [])->map(function (array $a): array {
                 $inicio = ($a['iniciadoEm'] ?? null) ? Carbon::parse($a['iniciadoEm']) : null;
                 $a['iniciadoEm'] = $inicio?->format('d/m/Y');
@@ -74,6 +77,7 @@ class PdfEscolhidoController extends Controller
     private function resumo(PdfEscolhido $e): array
     {
         $anuncios = $e->anuncios ?? [];
+        $dados = $e->dados ?? [];
 
         return [
             'id' => $e->id,
@@ -87,6 +91,12 @@ class PdfEscolhidoController extends Controller
             'paises' => $e->dados['paises'] ?? [],
             'anunciosAtivos' => $e->dados['anunciosAtivos'] ?? null,
             'diasRodando' => $e->dados['diasRodando'] ?? null,
+            // Termômetro com a foto da oferta guardada no clone (dados e anúncios do dia em que foi clonada).
+            'termometro' => PdfOferta::medirTermometro(
+                (int) ($dados['diasRodando'] ?? 0),
+                (int) ($dados['variacoes'] ?? 0),
+                PdfOferta::contarNovos7d(array_column($anuncios, 'iniciadoEm'), $dados['coletadoEm'] ?? null),
+            ),
             'totalCriativos' => count($anuncios),
             'totalMidias' => array_sum(array_map(fn (array $a) => count($a['midias'] ?? []), $anuncios)),
             'clonadoEm' => $e->created_at?->format('d/m/Y H:i'),

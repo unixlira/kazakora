@@ -36,8 +36,8 @@ const totalMidias = computed(() => props.anuncios.reduce((n, a) => n + a.midias.
                 <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Preço</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ preco ?? 'não visível' }}</dd></div>
                 <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Desde</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ oferta.inicioMaisAntigo ?? '—' }}</dd></div>
             </dl>
-            <p class="mt-3 text-xs font-semibold text-slate-500">Países: {{ (oferta.paises ?? []).join(' · ') || '—' }}</p>
-            <p v-if="oferta.observacao" class="mt-2 rounded-2xl bg-purple-50 p-3 text-sm leading-6 text-purple-950">{{ oferta.observacao }}</p>
+            <p class="mt-3 text-sm font-semibold text-slate-600">Países: {{ (oferta.paises ?? []).join(' · ') || '—' }}</p>
+            <p v-if="oferta.observacao" class="mt-2 rounded-2xl border-l-4 border-purple-500 bg-[var(--surface-muted)] p-3 text-sm leading-6 text-[var(--surface-foreground)]">{{ oferta.observacao }}</p>
 
             <div class="mt-4 flex flex-wrap gap-2">
                 <Link v-if="oferta.escolhidoId" :href="`/admin/pdf-oportunidades/escolhidos/${oferta.escolhidoId}`" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white"><i class="fas fa-check"></i> Clonado · ver plano</Link>

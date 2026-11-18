@@ -57,9 +57,10 @@ class ManuelaEncerramento
 
         $texto = ' '.preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9 ]/', ' ', Str::lower(Str::ascii($mensagem)))).' ';
 
+        // Enfeites primeiro: "tenha um ótimo dia" sai inteiro antes do "ótimo" sozinho.
+        self::tirar($texto, self::ENFEITES);
         $forte = self::tirar($texto, self::FORTES);
         $fraca = self::tirar($texto, self::FRACAS);
-        self::tirar($texto, self::ENFEITES);
 
         if (trim($texto) !== '') {
             return false;

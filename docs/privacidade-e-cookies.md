@@ -16,7 +16,49 @@ visita a loja.
 
 ## Como está montado
 
-### Aceite dos cookies (desde 26/10/2026: sem faixa, aceite nos Termos de Uso e no Finalizar pedido)
+### Aceite dos cookies (desde 18/11/2026: pop-up "Aceito" / "Somente o básico")
+- **Pedido do Lira em 18/11/2026:** aviso de cookies em pop-up no MEIO da tela
+  (`resources/js/Shared/Components/AvisoCookies.vue`, na `AppLayout`), com fundo
+  escurecido e dois botões do mesmo tamanho. **Decisão do dono: os dois botões
+  são honestos.** Coletar tudo mesmo com "Somente o básico" está fora de
+  questão (enganoso; LGPD e CDC).
+- **"Aceito"** → `POST /cookies/aceitar` → `Cookies::registrarAceite`: prova em
+  `consentimentos_cookies` com `escolha = aceito`, cookie `kazakora_cookies` =
+  `VERSAO`. Libera o Pixel da Meta do navegador (`pixelMeta.js` voltou a exigir
+  `cookies.aceito`; o `app.js` dispara a página atual na hora do aceite), a API
+  de Conversões (`Cookies::aceitou`), o `_fbc` do clique e os cookies de
+  terceiros no log de visitas.
+- **"Somente o básico"** → `POST /cookies/recusar` → `Cookies::registrarRecusa`:
+  prova com `escolha = basico` (visitante, usuário, versão do aviso, IP,
+  navegador, data/hora em `aceito_em`), cookie `kazakora_cookies` =
+  `basico:<VERSAO>`. `aceitou()` fica falso: **Pixel e API de Conversões não
+  rodam**, nenhum cookie de terceiro é criado nem gravado no log. Sobra o
+  necessário e a visita anônima que a loja já registrava sem aceite (tabela
+  "O que é registrado das visitas", coluna "Sem OK", inclusive o `fbclid`).
+- O pop-up aparece uma vez: some quando `cookies.escolhido` (prop do Inertia,
+  `Cookies::escolheu`) é verdadeiro. **Esc** não é aceite nem recusa: só
+  esconde o pop-up até o fim da sessão do navegador (`sessionStorage`), sem
+  gravar nada (Pixel continua desligado). Foco vai para o primeiro botão,
+  Tab fica preso nos dois botões e no link, rolagem da página travada.
+- Não aparece no admin (`cookies` é null lá), nem na `/politica-de-cookies`
+  (a pessoa está lendo; a página tem o botão "Rever minha escolha de cookies",
+  que reabre o pop-up para trocar a escolha). O checkout não tem pop-up.
+- **Aceites antigos continuam valendo** (`VERSOES_ANTERIORES`, inclusive
+  2026-11-02). `VERSAO` passou para **2026-11-18** porque a coleta mudou
+  (o Pixel voltou a esperar o aceite e existe a recusa).
+- O aceite no **Finalizar pedido** continua como estava (`CheckoutController`
+  chama `registrarAceite`): quem escolheu "Somente o básico" e depois finaliza
+  uma compra passa a ter aceite, porque a frase do botão diz isso.
+- Termos de Uso, Política de Privacidade e Política de Cookies reescritas para
+  dizer isso (saiu o "ao navegar você concorda").
+- **FerraKora:** o mesmo pop-up no site dela (repo `ferrakora`). A escolha fica
+  no `localStorage` de lá e a prova vem para cá por `POST /api/ferrakora/cookies`
+  (`OutroSiteCookiesController`, `escolha=aceito|basico`, `visitante=<uuid>`
+  opcional; só dos domínios em `services.ferrakora.origens`), gravada com
+  `origem = ferrakora`. Pixel da FerraKora (e os `_fbp`/`_fbc` no aviso de
+  visita) só depois do "Aceito".
+
+#### Histórico: 26/10/2026, sem faixa, aceite nos Termos de Uso e no Finalizar pedido
 - **Pedido do Lira em 26/10/2026** ("não quero mais esse botão de cookies [...]
   vai tá dentro do termos de uso [...] assim que você clicar em comprar, você
   aceita"): a faixa (`AvisoCookies.vue`) saiu da loja e do checkout. Motivo: no
@@ -30,9 +72,9 @@ visita a loja.
   navegar no site, o visitante concorda com cookies e coleta de dados; o aceite
   é registrado no Finalizar pedido. Políticas de Privacidade e de Cookies dizem
   o mesmo. `VERSAO` não mudou (a frase do checkout é a mesma de 24/10).
-- Risco conhecido, escolha do Lira: aceite implícito pela navegação e Pixel antes
-  de qualquer clique contrariam o Guia de Cookies da ANPD (cookie de publicidade
-  só com consentimento por ação clara). Não reverter sem pedido do Lira.
+- Risco conhecido na época, escolha do Lira: aceite implícito pela navegação e
+  Pixel antes de qualquer clique contrariavam o Guia de Cookies da ANPD.
+  Resolvido em 18/11/2026 pelo pop-up acima.
 
 #### Histórico: 25/10/2026, faixa "ao navegar você concorda", aceite em 3 s
 - **Pedido do Lira em 25/10/2026:** a faixa voltou (`AvisoCookies.vue`, na
@@ -80,11 +122,11 @@ visita a loja.
 |---|---|---|---|---|
 | `kazakora-session` | Necessário | login, carrinho, checkout | `SESSION_LIFETIME` (120 min sem uso) | art. 7º V e IX |
 | `XSRF-TOKEN` | Necessário | proteção contra CSRF | igual à sessão | art. 7º IX, art. 46 |
-| `kazakora_cookies` | Necessário | lembra o OK | 12 meses | art. 8º § 2º |
+| `kazakora_cookies` | Necessário | lembra a escolha do pop-up: versão do aviso (aceito) ou `basico:<versão>` (somente o básico, desde 18/11/2026) | 12 meses | art. 8º § 2º |
 | `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_cupom_1a` | Necessário | DESDE 2026-10-25 NÃO É MAIS GRAVADO (o pop-up aparece toda vez que o checkout abre sem cupom). Antes lembrava que o pop-up do cupom de 1ª compra do checkout já apareceu, para não mostrar de novo (2026-10-23). Gravado pelo navegador (JS), sem dado pessoal: só o valor `1` | 12 meses | art. 7º V |
 | `kazakora_visitor` | Navegação | liga as páginas abertas pelo mesmo navegador (histórico de navegação e número de páginas no olho de Visitas ao site). Desde 25/10/2026 criado no **primeiro acesso** (`Cookies::garantirVisitante`, no `TrackSiteVisit`), antes do aceite; o mesmo código fica na sessão (`kazakora_visitante`) para quem recusa cookie | 12 meses | art. 7º IX (legítimo interesse) |
-| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Desde 26/10/2026 carrega desde o primeiro acesso, sem esperar o OK (`resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
+| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Desde 18/11/2026 só depois do "Aceito" (de 26/10 a 18/11 carregou sem aceite; `resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 `SameSite=Lax`. A sessão só trafega em https quando o `APP_URL` é https
@@ -95,7 +137,8 @@ O servidor manda à Meta os mesmos **AddToCart** e **Purchase** do Pixel, com o
 mesmo `event_id` (a Meta desduplica). Código: `App\Services\Meta\ConversoesMeta`,
 jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento aprovado).
 
-- **Consentimento:** é o mesmo OK do Pixel (`Cookies::aceitou`, versão atual).
+- **Consentimento:** é o mesmo OK do Pixel (`Cookies::aceitou`, versão atual ou anterior).
+  Quem escolheu "Somente o básico" não manda nada (desde 18/11/2026).
   Sem OK, nada sai do servidor. AddToCart: OK na hora do clique. Purchase: OK
   no momento do pagamento (o checkout grava `orders.meta_rastreio`; sem OK fica
   nulo e o Purchase do servidor não sai). Escolha documentada: o aviso é "só
@@ -171,8 +214,9 @@ veio e se o pixel rodou (as visitas dos anúncios apareciam todas "Interno"):
   o parâmetro de clique (fbclid, gclid...). Valor do clique só do fbclid,
   mesma regra da loja. Páginas seguintes (`e=0`) são Interno.
 - `_fbp` e `_fbc` do Pixel da Meta, em `site_visits.cookies`. A FerraKora
-  não tem aviso de cookies e roda o Pixel desde 28/10/2026 (decisão do Lira);
-  a Política dela cita os dois cookies. Guardar o valor aqui é medir os
+  roda o Pixel desde 28/10/2026; desde 18/11/2026 só depois do "Aceito" do
+  pop-up de cookies dela (sem aceite, o aviso de visita vai sem `fbp`/`fbc`).
+  A Política dela cita os dois cookies. Guardar o valor aqui é medir os
   anúncios, a mesma finalidade. Prazo: o mesmo das visitas.
 
 ### Localização no pedido (pedido 2026-10-12)
@@ -288,13 +332,11 @@ telefone. **Não coleta nada novo**: só lê o que já existe.
 ## Regras para quem for mexer (Claude Code e Naia)
 
 1. **Pixel do Meta, Google Analytics, Google Ads, TikTok Pixel, Hotjar e afins
-   são cookies de terceiros não necessários.** Exceção decidida pelo Lira em
-   26/10/2026: o Pixel da Meta do navegador carrega sem OK (seção Aceite). Os
-   demais só podem carregar **depois** do OK
-   (`page.props.cookies.aceito === true`), têm que entrar na tabela da
-   `/politica-de-cookies` e a `VERSAO` tem que mudar. Com publicidade de
-   terceiros, a ANPD recomenda dar ao cliente a opção de **recusar** — avaliar
-   com o Lira trocar o "só OK" por "OK / Só os necessários" nesse momento.
+   são cookies de terceiros não necessários.** Só podem carregar **depois** do
+   "Aceito" (`page.props.cookies.aceito === true`); quem escolheu "Somente o
+   básico" nunca os recebe. Têm que entrar na tabela da `/politica-de-cookies`
+   e a `VERSAO` tem que mudar. (De 26/10 a 18/11/2026 o Pixel da Meta carregava
+   sem OK; acabou com o pop-up de 18/11/2026.)
 2. Dado novo de visitante = conferir base legal, prazo de guarda e atualizar
    este arquivo e a Política de Privacidade.
 3. Nunca guardar dado de cartão; pagamento fica com o intermediador.

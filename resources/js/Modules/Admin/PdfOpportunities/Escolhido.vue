@@ -60,10 +60,10 @@ const remover = () => {
                     <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Preço lá fora</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ preco ?? 'não visível' }}</dd></div>
                     <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Variações</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ dados.variacoes ?? '—' }}</dd></div>
                 </dl>
-                <p class="mt-3 text-xs font-semibold text-slate-500">
+                <p class="mt-3 text-sm font-semibold text-slate-600">
                     Países: {{ (dados.paises ?? []).join(' · ') || '—' }} · No ar desde {{ data(dados.inicioMaisAntigo) }} · Clonado em {{ escolhido.clonadoEm }}
                 </p>
-                <p v-if="dados.observacao" class="mt-2 rounded-2xl bg-purple-50 p-3 text-sm leading-6 text-purple-950">{{ dados.observacao }}</p>
+                <p v-if="dados.observacao" class="mt-2 rounded-2xl border-l-4 border-purple-500 bg-[var(--surface-muted)] p-3 text-sm leading-6 text-[var(--surface-foreground)]">{{ dados.observacao }}</p>
 
                 <div class="mt-4 flex flex-wrap gap-2">
                     <a v-if="dados.urlDestino" :href="dados.urlDestino" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-purple-700 px-4 py-2 text-sm font-black text-white">Página de vendas</a>

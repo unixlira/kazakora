@@ -62,6 +62,10 @@ export const sidebarSections = [
             { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', marca: 'tiktok', permission: 'relatorios.view' },
             { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', marca: 'mercado-livre', permission: 'relatorios.view' },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', marca: 'shopee', permission: 'relatorios.view' },
+            // KazaKora (Lira, 2026-11-18): produtos físicos que estão escalando
+            // na Biblioteca de Anúncios, com termômetro e fábrica de criativos.
+            // Ícone = o favicon sem fundo, no laranja do tema.
+            { label: 'KazaKora', href: '/admin/oportunidades/kazakora', logo: '/images/marca/icone-menu-kazakora.png', permission: 'relatorios.view' },
         ],
     },
     {

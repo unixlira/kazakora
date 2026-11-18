@@ -176,6 +176,10 @@
 .admin-shell .icone-mercado-livre { --cor-marca: #ffe600; filter: drop-shadow(0 0 0.5px #2d3277) drop-shadow(0 0 0.5px #2d3277); }
 .admin-shell .icone-correios { --cor-marca: #ffd400; filter: drop-shadow(0 0 0.5px #00416b) drop-shadow(0 0 0.5px #00416b); }
 .dark .admin-shell :is(.icone-mercado-livre, .icone-correios) { filter: none; }
+/* Logo como ícone do menu (Oportunidades › KazaKora, 2026-11-18): favicon sem
+   fundo, no laranja do tema; 18px porque a casa tem respiro dentro e fica do
+   tamanho visual dos ícones de fonte de 12-14px. */
+.admin-shell .icone-logo { width: 18px; height: 18px; object-fit: contain; }
 .admin-shell .icone-tiktok { --cor-marca: var(--surface-foreground); text-shadow: 1px 1px 0 #fe2c55, -1px -1px 0 #25f4ee; }
 
 /*

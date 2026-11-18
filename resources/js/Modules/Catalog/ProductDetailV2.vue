@@ -539,7 +539,8 @@ const imagemDoBloco = (indice) => (indice === null || indice === undefined ? nul
 const srcsetDoBloco = (indice) => (indice === null || indice === undefined ? null : srcsetFoto(props.product.images?.[indice]));
 
 const highlights = computed(() => {
-    if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
+    // Até 4 checks (mentoria, 18/11/2026: "4 benefícios").
+    if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 4);
     for (const section of descriptionSections.value) {
         const list = section.parts.find((part) => part.type === 'ul');
         if (list) return list.items.slice(0, 3);

@@ -12,6 +12,7 @@ use App\Modules\WhatsApp\Services\ManuelaProductSearch;
 use App\Modules\WhatsApp\Services\ManuelaVisao;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\ManuelaEncerramento;
 use App\Notifications\ManuelaAlertaAtendimentoNotification;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -90,6 +91,13 @@ class ReplyWithManuela
             return;
         }
 
+        // Reação (👍 🙏) e figurinha não são mensagem: a Manuela não responde
+        // (pedido do Lira 2026-11-18). O webhook já pula reação; esta trava
+        // cobre o caminho da chave ligada na tela, que responde a última.
+        if (in_array($inbound->type, ['reaction', 'sticker'], true)) {
+            return;
+        }
+
         // Cliente mandou várias mensagens seguidas: só a última dispara
         // resposta (ela já leva o histórico inteiro pra Manuela). E se alguém
         // (Manuela ou pessoa) já respondeu depois dela, não responde de novo.
@@ -97,8 +105,9 @@ class ReplyWithManuela
         $alreadyHandled = $conversation->messages()
             ->whereIn('direction', ['inbound', 'outbound'])
             ->where('id', '>', $inbound->id)
-            ->get(['id', 'payload'])
-            ->contains(fn (WhatsAppMessage $message) => ! ($message->payload['interim'] ?? false));
+            ->get(['id', 'type', 'payload'])
+            // Reação do cliente depois da pergunta dele não é resposta nossa.
+            ->contains(fn (WhatsAppMessage $message) => $message->type !== 'reaction' && ! ($message->payload['interim'] ?? false));
 
         if ($alreadyHandled) {
             return;
@@ -117,6 +126,14 @@ class ReplyWithManuela
         }
 
         $text = $inbound->type === 'text' ? (string) $inbound->body : (string) ($inbound->payload['transcription'] ?? '');
+
+        // "Obrigada", "ok, valeu", "tá bom, aguardo": fim de conversa. A Manuela
+        // não responde e o atendimento é encerrado (pedido do Lira 2026-11-18).
+        if (in_array($inbound->type, ['text', 'audio'], true) && ManuelaEncerramento::encerra($text, $this->deixamosPergunta($conversation, $inbound))) {
+            $this->encerrar($conversation, $inbound);
+
+            return;
+        }
 
         // Sem IA, o roteiro fixo não entende foto/áudio: chama uma pessoa.
         if (! $agent->isConfigured() && trim($text) === '') {
@@ -183,6 +200,34 @@ class ReplyWithManuela
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
 
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    /** A nossa última mensagem antes da do cliente terminou em pergunta? */
+    private function deixamosPergunta(WhatsAppConversation $conversation, WhatsAppMessage $inbound): bool
+    {
+        $ultima = $conversation->messages()
+            ->where('direction', 'outbound')
+            ->where('id', '<', $inbound->id)
+            ->where('type', '!=', 'reaction')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get(['id', 'body', 'payload'])
+            ->first(fn (WhatsAppMessage $m) => ! ($m->payload['interim'] ?? false));
+
+        return $ultima !== null && str_contains((string) $ultima->body, '?');
+    }
+
+    private function encerrar(WhatsAppConversation $conversation, WhatsAppMessage $inbound): void
+    {
+        $inbound->update(['payload' => array_merge($inbound->payload ?? [], ['manuela_encerrou' => true])]);
+
+        // Pendência do time (ficha de cancelamento, alerta) continua aberta:
+        // só sai da fila o que não precisa de ninguém.
+        if (! $conversation->fresh()->needs_human) {
+            $conversation->update(['status' => 'resolved']);
+        }
+
+        Log::info('whatsapp.manuela_encerrou', ['conversation_id' => $conversation->id, 'message_id' => $inbound->id]);
     }
 
     private function alertarAtendimento(WhatsAppConversation $conversation, string $pergunta, string $rascunho): void

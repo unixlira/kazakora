@@ -16,6 +16,7 @@ use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfEscolhidoController;
+use App\Modules\Admin\Http\Controllers\OportunidadesKazakoraController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -713,6 +714,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('oportunidades/mercado-livre/inteligencia', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'inteligencia'])
             ->middleware('throttle:30,1')
             ->name('oportunidades.inteligencia');
+        // Oportunidades › KazaKora (Lira, 2026-11-18): produtos físicos escalando
+        // na Biblioteca de Anúncios, termômetro e fábrica de criativos. Antes de oportunidades/{canal}.
+        Route::get('oportunidades/kazakora', [OportunidadesKazakoraController::class, 'index'])->name('oportunidades.kazakora');
+        Route::get('oportunidades/kazakora/{oportunidade}', [OportunidadesKazakoraController::class, 'show'])->whereNumber('oportunidade')->name('oportunidades.kazakora.ver');
+        Route::post('oportunidades/kazakora/anuncios/{anuncio}/clonar', [OportunidadesKazakoraController::class, 'clonar'])->whereNumber('anuncio')->middleware('throttle:20,1')->name('oportunidades.kazakora.clonar');
+        Route::post('oportunidades/kazakora/{oportunidade}/criativos', [OportunidadesKazakoraController::class, 'criar'])->whereNumber('oportunidade')->middleware('throttle:10,1')->name('oportunidades.kazakora.criar');
+        Route::post('oportunidades/kazakora/criativos/{criativo}/refazer', [OportunidadesKazakoraController::class, 'refazer'])->whereNumber('criativo')->middleware('throttle:10,1')->name('oportunidades.kazakora.refazer');
         Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
             ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
             ->middleware('throttle:30,1')

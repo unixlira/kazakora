@@ -2,11 +2,17 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import SeloFase from '@/Shared/Components/SeloFase.vue';
+import Termometro from '@/Shared/Components/Termometro.vue';
 
 const props = defineProps({
     escolhido: { type: Object, required: true },
     anuncios: { type: Array, default: () => [] },
+    fases: { type: Object, default: () => ({}) },
 });
+
+const calor = computed(() => props.escolhido.termometro ?? { pontuacao: 0, fase: 'teste', novos7d: 0 });
+const pontos = (n) => Number(n ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
 const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano', ro: 'Romeno' };
 const dados = computed(() => props.escolhido.dados ?? {});
@@ -50,7 +56,8 @@ const remover = () => {
                 <div v-else class="flex aspect-[4/5] items-center justify-center"><i class="fas fa-file-pdf text-4xl text-slate-300"></i></div>
             </div>
             <div class="min-w-0 flex-1">
-                <p class="text-xs font-bold uppercase tracking-wide text-purple-700">#{{ dados.posicao ?? '—' }} no radar · {{ escolhido.nicho || 'Sem nicho' }} · {{ IDIOMAS[escolhido.idioma] ?? escolhido.idioma }}</p>
+                <SeloFase :pontuacao="calor.pontuacao" :fase="calor.fase" :rotulo="fases[calor.fase]?.rotulo" />
+                <p class="mt-2 text-xs font-bold uppercase tracking-wide text-purple-700">#{{ dados.posicao ?? '—' }} no radar · {{ escolhido.nicho || 'Sem nicho' }} · {{ IDIOMAS[escolhido.idioma] ?? escolhido.idioma }}</p>
                 <h1 class="mt-1 text-xl font-black text-slate-900 sm:text-2xl">{{ escolhido.nome }}</h1>
                 <p class="mt-1 text-sm text-slate-500">{{ dados.anunciante }}<span v-if="dados.plataforma"> · {{ dados.plataforma }}</span><span v-if="dados.dominio"> · {{ dados.dominio }}</span></p>
 
@@ -59,6 +66,7 @@ const remover = () => {
                     <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Rodando há</dt><dd class="mt-1 text-lg font-black text-amber-700">{{ dados.diasRodando ?? '—' }} dias</dd></div>
                     <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Preço lá fora</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ preco ?? 'não visível' }}</dd></div>
                     <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Variações</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ dados.variacoes ?? '—' }}</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Criativos novos (7 dias)</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ calor.novos7d }}</dd></div>
                 </dl>
                 <p class="mt-3 text-sm font-semibold text-slate-600">
                     Países: {{ (dados.paises ?? []).join(' · ') || '—' }} · No ar desde {{ data(dados.inicioMaisAntigo) }} · Clonado em {{ escolhido.clonadoEm }}
@@ -71,6 +79,11 @@ const remover = () => {
                     <Link v-if="escolhido.ofertaId" :href="`/admin/pdf-oportunidades/${escolhido.ofertaId}`" class="rounded-xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">Oferta no radar</Link>
                     <button type="button" @click="remover" class="rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-700">Remover</button>
                 </div>
+            </div>
+            <div class="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-slate-50 px-4 py-3" title="Termômetro com os dados do dia em que a oferta foi clonada">
+                <Termometro :pontuacao="calor.pontuacao" :fase="calor.fase" grande />
+                <p class="mt-1 text-3xl font-black text-slate-900">{{ pontos(calor.pontuacao) }}</p>
+                <p class="text-xs font-bold uppercase text-slate-500">de 100</p>
             </div>
         </section>
 

@@ -2,11 +2,17 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import SeloFase from '@/Shared/Components/SeloFase.vue';
+import Termometro from '@/Shared/Components/Termometro.vue';
 
 const props = defineProps({
     oferta: { type: Object, required: true },
     anuncios: { type: Array, default: () => [] },
+    fases: { type: Object, default: () => ({}) },
 });
+
+const t = computed(() => props.oferta.termometro ?? { pontuacao: 0, fase: 'teste', novos7d: 0 });
+const pontos = (n) => Number(n ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 
 const IDIOMAS = { es: 'Espanhol', en: 'Inglês', pt: 'Português', fr: 'Francês', de: 'Alemão', it: 'Italiano', ro: 'Romeno' };
 const preco = computed(() => (props.oferta.preco === null || props.oferta.preco === undefined
@@ -25,25 +31,36 @@ const totalMidias = computed(() => props.anuncios.reduce((n, a) => n + a.midias.
     <AdminLayout>
         <Link href="/admin/pdf-oportunidades" class="inline-flex items-center gap-2 text-sm font-bold text-purple-700"><i class="fas fa-arrow-left"></i> Voltar ao ranking</Link>
 
-        <section class="mt-3 rounded-3xl bg-white p-4 shadow-lg shadow-slate-200/70 sm:p-6">
-            <p class="text-xs font-bold uppercase tracking-wide text-purple-700">#{{ oferta.posicao ?? '—' }} · {{ oferta.nicho || 'Sem nicho' }} · {{ IDIOMAS[oferta.idioma] ?? oferta.idioma }}</p>
-            <h1 class="mt-1 text-xl font-black text-slate-900 sm:text-2xl">{{ oferta.nome }}</h1>
-            <p class="mt-1 text-sm text-slate-500">{{ oferta.anunciante }}<span v-if="oferta.plataforma"> · {{ oferta.plataforma }}</span><span v-if="oferta.dominio"> · {{ oferta.dominio }}</span></p>
+        <section class="mt-3 flex flex-col gap-4 rounded-3xl bg-white p-4 shadow-lg shadow-slate-200/70 sm:flex-row sm:p-6">
+            <div class="min-w-0 flex-1">
+                <SeloFase :pontuacao="t.pontuacao" :fase="t.fase" :rotulo="fases[t.fase]?.rotulo" />
+                <p class="mt-2 text-xs font-bold uppercase tracking-wide text-purple-700">#{{ oferta.posicao ?? '—' }} · {{ oferta.nicho || 'Sem nicho' }} · {{ IDIOMAS[oferta.idioma] ?? oferta.idioma }}</p>
+                <h1 class="mt-1 text-xl font-black text-slate-900 sm:text-2xl">{{ oferta.nome }}</h1>
+                <p class="mt-1 text-sm text-slate-500">{{ oferta.anunciante }}<span v-if="oferta.plataforma"> · {{ oferta.plataforma }}</span><span v-if="oferta.dominio"> · {{ oferta.dominio }}</span></p>
+                <p v-if="fases[t.fase]" class="mt-2 text-sm leading-6 text-slate-600">{{ fases[t.fase].descricao }}</p>
 
-            <dl class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Anúncios ativos</dt><dd class="mt-1 text-lg font-black text-emerald-700">{{ oferta.anunciosAtivos }}</dd></div>
-                <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Rodando há</dt><dd class="mt-1 text-lg font-black text-amber-700">{{ oferta.diasRodando }} dias</dd></div>
-                <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Preço</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ preco ?? 'não visível' }}</dd></div>
-                <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Desde</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ oferta.inicioMaisAntigo ?? '—' }}</dd></div>
-            </dl>
-            <p class="mt-3 text-sm font-semibold text-slate-600">Países: {{ (oferta.paises ?? []).join(' · ') || '—' }}</p>
-            <p v-if="oferta.observacao" class="mt-2 rounded-2xl border-l-4 border-purple-500 bg-[var(--surface-muted)] p-3 text-sm leading-6 text-[var(--surface-foreground)]">{{ oferta.observacao }}</p>
+                <dl class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Anúncios ativos</dt><dd class="mt-1 text-lg font-black text-emerald-700">{{ oferta.anunciosAtivos }}</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Rodando há</dt><dd class="mt-1 text-lg font-black text-amber-700">{{ oferta.diasRodando }} dias</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Preço</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ preco ?? 'não visível' }}</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Desde</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ oferta.inicioMaisAntigo ?? '—' }}</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Variações</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ oferta.variacoes }}</dd></div>
+                    <div class="rounded-2xl bg-slate-50 p-3"><dt class="text-xs font-bold uppercase text-slate-400">Criativos novos (7 dias)</dt><dd class="mt-1 text-lg font-black text-slate-900">{{ t.novos7d }}</dd></div>
+                </dl>
+                <p class="mt-3 text-sm font-semibold text-slate-600">Países: {{ (oferta.paises ?? []).join(' · ') || '—' }}</p>
+                <p v-if="oferta.observacao" class="mt-2 rounded-2xl border-l-4 border-purple-500 bg-[var(--surface-muted)] p-3 text-sm leading-6 text-[var(--surface-foreground)]">{{ oferta.observacao }}</p>
 
-            <div class="mt-4 flex flex-wrap gap-2">
-                <Link v-if="oferta.escolhidoId" :href="`/admin/pdf-oportunidades/escolhidos/${oferta.escolhidoId}`" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white"><i class="fas fa-check"></i> Clonado · ver plano</Link>
-                <button v-else type="button" :disabled="clonando" @click="clonar" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-60"><i :class="clonando ? 'fas fa-spinner fa-spin' : 'fas fa-clone'"></i> {{ clonando ? 'Clonando…' : 'Clonar' }}</button>
-                <a v-if="oferta.urlDestino" :href="oferta.urlDestino" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-purple-700 px-4 py-2 text-sm font-black text-white">Página de vendas</a>
-                <a v-if="oferta.paginaBiblioteca" :href="oferta.paginaBiblioteca" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Todos os anúncios do anunciante</a>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <Link v-if="oferta.escolhidoId" :href="`/admin/pdf-oportunidades/escolhidos/${oferta.escolhidoId}`" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white"><i class="fas fa-check"></i> Clonado · ver plano</Link>
+                    <button v-else type="button" :disabled="clonando" @click="clonar" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-60"><i :class="clonando ? 'fas fa-spinner fa-spin' : 'fas fa-clone'"></i> {{ clonando ? 'Clonando…' : 'Clonar' }}</button>
+                    <a v-if="oferta.urlDestino" :href="oferta.urlDestino" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-purple-700 px-4 py-2 text-sm font-black text-white">Página de vendas</a>
+                    <a v-if="oferta.paginaBiblioteca" :href="oferta.paginaBiblioteca" target="_blank" rel="noopener noreferrer" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Todos os anúncios do anunciante</a>
+                </div>
+            </div>
+            <div class="flex shrink-0 flex-col items-center justify-center rounded-2xl bg-slate-50 px-4 py-3">
+                <Termometro :pontuacao="t.pontuacao" :fase="t.fase" grande />
+                <p class="mt-1 text-3xl font-black text-slate-900">{{ pontos(t.pontuacao) }}</p>
+                <p class="text-xs font-bold uppercase text-slate-500">de 100</p>
             </div>
         </section>
 

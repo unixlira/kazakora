@@ -736,9 +736,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             ->middleware('throttle:4,1')
             ->name('paginas-de-conversao.atualizar');
         Route::get('pdf-oportunidades', [PdfOpportunityController::class, 'index'])->name('pdf-oportunidades');
-        Route::post('pdf-oportunidades/atualizar', [PdfOpportunityController::class, 'refresh'])
-            ->middleware('throttle:4,1')
-            ->name('pdf-oportunidades.atualizar');
+        Route::get('pdf-oportunidades/{oferta}', [PdfOpportunityController::class, 'show'])->whereNumber('oferta')->name('pdf-oportunidades.ver');
     });
 
     Route::middleware('permission:financeiro.view')->group(function () {

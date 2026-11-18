@@ -36,7 +36,6 @@ const dataColeta = computed(() => (props.coletadoEm ? new Date(props.coletadoEm)
             <div class="flex items-center gap-3">
                 <img src="/images/marca/icone-menu-kazakora.png" alt="" class="h-10 w-10" />
                 <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-orange-300">Biblioteca de Anúncios da Meta · produtos físicos</p>
                     <h1 class="text-2xl font-black sm:text-3xl">Oportunidades KazaKora</h1>
                 </div>
             </div>

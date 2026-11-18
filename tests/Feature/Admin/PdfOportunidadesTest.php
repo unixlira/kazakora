@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Modules\Admin\Models\PdfEscolhido;
 use App\Modules\Admin\Models\PdfOferta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -142,5 +143,74 @@ class PdfOportunidadesTest extends TestCase
 
         $resposta = $this->actingAs($cliente)->get('/admin/pdf-oportunidades');
         $this->assertContains($resposta->status(), [302, 403]);
+    }
+
+    public function test_clonar_copia_oferta_criativos_plano_e_prompt(): void
+    {
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $oferta = PdfOferta::firstOrFail();
+
+        $this->actingAs($admin)->post('/admin/pdf-oportunidades/'.$oferta->id.'/clonar')->assertRedirect();
+        $this->actingAs($admin)->post('/admin/pdf-oportunidades/'.$oferta->id.'/clonar')->assertRedirect();
+
+        $this->assertSame(1, PdfEscolhido::count());
+        $escolhido = PdfEscolhido::firstOrFail();
+        $this->assertSame('Planner Digital 2026', $escolhido->nome);
+        $this->assertSame($admin->id, $escolhido->user_id);
+        $this->assertCount(2, $escolhido->anuncios);
+        $this->assertCount(5, $escolhido->plano_acao);
+        $this->assertStringContainsString('Planner Digital 2026', $escolhido->prompt_entregavel);
+        $this->assertStringContainsString('Planner imprimível', $escolhido->prompt_entregavel);
+        $this->assertStringContainsString('Descarga inmediata del planner 111', $escolhido->prompt_entregavel);
+
+        // A mídia é copiada para a pasta do clone e sobrevive à reimportação que apaga o anúncio.
+        $midia = $escolhido->anuncios[0]['midias'][0];
+        $this->assertStringStartsWith('pdf-escolhidos/'.$escolhido->id.'/', $midia['caminho']);
+        Storage::disk('public')->assertExists($midia['caminho']);
+        Storage::disk('public')->assertExists($escolhido->miniatura);
+
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson(['111'])])->assertSuccessful();
+        $this->assertCount(2, $escolhido->fresh()->anuncios);
+    }
+
+    public function test_telas_dos_escolhidos(): void
+    {
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $oferta = PdfOferta::firstOrFail();
+        $this->actingAs($admin)->post('/admin/pdf-oportunidades/'.$oferta->id.'/clonar');
+        $escolhido = PdfEscolhido::firstOrFail();
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades')
+            ->assertInertia(fn (Assert $page) => $page->where('totalEscolhidos', 1)->where('ofertas.0.escolhidoId', $escolhido->id));
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades/escolhidos')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Admin/PdfOpportunities/Escolhidos', false)
+                ->has('escolhidos', 1)
+                ->where('escolhidos.0.totalMidias', 2));
+
+        $this->actingAs($admin)->get('/admin/pdf-oportunidades/escolhidos/'.$escolhido->id)
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Admin/PdfOpportunities/Escolhido', false)
+                ->has('anuncios', 2)
+                ->has('escolhido.planoAcao', 5)
+                ->where('escolhido.dados.urlDestino', 'https://pay.hotmart.com/X123')
+                ->where('anuncios.0.iniciadoEm', '01/09/2026'));
+
+        $this->actingAs($admin)->delete('/admin/pdf-oportunidades/escolhidos/'.$escolhido->id)->assertRedirect('/admin/pdf-oportunidades/escolhidos');
+        $this->assertSame(0, PdfEscolhido::count());
+        Storage::disk('public')->assertMissing('pdf-escolhidos/'.$escolhido->id);
+    }
+
+    public function test_sem_relatorios_view_nao_clona(): void
+    {
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
+        $assinante = User::factory()->create(['role' => User::ROLE_SUBSCRIBER]);
+        DB::table('role_permissions')->where('role', User::ROLE_SUBSCRIBER)->where('permission', 'relatorios.view')->update(['granted' => false]);
+
+        $this->actingAs($assinante)->post('/admin/pdf-oportunidades/'.PdfOferta::firstOrFail()->id.'/clonar')->assertForbidden();
+        $this->assertSame(0, PdfEscolhido::count());
     }
 }

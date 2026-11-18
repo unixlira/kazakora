@@ -142,6 +142,8 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
     'versao' => \App\Support\Privacidade\Cookies::VERSAO,
 ]))->name('legal.cookies');
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
+// "Somente o básico" do pop-up de cookies (2026-11-18): grava a recusa e lembra dela.
+Route::post('/cookies/recusar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'recusar'])->middleware('throttle:20,1')->name('cookies.recusar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 // Quem Somos (pedido 2026-11-02): link só no rodapé, sem item no menu.
 Route::inertia('/quem-somos', 'Legal/QuemSomos')->name('legal.quem-somos');

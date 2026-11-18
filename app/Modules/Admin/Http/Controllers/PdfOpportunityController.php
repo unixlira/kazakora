@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Models\PdfEscolhido;
 use App\Modules\Admin\Models\PdfOferta;
 use App\Modules\Admin\Models\PdfOfertaAnuncio;
 use Illuminate\Support\Facades\Storage;
@@ -21,6 +22,7 @@ class PdfOpportunityController extends Controller
     public function index(): Response
     {
         $ofertas = PdfOferta::query()
+            ->with('escolhido:id,pdf_oferta_id')
             ->where('ativa', true)
             ->orderByRaw('posicao is null')->orderBy('posicao')->orderByDesc('pontuacao')
             ->limit(100)
@@ -30,12 +32,13 @@ class PdfOpportunityController extends Controller
         return Inertia::render('Admin/PdfOpportunities/Index', [
             'ofertas' => $ofertas,
             'coletadoEm' => PdfOferta::query()->where('ativa', true)->max('coletado_em'),
+            'totalEscolhidos' => PdfEscolhido::query()->count(),
         ]);
     }
 
     public function show(PdfOferta $oferta): Response
     {
-        $oferta->load(['anuncios' => fn ($q) => $q->orderByDesc('variacoes')->orderBy('iniciado_em')]);
+        $oferta->load(['escolhido:id,pdf_oferta_id', 'anuncios' => fn ($q) => $q->orderByDesc('variacoes')->orderBy('iniciado_em')]);
 
         return Inertia::render('Admin/PdfOpportunities/Show', [
             'oferta' => $this->resumo($oferta) + [
@@ -84,6 +87,7 @@ class PdfOpportunityController extends Controller
             'inicioMaisAntigo' => $o->inicio_mais_antigo?->format('d/m/Y'),
             'pontuacao' => (float) $o->pontuacao,
             'miniatura' => $this->url($o->miniatura),
+            'escolhidoId' => $o->escolhido?->id,
         ];
     }
 

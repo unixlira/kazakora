@@ -15,6 +15,7 @@ use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
+use App\Modules\Admin\Http\Controllers\PdfEscolhidoController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -737,6 +738,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             ->name('paginas-de-conversao.atualizar');
         Route::get('pdf-oportunidades', [PdfOpportunityController::class, 'index'])->name('pdf-oportunidades');
         Route::get('pdf-oportunidades/{oferta}', [PdfOpportunityController::class, 'show'])->whereNumber('oferta')->name('pdf-oportunidades.ver');
+        // PDFs Escolhidos (2026-11-18): o botão Clonar copia a oferta, os criativos, o plano de ação e o prompt do entregável.
+        Route::post('pdf-oportunidades/{oferta}/clonar', [PdfEscolhidoController::class, 'clonar'])->whereNumber('oferta')->middleware('throttle:30,1')->name('pdf-oportunidades.clonar');
+        Route::get('pdf-oportunidades/escolhidos', [PdfEscolhidoController::class, 'index'])->name('pdf-oportunidades.escolhidos');
+        Route::get('pdf-oportunidades/escolhidos/{escolhido}', [PdfEscolhidoController::class, 'show'])->whereNumber('escolhido')->name('pdf-oportunidades.escolhidos.ver');
+        Route::delete('pdf-oportunidades/escolhidos/{escolhido}', [PdfEscolhidoController::class, 'destroy'])->whereNumber('escolhido')->name('pdf-oportunidades.escolhidos.remover');
     });
 
     Route::middleware('permission:financeiro.view')->group(function () {

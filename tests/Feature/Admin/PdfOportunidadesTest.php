@@ -31,7 +31,7 @@ class PdfOportunidadesTest extends TestCase
         file_put_contents($this->pasta.'/01-planner/222.jpg', 'imagem-fake');
     }
 
-    private function json(array $anuncios = ['111', '222'], string $nome = 'Planner Digital 2026'): string
+    private function ofertasJson(array $anuncios = ['111', '222'], string $nome = 'Planner Digital 2026'): string
     {
         $ads = [];
         foreach ($anuncios as $id) {
@@ -79,8 +79,8 @@ class PdfOportunidadesTest extends TestCase
 
     public function test_importador_e_idempotente_e_copia_as_midias(): void
     {
-        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->json()])->assertSuccessful();
-        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->json(['111'], 'Planner Digital 2027')])->assertSuccessful();
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson(['111'], 'Planner Digital 2027')])->assertSuccessful();
 
         $this->assertSame(1, PdfOferta::count());
         $oferta = PdfOferta::firstOrFail();
@@ -98,10 +98,10 @@ class PdfOportunidadesTest extends TestCase
 
     public function test_oferta_que_saiu_do_arquivo_fica_inativa(): void
     {
-        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->json()])->assertSuccessful();
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
         $antiga = PdfOferta::create(['chave' => 'velha.com', 'nome' => 'Velha', 'ativa' => true, 'posicao' => 2]);
 
-        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->json()])->assertSuccessful();
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
 
         $this->assertFalse($antiga->fresh()->ativa);
         $this->assertTrue(PdfOferta::where('chave', 'pay.hotmart.com/X123')->first()->ativa);
@@ -109,7 +109,7 @@ class PdfOportunidadesTest extends TestCase
 
     public function test_telas_abrem_com_os_criativos(): void
     {
-        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->json()])->assertSuccessful();
+        $this->artisan('pdf-oportunidades:importar', ['arquivo' => $this->ofertasJson()])->assertSuccessful();
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $oferta = PdfOferta::firstOrFail();
 

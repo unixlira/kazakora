@@ -32,7 +32,7 @@ const cookies = [
     {
         nome: 'kazakora_cookies',
         tipo: 'Necessário',
-        finalidade: 'Lembra que você aceitou o uso de cookies ao finalizar uma compra.',
+        finalidade: 'Lembra a sua escolha no aviso de cookies (Aceito ou Somente o básico), para o aviso não aparecer em toda página. Também guarda o aceite feito ao finalizar uma compra.',
         duracao: '12 meses',
         base: 'Cumprimento de obrigação legal: prova do consentimento (art. 8º, § 2º)',
     },
@@ -53,11 +53,14 @@ const cookies = [
     {
         nome: '_fbp, _fbc',
         tipo: 'Publicidade',
-        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. O Pixel é carregado desde o primeiro acesso: ao navegar no site você concorda com ele pelos Termos de Uso, e o aceite é registrado ao finalizar a compra. O aviso pelo nosso servidor só acontece depois desse aceite. Você pode bloquear ou apagar esses cookies nas configurações do seu navegador.',
+        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas, os produtos colocados no carrinho e as compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Com o seu aceite, a loja também avisa a Meta direto do nosso servidor (API de Conversões) quando você coloca um produto no carrinho ou tem a compra aprovada, com seu e-mail, telefone, nome, cidade e CEP embaralhados (hash SHA-256, a Meta não recebe o texto), o IP e o navegador. Só é carregado depois que você clica em Aceito no aviso de cookies (ou aceita ao finalizar a compra). Se você escolher Somente o básico, nem o Pixel nem o aviso pelo nosso servidor acontecem.',
         duracao: 'até 90 dias',
-        base: 'Consentimento pelo uso do site, conforme os Termos de Uso, registrado ao finalizar a compra (art. 7º, I)',
+        base: 'Consentimento (art. 7º, I)',
     },
 ];
+
+// Reabre o pop-up de cookies (AvisoCookies.vue) para mudar a escolha.
+const reverEscolha = () => window.dispatchEvent(new Event('kz:abrir-aviso-cookies'));
 </script>
 
 <template>
@@ -81,7 +84,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios desde o primeiro acesso, e a API de Conversões da Meta só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
+                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios só se você clicar em Aceito. Com Somente o básico, ficam só os cookies necessários. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 
@@ -106,19 +109,31 @@ const cookies = [
                     </p>
                 </LegalCard>
 
-                <LegalCard title="Quando você aceita">
+                <LegalCard id="sua-escolha" title="A sua escolha" class="scroll-mt-28">
                     <p>
-                        Os cookies necessários funcionam desde o primeiro acesso, porque sem eles a loja não abre o carrinho nem o
-                        pagamento. O de navegação (kazakora_visitor) também é criado no primeiro acesso e registra as páginas que
-                        você abre no site. O Pixel da Meta também carrega desde o primeiro acesso: ao navegar no site você concorda
-                        com o uso de cookies e dados, conforme os <Link href="/termos-de-uso" class="font-medium text-store-accent hover:underline">Termos de Uso</Link>.
-                        O aceite é registrado pela frase abaixo do botão <strong>Finalizar pedido</strong>. Guardamos a data, a hora, o IP,
-                        o navegador e a versão do texto aceito, como a LGPD exige.
+                        No primeiro acesso, um aviso no meio da tela pergunta como você prefere. Os dois botões valem de verdade:
+                    </p>
+                    <ul class="flex flex-col gap-2.5">
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Aceito</strong>: além dos necessários, liberamos os cookies de medição e anúncios (Pixel da Meta) e o aviso à Meta pelo nosso servidor (API de Conversões).</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Somente o básico</strong>: ficam só os cookies necessários e o registro de visitas da própria loja descrito abaixo. O Pixel e a API de Conversões da Meta não rodam para você.</span></li>
+                    </ul>
+                    <p>
+                        Os cookies necessários e o de navegação (kazakora_visitor, um código aleatório do próprio site que registra as
+                        páginas abertas) funcionam desde o primeiro acesso, porque sem eles a loja não abre o carrinho nem o pagamento.
+                        A frase abaixo do botão <strong>Finalizar pedido</strong> também registra o aceite do uso de cookies. Em
+                        todos os casos guardamos a data, a hora, o IP, o navegador, a versão do aviso e a escolha feita, como a LGPD exige.
                     </p>
                     <p>
-                        Para desfazer, apague ou bloqueie os cookies do site nas configurações do seu navegador: o código de
-                        navegação recomeça do zero. Você também pode pedir pelo e-mail {{ COMPANY.email }}
-                        ou pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>.
+                        Você pode mudar a sua escolha quando quiser:
+                    </p>
+                    <div>
+                        <button type="button" class="rounded-full bg-[#1F2225] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#33373b] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#FD7B41]" @click="reverEscolha">
+                            Rever minha escolha de cookies
+                        </button>
+                    </div>
+                    <p>
+                        Também dá para apagar ou bloquear os cookies nas configurações do seu navegador, ou pedir pelo e-mail
+                        {{ COMPANY.email }} ou pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>.
                     </p>
                 </LegalCard>
 

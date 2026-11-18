@@ -10,9 +10,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
- * OK da faixa de cookies (pedido 2026-10-10). A faixa saiu em 2026-10-24,
- * voltou em 2026-10-25 e saiu de novo em 2026-10-26: o aceite vem do
- * "Finalizar pedido" (checkout). A rota fica para o OK vindo de outro lugar.
+ * Botões do pop-up de cookies (AvisoCookies.vue, pedido do Lira 2026-11-18):
+ * "Aceito" (aceitar) e "Somente o básico" (recusar). Os dois gravam a prova
+ * da escolha e lembram dela, para o pop-up não voltar a cada página.
+ * Histórico: faixa de 2026-10-10, fora em 2026-10-24, de volta em 2026-10-25
+ * e fora de novo em 2026-10-26 (aceite só no "Finalizar pedido", que continua).
  */
 class CookiesController extends Controller
 {
@@ -24,6 +26,14 @@ class CookiesController extends Controller
         if (! $jaAceitou) {
             TrackSiteVisit::registrarOk($request, $visitante);
         }
+
+        return back(303);
+    }
+
+    /** "Somente o básico": sem Pixel, sem API de Conversões, só o necessário. */
+    public function recusar(Request $request): RedirectResponse
+    {
+        Cookies::registrarRecusa($request);
 
         return back(303);
     }

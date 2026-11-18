@@ -43,15 +43,17 @@ const usoProibido = [
                     </p>
                 </LegalCard>
 
-                <!-- Cookies nos Termos (pedido do Lira 2026-10-26): sem faixa de cookies na entrada; ao
-                     navegar concorda, e o aceite é registrado no Finalizar pedido. -->
+                <!-- Cookies nos Termos (pedido do Lira 2026-10-26). Desde 2026-11-18 a escolha é do
+                     pop-up de cookies ("Aceito" / "Somente o básico"); o Finalizar pedido continua registrando o aceite. -->
                 <LegalCard id="cookies" title="Cookies e dados de navegação" class="scroll-mt-28">
                     <p>
-                        Ao navegar no site, você concorda com o uso de cookies e com a coleta dos seus dados de navegação,
-                        conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/18), a
+                        No primeiro acesso, o aviso de cookies pergunta a sua escolha, conforme a Lei Geral de Proteção de Dados
+                        (Lei nº 13.709/18), a
                         <Link href="/politica-de-privacidade" class="font-medium text-store-accent hover:underline">Política de Privacidade</Link>
                         e a <Link href="/politica-de-cookies" class="font-medium text-store-accent hover:underline">Política de Cookies</Link>.
-                        Isso inclui o Pixel da Meta (Facebook e Instagram), que mede as visitas e as compras vindas dos nossos anúncios.
+                        <strong>Aceito</strong> libera os cookies de medição e anúncios, como o Pixel da Meta (Facebook e Instagram),
+                        que mede as visitas e as compras vindas dos nossos anúncios. <strong>Somente o básico</strong> deixa só os
+                        cookies necessários para a loja funcionar e o registro de visitas da própria loja.
                     </p>
                     <p>
                         Ao clicar em <strong>Finalizar pedido</strong>, você declara que leu e aceita estes Termos, a Política

@@ -114,10 +114,12 @@ class HandleInertiaRequests extends Middleware
             'pagamentoTeste' => fn () => $request->is('finalizacao*') && \App\Services\MercadoPago\CredenciaisCheckout::emTeste(),
             // Parcelas reais do cartão (Botrel, 2026-11-02): preço de vitrine e página do produto.
             'parcelamento' => fn () => $request->is('admin*') ? null : \App\Modules\Checkout\Support\ParcelasCartao::tabela(),
-            // Aviso de cookies (docs/privacidade-e-cookies.md): some depois do OK.
+            // Pop-up de cookies (docs/privacidade-e-cookies.md, 2026-11-18): aparece
+            // até a pessoa escolher "Aceito" ou "Somente o básico". Admin não tem.
             'cookies' => fn () => $request->is('admin*') ? null : [
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),
-                // Pixel da Meta (2026-10-16): o front só carrega depois do OK; ID do admin.
+                'escolhido' => \App\Support\Privacidade\Cookies::escolheu($request),
+                // Pixel da Meta: o front só carrega com `aceito` (de novo desde 2026-11-18); ID do admin.
                 'pixelMeta' => \App\Support\PixelMeta::id(),
             ],
             // Modal "Avalie sua compra" depois do login (2026-10-23): só na loja, só cliente.

@@ -19,10 +19,14 @@ use Illuminate\Support\Str;
  *   entrada. Navegador completo, valor do clique (menos o fbclid, sempre desde
  *   2026-11-02) e cookies de terceiros no log continuam só depois do OK.
  *
- * Aceite (gravado por registrarAceite()): desde 2026-10-26 sem faixa de
- * cookies; ao navegar o visitante concorda pelos Termos de Uso e o aceite é
- * gravado no "Finalizar pedido". O Pixel da Meta do navegador carrega sem
- * esperar o aceite (pixelMeta.js); a API de Conversões continua só com ele.
+ * Escolha (desde 2026-11-18, pop-up AvisoCookies.vue no meio da tela):
+ * - "Aceito" → registrarAceite(): prova com escolha "aceito", cookie
+ *   kazakora_cookies = VERSAO. Libera o Pixel da Meta (pixelMeta.js exige
+ *   `cookies.aceito`) e a API de Conversões (aceitou()).
+ * - "Somente o básico" → registrarRecusa(): prova com escolha "basico",
+ *   cookie kazakora_cookies = "basico:VERSAO". Pixel e API de Conversões
+ *   ficam desligados; sobra o necessário e a visita anônima de sempre.
+ * O "Finalizar pedido" continua gravando o aceite (registrarAceite).
  *
  * Mudou o que a loja coleta? Troque VERSAO e atualize as políticas.
  */
@@ -32,12 +36,16 @@ class Cookies
     // 2026-10-24: aceite na frase do checkout, no lugar do aviso flutuante.
     // 2026-10-25: faixa de volta, aceite ao navegar (OK ou 3 s sem clique).
     // 2026-11-02: fbclid gravado em toda visita, sem esperar o aceite.
-    public const VERSAO = '2026-11-02';
+    // 2026-11-18: pop-up "Aceito" / "Somente o básico"; Pixel volta a esperar o aceite.
+    public const VERSAO = '2026-11-18';
 
     /** OKs anteriores para os mesmos cookies (aviso de 2026-10-18): continuam valendo. */
-    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24', '2026-10-25'];
+    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24', '2026-10-25', '2026-11-02'];
 
-    /** Guarda que o cliente deu OK (e em qual versão do aviso). */
+    /** Valor do kazakora_cookies de quem escolheu "Somente o básico": "basico:<VERSAO>". */
+    public const PREFIXO_BASICO = 'basico:';
+
+    /** Guarda a escolha do cliente (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';
 
     /** Identificador aleatório de visitante, só para estatística. */
@@ -72,6 +80,56 @@ class Cookies
     public static function aceitou(Request $request): bool
     {
         return in_array($request->cookie(self::COOKIE_OK), [self::VERSAO, ...self::VERSOES_ANTERIORES], true);
+    }
+
+    /** Escolheu "Somente o básico" no aviso atual (2026-11-18). */
+    public static function recusou(Request $request): bool
+    {
+        return $request->cookie(self::COOKIE_OK) === self::PREFIXO_BASICO.self::VERSAO;
+    }
+
+    /** Já respondeu o aviso (aceitou ou ficou com o básico): o pop-up não aparece. */
+    public static function escolheu(Request $request): bool
+    {
+        return self::aceitou($request) || self::recusou($request);
+    }
+
+    /**
+     * Grava a recusa ("Somente o básico", 2026-11-18) com a mesma prova do
+     * aceite (versão, data/hora, IP, navegador), para mostrar que a escolha
+     * foi respeitada. Na KazaKora o kazakora_cookies vira "basico:VERSAO":
+     * o pop-up não volta e aceitou() fica falso (sem Pixel, sem API de
+     * Conversões, sem cookies de terceiros no log). Não cria _fbc.
+     */
+    public static function registrarRecusa(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?string $visitante = null): string
+    {
+        $naLoja = $origem === ConsentimentoCookie::ORIGEM_KAZAKORA;
+        $visitante = ($naLoja ? self::visitante($request) : $visitante) ?: (string) Str::uuid();
+
+        if (! $naLoja || ! self::recusou($request)) {
+            self::gravarProva($request, $origem, $visitante, ConsentimentoCookie::ESCOLHA_BASICO);
+        }
+
+        if ($naLoja) {
+            Cookie::queue(self::COOKIE_OK, self::PREFIXO_BASICO.self::VERSAO, self::DURACAO_MINUTOS);
+            $request->cookies->set(self::COOKIE_OK, self::PREFIXO_BASICO.self::VERSAO);
+        }
+
+        return $visitante;
+    }
+
+    private static function gravarProva(Request $request, string $origem, string $visitante, string $escolha, ?int $userId = null): void
+    {
+        ConsentimentoCookie::create([
+            'visitante_id' => substr($visitante, 0, 36),
+            'user_id' => $userId ?? $request->user()?->id,
+            'origem' => $origem,
+            'versao' => self::VERSAO,
+            'escolha' => $escolha,
+            'ip' => $request->ip(),
+            'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
+            'aceito_em' => now(),
+        ]);
     }
 
     /**
@@ -130,23 +188,16 @@ class Cookies
      * Na KazaKora também cria os cookies do OK e do visitante e marca a
      * requisição atual como aceita, para o resto dela (rastreio da Meta do
      * pedido) já enxergar o aceite. Os outros sites (Beauty Kora, FerraKora)
-     * chegam pela API, de outro domínio: só a prova é gravada.
+     * chegam pela API, de outro domínio: só a prova é gravada (com o código
+     * de visitante que o site mandar, ou um novo).
      */
-    public static function registrarAceite(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?int $userId = null): string
+    public static function registrarAceite(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?int $userId = null, ?string $visitante = null): string
     {
         $naLoja = $origem === ConsentimentoCookie::ORIGEM_KAZAKORA;
-        $visitante = ($naLoja ? $request->cookie(self::COOKIE_VISITANTE) : null) ?: (string) Str::uuid();
+        $visitante = ($naLoja ? $request->cookie(self::COOKIE_VISITANTE) : $visitante) ?: (string) Str::uuid();
 
         if (! $naLoja || ! self::aceitou($request)) {
-            ConsentimentoCookie::create([
-                'visitante_id' => $visitante,
-                'user_id' => $userId ?? $request->user()?->id,
-                'origem' => $origem,
-                'versao' => self::VERSAO,
-                'ip' => $request->ip(),
-                'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
-                'aceito_em' => now(),
-            ]);
+            self::gravarProva($request, $origem, $visitante, ConsentimentoCookie::ESCOLHA_ACEITO, $userId);
         }
 
         if ($naLoja) {

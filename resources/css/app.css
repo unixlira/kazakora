@@ -178,8 +178,10 @@
 .dark .admin-shell :is(.icone-mercado-livre, .icone-correios) { filter: none; }
 /* Logo como ícone do menu (Oportunidades › KazaKora, 2026-11-18): favicon sem
    fundo, no laranja do tema; 18px porque a casa tem respiro dentro e fica do
-   tamanho visual dos ícones de fonte de 12-14px. */
-.admin-shell .icone-logo { width: 18px; height: 18px; object-fit: contain; }
+   tamanho visual dos ícones de fonte de 12-14px. A caixa em volta tem 15px,
+   a largura que o Font Awesome 7 dá aos ícones (1,25em de 12px), senão o
+   texto do item fica mais à direita que o dos outros. */
+.admin-shell .icone-logo { width: 18px; height: 18px; max-width: none; object-fit: contain; }
 .admin-shell .icone-tiktok { --cor-marca: var(--surface-foreground); text-shadow: 1px 1px 0 #fe2c55, -1px -1px 0 #25f4ee; }
 
 /*

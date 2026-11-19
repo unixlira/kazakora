@@ -72,6 +72,9 @@ class TrackSiteVisit
     /** Sessão: fbclid do anúncio, para o _fbc sair mesmo se o aceite vier depois, no checkout. */
     public const SESSAO_FBCLID = 'meta_fbclid';
 
+    /** Sessão: gclid do anúncio do Google, para o _gcl_aw sair no aceite (2026-11-19). */
+    public const SESSAO_GCLID = 'google_gclid';
+
     public function handle(Request $request, Closure $next): Response
     {
         // O cookie de visitante nasce antes da página, para o resto da
@@ -79,6 +82,7 @@ class TrackSiteVisit
         if ($request->isMethod('get') && $this->paginaDaLoja($request)) {
             rescue(fn () => Cookies::garantirVisitante($request), null, false);
             rescue(fn () => self::guardarFbclid($request), null, false);
+            rescue(fn () => self::guardarGclid($request), null, false);
         }
 
         $response = $next($request);
@@ -117,6 +121,22 @@ class TrackSiteVisit
 
         if (is_string($fbclid) && preg_match('/^[A-Za-z0-9_\-]{10,500}$/', $fbclid) === 1) {
             $request->session()->put(self::SESSAO_FBCLID, ['valor' => $fbclid, 'em' => (int) floor(microtime(true) * 1000)]);
+        }
+    }
+
+    /**
+     * Clique de anúncio do Google (?gclid=, 2026-11-19): mesma ideia do
+     * fbclid. A tag do Google Ads (Shared/tagGoogle.js) só carrega depois do
+     * aceite, que pode vir só no Finalizar pedido; sem isto a compra perdia o
+     * vínculo com o clique. Cookies::registrarAceite cria o _gcl_aw com isto.
+     * Fica só na sessão (servidor), nenhum cookie novo antes do aceite.
+     */
+    private static function guardarGclid(Request $request): void
+    {
+        $gclid = $request->query('gclid');
+
+        if (is_string($gclid) && preg_match('/^[A-Za-z0-9_\-]{10,300}$/', $gclid) === 1) {
+            $request->session()->put(self::SESSAO_GCLID, ['valor' => $gclid, 'em' => time()]);
         }
     }
 

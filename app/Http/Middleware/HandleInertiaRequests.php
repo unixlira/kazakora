@@ -99,6 +99,8 @@ class HandleInertiaRequests extends Middleware
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),
                 // Pixel da Meta (2026-10-16): o front só carrega depois do OK; ID do admin.
                 'pixelMeta' => \App\Support\PixelMeta::id(),
+                // Tag do Google Ads (2026-11-19): o front só carrega com `aceito`.
+                'googleAds' => \App\Support\GoogleAds::id(),
             ],
             // Modal "Avalie sua compra" depois do login (2026-10-23): só na loja, só cliente.
             'avaliacaoModal' => fn () => ! $request->is('admin*') && $request->user() && ! $request->user()->isStaff() && \App\Modules\Catalog\Support\ModalAvaliacao::ativo($request->session())

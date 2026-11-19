@@ -2,6 +2,7 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { rastrearPagina } from '@/Shared/pixelMeta';
+import { rastrearPaginaGoogle } from '@/Shared/tagGoogle';
 import { liberarImagensDepoisDaPrimeiraPintura } from '@/Shared/imagensDepoisDoTopo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
@@ -23,7 +24,11 @@ createInertiaApp({
         // Pixel da Meta (Shared/pixelMeta.js): desde 2026-10-26 roda sem esperar
         // o OK de cookies (sem faixa; aceite no Finalizar pedido e nos Termos de Uso).
         // `navigate` cobre a primeira página e cada troca de página.
-        router.on('navigate', (e) => rastrearPagina(e.detail.page));
+        router.on('navigate', (e) => {
+            rastrearPagina(e.detail.page);
+            // Tag do Google Ads (Shared/tagGoogle.js, 2026-11-19): só com o aceite registrado.
+            rastrearPaginaGoogle(e.detail.page);
+        });
 
         // Tela de abertura (resources/views/app.blade.php): some quando a loja montou
         // e o CSS da loja (carregado sem travar a página) já chegou.

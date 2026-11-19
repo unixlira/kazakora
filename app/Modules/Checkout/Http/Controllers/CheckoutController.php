@@ -1182,6 +1182,8 @@ class CheckoutController extends Controller
                 'event_id' => ConversoesMeta::eventIdDoPurchase($order),
                 'dados' => ConversoesMeta::dadosDoPurchase($order),
             ] : null,
+            // Conversão "Compra" do Google Ads (2026-11-19): só com aceite de cookies.
+            'google_compra' => \App\Support\GoogleAds::compra($order, $request),
         ]);
     }
 
@@ -1197,6 +1199,7 @@ class CheckoutController extends Controller
                 'event_id' => ConversoesMeta::eventIdDoPurchase($order),
                 'dados' => ConversoesMeta::dadosDoPurchase($order),
             ] : null,
+            'googleCompra' => \App\Support\GoogleAds::compra($order, $request),
         ]);
     }
 

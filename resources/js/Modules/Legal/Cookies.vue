@@ -57,6 +57,13 @@ const cookies = [
         duracao: 'até 90 dias',
         base: 'Consentimento pelo uso do site, conforme os Termos de Uso, registrado ao finalizar a compra (art. 7º, I)',
     },
+    {
+        nome: '_gcl_aw, _gcl_au',
+        tipo: 'Publicidade',
+        finalidade: 'Tag do Google Ads (Google): mede as compras vindas dos nossos anúncios no Google e ajuda o Google a mostrar nossos anúncios a quem tem interesse. Quando a compra é aprovada, a loja informa ao Google o valor e o número do pedido e pode mandar junto o seu e-mail e telefone embaralhados (hash SHA-256, o Google não recebe o texto), só para ligar a compra ao anúncio. Se você chegou por um anúncio do Google, o código do clique (gclid) fica guardado na sua sessão, no nosso servidor, e só vira cookie depois do aceite. Diferente do Pixel da Meta, a tag do Google só é carregada depois do aceite registrado ao finalizar a compra. O Google trata esses dados conforme a política de privacidade dele (policies.google.com/privacy).',
+        duracao: 'até 90 dias',
+        base: 'Consentimento registrado ao finalizar a compra (art. 7º, I)',
+    },
 ];
 </script>
 
@@ -81,7 +88,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios desde o primeiro acesso, e a API de Conversões da Meta só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
+                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios desde o primeiro acesso, e a API de Conversões da Meta e a tag do Google Ads só depois do seu aceite ao finalizar a compra. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 
@@ -112,6 +119,7 @@ const cookies = [
                         pagamento. O de navegação (kazakora_visitor) também é criado no primeiro acesso e registra as páginas que
                         você abre no site. O Pixel da Meta também carrega desde o primeiro acesso: ao navegar no site você concorda
                         com o uso de cookies e dados, conforme os <Link href="/termos-de-uso" class="font-medium text-store-accent hover:underline">Termos de Uso</Link>.
+                        A tag do Google Ads só carrega depois do aceite.
                         O aceite é registrado pela frase abaixo do botão <strong>Finalizar pedido</strong>. Guardamos a data, a hora, o IP,
                         o navegador e a versão do texto aceito, como a LGPD exige.
                     </p>

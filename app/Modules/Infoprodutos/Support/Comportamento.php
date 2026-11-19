@@ -17,6 +17,12 @@ use Illuminate\Support\Collection;
  */
 class Comportamento
 {
+    /**
+     * Mostrar as visitas de teste (utm_source=teste-medicao): o painel liga
+     * com ?testes=1 para conferir a medição de ponta a ponta.
+     */
+    public static bool $comTestes = false;
+
     public const CELULAR = 'celular';
 
     public const COMPUTADOR = 'computador';
@@ -27,7 +33,7 @@ class Comportamento
     public function paginas(Carbon $de, Carbon $ate): array
     {
         return InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->where('teste', false)
+            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))
             ->whereBetween('created_at', [$de, $ate])
             ->selectRaw('produto, pagina, COUNT(DISTINCT sessao) as visitas')
             ->groupBy('produto', 'pagina')
@@ -123,7 +129,7 @@ class Comportamento
     private function sessoes(string $produto, string $pagina, string $aparelho, Carbon $de, Carbon $ate): Collection
     {
         $pv = InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->where('teste', false)
+            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))
             ->where('produto', $produto)->where('pagina', $pagina)
             ->whereBetween('created_at', [$de, $ate])
             ->orderBy('id')

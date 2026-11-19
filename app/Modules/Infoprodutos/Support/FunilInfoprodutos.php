@@ -23,6 +23,12 @@ use Illuminate\Support\Collection;
  */
 class FunilInfoprodutos
 {
+    /**
+     * Mostrar as visitas de teste (utm_source=teste-medicao): o painel liga
+     * com ?testes=1 para conferir a medição de ponta a ponta.
+     */
+    public static bool $comTestes = false;
+
     public const PERIODOS = ['hoje' => 'Hoje', '7d' => '7 dias', '30d' => '30 dias'];
 
     public const TODOS = 'todos';
@@ -138,7 +144,7 @@ class FunilInfoprodutos
     private function pageviews(string $produto, Carbon $de, Carbon $ate): Collection
     {
         return InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->where('teste', false)->where('pagina', 'landing')
+            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))->where('pagina', 'landing')
             ->when($produto === self::TODOS, fn ($q) => $q->whereIn('produto', array_keys((array) config('infoprodutos.produtos'))),
                 fn ($q) => $q->where('produto', $produto))
             ->whereBetween('created_at', [$de, $ate])

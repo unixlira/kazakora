@@ -38,6 +38,7 @@ class InfoprodutosPainelController extends Controller
 {
     public function index(Request $request): Response
     {
+        FunilInfoprodutos::$comTestes = $request->boolean('testes');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         $produtos = (array) config('infoprodutos.produtos');
         $produto = array_key_exists((string) $request->query('produto'), $produtos) ? (string) $request->query('produto') : FunilInfoprodutos::TODOS;
@@ -144,6 +145,7 @@ class InfoprodutosPainelController extends Controller
 
     public function comportamento(Request $request, Comportamento $comportamento): Response
     {
+        Comportamento::$comTestes = $request->boolean('testes');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         [$de, $ate] = FunilInfoprodutos::intervalo($periodo);
         $aparelho = $request->query('aparelho') === Comportamento::COMPUTADOR ? Comportamento::COMPUTADOR : Comportamento::CELULAR;

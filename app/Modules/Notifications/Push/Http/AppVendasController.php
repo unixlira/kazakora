@@ -7,9 +7,10 @@ use App\Modules\Notifications\Push\AvisosPush;
 use App\Modules\Notifications\Push\Models\PushInscricao;
 use App\Modules\Notifications\Push\WebPush;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * API da página de ativação dos apps de vendas (/app/<app>/, repositório
@@ -17,10 +18,15 @@ use Illuminate\Support\Str;
  */
 class AppVendasController extends Controller
 {
-    /** Login: o app manda para cá, o painel pede a senha e volta para o app. */
-    public function entrar(string $app): RedirectResponse
+    /**
+     * Login: o app manda para cá, o painel pede a senha e volta para o app.
+     * O login é um POST do Inertia que segue o redirecionamento para cá:
+     * Inertia::location faz o navegador abrir a página do app inteira (um
+     * redirect comum cairia como "resposta que não é Inertia").
+     */
+    public function entrar(string $app): Response
     {
-        return redirect('/app/'.$app.'/');
+        return Inertia::location('/app/'.$app.'/');
     }
 
     public function estado(Request $request, string $app, WebPush $webPush): JsonResponse

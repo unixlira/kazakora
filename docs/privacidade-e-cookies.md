@@ -127,10 +127,50 @@ visita a loja.
 | `kazakora_cupom_1a` | Necessário | DESDE 2026-10-25 NÃO É MAIS GRAVADO (o pop-up aparece toda vez que o checkout abre sem cupom). Antes lembrava que o pop-up do cupom de 1ª compra do checkout já apareceu, para não mostrar de novo (2026-10-23). Gravado pelo navegador (JS), sem dado pessoal: só o valor `1` | 12 meses | art. 7º V |
 | `kazakora_visitor` | Navegação | liga as páginas abertas pelo mesmo navegador (histórico de navegação e número de páginas no olho de Visitas ao site). Desde 25/10/2026 criado no **primeiro acesso** (`Cookies::garantirVisitante`, no `TrackSiteVisit`), antes do aceite; o mesmo código fica na sessão (`kazakora_visitante`) para quem recusa cookie | 12 meses | art. 7º IX (legítimo interesse) |
 | `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Desde 18/11/2026 só depois do "Aceito" (de 26/10 a 18/11 carregou sem aceite; `resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
+| `_gcl_aw`, `_gcl_au` | Publicidade (Google) | tag do Google Ads (`GOOGLE_ADS_CONVERSION_ID`): conversão "Compra" com valor e número do pedido. Só depois do aceite (`resources/js/Shared/tagGoogle.js`). `_gcl_aw` também criado pelo servidor no aceite, com o gclid guardado na sessão (desde 19/11/2026) | até 90 dias | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 `SameSite=Lax`. A sessão só trafega em https quando o `APP_URL` é https
 (`config/session.php`). Login expira em 8 h (`ExpireStaleSession`).
+
+### Tag do Google Ads (pedido 2026-11-19, PMax do travesseiro)
+Conversão "Compra" do Google Ads no pedido pago do kazakora.com, com valor e
+número do pedido. Código: `App\Support\GoogleAds` (servidor) e
+`resources/js/Shared/tagGoogle.js` (front, chamado pelo `app.js` e pelo
+`CheckoutV2.vue`).
+
+- **Consentimento: o mesmo do Pixel da Meta.** O `gtag.js` só é baixado com
+  `cookies.aceito` (pop-up "Aceito", aceite antigo ou o do Finalizar pedido).
+  "Somente o básico" ou sem aceite: nada do Google carrega. A compra só sai
+  do servidor para o front (`google_compra` no status do pagamento,
+  `googleCompra` na confirmação) se `Cookies::aceitou` for verdadeiro naquela
+  requisição, o pedido estiver pago e for da loja (`ConversoesMeta::pedidoDaLoja`).
+- **Clique do anúncio (`gclid`):** guardado só na sessão do servidor
+  (`TrackSiteVisit::SESSAO_GCLID`, chave `google_gclid`), igual ao fbclid. No
+  aceite, `Cookies::criarGclAw` cria o `_gcl_aw` (`GCL.<hora>.<gclid>`, 90 dias,
+  `.kazakora.com`, sem criptografia, `bootstrap/app.php`) para a tag ligar a
+  compra ao clique mesmo quando o aceite só vem no Finalizar pedido. Nenhum
+  cookie do Google existe antes do aceite. O log de visitas continua sem o
+  valor do gclid antes do aceite.
+- **Consent Mode:** depois do aceite, `ad_storage`, `ad_user_data` e
+  `ad_personalization` liberados; `analytics_storage` negado (a loja não usa
+  Google Analytics).
+- **Uma vez por pedido:** `transaction_id` = número do pedido (o Google
+  desduplica) e trava no `localStorage` (`kzg_<pedido>`).
+- **Conversões otimizadas (Enhanced Conversions):** e-mail e celular
+  (+55...) normalizados e com hash SHA-256, só com
+  `GOOGLE_ADS_ENHANCED_CONVERSIONS=true`. Desligado por padrão: ligar só
+  depois de aceitar os "termos de dados do cliente" na conta do Google Ads.
+  Mesmo dado que a API de Conversões da Meta já manda com o mesmo aceite; as
+  políticas já citam.
+- **.env:** `GOOGLE_ADS_CONVERSION_ID` (AW-...), `GOOGLE_ADS_PURCHASE_LABEL`
+  (rótulo da ação "Compra"), `GOOGLE_ADS_ENHANCED_CONVERSIONS`. Sem ID ou sem
+  rótulo válidos, a tag não carrega.
+- `VERSAO` passou para **2026-11-19** (texto do pop-up e das políticas citam
+  o Google). Os aceites anteriores continuam valendo (`VERSOES_ANTERIORES`),
+  como nas trocas de 02/11 e 18/11.
+- Cookies do Google: `_gcl_aw` e `_gcl_au` (já estavam na lista
+  `COOKIES_REGISTRAVEIS` do log de visitas).
 
 ### API de Conversões da Meta (pedido 2026-10-18)
 O servidor manda à Meta os mesmos **AddToCart** e **Purchase** do Pixel, com o

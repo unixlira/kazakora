@@ -3,6 +3,7 @@ import { instalarJornada } from '@/Shared/jornadaCarrinho.mjs';
 import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { rastrearPagina } from '@/Shared/pixelMeta';
+import { rastrearPaginaGoogle } from '@/Shared/tagGoogle';
 import { liberarImagensDepoisDaPrimeiraPintura } from '@/Shared/imagensDepoisDoTopo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
@@ -32,10 +33,15 @@ createInertiaApp({
         router.on('navigate', (e) => {
             pixelOk = !!e.detail.page.props.cookies?.aceito;
             rastrearPagina(e.detail.page);
+            // Tag do Google Ads (Shared/tagGoogle.js, 2026-11-19): mesma regra do aceite.
+            rastrearPaginaGoogle(e.detail.page);
         });
         router.on('success', (e) => {
             const aceito = !!e.detail.page.props.cookies?.aceito;
-            if (aceito && !pixelOk) rastrearPagina(e.detail.page, { imediato: true });
+            if (aceito && !pixelOk) {
+                rastrearPagina(e.detail.page, { imediato: true });
+                rastrearPaginaGoogle(e.detail.page);
+            }
             pixelOk = aceito;
         });
 

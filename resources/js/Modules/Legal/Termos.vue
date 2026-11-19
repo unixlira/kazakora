@@ -51,8 +51,8 @@ const usoProibido = [
                         (Lei nº 13.709/18), a
                         <Link href="/politica-de-privacidade" class="font-medium text-store-accent hover:underline">Política de Privacidade</Link>
                         e a <Link href="/politica-de-cookies" class="font-medium text-store-accent hover:underline">Política de Cookies</Link>.
-                        <strong>Aceito</strong> libera os cookies de medição e anúncios, como o Pixel da Meta (Facebook e Instagram),
-                        que mede as visitas e as compras vindas dos nossos anúncios. <strong>Somente o básico</strong> deixa só os
+                        <strong>Aceito</strong> libera os cookies de medição e anúncios, como o Pixel da Meta (Facebook e Instagram)
+                        e a tag do Google Ads, que medem as visitas e as compras vindas dos nossos anúncios. <strong>Somente o básico</strong> deixa só os
                         cookies necessários para a loja funcionar e o registro de visitas da própria loja.
                     </p>
                     <p>

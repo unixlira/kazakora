@@ -57,6 +57,13 @@ const cookies = [
         duracao: 'até 90 dias',
         base: 'Consentimento (art. 7º, I)',
     },
+    {
+        nome: '_gcl_aw, _gcl_au',
+        tipo: 'Publicidade',
+        finalidade: 'Tag do Google Ads (Google): mede as compras vindas dos nossos anúncios no Google e ajuda o Google a mostrar nossos anúncios a quem tem interesse. Quando a compra é aprovada, a loja informa ao Google o valor e o número do pedido e pode mandar junto o seu e-mail e telefone embaralhados (hash SHA-256, o Google não recebe o texto), só para ligar a compra ao anúncio. Se você chegou por um anúncio do Google, o código do clique (gclid) fica guardado na sua sessão, no nosso servidor, e só vira cookie depois do aceite. Só é carregada depois que você clica em Aceito no aviso de cookies (ou aceita ao finalizar a compra). Com Somente o básico, a tag do Google não roda. O Google trata esses dados conforme a política de privacidade dele (policies.google.com/privacy).',
+        duracao: 'até 90 dias',
+        base: 'Consentimento (art. 7º, I)',
+    },
 ];
 
 // Reabre o pop-up de cookies (AvisoCookies.vue) para mudar a escolha.
@@ -84,7 +91,7 @@ const reverEscolha = () => window.dispatchEvent(new Event('kz:abrir-aviso-cookie
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) para medir nossos anúncios só se você clicar em Aceito. Com Somente o básico, ficam só os cookies necessários. A KazaKora não vende dados.
+                        Usamos o Pixel e a API de Conversões da Meta (Facebook e Instagram) e a tag do Google Ads para medir nossos anúncios só se você clicar em Aceito. Com Somente o básico, ficam só os cookies necessários. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 
@@ -114,8 +121,8 @@ const reverEscolha = () => window.dispatchEvent(new Event('kz:abrir-aviso-cookie
                         No primeiro acesso, um aviso no meio da tela pergunta como você prefere. Os dois botões valem de verdade:
                     </p>
                     <ul class="flex flex-col gap-2.5">
-                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Aceito</strong>: além dos necessários, liberamos os cookies de medição e anúncios (Pixel da Meta) e o aviso à Meta pelo nosso servidor (API de Conversões).</span></li>
-                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Somente o básico</strong>: ficam só os cookies necessários e o registro de visitas da própria loja descrito abaixo. O Pixel e a API de Conversões da Meta não rodam para você.</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Aceito</strong>: além dos necessários, liberamos os cookies de medição e anúncios (Pixel da Meta e tag do Google Ads) e o aviso à Meta pelo nosso servidor (API de Conversões).</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-check mt-0.5 shrink-0 text-store-accent"></i><span><strong>Somente o básico</strong>: ficam só os cookies necessários e o registro de visitas da própria loja descrito abaixo. O Pixel e a API de Conversões da Meta e a tag do Google Ads não rodam para você.</span></li>
                     </ul>
                     <p>
                         Os cookies necessários e o de navegação (kazakora_visitor, um código aleatório do próprio site que registra as

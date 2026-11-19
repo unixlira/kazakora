@@ -642,6 +642,20 @@ return [
         'site_url' => 'https://kazakora.com',
     ],
 
+    // Tag do Google Ads na loja (2026-11-19, App\Support\GoogleAds e
+    // Shared/tagGoogle.js): conversão "Compra" no pedido pago, com valor e
+    // número do pedido. Só carrega depois do aceite de cookies. Sem ID ou sem
+    // rótulo nada carrega. conversion_id no formato AW-123456789; o rótulo é o
+    // da ação de conversão (Metas > Conversões > Compra > Configuração da tag).
+    // enhanced_conversions manda e-mail e celular com hash SHA-256 junto da
+    // compra (Conversões otimizadas); só ligar depois de aceitar os termos de
+    // dados do cliente na conta do Google Ads.
+    'google_ads_tag' => [
+        'conversion_id' => env('GOOGLE_ADS_CONVERSION_ID'),
+        'purchase_label' => env('GOOGLE_ADS_PURCHASE_LABEL'),
+        'enhanced_conversions' => (bool) env('GOOGLE_ADS_ENHANCED_CONVERSIONS', false),
+    ],
+
     // API de Conversões da Meta (pedido 2026-10-18, App\Services\Meta\ConversoesMeta):
     // AddToCart e Purchase saem também do servidor, com o mesmo event_id do
     // Pixel (a Meta desduplica). Desligado por padrão: o homolog usa o mesmo

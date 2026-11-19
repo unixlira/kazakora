@@ -2,7 +2,8 @@
 // Pop-up de cookies no meio da tela (pedido do Lira 2026-11-18). Dois botões
 // honestos e do mesmo tamanho:
 //  - "Aceito": POST /cookies/aceitar. Grava a prova e libera o Pixel da Meta
-//    e a API de Conversões (pixelMeta.js exige `cookies.aceito`).
+//    e a API de Conversões (pixelMeta.js exige `cookies.aceito`) e a tag do
+//    Google Ads (tagGoogle.js, 2026-11-19, mesma regra).
 //  - "Somente o básico": POST /cookies/recusar. Grava a prova da recusa;
 //    Pixel e API de Conversões NÃO rodam para essa pessoa.
 // Os dois lembram a escolha (cookie kazakora_cookies, 12 meses): o pop-up
@@ -130,7 +131,7 @@ onBeforeUnmount(() => {
 
                     <p id="aviso-cookies-texto" class="mt-4 text-[14.5px] leading-relaxed text-[#4a4f54]">
                         Usamos cookies para a loja funcionar e, se você aceitar, para medir nossos anúncios
-                        (Pixel da Meta) e mostrar ofertas que fazem sentido para você. A escolha é sua.
+                        (Pixel da Meta e tag do Google Ads) e mostrar ofertas que fazem sentido para você. A escolha é sua.
                     </p>
 
                     <ul class="mt-4 space-y-2.5 rounded-2xl bg-[#f6f5f4] p-4 text-[13.5px] leading-snug">

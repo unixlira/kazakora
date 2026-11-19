@@ -4,6 +4,7 @@ namespace App\Modules\Notifications\Push\Http;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Notifications\Push\AvisosPush;
+use App\Modules\Notifications\Push\MetricasDaLoja;
 use App\Modules\Notifications\Push\Models\PushInscricao;
 use App\Modules\Notifications\Push\WebPush;
 use Illuminate\Http\JsonResponse;
@@ -86,5 +87,15 @@ class AppVendasController extends Controller
         $resultado = $avisos->enviar($app, $avisos->mensagemDeTeste($app), $request->user());
 
         return response()->json($resultado, $resultado['enviados'] > 0 ? 200 : 422);
+    }
+
+    /**
+     * Tela principal do app (2026-11-19): métricas só da loja do app
+     * (MetricasDaLoja), guardadas 60 s. ?periodo=hoje|7d|30d.
+     */
+    public function metricas(Request $request, string $app, MetricasDaLoja $metricas): JsonResponse
+    {
+        return response()->json($metricas->montar($app, MetricasDaLoja::periodo($request->query('periodo'))))
+            ->header('Cache-Control', 'private, no-store');
     }
 }

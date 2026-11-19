@@ -130,23 +130,16 @@ class Cookies
      * Na KazaKora também cria os cookies do OK e do visitante e marca a
      * requisição atual como aceita, para o resto dela (rastreio da Meta do
      * pedido) já enxergar o aceite. Os outros sites (Beauty Kora, FerraKora)
-     * chegam pela API, de outro domínio: só a prova é gravada.
+     * chegam pela API, de outro domínio: só a prova é gravada (com o código
+     * de visitante que o site mandar, ou um novo).
      */
-    public static function registrarAceite(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?int $userId = null): string
+    public static function registrarAceite(Request $request, string $origem = ConsentimentoCookie::ORIGEM_KAZAKORA, ?int $userId = null, ?string $visitante = null): string
     {
         $naLoja = $origem === ConsentimentoCookie::ORIGEM_KAZAKORA;
-        $visitante = ($naLoja ? $request->cookie(self::COOKIE_VISITANTE) : null) ?: (string) Str::uuid();
+        $visitante = ($naLoja ? $request->cookie(self::COOKIE_VISITANTE) : $visitante) ?: (string) Str::uuid();
 
         if (! $naLoja || ! self::aceitou($request)) {
-            ConsentimentoCookie::create([
-                'visitante_id' => $visitante,
-                'user_id' => $userId ?? $request->user()?->id,
-                'origem' => $origem,
-                'versao' => self::VERSAO,
-                'ip' => $request->ip(),
-                'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
-                'aceito_em' => now(),
-            ]);
+            self::gravarProva($request, $origem, $visitante, ConsentimentoCookie::ESCOLHA_ACEITO, $userId);
         }
 
         if ($naLoja) {
@@ -158,6 +151,35 @@ class Cookies
         }
 
         return $visitante;
+    }
+
+    /**
+     * Grava a recusa ("Somente o básico") de outro site (FerraKora, 2026-11-19),
+     * com a mesma prova do aceite (versão, data/hora, IP, navegador). Na
+     * KazaKora ainda não existe recusa (o pop-up novo não foi para produção):
+     * aqui só a prova dos outros sites, que lembram a escolha no navegador deles.
+     */
+    public static function registrarRecusa(Request $request, string $origem, ?string $visitante = null): string
+    {
+        abort_if($origem === ConsentimentoCookie::ORIGEM_KAZAKORA, 404);
+        $visitante = $visitante ?: (string) Str::uuid();
+        self::gravarProva($request, $origem, $visitante, ConsentimentoCookie::ESCOLHA_BASICO);
+
+        return $visitante;
+    }
+
+    private static function gravarProva(Request $request, string $origem, string $visitante, string $escolha, ?int $userId = null): void
+    {
+        ConsentimentoCookie::create([
+            'visitante_id' => substr($visitante, 0, 36),
+            'user_id' => $userId ?? $request->user()?->id,
+            'origem' => $origem,
+            'versao' => self::VERSAO,
+            'escolha' => $escolha,
+            'ip' => $request->ip(),
+            'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
+            'aceito_em' => now(),
+        ]);
     }
 
     /** 90 dias, o mesmo prazo que o Pixel usa no _fbc. */

@@ -68,6 +68,12 @@ class MetaAdsService
     private ?string $contaFixa = null;
 
     /**
+     * Token usado no lugar de META_ADS_ACCESS_TOKEN (GreenKora, 2026-11-19:
+     * a conta dos infoprodutos é de outro usuário e tem token próprio).
+     */
+    private ?string $tokenFixo = null;
+
+    /**
      * Cópia do serviço lendo outra conta de anúncios com o mesmo token. Só
      * para LEITURA (espelho, totais): criar e enviar campanha seguem na
      * conta da KazaKora.
@@ -76,6 +82,18 @@ class MetaAdsService
     {
         $copia = clone $this;
         $copia->contaFixa = $adAccountId;
+
+        return $copia;
+    }
+
+    /**
+     * Cópia lendo outra conta com OUTRO token (GreenKora). Só leitura, como
+     * naConta(); o token nunca vai para log nem mensagem de erro.
+     */
+    public function comToken(string $token, string $adAccountId): static
+    {
+        $copia = $this->naConta($adAccountId);
+        $copia->tokenFixo = $token;
 
         return $copia;
     }
@@ -95,6 +113,10 @@ class MetaAdsService
      */
     public function faltando(): array
     {
+        if ($this->tokenFixo !== null) {
+            return filled($this->tokenFixo) && filled($this->contaFixa) ? [] : ['META_GK_ACCESS_TOKEN'];
+        }
+
         $faltando = [];
 
         foreach (['access_token' => 'META_ADS_ACCESS_TOKEN', 'ad_account_id' => 'META_ADS_AD_ACCOUNT_ID', 'page_id' => 'META_ADS_PAGE_ID'] as $chave => $env) {
@@ -1058,6 +1080,160 @@ class MetaAdsService
                 'spend' => $m['gasto'],
             ];
         }, $linhas);
+    }
+
+    /**
+     * Performance de cada anúncio por dia (metadados, Lira 2026-10-27),
+     * inclusive dos excluídos (só o insights traz). Sem $de/$ate, desde o
+     * início da conta. Os nomes vêm junto para gravar o que a Meta não lista.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    public function desempenhoDiarioPorAnuncio(?Carbon $de = null, ?Carbon $ate = null): array
+    {
+        $periodo = $de && $ate
+            ? ['time_range' => json_encode(['since' => $de->toDateString(), 'until' => $ate->toDateString()])]
+            : ['date_preset' => 'maximum'];
+
+        $linhas = $this->getPaginado($this->conta().'/insights', $periodo + [
+            'level' => 'ad',
+            'time_increment' => 1,
+            'filtering' => json_encode([['field' => 'ad.effective_status', 'operator' => 'IN', 'value' => [...self::STATUS_LISTAVEIS, 'DELETED']]]),
+            'fields' => 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values',
+            'limit' => 500,
+        ]);
+
+        return array_map(function (array $linha) {
+            $m = $this->metricas($linha);
+
+            return [
+                'anuncio_meta_id' => (string) $linha['ad_id'],
+                'anuncio_nome' => (string) ($linha['ad_name'] ?? ''),
+                'conjunto_meta_id' => (string) $linha['adset_id'],
+                'conjunto_nome' => (string) ($linha['adset_name'] ?? ''),
+                'campanha_meta_id' => (string) $linha['campaign_id'],
+                'campanha_nome' => (string) ($linha['campaign_name'] ?? ''),
+                'data' => (string) $linha['date_start'],
+                'gasto' => $m['gasto'],
+                'impressoes' => $m['impressoes'],
+                'cliques' => $m['cliques'],
+                'cliques_link' => (int) ($m['cliques_link'] ?? 0),
+                'visualizacoes_pagina' => $m['visualizacoes_pagina'],
+                'carrinho' => $m['carrinho'],
+                'checkout' => $m['checkout'],
+                'compras' => $m['compras'],
+                'vendas' => $m['vendas'],
+            ];
+        }, $linhas);
+    }
+
+    /**
+     * Anúncio a anúncio para a tela Criativos (Lira 2026-11-19): as métricas
+     * de sempre (metricas(), mesmo critério de compra/carrinho/checkout) mais
+     * as de vídeo — views de 3 s (action video_view), plays, p25/p50/p75/p100,
+     * ThruPlay e tempo médio assistido — e o criativo (miniatura, link de
+     * pré-visualização, id do vídeo) e o status do anúncio. Só leitura.
+     *
+     * @param  string|array{since: string, until: string}  $periodo  date_preset ou intervalo
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    public function criativos(string|array $periodo, ?string $campaignId = null): array
+    {
+        $filtro = [['field' => 'ad.effective_status', 'operator' => 'IN', 'value' => [...self::STATUS_LISTAVEIS, 'DELETED']]];
+        if ($campaignId !== null) {
+            $filtro[] = ['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaignId];
+        }
+        $linhas = $this->getPaginado($this->conta().'/insights', (is_array($periodo)
+            ? ['time_range' => json_encode($periodo)]
+            : ['date_preset' => $periodo]) + [
+                'level' => 'ad',
+                'filtering' => json_encode($filtro),
+                'fields' => 'campaign_id,campaign_name,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions,action_values,'
+                    .'video_play_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,'
+                    .'video_p100_watched_actions,video_thruplay_watched_actions,video_avg_time_watched_actions',
+                'limit' => 200,
+            ]);
+
+        $ids = array_values(array_unique(array_map(fn ($l) => (string) $l['ad_id'], $linhas)));
+        $anuncios = [];
+        foreach (array_chunk($ids, 50) as $lote) {
+            $resposta = $this->get('', [
+                'ids' => implode(',', $lote),
+                'fields' => 'effective_status,preview_shareable_link,creative{thumbnail_url,image_url,video_id,object_type,asset_feed_spec{videos}}',
+            ]);
+            foreach ($resposta as $id => $a) {
+                if (is_array($a)) {
+                    $anuncios[(string) $id] = $a;
+                }
+            }
+        }
+
+        $soma = fn (array $linha, string $campo) => (float) collect($linha[$campo] ?? [])->sum(fn ($a) => (float) ($a['value'] ?? 0));
+
+        return array_map(function (array $linha) use ($anuncios, $soma) {
+            $id = (string) $linha['ad_id'];
+            $a = $anuncios[$id] ?? [];
+            $criativo = $a['creative'] ?? [];
+            $videoId = $criativo['video_id'] ?? ($criativo['asset_feed_spec']['videos'][0]['video_id'] ?? null);
+            $acoes = $linha['actions'] ?? [];
+
+            return [
+                'id' => $id,
+                'nome' => (string) ($linha['ad_name'] ?? ''),
+                'campanha_id' => (string) ($linha['campaign_id'] ?? ''),
+                'campanha' => (string) ($linha['campaign_name'] ?? ''),
+                'conjunto' => (string) ($linha['adset_name'] ?? ''),
+                'status' => (string) ($a['effective_status'] ?? 'DELETED'),
+                'miniatura' => $criativo['thumbnail_url'] ?? $criativo['image_url'] ?? null,
+                'previa' => $a['preview_shareable_link'] ?? null,
+                'gerenciador' => $this->linkAnuncioGerenciador($id),
+                'video_id' => $videoId !== null ? (string) $videoId : null,
+                'video' => [
+                    'views_3s' => (int) round($this->valorDaAcao($acoes, ['video_view'])),
+                    'plays' => (int) round($soma($linha, 'video_play_actions')),
+                    'p25' => (int) round($soma($linha, 'video_p25_watched_actions')),
+                    'p50' => (int) round($soma($linha, 'video_p50_watched_actions')),
+                    'p75' => (int) round($soma($linha, 'video_p75_watched_actions')),
+                    'p100' => (int) round($soma($linha, 'video_p100_watched_actions')),
+                    'thruplay' => (int) round($soma($linha, 'video_thruplay_watched_actions')),
+                    'tempo_medio' => isset($linha['video_avg_time_watched_actions']) ? round($soma($linha, 'video_avg_time_watched_actions'), 1) : null,
+                ],
+            ] + $this->metricas($linha);
+        }, $linhas);
+    }
+
+    /**
+     * Duração (s) dos vídeos, por id (GET /?ids=..&fields=length). Vídeo que a
+     * Meta não devolve fica de fora.
+     *
+     * @param  list<string>  $ids
+     * @return array<string, float>
+     *
+     * @throws MetaAdsException
+     */
+    public function duracaoDosVideos(array $ids): array
+    {
+        $duracoes = [];
+        foreach (array_chunk(array_values(array_unique(array_filter($ids))), 50) as $lote) {
+            foreach ($this->get('', ['ids' => implode(',', $lote), 'fields' => 'length']) as $id => $v) {
+                if (is_array($v) && isset($v['length'])) {
+                    $duracoes[(string) $id] = round((float) $v['length'], 1);
+                }
+            }
+        }
+
+        return $duracoes;
+    }
+
+    /** Moeda da conta de anúncios (ex.: BRL, USD). */
+    public function moedaDaConta(): ?string
+    {
+        return Cache::remember('meta-ads:moeda:'.md5($this->conta()), now()->addDay(),
+            fn () => $this->get($this->conta(), ['fields' => 'currency'])['currency'] ?? null);
     }
 
     /** Períodos da tela (date_preset da Meta => rótulo). */
@@ -2250,7 +2426,7 @@ class MetaAdsService
 
     private function cliente(): PendingRequest
     {
-        return Http::withToken((string) config('services.meta_ads.access_token'))
+        return Http::withToken($this->tokenFixo ?? (string) config('services.meta_ads.access_token'))
             ->acceptJson()
             ->timeout(60);
     }

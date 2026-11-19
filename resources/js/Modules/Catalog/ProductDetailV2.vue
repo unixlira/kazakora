@@ -23,6 +23,7 @@ import { parcelaMaxima } from '@/Shared/parcelas';
 import { medirRolagem } from '@/Shared/medicaoProduto';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { carregarMedicao } from '@/Shared/medicao';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -675,6 +676,17 @@ let pararMedicao = null;
 onMounted(() => { pararMedicao = medirRolagem(props.product.id); });
 onUnmounted(() => pararMedicao?.());
 
+// Mapa de cliques (pedido do Lira 2026-11-19): /js/kzm.js, sem cookie e sem
+// dado pessoal, carregado depois que a página fica ociosa (não pesa no LCP).
+// Os elementos levam data-kzm com nome estável; troca de foto e de variação
+// viram ação nomeada. Leitura: admin › Publicidade › Comportamento.
+const nomeKzm = (prefixo, texto) => `${prefixo}:${String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30)}`;
+const kzmAcao = (nome) => { try { window.kzm?.acao(nome); } catch { /* medição nunca quebra a página */ } };
+let pararKzm = null;
+onMounted(() => { pararKzm = carregarMedicao(`kz/${props.product.slug}`); });
+onUnmounted(() => pararKzm?.());
+watch(activeIndex, (i) => kzmAcao(`galeria:${i + 1}`));
+
 const precoDaJornada = () => snapshot({ items: [{ product: precoBase.value, quantity: quantity.value, unit_price: unitPriceForQuantity(quantity.value) }], subtotal: currentTotal.value, total: currentTotal.value });
 let ultimoPrecoJornada;
 onMounted(() => {
@@ -861,7 +873,7 @@ const submitReview = () => {
                     <main class="col-principal">
                         <section class="card galeria-card">
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
-                                <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
+                                <div class="foto" data-kzm="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
                                     <!-- Favorito no canto da foto desligado (pedido do Lira 2026-10-23); para voltar, descomente.
                                     <button type="button" class="fav fav-foto" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
                                         :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click.stop="toggleFavorite(product.id)">
@@ -871,7 +883,7 @@ const submitReview = () => {
                                     <img v-if="fotoModelo" :src="fotoModelo" :alt="`${product.name} — outro modelo`">
                                     <template v-else-if="activeMedia?.type === 'video'">
                                         <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
-                                        <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
+                                        <button v-else type="button" class="capa-video" data-kzm="video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
                                             <img v-if="videoPoster" :src="videoPoster" :srcset="videoPosterSrcset" :sizes="videoPosterSrcset ? FOTO_SIZES : null" :alt="`${product.name} — vídeo`" fetchpriority="high">
                                             <video v-else v-video-preguicoso :src="activeMedia.src" muted playsinline preload="none"></video>
                                             <span class="play grande"><i class="fas fa-play"></i></span>
@@ -881,20 +893,20 @@ const submitReview = () => {
                                     <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
 
                                     <template v-if="mediaItems.length > 1">
-                                        <button type="button" class="seta esq" aria-label="Mídia anterior" @click.stop="goPrev"><i class="fas fa-chevron-left"></i></button>
-                                        <button type="button" class="seta dir" aria-label="Próxima mídia" @click.stop="goNext"><i class="fas fa-chevron-right"></i></button>
+                                        <button type="button" class="seta esq" data-kzm="galeria-seta" aria-label="Mídia anterior" @click.stop="goPrev"><i class="fas fa-chevron-left"></i></button>
+                                        <button type="button" class="seta dir" data-kzm="galeria-seta" aria-label="Próxima mídia" @click.stop="goNext"><i class="fas fa-chevron-right"></i></button>
                                     </template>
                                 </div>
                                 <!-- No celular, pontos no lugar das miniaturas (Botrel, 2026-11-02): a fileira empurrava o preço para baixo da barra fixa. -->
                                 <div v-if="mediaItems.length > 1" class="pontos">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                        :aria-current="index === activeIndex" @click="activeIndex = index"><span></span></button>
+                                        :aria-current="index === activeIndex" :data-kzm="`galeria:${index + 1}`" @click="activeIndex = index"><span></span></button>
                                 </div>
                                 <div v-if="mediaItems.length > 1" ref="miniaturasEl" class="miniaturas">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': escolhida && item.variantId === escolhida.id }" @click="activeIndex = index">
+                                        :aria-current="index === activeIndex" :data-kzm="`galeria:${index + 1}`" :class="{ 'da-variacao': escolhida && item.variantId === escolhida.id }" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
                                             <img v-if="videoPoster" :src="videoPoster" alt="">
                                             <video v-else v-video-preguicoso :src="item.src" muted preload="none"></video>
@@ -978,7 +990,7 @@ const submitReview = () => {
                                 <div class="opcoes" :class="{ 'em-grade': precosDiferentes }">
                                     <button v-for="variant in opcoesVariacao" :key="variant.id" type="button"
                                         class="opcao" :class="{ atual: variant.id === escolhida?.id, esgotada: variant.stock < 1 }"
-                                        :aria-pressed="variant.id === escolhida?.id" @click="escolherVariacao(variant)">
+                                        :aria-pressed="variant.id === escolhida?.id" :data-kzm="nomeKzm('variacao', nomeDaOpcao(variant))" @click="escolherVariacao(variant)">
                                         <span>{{ nomeDaOpcao(variant) }}</span>
                                     </button>
                                 </div>
@@ -990,7 +1002,7 @@ const submitReview = () => {
                                 <span class="subtitulo">Leve mais, pague menos</span>
                                 <ul>
                                     <li v-for="tier in faixasVisiveis" :key="tier.id">
-                                        <button type="button" class="kit" :aria-pressed="quantity === tier.min_quantity" @click="setQuantity(tier.min_quantity)">
+                                        <button type="button" class="kit" :aria-pressed="quantity === tier.min_quantity" :data-kzm="`variacao:kit-${tier.min_quantity}`" @click="setQuantity(tier.min_quantity)">
                                             <span>{{ tier.min_quantity }} unidades · <b class="kit-off">{{ Math.round(Number(tier.discount_percentage)) }}% OFF</b></span>
                                             <strong>{{ formatPrice(unitPriceForQuantity(tier.min_quantity)) }}/un.</strong>
                                         </button>
@@ -1003,7 +1015,7 @@ const submitReview = () => {
                             <form ref="prazoCepEl" class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
-                                    <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
+                                    <input id="cep-prazo" data-kzm="frete" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
                                     <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'calcular' }}</button>
                                 </div>
                                 <p v-if="enderecoPrazo && !erroPrazo" class="rua"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ enderecoPrazo }}</p>
@@ -1067,7 +1079,7 @@ const submitReview = () => {
                                  no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
                                  Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
                             <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                <button type="button" class="btn comprar-agora" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
+                                <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
                             </div>
                         </aside>
 
@@ -1166,13 +1178,13 @@ const submitReview = () => {
                             </div>
 
                             <p v-if="dimensoesEmbalagem" class="dimensoes-embalagem"><strong>Dimensões da embalagem:</strong> {{ dimensoesEmbalagem }}</p>
-                            <button v-if="temMaisDescricao && !descricaoAberta" type="button" class="btn-sec ver-descricao" @click="descricaoAberta = true">Ver descrição completa</button>
+                            <button v-if="temMaisDescricao && !descricaoAberta" type="button" class="btn-sec ver-descricao" data-kzm="descricao" @click="descricaoAberta = true">Ver descrição completa</button>
                         </section>
 
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
                              Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). Logo depois
                              da descrição, antes de Garantia, Pagamento Seguro e Informação adicional (teste pedido 2026-10-21). -->
-                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
+                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo" data-kzm="brinde">
                             <div class="promo-texto">
                                 <h2>{{ quadrosPromocao.airfryer?.titulo || sorteio.titulo }}</h2>
                                 <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar dos parágrafos do sorteio. -->
@@ -1228,7 +1240,7 @@ const submitReview = () => {
                 </div>
 
                 <!-- AVALIAÇÕES (largura total) -->
-                <section v-if="showReviews" id="avaliacoes" class="card largura-total">
+                <section v-if="showReviews" id="avaliacoes" class="card largura-total" data-kzm="avaliacoes">
                     <div class="aval-topo">
                         <div class="aval-resumo">
                             <h2>Avaliações de Clientes</h2>
@@ -1319,7 +1331,7 @@ const submitReview = () => {
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
                 </div>
-                <button type="button" class="btn" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
+                <button type="button" class="btn" data-kzm="comprar:barra" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
             </div>
         </div>
 

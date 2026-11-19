@@ -138,6 +138,13 @@ const direitos = [
                         apagados e sobram só números gerais. O cookie de navegação dura 12 meses e os da Meta e do Google até 90 dias.
                     </p>
                     <p>
+                        <strong>Mapa de cliques das páginas de produto</strong>: para melhorar as páginas, registramos de forma anônima
+                        onde as pessoas clicam (posição na página e nome do botão ou da área, como "foto 2" ou "Comprar"), até onde rolam,
+                        a troca de foto ou de variação e o tempo na página. Não usa cookie nem guarda nada no seu aparelho além de um código
+                        aleatório que só existe enquanto a aba está aberta; não registra o IP (só o país), nem o que você digita, nem dado
+                        pessoal. Esses registros são apagados em 90 dias; depois sobram só totais por dia.
+                    </p>
+                    <p>
                         Você pode apagar ou bloquear os cookies a qualquer momento nas configurações do seu navegador, e pedir
                         a revogação do consentimento pelo e-mail {{ COMPANY.email }} ou pelo
                         <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>

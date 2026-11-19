@@ -4,7 +4,6 @@ namespace App\Modules\Notifications\Push\Http;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Notifications\Push\AppsDeVendas;
 use App\Modules\Notifications\Push\AvisosPush;
 use App\Modules\Notifications\Push\DadosDoApp;
 use App\Modules\Notifications\Push\TokensDoApp;
@@ -33,7 +32,9 @@ class AppVendasController extends Controller
      */
     public function entrar(string $app): Response
     {
-        return Inertia::location(AppsDeVendas::url($app));
+        // Endereço antigo do app no painel: depois que app.<loja>.com entra no ar,
+        // o nginx do painel manda /app/<loja>/ para lá com 301.
+        return Inertia::location('/app/'.$app.'/');
     }
 
     public function estado(Request $request, string $app, WebPush $webPush): JsonResponse

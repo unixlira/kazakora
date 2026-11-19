@@ -130,6 +130,10 @@ class AppVendasTest extends TestCase
     {
         $this->get('/admin/vendas-app/kazakora/entrar')->assertRedirect();
         $this->actingAs($this->admin())->get('/admin/vendas-app/kazakora/entrar')->assertRedirect('/app/kazakora/');
+
+        // Vindo do POST de login do Inertia: troca de página inteira.
+        $this->actingAs($this->admin())->get('/admin/vendas-app/ferrakora/entrar', ['X-Inertia' => 'true'])
+            ->assertStatus(409)->assertHeader('X-Inertia-Location', '/app/ferrakora/');
     }
 
     public function test_enviar_teste_manda_so_para_o_app_e_apaga_inscricao_morta(): void

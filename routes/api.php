@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OutroSiteCheckoutEventosController;
+use App\Http\Controllers\Api\OutroSiteCookiesController;
 use App\Http\Controllers\Api\OutroSiteVisitaController;
 use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
@@ -243,6 +244,13 @@ Route::post('/{site}/checkout/eventos', [OutroSiteCheckoutEventosController::cla
     ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
     ->middleware('throttle:120,1,outro-site-checkout-eventos')
     ->name('api.outro-site.checkout.eventos');
+
+// Pop-up de cookies dos outros sites (FerraKora; 2026-11-18): prova do
+// "Aceito" ou do "Somente o básico", com origem do site.
+Route::post('/{site}/cookies', [OutroSiteCookiesController::class, 'registrar'])
+    ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
+    ->middleware('throttle:20,1,outro-site-cookies')
+    ->name('api.outro-site.cookies');
 
 // Catálogo do site FerraKora vindo do KazaKora (2026-10-13), igual ao do
 // Beauty Kora, com categoria e link do produto na loja. Fica depois da rota

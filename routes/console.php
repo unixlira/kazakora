@@ -396,3 +396,9 @@ Schedule::command('frete:tabela-localidades')->monthlyOn(1, '06:00')->timezone('
 // :17, saldo ADS :19, vídeos :23, BeautyKora :27, coletas :43, conteúdo de
 // anúncio 7/21/37/51). Miniaturas das fotos de avaliação antigas, até zerar.
 Schedule::command('avaliacoes:miniaturas --limite=2000')->hourlyAt(29)->withoutOverlapping(60);
+
+// Funil dos infoprodutos e mapa de cliques (2026-11-19): totais por dia e
+// limpeza dos eventos brutos com mais de 90 dias; prints das páginas medidas
+// (fundo do mapa de cliques) quando a página muda ou o print passa de 24 h.
+Schedule::command('infoprodutos:consolidar')->dailyAt('03:45')->withoutOverlapping(60);
+Schedule::command('comportamento:prints')->hourlyAt(17)->withoutOverlapping(50)->runInBackground();

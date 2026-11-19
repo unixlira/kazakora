@@ -11,9 +11,10 @@ use App\Modules\Checkout\Models\Order;
  * notificação é sempre o do app que a recebe, por isso são dois apps e não
  * um com dois tipos de aviso.
  *
- * Os arquivos de cada app (manifest, service worker, ícones, página de
- * ativação) moram em repositórios próprios (unixlira/kazakora-vendas-app e
- * unixlira/ferrakora-vendas-app) e o nginx do painel serve em /app/<app>/.
+ * Os arquivos de cada app (manifest, service worker, ícones, telas) moram em
+ * repositórios próprios (unixlira/kazakora-vendas-app e
+ * unixlira/ferrakora-vendas-app), servidos em app.kazakora.com e
+ * app.ferrakora.com; os dados vêm da API /api-apps-vendas (routes/apps_vendas.php).
  * Venda de marketplace e da Beauty Kora não avisa.
  */
 class AppsDeVendas
@@ -43,9 +44,23 @@ class AppsDeVendas
         };
     }
 
-    /** Endereço de um arquivo do app (ícone, página), servido pelo painel. */
+    /**
+     * Endereço de um arquivo do app (ícone, página). Desde 2026-11-19 cada
+     * app é um site próprio (app.kazakora.com, app.ferrakora.com).
+     */
     public static function url(string $app, string $caminho = ''): string
     {
-        return rtrim((string) config('services.webpush.painel_url'), '/')."/app/{$app}/".ltrim($caminho, '/');
+        return self::origem($app).'/'.ltrim($caminho, '/');
+    }
+
+    public static function origem(string $app): string
+    {
+        return rtrim((string) config('services.webpush.apps.'.$app), '/');
+    }
+
+    /** Origens liberadas no CORS da API dos apps. @return list<string> */
+    public static function origens(): array
+    {
+        return array_values(array_filter(array_map(fn ($app) => self::origem($app), self::TODOS)));
     }
 }

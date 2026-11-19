@@ -54,7 +54,8 @@ class AvisosPush
             'badge' => AppsDeVendas::url($app, 'icons/badge-96.png'),
             'image' => $imagem,
             'tag' => 'pedido-'.$order->id,
-            'url' => '/admin/pedidos/'.$order->id,
+            // Endereço dentro do app (site próprio desde 2026-11-19): abre o detalhe do pedido nele.
+            'url' => '/#/pedidos/'.$order->id,
         ];
     }
 
@@ -70,7 +71,7 @@ class AvisosPush
             'badge' => AppsDeVendas::url($app, 'icons/badge-96.png'),
             'image' => null,
             'tag' => 'teste-'.$app,
-            'url' => '/admin/pedidos',
+            'url' => '/#/pedidos',
         ];
     }
 

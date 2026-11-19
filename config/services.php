@@ -699,6 +699,11 @@ return [
         'subject' => env('VAPID_SUBJECT', 'mailto:korashopecom@gmail.com'),
         // Endereço do painel: ícones e página dos apps saem de lá.
         'painel_url' => env('PAINEL_URL', 'https://painel.kazakora.com'),
+        // Sites dos apps de vendas (2026-11-19): ícones do aviso e origem do CORS.
+        'apps' => [
+            'kazakora' => env('APP_VENDAS_KAZAKORA_URL', 'https://app.kazakora.com'),
+            'ferrakora' => env('APP_VENDAS_FERRAKORA_URL', 'https://app.ferrakora.com'),
+        ],
     ],
 
 ];

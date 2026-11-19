@@ -84,4 +84,26 @@ class BuscaInstantaneaTest extends TestCase
             ->where('products.total', 1)
             ->where('products.data.0.slug', $livro->slug));
     }
+
+    public function test_acha_pela_descricao_e_quem_tem_no_nome_vem_primeiro(): void
+    {
+        // Título persuasivo sem a palavra básica (pedido 2026-11-19).
+        $furadeira = Product::factory()->create([
+            'name' => 'Kit Potência Total 48V com 2 Baterias', 'slug' => 'kit-potencia-total-48v',
+            'description' => 'Parafusadeira e furadeira sem fio com maleta.', 'is_active' => true,
+        ]);
+        $nome = Product::factory()->create(['name' => 'Parafusadeira 12V Compacta', 'slug' => 'parafusadeira-12v-compacta', 'description' => 'Leve.', 'is_active' => true]);
+        Product::factory()->create(['name' => 'Trena 5m', 'slug' => 'trena-5m', 'description' => 'Trava automática.', 'is_active' => true]);
+
+        $this->getJson('/busca/sugestoes?q=parafusadeira')
+            ->assertOk()
+            ->assertJsonPath('total', 2)
+            ->assertJsonPath('produtos.0.slug', $nome->slug)
+            ->assertJsonPath('produtos.1.slug', $furadeira->slug);
+
+        $this->get('/?search=parafusadeira')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('products.total', 2)
+            ->where('products.data.0.slug', $nome->slug)
+            ->where('products.data.1.slug', $furadeira->slug));
+    }
 }

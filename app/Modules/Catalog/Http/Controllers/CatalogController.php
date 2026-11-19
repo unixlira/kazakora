@@ -202,6 +202,8 @@ class CatalogController extends Controller
     /**
      * Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem.
      * Desde 2026-11-19 também no slug: o Livro Falante (id 213) mudou de nome e sumia de "livro".
+     * Desde 2026-11-19 também na descrição completa: título persuasivo sem a palavra básica
+     * ("livro", "parafusadeira") ainda acha o produto. Quem tem a palavra no nome segue na frente.
      */
     private static function filtrarBusca($query, string $search): void
     {
@@ -213,6 +215,7 @@ class CatalogController extends Controller
                 ->orWhere('sku', 'like', $termo)
                 ->orWhere('tags', 'like', $termo)
                 ->orWhere('slug', 'like', $termo)
+                ->orWhere('description', 'like', $termo)
                 ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
         }
     }

@@ -1799,7 +1799,7 @@ class CheckoutController extends Controller
 
             $order->items()->create([
                 'product_id' => $product->id,
-                'product_name' => $product->name,
+                'product_name' => $product->nomeParaPedido(),
                 'product_price' => $unitPrice,
                 'quantity' => $quantity,
                 'subtotal' => round($unitPrice * $quantity, 2),

@@ -386,6 +386,9 @@ class ProductController extends Controller
         $rules = [
             'category_id' => ['nullable', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
+            // Nome da NF-e e da separação (18/11/2026): o name é título de
+            // vitrine; vazio = usa o name. Ver Product::nomeParaPedido().
+            'nome_interno' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'brand' => ['nullable', 'string', 'max:100'],
             'model' => ['nullable', 'string', 'max:100'],
@@ -424,7 +427,7 @@ class ProductController extends Controller
             $lista = collect(explode(',', (string) $dados['tags']))->map(fn ($t) => trim($t))->filter()->unique()->values()->all();
             $dados['tags'] = $lista ?: null;
         }
-        foreach (['seo_title', 'seo_description'] as $campo) {
+        foreach (['nome_interno', 'seo_title', 'seo_description'] as $campo) {
             if (array_key_exists($campo, $dados)) {
                 $dados[$campo] = filled($dados[$campo]) ? trim($dados[$campo]) : null;
             }

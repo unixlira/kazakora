@@ -62,6 +62,7 @@ const props = defineProps({
 
 const form = useForm({
     name: props.product.name,
+    nome_interno: props.product.nome_interno ?? '',
     sku: props.product.sku,
     category_id: props.product.category_id,
     brand: props.product.brand ?? '',

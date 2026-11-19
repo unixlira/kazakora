@@ -187,6 +187,20 @@ const resumo = computed(() => {
                 <InputError :message="form.errors.name" />
             </div>
 
+            <div v-if="form.nome_interno !== undefined">
+                <label for="nome_interno" class="block text-sm font-medium">Nome interno (nota e separação)</label>
+                <input
+                    id="nome_interno"
+                    v-model="form.nome_interno"
+                    type="text"
+                    maxlength="255"
+                    aria-describedby="nome_interno-hint"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <p id="nome_interno-hint" class="mt-1 text-xs text-gray-400">Vai na NF-e e no KoraSync dos pedidos do site. Vazio = usa o Nome.</p>
+                <InputError :message="form.errors.nome_interno" />
+            </div>
+
             <div>
                 <label for="category_id" class="block text-sm font-medium">Categoria</label>
                 <select

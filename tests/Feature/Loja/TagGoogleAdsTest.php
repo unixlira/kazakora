@@ -28,9 +28,9 @@ class TagGoogleAdsTest extends TestCase
         ]);
     }
 
-    private function pedidoPago(array $extra = []): Order
+    private function pedidoPago(array $extra = [], string $email = ' Cliente.Teste@Example.com '): Order
     {
-        $user = User::factory()->create(['email' => ' Cliente.Teste@Example.com ', 'phone' => '(11) 98888-7777']);
+        $user = User::factory()->create(['email' => $email, 'phone' => '(11) 98888-7777']);
         $product = Product::factory()->create(['stock' => 10, 'is_active' => true]);
 
         $order = Order::create([
@@ -77,7 +77,7 @@ class TagGoogleAdsTest extends TestCase
     {
         $order = $this->pedidoPago();
 
-        $this->actingAs($order->user)->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+        $this->actingAs($order->user)->withCredentials()->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
             ->getJson("/finalizacao/{$order->id}/status")
             ->assertOk()
             ->assertJsonPath('google_compra.id', 'AW-123456789')
@@ -92,10 +92,10 @@ class TagGoogleAdsTest extends TestCase
     {
         $order = $this->pedidoPago();
 
-        $this->actingAs($order->user)->getJson("/finalizacao/{$order->id}/status")
+        $this->actingAs($order->user)->withCredentials()->getJson("/finalizacao/{$order->id}/status")
             ->assertOk()->assertJsonPath('google_compra', null);
 
-        $this->actingAs($order->user)->withCookie(Cookies::COOKIE_OK, Cookies::PREFIXO_BASICO.Cookies::VERSAO)
+        $this->actingAs($order->user)->withCredentials()->withCookie(Cookies::COOKIE_OK, Cookies::PREFIXO_BASICO.Cookies::VERSAO)
             ->getJson("/finalizacao/{$order->id}/status")
             ->assertOk()->assertJsonPath('google_compra', null);
     }
@@ -103,13 +103,13 @@ class TagGoogleAdsTest extends TestCase
     public function test_sem_tag_configurada_ou_pedido_nao_pago_nao_entrega_a_compra(): void
     {
         $naoPago = $this->pedidoPago(['status' => Order::STATUS_AWAITING_PAYMENT]);
-        $this->actingAs($naoPago->user)->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+        $this->actingAs($naoPago->user)->withCredentials()->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
             ->getJson("/finalizacao/{$naoPago->id}/status")
             ->assertOk()->assertJsonPath('google_compra', null);
 
         config(['services.google_ads_tag.purchase_label' => null]);
-        $pago = $this->pedidoPago(['external_order_id' => '261119ZZZ']);
-        $this->actingAs($pago->user)->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+        $pago = $this->pedidoPago(['external_order_id' => '261119ZZZ'], 'outro.cliente@example.com');
+        $this->actingAs($pago->user)->withCredentials()->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
             ->getJson("/finalizacao/{$pago->id}/status")
             ->assertOk()->assertJsonPath('google_compra', null);
     }
@@ -136,7 +136,7 @@ class TagGoogleAdsTest extends TestCase
     {
         $order = $this->pedidoPago();
 
-        $this->actingAs($order->user)->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+        $this->actingAs($order->user)->withCredentials()->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
             ->get("/finalizacao/{$order->id}/confirmacao")
             ->assertOk()
             ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page

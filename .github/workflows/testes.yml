@@ -1,0 +1,54 @@
+name: Testes
+
+# Testes fora do servidor da Hostinger (pedido do Lira em 15/11/2026: o
+# homolog estourou o limite de recursos do plano com as rodadas de teste).
+# Roda sozinho em todo push de ramo de trabalho e pode ser chamado à mão,
+# com a lista de arquivos de teste para rodar só os que interessam.
+on:
+  push:
+    branches: ['release/**', 'feature/**', 'fix/**']
+  workflow_dispatch:
+    inputs:
+      arquivos:
+        description: 'Arquivos de teste separados por espaço (vazio = todos)'
+        required: false
+        default: ''
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, intl, bcmath, zip, soap, pdo_sqlite
+          tools: composer:v2
+
+      - name: Dependências
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Front (os testes de página precisam do manifest do Vite)
+        run: npm ci && npm run build
+
+      - name: Testes
+        env:
+          ARQUIVOS: ${{ github.event.inputs.arquivos }}
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          if [ -n "$ARQUIVOS" ]; then
+            for f in $ARQUIVOS; do php artisan test --compact "$f" || falhou=1; done
+            exit ${falhou:-0}
+          fi
+          php artisan test --compact

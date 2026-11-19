@@ -105,9 +105,12 @@ class MetaAdsFunilColunasTest extends TestCase
         $espelho = null;
         $this->actingAs($this->admin())->get($url)
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->loadDeferredProps(function ($reload) use (&$espelho) {
-                $espelho = $reload->toArray()['props']['espelho'];
-            }));
+            // Closure comum (não arrow fn): a arrow fn copiaria $espelho em vez de usar a referência.
+            ->assertInertia(function ($page) use (&$espelho) {
+                $page->loadDeferredProps(function ($reload) use (&$espelho) {
+                    $espelho = $reload->toArray()['props']['espelho'];
+                });
+            });
 
         $this->assertIsArray($espelho);
         $this->assertNull($espelho['erro']);

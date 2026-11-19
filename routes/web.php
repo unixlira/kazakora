@@ -338,6 +338,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->controller(\App\Modules\Notifications\Push\Http\AppVendasController::class)->group(function () {
             Route::get('entrar', 'entrar')->name('entrar');
             Route::get('estado', 'estado')->name('estado');
+            Route::get('metricas', 'metricas')->middleware('throttle:30,1')->name('metricas');
             Route::post('inscrever', 'inscrever')->middleware('throttle:20,1')->name('inscrever');
             Route::post('cancelar', 'cancelar')->middleware('throttle:20,1')->name('cancelar');
             Route::post('teste', 'teste')->middleware('throttle:6,1')->name('teste');

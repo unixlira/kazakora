@@ -140,6 +140,8 @@ class MetricasDaLoja
             'top_produtos' => $this->topProdutos($canal, $inicio, $agora),
             'ultimos_pedidos' => $this->ultimosPedidos($canal),
             'serie' => $this->serie($app, $canal, $periodo, $inicio, $agora),
+            // Aba Mais do app KazaKora (2026-11-19): infoprodutos de hoje, sempre "hoje".
+            'infoprodutos_hoje' => $app === AppsDeVendas::KAZAKORA ? \App\Modules\Infoprodutos\Support\FunilInfoprodutos::resumoDeHoje() : null,
         ];
     }
 

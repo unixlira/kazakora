@@ -24,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Uma por requisição: guarda o destino e a tabela de frete dela.
         $this->app->scoped(\App\Modules\Checkout\Support\FreteEmbutido::class);
+        // Web Push dos apps de vendas: chaves VAPID do .env (2026-11-19).
+        $this->app->bind(\App\Modules\Notifications\Push\WebPush::class, fn () => \App\Modules\Notifications\Push\WebPush::daConfig());
         // Trava do frete por visitante (2026-10-24): memória da requisição.
         $this->app->scoped(\App\Modules\Checkout\Support\TravaDeFrete::class);
         // Site que está vendendo (Ofertas Relâmpago por empresa, 2026-10-14).

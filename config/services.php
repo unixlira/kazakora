@@ -677,4 +677,14 @@ return [
         'token' => env('AMAZON_REPORTS_TOKEN', env('TIKTOK_REPORTS_TOKEN')),
     ],
 
+    // Web Push dos apps de vendas KazaKora e FerraKora (2026-11-19).
+    // Gerar: php artisan push:gerar-chaves-vapid. Subject = mailto do suporte.
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:korashopecom@gmail.com'),
+        // Endereço do painel: ícones e página dos apps saem de lá.
+        'painel_url' => env('PAINEL_URL', 'https://painel.kazakora.com'),
+    ],
+
 ];

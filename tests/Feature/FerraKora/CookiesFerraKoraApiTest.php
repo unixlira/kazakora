@@ -78,7 +78,7 @@ class CookiesFerraKoraApiTest extends TestCase
 
     public function test_aceite_da_loja_continua_com_a_versao_de_sempre(): void
     {
-        $this->assertSame('2026-11-02', Cookies::VERSAO);
+        $this->assertSame('2026-11-19', Cookies::VERSAO);
 
         $this->from('/politica-de-entrega')->post('/cookies/aceitar')->assertCookie(Cookies::COOKIE_OK, Cookies::VERSAO);
         $this->assertSame('aceito', ConsentimentoCookie::sole()->escolha);

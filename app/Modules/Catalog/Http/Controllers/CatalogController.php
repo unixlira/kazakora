@@ -199,7 +199,10 @@ class CatalogController extends Controller
         return response()->json(['produtos' => $produtos, 'total' => $total]);
     }
 
-    /** Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem. */
+    /**
+     * Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem.
+     * Desde 2026-11-19 também no slug: o Livro Falante (id 213) mudou de nome e sumia de "livro".
+     */
     private static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
@@ -209,6 +212,7 @@ class CatalogController extends Controller
                 ->orWhere('model', 'like', $termo)
                 ->orWhere('sku', 'like', $termo)
                 ->orWhere('tags', 'like', $termo)
+                ->orWhere('slug', 'like', $termo)
                 ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
         }
     }

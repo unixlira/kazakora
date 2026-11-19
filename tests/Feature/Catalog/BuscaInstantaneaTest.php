@@ -64,4 +64,24 @@ class BuscaInstantaneaTest extends TestCase
         $this->get('/?categoria='.$cozinha->slug)->assertInertia(fn (AssertableInertia $page) => $page
             ->where('departamentosFiltro.0.slug', $cozinha->slug));
     }
+
+    public function test_acha_pelo_slug_quando_o_nome_nao_tem_a_palavra(): void
+    {
+        // Livro Falante (id 213 em produção): nome sem "livro", slug com "livro".
+        $livro = Product::factory()->create([
+            'name' => 'Aprende Brincando Inglês e Português, Ouvindo + Lousa LED Grátis',
+            'slug' => 'livro-falante-infantil-bilingue-portugues-e-ingles-com-som-11-temas-e-300-palavras',
+            'is_active' => true,
+        ]);
+        Product::factory()->create(['name' => 'Lousa Mágica Infantil', 'slug' => 'lousa-magica-infantil', 'is_active' => true]);
+
+        $this->getJson('/busca/sugestoes?q=livro')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('produtos.0.slug', $livro->slug);
+
+        $this->get('/?search=livro')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('products.total', 1)
+            ->where('products.data.0.slug', $livro->slug));
+    }
 }

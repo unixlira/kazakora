@@ -93,11 +93,26 @@ class MetaAdsController extends Controller
             'status' => $status,
             'statusFiltros' => array_map(fn (array $f) => $f[0], MetaAdsService::FILTROS_STATUS),
             'espelho' => Inertia::defer(fn () => $this->espelho($daLoja, $periodo, null, $ehKazaKora ? $this->noKazaKora() : [], $status)),
-            'lojasMeta' => ['lojas' => $porLoja->lojas(), 'loja' => $loja],
+            'lojasMeta' => ['lojas' => $porLoja->lojas(), 'loja' => $loja, 'aviso' => $this->avisoDeLoja($porLoja, $request->query('loja'))],
             // Editar anúncio pelo espelho (2026-10-19).
             'produtos' => $this->listaDeProdutos(),
             'chamadas' => MetaAdsCampanha::CHAMADAS,
         ]);
+    }
+
+    /**
+     * Loja pedida sem conta de anúncios configurada (Lira 2026-11-18): a tela
+     * avisa em vez de mostrar a KazaKora calada no lugar dela.
+     */
+    private function avisoDeLoja(CampanhasMetaPorLoja $porLoja, mixed $pedida): ?string
+    {
+        if (! is_string($pedida) || $pedida === '' || $pedida === CampanhasMetaPorLoja::KAZAKORA || isset($porLoja->lojas()[$pedida])) {
+            return null;
+        }
+
+        return $pedida === CampanhasMetaPorLoja::FERRAKORA
+            ? 'A FerraKora não tem conta de anúncios da Meta configurada (FERRAKORA_META_ADS_AD_ACCOUNT_ID no .env, com o token META_ADS_ACCESS_TOKEN). Mostrando a KazaKora.'
+            : 'Essa loja não tem conta de anúncios da Meta configurada. Mostrando a KazaKora.';
     }
 
     public function create(MetaAdsService $meta): Response
@@ -1516,7 +1531,7 @@ class MetaAdsController extends Controller
     private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = [], string $status = 'todos'): array
     {
         if (! $meta->configurado()) {
-            return ['campanhas' => [], 'erro' => null, 'diagnostico' => null];
+            return ['campanhas' => [], 'total' => null, 'erro' => null, 'diagnostico' => null];
         }
 
         try {
@@ -1547,13 +1562,17 @@ class MetaAdsController extends Controller
 
             // "O que fazer agora" (2026-10-21): só leitura, sobre o espelho
             // inteiro; o filtro de status só escolhe o que a tabela mostra.
+            $listadas = MetaAdsService::filtrarPorStatus($campanhas, $status);
+
             return [
-                'campanhas' => MetaAdsService::filtrarPorStatus($campanhas, $status),
+                'campanhas' => $listadas,
+                // Linha de total do funil (Lira 2026-11-18): das campanhas listadas.
+                'total' => MetaAdsService::totalDoPeriodo($listadas),
                 'erro' => null,
                 'diagnostico' => $meta->diagnosticar(['campanhas' => $campanhas] + $completo, $periodo),
             ];
         } catch (MetaAdsException $erro) {
-            return ['campanhas' => [], 'erro' => $erro->getMessage(), 'diagnostico' => null];
+            return ['campanhas' => [], 'total' => null, 'erro' => $erro->getMessage(), 'diagnostico' => null];
         }
     }
 

@@ -1587,7 +1587,73 @@ class MetaAdsService
             'visualizacoes_pagina' => (int) round($this->valorDaAcao($acoes, self::ACOES_PAGINA)),
             'carrinho' => (int) round($this->valorDaAcao($acoes, self::ACOES_CARRINHO)),
             'checkout' => (int) round($this->valorDaAcao($acoes, self::ACOES_CHECKOUT)),
+        ] + self::custosDoFunil($gasto, (int) round($this->valorDaAcao($acoes, self::ACOES_PAGINA)),
+            (int) round($this->valorDaAcao($acoes, self::ACOES_CARRINHO)),
+            (int) round($this->valorDaAcao($acoes, self::ACOES_CHECKOUT)),
+            (int) round($this->valorDeCompra($acoes)));
+    }
+
+    /**
+     * Custo por etapa do funil (Lira 2026-11-18): gasto ÷ eventos, igual ao
+     * cost_per_action_type do Gerenciador. null sem evento.
+     *
+     * @return array{custo_pagina: ?float, custo_carrinho: ?float, custo_checkout: ?float, custo_compra: ?float}
+     */
+    private static function custosDoFunil(float $gasto, int $pagina, int $carrinho, int $checkout, int $compras): array
+    {
+        $custo = fn (int $n) => $n > 0 ? round($gasto / $n, 2) : null;
+
+        return [
+            'custo_pagina' => $custo($pagina),
+            'custo_carrinho' => $custo($carrinho),
+            'custo_checkout' => $custo($checkout),
+            'custo_compra' => $custo($compras),
         ];
+    }
+
+    /**
+     * Linha de total do período (Lira 2026-11-18): soma o que se soma
+     * (gasto, impressões, cliques no link, eventos do funil, valor das
+     * compras) e RECALCULA CTR, CPC, custos e ROAS a partir das somas, nunca
+     * média de médias. Alcance e frequência não se somam (a mesma pessoa
+     * aparece em várias campanhas): ficam null.
+     *
+     * @param  list<array<string, mixed>>  $campanhas  campanhas do espelho (com 'metricas')
+     * @return array<string, mixed>
+     */
+    public static function totalDoPeriodo(array $campanhas): array
+    {
+        $soma = fn (string $chave) => array_sum(array_map(fn ($c) => (float) ($c['metricas'][$chave] ?? 0), $campanhas));
+        $temCliquesLink = collect($campanhas)->contains(fn ($c) => ($c['metricas']['cliques_link'] ?? null) !== null);
+
+        $gasto = round($soma('gasto'), 2);
+        $impressoes = (int) $soma('impressoes');
+        $cliques = (int) $soma('cliques');
+        $cliquesLink = $temCliquesLink ? (int) $soma('cliques_link') : null;
+        $vendas = round($soma('vendas'), 2);
+        $pagina = (int) $soma('visualizacoes_pagina');
+        $carrinho = (int) $soma('carrinho');
+        $checkout = (int) $soma('checkout');
+        $compras = (int) $soma('compras');
+
+        return [
+            'gasto' => $gasto,
+            'impressoes' => $impressoes,
+            'alcance' => null,
+            'cliques' => $cliques,
+            'cpc' => $cliques > 0 ? round($gasto / $cliques, 2) : null,
+            'compras' => $compras,
+            'vendas' => $vendas,
+            'roas' => $gasto > 0 ? round($vendas / $gasto, 2) : null,
+            'frequencia' => null,
+            'cpm' => $impressoes > 0 ? round($gasto / $impressoes * 1000, 2) : null,
+            'cliques_link' => $cliquesLink,
+            'ctr_link' => $cliquesLink !== null && $impressoes > 0 ? round($cliquesLink / $impressoes * 100, 2) : null,
+            'cpc_link' => $cliquesLink ? round($gasto / $cliquesLink, 2) : null,
+            'visualizacoes_pagina' => $pagina,
+            'carrinho' => $carrinho,
+            'checkout' => $checkout,
+        ] + self::custosDoFunil($gasto, $pagina, $carrinho, $checkout, $compras);
     }
 
     private function centavosEmReais(mixed $centavos): ?float

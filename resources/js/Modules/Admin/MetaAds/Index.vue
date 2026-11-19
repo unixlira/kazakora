@@ -166,6 +166,10 @@ const columns = [
             <span v-if="!ehKazaKora" class="text-xs text-slate-500">Conta de anúncios da {{ props.lojasMeta.lojas[props.lojasMeta.loja] }}. Campanha nova continua sendo montada na KazaKora.</span>
         </div>
 
+        <p v-if="props.lojasMeta.aviso" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            {{ props.lojasMeta.aviso }}
+        </p>
+
         <div v-if="!props.config.configurado" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="status">
             <strong>Meta não configurada.</strong>
             Dá para montar rascunhos e subir os vídeos, mas o envio fica desligado até preencher no servidor:
@@ -224,7 +228,7 @@ const columns = [
                 <p v-else-if="props.status === 'excluidos'" class="mb-2 text-xs text-slate-500">
                     A Meta só devolve o que foi excluído e teve gasto no período escolhido.
                 </p>
-                <EspelhoMeta v-if="!props.espelho?.erro && (props.espelho?.campanhas ?? []).length" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :ao-vivo="aoVivo.meta" :diagnostico="props.espelho?.diagnostico" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
+                <EspelhoMeta v-if="!props.espelho?.erro && (props.espelho?.campanhas ?? []).length" ref="tabela" :campanhas="props.espelho?.campanhas ?? []" :total="props.espelho?.total ?? null" :ao-vivo="aoVivo.meta" :diagnostico="props.espelho?.diagnostico" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
                     :produtos="props.produtos" :chamadas="props.chamadas" :class="{ 'opacity-60': carregando }" @mudou="recarregar" />
             </Deferred>
         </section>

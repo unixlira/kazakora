@@ -32,6 +32,9 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function () {
             \Illuminate\Support\Facades\Route::middleware('api')->prefix('api-apps-vendas')
                 ->group(base_path('routes/apps_vendas.php'));
+            // Funil dos infoprodutos e mapa de cliques (2026-11-19), fora de /api/* pelo mesmo motivo.
+            \Illuminate\Support\Facades\Route::middleware('api')->prefix('api-infoprodutos')
+                ->group(base_path('routes/infoprodutos.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

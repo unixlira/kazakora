@@ -548,6 +548,7 @@ const submitReview = () => {
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <span class="font-medium text-store-fg">
                                     {{ review.reviewer_display_name }}
+                                    <span v-if="review.outra_loja" class="ml-1.5 rounded-full bg-store-fg/5 px-2 py-0.5 align-middle text-[11px] font-semibold text-store-fg-muted">Comprador do mesmo modelo em outro marketplace</span>
                                 </span>
                             </div>
                             <div class="mt-1 flex items-center gap-0.5">

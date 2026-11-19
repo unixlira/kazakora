@@ -789,6 +789,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Metadados das campanhas da Meta (2026-10-27): lidos do nosso banco, só leitura.
         Route::get('publicidade/meta-ads/metadados', [\App\Modules\Admin\Http\Controllers\MetaAdsDadosController::class, 'index'])->name('publicidade.meta-ads.metadados');
         Route::get('publicidade/meta-ads/metadados/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsDadosController::class, 'campanha'])->whereNumber('metaId')->name('publicidade.meta-ads.metadados.campanha');
+        // Infoprodutos, Criativos e Comportamento (pedido do Lira 2026-11-19): funil dos
+        // infoprodutos, anúncio a anúncio das 3 contas Meta e mapa de cliques. Só leitura.
+        Route::get('publicidade/infoprodutos', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'index'])->name('publicidade.infoprodutos');
+        Route::get('publicidade/criativos', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'criativos'])->name('publicidade.criativos');
+        Route::get('publicidade/comportamento', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'comportamento'])->name('publicidade.comportamento');
+        Route::get('publicidade/comportamento/visita', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'visita'])->name('publicidade.comportamento.visita');
+        Route::get('publicidade/comportamento/print', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'print'])->name('publicidade.comportamento.print');
     });
     // Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
     // com vários conjuntos e anúncios e ela vai para a Meta pausada. Ver é

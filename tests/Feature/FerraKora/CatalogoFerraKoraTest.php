@@ -86,6 +86,23 @@ class CatalogoFerraKoraTest extends TestCase
         $this->getJson('/api/ferrakora/produtos/nao-existe')->assertNotFound();
     }
 
+    public function test_lista_leva_os_termos_da_descricao_e_dos_slugs_para_a_busca(): void
+    {
+        [$pai] = $this->grupo();
+        $pai->update(['name' => 'Medidor Preciso Que Não Escorrega', 'description' => "Trena de 5 metros.\nTrava automática, ótima trena."]);
+        $this->enviar([['sku' => 'FER-TRE-5M', 'categoria' => 'Trenas', 'ordem' => 1]])->assertOk();
+
+        $termos = explode(' ', $this->getJson('/api/ferrakora/produtos')->assertOk()->json('products.0.termos'));
+
+        // Descrição (sem acento e sem repetir) e o slug do KazaKora, que ainda tem "emborrachada".
+        $this->assertContains('trena', $termos);
+        $this->assertContains('automatica', $termos);
+        $this->assertContains('emborrachada', $termos);
+        $this->assertCount(1, array_keys($termos, 'trena'));
+        $this->assertNotContains('de', $termos);
+        $this->assertNotContains('p', $termos);
+    }
+
     public function test_emoji_da_descricao_nao_quebra_no_meio(): void
     {
         [$pai] = $this->grupo();

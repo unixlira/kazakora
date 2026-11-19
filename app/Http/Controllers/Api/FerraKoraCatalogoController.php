@@ -29,12 +29,28 @@ class FerraKoraCatalogoController extends Controller
         // A lista (cards, menu, busca) não usa a descrição nem "media" (cópia
         // de "images"): saem para a resposta e o cache do navegador ficarem
         // leves (2026-10-15). A página do produto (show) continua com tudo.
+        // "termos" (2026-11-19): as palavras da descrição completa e dos
+        // slugs (FerraKora e KazaKora), sem repetição, para a busca do site
+        // achar o produto mesmo com título persuasivo sem a palavra básica.
         $produtos = array_map(
-            fn (array $produto) => Arr::except($produto, ['description', 'media']),
+            fn (array $produto) => [...Arr::except($produto, ['description', 'media']), 'termos' => self::termosDeBusca($produto)],
             $this->catalogo->produtos(),
         );
 
         return $this->semCache(response()->json(['count' => count($produtos), 'offset' => 0, 'limit' => count($produtos), 'products' => $produtos]));
+    }
+
+    /** Palavras (3+ letras, sem acento, minúsculas, sem repetir) da descrição e dos slugs do produto. */
+    public static function termosDeBusca(array $produto): string
+    {
+        $texto = implode(' ', [
+            html_entity_decode(strip_tags(str_replace('<', ' <', (string) ($produto['description'] ?? ''))), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+            (string) ($produto['slug'] ?? ''),
+            basename((string) parse_url((string) ($produto['kazakora_url'] ?? ''), PHP_URL_PATH)),
+        ]);
+        preg_match_all('/[a-z0-9]{3,}/', Str::lower(Str::ascii($texto)), $palavras);
+
+        return implode(' ', array_values(array_unique($palavras[0])));
     }
 
     public function show(string $id): JsonResponse

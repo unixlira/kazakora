@@ -4,15 +4,17 @@ namespace App\Modules\Notifications\Push\Http;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Auth\Http\Requests\LoginRequest;
+use App\Modules\Notifications\Push\AppsDeVendas;
 use App\Modules\Notifications\Push\AvisosPush;
 use App\Modules\Notifications\Push\DadosDoApp;
+use App\Modules\Notifications\Push\TokensDoApp;
 use App\Modules\Notifications\Push\MetricasDaLoja;
 use App\Modules\Notifications\Push\Models\PushInscricao;
 use App\Modules\Notifications\Push\WebPush;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,7 +33,7 @@ class AppVendasController extends Controller
      */
     public function entrar(string $app): Response
     {
-        return Inertia::location('/app/'.$app.'/');
+        return Inertia::location(AppsDeVendas::url($app));
     }
 
     public function estado(Request $request, string $app, WebPush $webPush): JsonResponse
@@ -104,48 +106,54 @@ class AppVendasController extends Controller
     }
 
     /**
-     * Sessão do app (fora do auth): diz se já há admin logado e deixa o
-     * cookie XSRF para o login. Sempre 200, para a tela de entrar do app.
+     * Login do app (2026-11-19: app.kazakora.com e app.ferrakora.com são
+     * sites próprios). Confere a senha sem abrir sessão, com o mesmo limite
+     * de 5 tentativas do login do painel, e devolve um token só deste app
+     * (TokensDoApp). Só admin.
      */
-    public function sessao(Request $request, string $app): JsonResponse
+    public function login(Request $request, string $app): JsonResponse
     {
-        $user = $request->user();
-        $admin = $user instanceof User && $user->role === User::ROLE_ADMIN;
+        $dados = $request->validate([
+            'email' => ['required', 'string', 'email', 'max:190'],
+            'password' => ['required', 'string', 'max:200'],
+            'aparelho' => ['nullable', 'string', 'max:120'],
+        ]);
+        $chave = 'apps-vendas-login:'.Str::transliterate(Str::lower($dados['email'])).'|'.$request->ip();
 
-        return response()->json([
-            'logado' => $admin,
-            'usuario' => $admin ? Str::before((string) $user->name, ' ') : null,
-        ])->header('Cache-Control', 'private, no-store');
-    }
+        if (RateLimiter::tooManyAttempts($chave, 5)) {
+            return response()->json(['message' => 'Muitas tentativas. Tente de novo em '.RateLimiter::availableIn($chave).' segundos.'], 429);
+        }
 
-    /**
-     * Login do próprio app (2026-11-19: o app não abre a tela de login do
-     * painel). Mesma regra e limite de tentativas do login do painel; só
-     * admin fica logado.
-     */
-    public function login(LoginRequest $request, string $app): JsonResponse
-    {
-        $request->merge(['remember' => true]);
-        $request->authenticate();
+        $user = User::query()->where('email', $dados['email'])->first();
+        if (! $user || ! Auth::guard('web')->getProvider()->validateCredentials($user, ['password' => $dados['password']])) {
+            RateLimiter::hit($chave);
 
-        if ($request->user()?->role !== User::ROLE_ADMIN) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            return response()->json(['message' => 'E-mail ou senha incorretos.'], 422);
+        }
+        RateLimiter::clear($chave);
 
+        if ($user->role !== User::ROLE_ADMIN) {
             return response()->json(['message' => 'Só administrador entra no app.'], 403);
         }
 
-        $request->session()->regenerate();
+        return response()->json(TokensDoApp::emitir($user, $app, (string) ($dados['aparelho'] ?? '')) + [
+            'usuario' => Str::before((string) $user->name, ' '),
+        ]);
+    }
 
+    public function sessao(Request $request, string $app): JsonResponse
+    {
         return response()->json(['logado' => true, 'usuario' => Str::before((string) $request->user()->name, ' ')]);
     }
 
+    /** Sai: apaga o token e, se vier, a inscrição de aviso deste aparelho. */
     public function sair(Request $request, string $app): JsonResponse
     {
-        Auth::guard('web')->logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if (is_string($endpoint = $request->input('endpoint')) && $endpoint !== '') {
+            PushInscricao::query()->where('endpoint_hash', PushInscricao::hashDoEndpoint($endpoint))
+                ->where('user_id', $request->user()->id)->delete();
+        }
+        $request->attributes->get('app_vendas_token')?->delete();
 
         return response()->json(['ok' => true]);
     }

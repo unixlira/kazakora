@@ -9,6 +9,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Modules\Notifications\Push\TokensDoApp;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -44,6 +45,12 @@ class MetricasAppVendasTest extends TestCase
     {
         Carbon::setTestNow();
         parent::tearDown();
+    }
+
+    /** Requisições com o token do app, como o app faz. */
+    private function api(User $user, string $app): static
+    {
+        return $this->withToken(TokensDoApp::emitir($user, $app)['token']);
     }
 
     private function admin(): User
@@ -113,7 +120,7 @@ class MetricasAppVendasTest extends TestCase
     {
         $p = $this->cenario();
 
-        $r = $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas?periodo=hoje')->assertOk();
+        $r = $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=hoje')->assertOk();
 
         $r->assertJsonPath('loja', 'kazakora.com')
             ->assertJsonPath('faturamento.valor', 310)
@@ -159,7 +166,7 @@ class MetricasAppVendasTest extends TestCase
     {
         $p = $this->cenario();
 
-        $r = $this->actingAs($this->admin())->getJson('/admin/vendas-app/ferrakora/metricas?periodo=7d')->assertOk();
+        $r = $this->api($this->admin(), 'ferrakora')->getJson('/api-apps-vendas/ferrakora/metricas?periodo=7d')->assertOk();
 
         $r->assertJsonPath('loja', 'ferrakora.com')
             ->assertJsonPath('faturamento.valor', 300)
@@ -179,7 +186,7 @@ class MetricasAppVendasTest extends TestCase
         $this->cenario();
         $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 90.00, '2026-11-10 10:00');
 
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas?periodo=7d')->assertOk()
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d')->assertOk()
             ->assertJsonPath('faturamento.valor', 1390)
             ->assertJsonPath('pedidos.valor', 4)
             ->assertJsonPath('faturamento.anterior', 90)
@@ -199,7 +206,7 @@ class MetricasAppVendasTest extends TestCase
         $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 500.00, '2026-10-25 10:00'); // depois de 19/10: fora
         $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 600.00, '2026-10-31 23:00'); // mês anterior: fora do atual
 
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas')->assertOk()
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas')->assertOk()
             ->assertJsonPath('periodo', 'mes')
             ->assertJsonPath('faturamento.valor', 1430)
             ->assertJsonPath('pedidos.valor', 5)
@@ -228,13 +235,13 @@ class MetricasAppVendasTest extends TestCase
         });
         $this->cenario();
 
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas?periodo=7d')->assertOk()
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d')->assertOk()
             ->assertJsonPath('meta.configurada', true)
             ->assertJsonPath('meta.gasto.valor', 80)
             ->assertJsonPath('meta.gasto.anterior', 100)
             ->assertJsonPath('meta.roas.valor', 17.38); // 1.390 / 80
 
-        $fk = $this->actingAs($this->admin())->getJson('/admin/vendas-app/ferrakora/metricas?periodo=7d')->assertOk()
+        $fk = $this->api($this->admin(), 'ferrakora')->getJson('/api-apps-vendas/ferrakora/metricas?periodo=7d')->assertOk()
             ->assertJsonPath('meta.gasto.valor', 30)
             ->assertJsonPath('meta.roas.valor', 10);
 
@@ -244,20 +251,53 @@ class MetricasAppVendasTest extends TestCase
 
         Cache::flush();
         ChannelAdSpend::create(['date' => '2026-11-19', 'channel' => 'ferrakora', 'spend' => 20]);
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/ferrakora/metricas?periodo=7d')->assertOk()
+        $this->api($this->admin(), 'ferrakora')->getJson('/api-apps-vendas/ferrakora/metricas?periodo=7d')->assertOk()
             ->assertJsonPath('lucro.motivo', null);
     }
 
-    public function test_so_admin_ve_as_metricas(): void
+    public function test_so_admin_com_token_do_proprio_app(): void
     {
-        $this->getJson('/admin/vendas-app/kazakora/metricas')->assertUnauthorized();
+        $this->getJson('/api-apps-vendas/kazakora/metricas')->assertUnauthorized();
 
         $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
-        $this->actingAs($gerente)->getJson('/admin/vendas-app/kazakora/metricas')->assertForbidden();
+        $this->api($gerente, 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas')->assertUnauthorized();
 
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/beautykora/metricas')->assertNotFound();
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas?periodo=qualquer')
+        // Token do app KazaKora não abre o app FerraKora.
+        $admin = $this->admin();
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/ferrakora/metricas')->assertUnauthorized();
+
+        // Token vencido não vale; admin rebaixado perde o acesso na hora.
+        $token = TokensDoApp::emitir($admin, 'kazakora')['token'];
+        $this->withToken($token)->getJson('/api-apps-vendas/kazakora/sessao')->assertOk();
+        Carbon::setTestNow($this->agora->copy()->addDays(TokensDoApp::DIAS + 1));
+        $this->withToken($token)->getJson('/api-apps-vendas/kazakora/sessao')->assertUnauthorized();
+        Carbon::setTestNow($this->agora);
+        $outro = TokensDoApp::emitir($admin, 'kazakora')['token'];
+        $admin->forceFill(['role' => User::ROLE_MANAGER])->save();
+        $this->withToken($outro)->getJson('/api-apps-vendas/kazakora/sessao')->assertUnauthorized();
+
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/beautykora/metricas')->assertNotFound();
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=qualquer')
             ->assertOk()->assertJsonPath('periodo', 'mes');
+    }
+
+    public function test_cors_so_para_os_sites_dos_apps(): void
+    {
+        $this->call('OPTIONS', '/api-apps-vendas/kazakora/metricas', [], [], [], [
+            'HTTP_ORIGIN' => 'https://app.kazakora.com', 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
+        ])->assertNoContent()->assertHeader('Access-Control-Allow-Origin', 'https://app.kazakora.com');
+
+        $this->call('OPTIONS', '/api-apps-vendas/kazakora/login', [], [], [], [
+            'HTTP_ORIGIN' => 'https://app.ferrakora.com', 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'POST',
+        ])->assertNoContent()->assertHeader('Access-Control-Allow-Origin', 'https://app.ferrakora.com');
+
+        $estranho = $this->call('OPTIONS', '/api-apps-vendas/kazakora/metricas', [], [], [], [
+            'HTTP_ORIGIN' => 'https://golpe.example', 'HTTP_ACCESS_CONTROL_REQUEST_METHOD' => 'GET',
+        ]);
+        $this->assertFalse($estranho->headers->has('Access-Control-Allow-Origin'));
+
+        $this->api($this->admin(), 'kazakora')->getJson('/api-apps-vendas/kazakora/sessao', ['Origin' => 'https://app.kazakora.com'])
+            ->assertOk()->assertHeader('Access-Control-Allow-Origin', 'https://app.kazakora.com');
     }
 
     public function test_resposta_fica_guardada_60_segundos(): void
@@ -265,37 +305,58 @@ class MetricasAppVendasTest extends TestCase
         $this->cenario();
         $admin = $this->admin();
 
-        $url = '/admin/vendas-app/kazakora/metricas?periodo=hoje';
-        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 2);
+        $url = '/api-apps-vendas/kazakora/metricas?periodo=hoje';
+        $this->api($admin, 'kazakora')->getJson($url)->assertJsonPath('pedidos.valor', 2);
         $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 10.00, '2026-11-19 14:30');
-        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 2);
+        $this->getJson($url)->assertJsonPath('pedidos.valor', 2);
 
         Carbon::setTestNow($this->agora->copy()->addSeconds(61));
-        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 3);
+        $this->getJson($url)->assertJsonPath('pedidos.valor', 3);
     }
 
     // ---------- Telas do app: login, pedidos, produtos, campanhas ----------
 
-    public function test_login_do_app_so_para_admin(): void
+    public function test_login_do_app_devolve_token_so_para_admin(): void
     {
         User::factory()->create(['email' => 'lira@teste.com', 'password' => Hash::make('segredo123'), 'role' => User::ROLE_ADMIN, 'name' => 'Lira Teste']);
         User::factory()->create(['email' => 'gerente@teste.com', 'password' => Hash::make('segredo123'), 'role' => User::ROLE_MANAGER]);
 
-        $this->getJson('/admin/vendas-app/ferrakora/sessao')->assertOk()->assertJson(['logado' => false]);
+        $this->postJson('/api-apps-vendas/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'errada'])->assertStatus(422);
+        $this->postJson('/api-apps-vendas/ferrakora/login', ['email' => 'gerente@teste.com', 'password' => 'segredo123'])->assertForbidden();
 
-        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'errada'])->assertStatus(422);
+        $r = $this->postJson('/api-apps-vendas/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'segredo123', 'aparelho' => 'iPhone'])
+            ->assertOk()->assertJsonPath('usuario', 'Lira');
+        $token = (string) $r->json('token');
+        $this->assertNotSame('', $token);
         $this->assertGuest();
 
-        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'gerente@teste.com', 'password' => 'segredo123'])->assertForbidden();
-        $this->assertGuest();
+        $this->withToken($token)->getJson('/api-apps-vendas/ferrakora/sessao')->assertOk()->assertJson(['logado' => true, 'usuario' => 'Lira']);
+        $this->withToken($token)->postJson('/api-apps-vendas/ferrakora/sair')->assertOk();
+        $this->withToken($token)->getJson('/api-apps-vendas/ferrakora/sessao')->assertUnauthorized();
 
-        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'segredo123'])
-            ->assertOk()->assertJson(['logado' => true, 'usuario' => 'Lira']);
-        $this->assertAuthenticated();
-        $this->getJson('/admin/vendas-app/ferrakora/sessao')->assertJson(['logado' => true, 'usuario' => 'Lira']);
+        // 5 senhas erradas travam o e-mail.
+        foreach (range(1, 5) as $i) {
+            $this->postJson('/api-apps-vendas/kazakora/login', ['email' => 'lira@teste.com', 'password' => 'x'.$i]);
+        }
+        $this->postJson('/api-apps-vendas/kazakora/login', ['email' => 'lira@teste.com', 'password' => 'segredo123'])->assertStatus(429);
+    }
 
-        $this->postJson('/admin/vendas-app/ferrakora/sair')->assertOk();
-        $this->assertGuest();
+    public function test_inscricao_de_aviso_pelo_token(): void
+    {
+        config(['services.webpush.public_key' => \App\Modules\Notifications\Push\WebPush::gerarChaves()['publica']]);
+        $admin = $this->admin();
+        $inscricao = ['endpoint' => 'https://web.push.apple.com/fk-token', 'keys' => [
+            'p256dh' => \App\Modules\Notifications\Push\WebPush::gerarChaves()['publica'],
+            'auth' => \App\Modules\Notifications\Push\WebPush::base64urlEncode(random_bytes(16)),
+        ]];
+
+        $this->api($admin, 'ferrakora')->postJson('/api-apps-vendas/ferrakora/inscrever', $inscricao)->assertOk();
+        $this->assertDatabaseHas('push_inscricoes', ['app' => 'ferrakora', 'user_id' => $admin->id]);
+        $this->getJson('/api-apps-vendas/ferrakora/estado')->assertOk()->assertJsonPath('aparelhos', 1);
+
+        // Sair com o endpoint apaga a inscrição deste aparelho.
+        $this->postJson('/api-apps-vendas/ferrakora/sair', ['endpoint' => $inscricao['endpoint']])->assertOk();
+        $this->assertDatabaseCount('push_inscricoes', 0);
     }
 
     public function test_pedidos_e_detalhe_so_da_loja_do_app_sem_dado_pessoal(): void
@@ -303,15 +364,15 @@ class MetricasAppVendasTest extends TestCase
         $p = $this->cenario();
         $admin = $this->admin();
 
-        $lista = $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos')->assertOk();
+        $lista = $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos')->assertOk();
         $this->assertEqualsCanonicalizing(
             [$p['kz1']->id, $p['kz2']->id, $p['kzPix']->id, $p['kzCancelado']->id, $p['kzOntem']->id, $p['kzOntemTarde']->id],
             collect($lista->json('pedidos'))->pluck('id')->all(),
         );
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos?status=aguardando')
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos?status=aguardando')
             ->assertJsonCount(1, 'pedidos')->assertJsonPath('pedidos.0.id', $p['kzPix']->id);
 
-        $detalhe = $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['kz1']->id)->assertOk()
+        $detalhe = $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos/'.$p['kz1']->id)->assertOk()
             ->assertJsonPath('total', 110)
             ->assertJsonPath('cliente', 'Maria')
             ->assertJsonPath('cidade', 'São Paulo / SP')
@@ -322,13 +383,13 @@ class MetricasAppVendasTest extends TestCase
         }
 
         // Pedido de outra loja ou de marketplace não existe no app.
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['fk']->id)->assertNotFound();
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['ml']->id)->assertNotFound();
-        $this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/pedidos/'.$p['kz1']->id)->assertNotFound();
-        $this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/pedidos/'.$p['fk']->id)->assertOk();
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos/'.$p['fk']->id)->assertNotFound();
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos/'.$p['ml']->id)->assertNotFound();
+        $this->api($admin, 'ferrakora')->getJson('/api-apps-vendas/ferrakora/pedidos/'.$p['kz1']->id)->assertNotFound();
+        $this->api($admin, 'ferrakora')->getJson('/api-apps-vendas/ferrakora/pedidos/'.$p['fk']->id)->assertOk();
 
         $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
-        $this->actingAs($gerente)->getJson('/admin/vendas-app/kazakora/pedidos')->assertForbidden();
+        $this->api($gerente, 'kazakora')->getJson('/api-apps-vendas/kazakora/pedidos')->assertUnauthorized();
     }
 
     public function test_produtos_do_catalogo_de_cada_loja(): void
@@ -340,21 +401,21 @@ class MetricasAppVendasTest extends TestCase
         FerraKoraProduto::create(['product_id' => $ambos->id, 'ordem' => 2, 'ativo' => false]);
         $admin = $this->admin();
 
-        $kzIds = collect($this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/produtos')->assertOk()->json('produtos'))->pluck('id');
+        $kzIds = collect($this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/produtos')->assertOk()->json('produtos'))->pluck('id');
         $this->assertTrue($kzIds->contains($kz->id));
         $this->assertFalse($kzIds->contains($soFk->id));
 
-        $fk = collect($this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/produtos')->assertOk()->json('produtos'))->keyBy('id');
+        $fk = collect($this->api($admin, 'ferrakora')->getJson('/api-apps-vendas/ferrakora/produtos')->assertOk()->json('produtos'))->keyBy('id');
         $this->assertEqualsCanonicalizing([$soFk->id, $ambos->id], $fk->keys()->all());
         $this->assertSame('Trena Profissional 5m', $fk[$soFk->id]['nome']);
         $this->assertFalse($fk[$ambos->id]['ativo'], 'despublicado no site FerraKora');
 
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/produtos?busca=Árvore')->assertJsonCount(1, 'produtos');
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/produtos?busca=Árvore')->assertJsonCount(1, 'produtos');
     }
 
     public function test_campanhas_sem_meta_configurada(): void
     {
-        $this->actingAs($this->admin())->getJson('/admin/vendas-app/ferrakora/campanhas')->assertOk()
+        $this->api($this->admin(), 'ferrakora')->getJson('/api-apps-vendas/ferrakora/campanhas')->assertOk()
             ->assertJson(['configurada' => false, 'campanhas' => []]);
     }
 }

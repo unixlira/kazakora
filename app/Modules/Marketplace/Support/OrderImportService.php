@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
 use App\Modules\Catalog\Jobs\CompleteImportedProductJob;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\ProductMediaBackfillService;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
@@ -304,9 +305,7 @@ class OrderImportService
                 'product_id' => $product?->id,
                 'external_item_id' => $item['external_id'],
                 'external_model_id' => $externalModelId,
-                'product_name' => $product?->name
-                    ?? ($item['external_name'] ?? null)
-                    ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                'product_name' => self::nomeDoItem($item, $product),
                 'product_price' => $item['unit_price'],
                 'quantity' => $item['quantity'],
                 'subtotal' => round($item['unit_price'] * $item['quantity'], 2),
@@ -570,9 +569,7 @@ class OrderImportService
                     // add_external_item_id).
                     'external_item_id' => $item['external_id'],
                     'external_model_id' => $externalModelId,
-                    'product_name' => $product?->name
-                        ?? ($item['external_name'] ?? null)
-                        ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                    'product_name' => self::nomeDoItem($item, $product),
                     'product_price' => $item['unit_price'],
                     'quantity' => $item['quantity'],
                     'subtotal' => round($item['unit_price'] * $item['quantity'], 2),
@@ -910,6 +907,35 @@ class OrderImportService
      * NFeXmlBuilderService), isso é só uma tentativa extra de recuperar o
      * dado antes de deixar a emissão falhar.
      */
+    /**
+     * Nome gravado no item do pedido de marketplace: o TÍTULO DO ANÚNCIO que
+     * o próprio canal manda no pedido (ML item.title, Shopee item_name +
+     * model_name, TikTok/Bling descricao, Amazon Title). É ele que aparece no
+     * KoraSync e vai no xProd da NF-e. Pedido do dono, 18/11/2026: o name do
+     * produto virou título de vitrine ("... + PDF Grátis") e não pode sair
+     * na separação nem na nota. Sem título do canal, cai no nome interno do
+     * produto (Product::nomeParaPedido()).
+     *
+     * @param  array<string, mixed>  $item
+     */
+    public static function nomeDoItem(array $item, ?Product $product): string
+    {
+        $doCanal = trim((string) ($item['external_name'] ?? ''));
+
+        if ($doCanal !== '') {
+            return $doCanal;
+        }
+
+        return $product?->nomeParaPedido()
+            ?? "Item {$item['external_id']} (sem produto local mapeado)";
+    }
+
+    /** O item ainda está com o nome provisório de "sem produto mapeado"? */
+    public static function nomeProvisorio(?string $nome): bool
+    {
+        return $nome === null || trim($nome) === '' || str_contains($nome, '(sem produto local mapeado)');
+    }
+
     public function refreshBuyerInfo(Order $order): void
     {
         if ($order->origin === Order::ORIGIN_STORE) {

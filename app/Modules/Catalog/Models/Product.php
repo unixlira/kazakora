@@ -30,6 +30,7 @@ class Product extends Model
         'sku',
         'sku_anterior',
         'name',
+        'nome_interno',
         'slug',
         'description',
         'brand',
@@ -254,6 +255,16 @@ class Product extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'parent_product_id');
+    }
+
+    /**
+     * Nome que vai no item do pedido (e daí na NF-e e na separação) quando
+     * o canal não manda título próprio: o nome interno, se houver, senão o
+     * name. O name é título de vitrine desde 18/11/2026 ("... + PDF Grátis").
+     */
+    public function nomeParaPedido(): string
+    {
+        return filled($this->nome_interno) ? trim((string) $this->nome_interno) : (string) $this->name;
     }
 
     public function children(): HasMany

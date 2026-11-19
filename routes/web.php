@@ -331,6 +331,17 @@ Route::middleware('auth')->group(function () {
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
+    // Apps de vendas KazaKora e FerraKora (2026-11-19): a página de cada app
+    // (/app/<app>/, repositório próprio) inscreve o aparelho no Web Push.
+    Route::middleware('admin')->prefix('vendas-app/{app}')->name('vendas-app.')
+        ->whereIn('app', \App\Modules\Notifications\Push\AppsDeVendas::TODOS)
+        ->controller(\App\Modules\Notifications\Push\Http\AppVendasController::class)->group(function () {
+            Route::get('entrar', 'entrar')->name('entrar');
+            Route::get('estado', 'estado')->name('estado');
+            Route::post('inscrever', 'inscrever')->middleware('throttle:20,1')->name('inscrever');
+            Route::post('cancelar', 'cancelar')->middleware('throttle:20,1')->name('cancelar');
+            Route::post('teste', 'teste')->middleware('throttle:6,1')->name('teste');
+        });
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
     // Painel por grupo (Lira, 17/11/2026): Marketplaces ou E-commerces, abre o
     // Resultado (financeiro) ou os Indicadores, conforme a permissão.

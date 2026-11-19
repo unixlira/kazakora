@@ -35,13 +35,17 @@ use Throwable;
  *    CampanhasMetaPorLoja::servicoDa), lido da Meta.
  *
  * Comparação: pedidos, faturamento e visitas contra a mesma janela do
- * período anterior, até a mesma hora (hoje × ontem até agora). Lucro e Meta
- * são por dia inteiro: comparam com os N dias anteriores completos e, em
- * "hoje", não comparam (dia pela metade contra dia inteiro).
+ * período anterior, até a mesma hora (hoje × ontem até agora; mês × mesmo
+ * intervalo do mês anterior). Lucro e Meta são por dia inteiro: comparam com
+ * os dias anteriores completos e, em "hoje", não comparam (dia pela metade
+ * contra dia inteiro).
  */
 class MetricasDaLoja
 {
-    public const PERIODOS = ['hoje' => 1, '7d' => 7, '30d' => 30];
+    /** hoje, semana (últimos 7 dias, hoje incluído), mês corrente (dia 1 até agora) e 30 dias. */
+    public const PERIODOS = ['hoje' => 1, '7d' => 7, 'mes' => null, '30d' => 30];
+
+    public const PERIODO_PADRAO = 'mes';
 
     public const CANAL = [
         AppsDeVendas::KAZAKORA => Order::ORIGIN_STORE,
@@ -71,7 +75,7 @@ class MetricasDaLoja
 
     public static function periodo(?string $pedido): string
     {
-        return array_key_exists((string) $pedido, self::PERIODOS) ? (string) $pedido : 'hoje';
+        return array_key_exists((string) $pedido, self::PERIODOS) ? (string) $pedido : self::PERIODO_PADRAO;
     }
 
     /** Guardado 60 s: o app atualiza a cada 60 s com a tela aberta. */
@@ -83,10 +87,19 @@ class MetricasDaLoja
     public function calcular(string $app, string $periodo, ?Carbon $agora = null): array
     {
         $agora ??= now();
-        $dias = self::PERIODOS[$periodo];
-        $inicio = $agora->copy()->startOfDay()->subDays($dias - 1);
-        $inicioAnt = $inicio->copy()->subDays($dias);
-        $fimAnt = $agora->copy()->subDays($dias);
+        if ($periodo === 'mes') {
+            // Mês corrente × mesmo intervalo do mês anterior (1 a 19/10 × 1 a 19/11).
+            $inicio = $agora->copy()->startOfMonth();
+            $inicioAnt = $inicio->copy()->subMonthNoOverflow();
+            $fimAnt = $agora->copy()->subMonthNoOverflow();
+        } else {
+            $dias = self::PERIODOS[$periodo];
+            $inicio = $agora->copy()->startOfDay()->subDays($dias - 1);
+            $inicioAnt = $inicio->copy()->subDays($dias);
+            $fimAnt = $agora->copy()->subDays($dias);
+        }
+        // Lucro e Meta são por dia: o anterior vai até o fim do dia de $fimAnt.
+        $fimAntDia = $fimAnt->copy()->startOfDay()->addDay();
         $canal = self::CANAL[$app];
 
         $atual = $this->vendas($canal, $inicio, $agora);
@@ -97,9 +110,9 @@ class MetricasDaLoja
         $conversaoAnt = $visitasAnt > 0 ? round($anterior['pedidos'] / $visitasAnt * 100, 2) : null;
 
         $comparaDiaInteiro = $periodo !== 'hoje';
-        $meta = $this->meta($app, $inicioAnt, $inicio, $agora);
+        $meta = $this->meta($app, $inicioAnt, $fimAntDia, $inicio, $agora);
         $roas = ($meta['gasto'] ?? 0) > 0 ? round($atual['faturamento'] / $meta['gasto'], 2) : null;
-        $roasAnt = ($meta['gasto_anterior'] ?? 0) > 0 ? round($this->vendas($canal, $inicioAnt, $inicio)['faturamento'] / $meta['gasto_anterior'], 2) : null;
+        $roasAnt = ($meta['gasto_anterior'] ?? 0) > 0 ? round($this->vendas($canal, $inicioAnt, $fimAntDia->copy()->subSecond())['faturamento'] / $meta['gasto_anterior'], 2) : null;
 
         return [
             'app' => $app,
@@ -111,7 +124,7 @@ class MetricasDaLoja
             'faturamento' => self::numero($atual['faturamento'], $anterior['faturamento']),
             'pedidos' => self::numero($atual['pedidos'], $anterior['pedidos']),
             'ticket_medio' => self::numero($atual['ticket'], $anterior['ticket']),
-            'lucro' => $this->lucro($app, $canal, $inicio, $inicioAnt, $agora, $comparaDiaInteiro),
+            'lucro' => $this->lucro($app, $canal, $inicio, $inicioAnt, $fimAntDia, $agora, $comparaDiaInteiro),
             'aguardando_pagamento' => $this->aguardando($canal, $inicio, $agora),
             'visitas' => self::numero($visitas, $visitasAnt),
             'conversao' => self::numero($conversao, $conversaoAnt),
@@ -165,7 +178,7 @@ class MetricasDaLoja
      * (ads:sync-spend grava com canal 'ferrakora'); sem isso o lucro sairia
      * maior que o real e fica de fora, com o motivo.
      */
-    private function lucro(string $app, string $canal, Carbon $inicio, Carbon $inicioAnt, Carbon $agora, bool $comparar): array
+    private function lucro(string $app, string $canal, Carbon $inicio, Carbon $inicioAnt, Carbon $fimAntDia, Carbon $agora, bool $comparar): array
     {
         if ($app === AppsDeVendas::FERRAKORA
             && filled(config('services.meta_ads.ferrakora_ad_account_id'))
@@ -176,7 +189,7 @@ class MetricasDaLoja
 
         $amanha = $agora->copy()->startOfDay()->addDay();
         $linha = $this->margem->porCanal($inicio, $amanha)[$canal] ?? null;
-        $anterior = $comparar ? ($this->margem->porCanal($inicioAnt, $inicio)[$canal] ?? null) : null;
+        $anterior = $comparar ? ($this->margem->porCanal($inicioAnt, $fimAntDia)[$canal] ?? null) : null;
         $lucro = $linha ? (float) $linha['lucro'] : 0.0;
         $receita = $linha ? (float) $linha['receita'] : 0.0;
 
@@ -266,10 +279,10 @@ class MetricasDaLoja
     }
 
     /**
-     * Gasto da conta Meta da loja: dias [inicio, hoje] e os N dias antes.
+     * Gasto da conta Meta da loja: dias [inicio, hoje] e o intervalo anterior.
      * Uma leitura só, guardada 5 minutos; erro da Meta não derruba a tela.
      */
-    private function meta(string $app, Carbon $inicioAnt, Carbon $inicio, Carbon $agora): array
+    private function meta(string $app, Carbon $inicioAnt, Carbon $fimAntDia, Carbon $inicio, Carbon $agora): array
     {
         $loja = $app === AppsDeVendas::FERRAKORA ? CampanhasMetaPorLoja::FERRAKORA : CampanhasMetaPorLoja::KAZAKORA;
         if (! isset($this->metaPorLoja->lojas()[$loja])) {
@@ -291,7 +304,7 @@ class MetricasDaLoja
             if ((string) $linha['date'] >= $inicio->toDateString()) {
                 $gasto += (float) $linha['spend'];
                 $vendas += (float) $linha['attributed_gmv'];
-            } else {
+            } elseif ((string) $linha['date'] < $fimAntDia->toDateString()) {
                 $anterior += (float) $linha['spend'];
             }
         }

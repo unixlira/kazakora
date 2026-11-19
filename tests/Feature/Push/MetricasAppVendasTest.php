@@ -5,13 +5,16 @@ namespace Tests\Feature\Push;
 use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -188,6 +191,24 @@ class MetricasAppVendasTest extends TestCase
             ->assertJsonPath('serie.5.visitas', 1);
     }
 
+    public function test_mes_corrente_compara_com_o_mesmo_intervalo_do_mes_anterior(): void
+    {
+        $this->cenario();
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 40.00, '2026-11-01 00:30');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 25.00, '2026-10-05 10:00');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 500.00, '2026-10-25 10:00'); // depois de 19/10: fora
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 600.00, '2026-10-31 23:00'); // mês anterior: fora do atual
+
+        $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas')->assertOk()
+            ->assertJsonPath('periodo', 'mes')
+            ->assertJsonPath('faturamento.valor', 1430)
+            ->assertJsonPath('pedidos.valor', 5)
+            ->assertJsonPath('faturamento.anterior', 25)
+            ->assertJsonCount(19, 'serie')
+            ->assertJsonPath('serie.0.rotulo', '01/11')
+            ->assertJsonPath('serie.0.pedidos', 1);
+    }
+
     public function test_gasto_e_roas_da_meta_vem_da_conta_da_loja(): void
     {
         config([
@@ -236,7 +257,7 @@ class MetricasAppVendasTest extends TestCase
 
         $this->actingAs($this->admin())->getJson('/admin/vendas-app/beautykora/metricas')->assertNotFound();
         $this->actingAs($this->admin())->getJson('/admin/vendas-app/kazakora/metricas?periodo=qualquer')
-            ->assertOk()->assertJsonPath('periodo', 'hoje');
+            ->assertOk()->assertJsonPath('periodo', 'mes');
     }
 
     public function test_resposta_fica_guardada_60_segundos(): void
@@ -244,11 +265,96 @@ class MetricasAppVendasTest extends TestCase
         $this->cenario();
         $admin = $this->admin();
 
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/metricas')->assertJsonPath('pedidos.valor', 2);
+        $url = '/admin/vendas-app/kazakora/metricas?periodo=hoje';
+        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 2);
         $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 10.00, '2026-11-19 14:30');
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/metricas')->assertJsonPath('pedidos.valor', 2);
+        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 2);
 
         Carbon::setTestNow($this->agora->copy()->addSeconds(61));
-        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/metricas')->assertJsonPath('pedidos.valor', 3);
+        $this->actingAs($admin)->getJson($url)->assertJsonPath('pedidos.valor', 3);
+    }
+
+    // ---------- Telas do app: login, pedidos, produtos, campanhas ----------
+
+    public function test_login_do_app_so_para_admin(): void
+    {
+        User::factory()->create(['email' => 'lira@teste.com', 'password' => Hash::make('segredo123'), 'role' => User::ROLE_ADMIN, 'name' => 'Lira Teste']);
+        User::factory()->create(['email' => 'gerente@teste.com', 'password' => Hash::make('segredo123'), 'role' => User::ROLE_MANAGER]);
+
+        $this->getJson('/admin/vendas-app/ferrakora/sessao')->assertOk()->assertJson(['logado' => false]);
+
+        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'errada'])->assertStatus(422);
+        $this->assertGuest();
+
+        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'gerente@teste.com', 'password' => 'segredo123'])->assertForbidden();
+        $this->assertGuest();
+
+        $this->postJson('/admin/vendas-app/ferrakora/login', ['email' => 'lira@teste.com', 'password' => 'segredo123'])
+            ->assertOk()->assertJson(['logado' => true, 'usuario' => 'Lira']);
+        $this->assertAuthenticated();
+        $this->getJson('/admin/vendas-app/ferrakora/sessao')->assertJson(['logado' => true, 'usuario' => 'Lira']);
+
+        $this->postJson('/admin/vendas-app/ferrakora/sair')->assertOk();
+        $this->assertGuest();
+    }
+
+    public function test_pedidos_e_detalhe_so_da_loja_do_app_sem_dado_pessoal(): void
+    {
+        $p = $this->cenario();
+        $admin = $this->admin();
+
+        $lista = $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos')->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$p['kz1']->id, $p['kz2']->id, $p['kzPix']->id, $p['kzCancelado']->id, $p['kzOntem']->id, $p['kzOntemTarde']->id],
+            collect($lista->json('pedidos'))->pluck('id')->all(),
+        );
+        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos?status=aguardando')
+            ->assertJsonCount(1, 'pedidos')->assertJsonPath('pedidos.0.id', $p['kzPix']->id);
+
+        $detalhe = $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['kz1']->id)->assertOk()
+            ->assertJsonPath('total', 110)
+            ->assertJsonPath('cliente', 'Maria')
+            ->assertJsonPath('cidade', 'São Paulo / SP')
+            ->assertJsonPath('itens.0.nome', 'Árvore de Natal')
+            ->assertJsonPath('pagamento.metodo', 'Cartão');
+        foreach (['Sigilosa', 'Secreta', '11988887777', '01310'] as $pessoal) {
+            $this->assertStringNotContainsString($pessoal, $detalhe->getContent());
+        }
+
+        // Pedido de outra loja ou de marketplace não existe no app.
+        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['fk']->id)->assertNotFound();
+        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/pedidos/'.$p['ml']->id)->assertNotFound();
+        $this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/pedidos/'.$p['kz1']->id)->assertNotFound();
+        $this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/pedidos/'.$p['fk']->id)->assertOk();
+
+        $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
+        $this->actingAs($gerente)->getJson('/admin/vendas-app/kazakora/pedidos')->assertForbidden();
+    }
+
+    public function test_produtos_do_catalogo_de_cada_loja(): void
+    {
+        $kz = Product::factory()->create(['name' => 'Árvore de Natal 1,80', 'is_active' => true, 'so_ferrakora' => false]);
+        $soFk = Product::factory()->create(['name' => 'Trena 5m', 'is_active' => true, 'so_ferrakora' => true]);
+        $ambos = Product::factory()->create(['name' => 'Parafusadeira 48V', 'is_active' => true, 'so_ferrakora' => false]);
+        FerraKoraProduto::create(['product_id' => $soFk->id, 'titulo' => 'Trena Profissional 5m', 'ordem' => 1, 'ativo' => true]);
+        FerraKoraProduto::create(['product_id' => $ambos->id, 'ordem' => 2, 'ativo' => false]);
+        $admin = $this->admin();
+
+        $kzIds = collect($this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/produtos')->assertOk()->json('produtos'))->pluck('id');
+        $this->assertTrue($kzIds->contains($kz->id));
+        $this->assertFalse($kzIds->contains($soFk->id));
+
+        $fk = collect($this->actingAs($admin)->getJson('/admin/vendas-app/ferrakora/produtos')->assertOk()->json('produtos'))->keyBy('id');
+        $this->assertEqualsCanonicalizing([$soFk->id, $ambos->id], $fk->keys()->all());
+        $this->assertSame('Trena Profissional 5m', $fk[$soFk->id]['nome']);
+        $this->assertFalse($fk[$ambos->id]['ativo'], 'despublicado no site FerraKora');
+
+        $this->actingAs($admin)->getJson('/admin/vendas-app/kazakora/produtos?busca=Árvore')->assertJsonCount(1, 'produtos');
+    }
+
+    public function test_campanhas_sem_meta_configurada(): void
+    {
+        $this->actingAs($this->admin())->getJson('/admin/vendas-app/ferrakora/campanhas')->assertOk()
+            ->assertJson(['configurada' => false, 'campanhas' => []]);
     }
 }

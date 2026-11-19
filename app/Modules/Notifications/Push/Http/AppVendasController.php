@@ -3,12 +3,16 @@
 namespace App\Modules\Notifications\Push\Http;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Modules\Auth\Http\Requests\LoginRequest;
 use App\Modules\Notifications\Push\AvisosPush;
+use App\Modules\Notifications\Push\DadosDoApp;
 use App\Modules\Notifications\Push\MetricasDaLoja;
 use App\Modules\Notifications\Push\Models\PushInscricao;
 use App\Modules\Notifications\Push\WebPush;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -97,5 +101,75 @@ class AppVendasController extends Controller
     {
         return response()->json($metricas->montar($app, MetricasDaLoja::periodo($request->query('periodo'))))
             ->header('Cache-Control', 'private, no-store');
+    }
+
+    /**
+     * Sessão do app (fora do auth): diz se já há admin logado e deixa o
+     * cookie XSRF para o login. Sempre 200, para a tela de entrar do app.
+     */
+    public function sessao(Request $request, string $app): JsonResponse
+    {
+        $user = $request->user();
+        $admin = $user instanceof User && $user->role === User::ROLE_ADMIN;
+
+        return response()->json([
+            'logado' => $admin,
+            'usuario' => $admin ? Str::before((string) $user->name, ' ') : null,
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    /**
+     * Login do próprio app (2026-11-19: o app não abre a tela de login do
+     * painel). Mesma regra e limite de tentativas do login do painel; só
+     * admin fica logado.
+     */
+    public function login(LoginRequest $request, string $app): JsonResponse
+    {
+        $request->merge(['remember' => true]);
+        $request->authenticate();
+
+        if ($request->user()?->role !== User::ROLE_ADMIN) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json(['message' => 'Só administrador entra no app.'], 403);
+        }
+
+        $request->session()->regenerate();
+
+        return response()->json(['logado' => true, 'usuario' => Str::before((string) $request->user()->name, ' ')]);
+    }
+
+    public function sair(Request $request, string $app): JsonResponse
+    {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function pedidos(Request $request, string $app, DadosDoApp $dados): JsonResponse
+    {
+        return response()->json($dados->pedidos($app, $request->query('status'), (int) $request->query('pagina', 1)));
+    }
+
+    public function pedido(string $app, int $pedido, DadosDoApp $dados): JsonResponse
+    {
+        $resposta = $dados->pedido($app, $pedido);
+        abort_if($resposta === null, 404);
+
+        return response()->json($resposta);
+    }
+
+    public function produtos(Request $request, string $app, DadosDoApp $dados): JsonResponse
+    {
+        return response()->json($dados->produtos($app, is_string($request->query('busca')) ? mb_substr($request->query('busca'), 0, 80) : null));
+    }
+
+    public function campanhas(Request $request, string $app, DadosDoApp $dados): JsonResponse
+    {
+        return response()->json($dados->campanhas($app, MetricasDaLoja::periodo($request->query('periodo'))));
     }
 }

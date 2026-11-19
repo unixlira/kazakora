@@ -69,7 +69,7 @@ class InvoiceEmissionService
 
                     $order->items()->create([
                         'product_id' => $product->id,
-                        'product_name' => $product->name,
+                        'product_name' => $product->nomeParaPedido(),
                         'product_price' => $item['unit_price'],
                         'quantity' => $item['quantity'],
                         'subtotal' => round($item['unit_price'] * $item['quantity'], 2),

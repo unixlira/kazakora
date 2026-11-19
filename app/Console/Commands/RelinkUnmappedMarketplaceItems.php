@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Catalog\Jobs\CompleteImportedProductJob;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -136,7 +137,12 @@ class RelinkUnmappedMarketplaceItems extends Command
             }
 
             foreach ($group as $item) {
-                $item->update(['product_id' => $product->id, 'product_name' => $product->name]);
+                // Título do anúncio que veio do canal fica (é o que vai no
+                // KoraSync e na nota); só o nome provisório é trocado.
+                $item->update([
+                    'product_id' => $product->id,
+                    'product_name' => OrderImportService::nomeProvisorio($item->product_name) ? $product->nomeParaPedido() : $item->product_name,
+                ]);
             }
 
             // Pedido que só esperava este vínculo pra ter nota: sai agora.

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
@@ -1836,9 +1837,13 @@ class DashboardAgentController extends Controller
             ->get();
 
         foreach ($itens as $alvo) {
+            // O nome que veio do canal (título do anúncio) fica; só o
+            // provisório "sem produto local mapeado" é trocado.
             $alvo->forceFill([
                 'product_id' => $product->id,
-                'product_name' => $product->name,
+                'product_name' => OrderImportService::nomeProvisorio($alvo->product_name)
+                    ? $product->nomeParaPedido()
+                    : $alvo->product_name,
             ])->save();
         }
 

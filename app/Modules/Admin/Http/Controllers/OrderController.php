@@ -7,6 +7,7 @@ use App\Modules\Admin\Support\BuscaDePedidos;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
@@ -481,9 +482,17 @@ class OrderController extends Controller
                 $unitPrice = (float) ($item->product_price ?: $product->unitPriceForQuantity($newQuantity));
                 $lineSubtotal = round($unitPrice * $newQuantity, 2);
 
+                // Mesmo produto em pedido de canal: mantém o título do
+                // anúncio gravado na importação (não o name de vitrine).
+                $nomeDoItem = $oldProductId === $newProductId
+                    && $order->origin !== Order::ORIGIN_STORE
+                    && ! OrderImportService::nomeProvisorio($item->product_name)
+                        ? $item->product_name
+                        : $product->nomeParaPedido();
+
                 $item->update([
                     'product_id' => $product->id,
-                    'product_name' => $product->name,
+                    'product_name' => $nomeDoItem,
                     'product_price' => $unitPrice,
                     'quantity' => $newQuantity,
                     'subtotal' => $lineSubtotal,
@@ -493,7 +502,7 @@ class OrderController extends Controller
                 $newValues[] = [
                     'id' => $item->id,
                     'product_id' => $product->id,
-                    'product_name' => $product->name,
+                    'product_name' => $nomeDoItem,
                     'quantity' => $newQuantity,
                     'subtotal' => $lineSubtotal,
                 ];

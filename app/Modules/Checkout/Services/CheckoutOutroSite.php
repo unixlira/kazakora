@@ -503,7 +503,7 @@ abstract class CheckoutOutroSite
             foreach ($itens as $item) {
                 $order->items()->create([
                     'product_id' => $item['product']->id,
-                    'product_name' => $item['product']->name,
+                    'product_name' => $item['product']->nomeParaPedido(),
                     'product_price' => $item['preco_unitario'],
                     'quantity' => $item['quantity'],
                     'subtotal' => $item['subtotal'],

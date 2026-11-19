@@ -153,6 +153,7 @@ class FunilInfoprodutosTest extends TestCase
         $this->actingAs($admin)->get('/admin/publicidade/comportamento?loja=infoprodutos')->assertOk();
         $this->actingAs($admin)->getJson('/admin/publicidade/comportamento/visita?sessao=s1xxxxxxxxxxxxxxxx&produto=pidelo-bien')
             ->assertOk()->assertJsonPath('passos.0.texto', 'entrou na página');
+        $this->app['auth']->forgetGuards();
         $this->get('/admin/publicidade/infoprodutos')->assertRedirect();
     }
 }

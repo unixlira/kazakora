@@ -220,9 +220,9 @@ class AppVendasTest extends TestCase
 
         $this->assertSame('Vendeu: Parafusadeira 48V com 2 baterias e mais 1', $mensagem['title']);
         $this->assertSame('Pedido #'.$order->id.' · R$ 172,46', $mensagem['body']);
-        $this->assertSame('https://painel.kazakora.com/app/kazakora/icons/icon-192.png', $mensagem['icon']);
-        $this->assertSame('https://painel.kazakora.com/app/kazakora/icons/badge-96.png', $mensagem['badge']);
-        $this->assertSame('/admin/pedidos/'.$order->id, $mensagem['url']);
+        $this->assertSame('https://app.kazakora.com/icons/icon-192.png', $mensagem['icon']);
+        $this->assertSame('https://app.kazakora.com/icons/badge-96.png', $mensagem['badge']);
+        $this->assertSame('/#/pedidos/'.$order->id, $mensagem['url']);
 
         $texto = json_encode($mensagem, JSON_UNESCAPED_UNICODE);
         $this->assertStringNotContainsString('Maria', $texto);

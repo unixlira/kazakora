@@ -28,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // API dos apps de vendas (2026-11-19), fora de /api/* por causa do CORS.
+        then: function () {
+            \Illuminate\Support\Facades\Route::middleware('api')->prefix('api-apps-vendas')
+                ->group(base_path('routes/apps_vendas.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Laravel defaults this to route('login'); the route was renamed to

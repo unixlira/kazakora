@@ -122,6 +122,15 @@ class OrderPaymentFinalizer
             EnviarPurchaseMetaJob::dispatch($order->id)->afterCommit();
         }
 
+        // Aviso no app de vendas KazaKora/FerraKora (2026-11-19): só pedido
+        // de kazakora.com e ferrakora.com; o job trava em um aviso por pedido
+        // e nunca lança. Falha de fila também não segura o pagamento.
+        if (\App\Modules\Notifications\Push\AppsDeVendas::doPedido($order) !== null) {
+            rescue(function () use ($order) {
+                \App\Modules\Notifications\Push\Jobs\AvisarVendaPorPushJob::dispatch($order->id)->afterCommit();
+            }, report: false);
+        }
+
         return true;
     }
 

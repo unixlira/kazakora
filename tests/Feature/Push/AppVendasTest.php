@@ -132,7 +132,8 @@ class AppVendasTest extends TestCase
         $this->actingAs($this->admin())->get('/admin/vendas-app/kazakora/entrar')->assertRedirect('/app/kazakora/');
 
         // Vindo do POST de login do Inertia: troca de página inteira.
-        $this->actingAs($this->admin())->get('/admin/vendas-app/ferrakora/entrar', ['X-Inertia' => 'true'])
+        $versao = (string) app(\App\Http\Middleware\HandleInertiaRequests::class)->version(request());
+        $this->actingAs($this->admin())->get('/admin/vendas-app/ferrakora/entrar', ['X-Inertia' => 'true', 'X-Inertia-Version' => $versao])
             ->assertStatus(409)->assertHeader('X-Inertia-Location', '/app/ferrakora/');
     }
 

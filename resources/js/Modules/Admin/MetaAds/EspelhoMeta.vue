@@ -12,6 +12,8 @@ import { ctaDoAnuncio, formatarNumero, formatarReais, PRIORIDADES, statusMeta } 
 
 const props = defineProps({
     campanhas: { type: Array, default: () => [] },
+    // Linha de total do período (MetaAdsService::totalDoPeriodo, Lira 2026-11-18).
+    total: { type: Object, default: null },
     // Abre todos os conjuntos de cara (tela de uma campanha só).
     abrirTudo: { type: Boolean, default: false },
     // Botões Novo conjunto e Novo anúncio (quem pode criar; Lira 2026-10-19).
@@ -55,9 +57,9 @@ const BOTAO_ICONE = 'inline-flex h-7 w-7 items-center justify-center rounded-md 
 const BOTAO_EDITAR = `${BOTAO_ICONE} border-primary/40 text-primary hover:bg-primary/10 focus-visible:ring-primary/40`;
 const BOTAO_EXCLUIR = `${BOTAO_ICONE} border-red-300 text-red-700 hover:bg-red-50 focus-visible:ring-red-300 dark:text-red-300 dark:hover:bg-red-500/10`;
 const temAcoes = computed(() => props.acoes || props.editarAnuncios);
-const totalColunas = computed(() => 12 + (temAcoes.value ? 1 : 0));
-// Nome com largura fixa: nome comprido quebra em linhas em vez de esticar a tabela.
-const COL_NOME = 'sticky left-0 z-10 w-[320px] min-w-[280px] max-w-[340px] break-words bg-[var(--surface)]';
+// Nome com largura fixa: nome comprido quebra em linhas em vez de esticar a
+// tabela. No celular fica mais estreito e preso à esquerda enquanto o funil rola.
+const COL_NOME = 'sticky left-0 z-10 w-[150px] min-w-[150px] max-w-[170px] break-words bg-[var(--surface)] shadow-[1px_0_0_var(--surface-border)] sm:w-[320px] sm:min-w-[280px] sm:max-w-[340px]';
 const COL_ACOES = 'sticky right-0 z-10 whitespace-nowrap border-l border-[var(--surface-border)] bg-[var(--surface)] px-3';
 
 const BASE = '/admin/publicidade/meta-ads/campanhas';
@@ -112,7 +114,6 @@ const alternar = (c, id) => { abertos[id] = !aberto(c, id); };
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const totalAnuncios = (c) => c.conjuntos.reduce((t, s) => t + s.anuncios.length, 0);
-const roas = (m) => (m.roas === null ? '-' : `${m.roas.toFixed(2).replace('.', ',')}x`);
 const orcamento = (item) => {
     if (item.orcamento_diario) return `${formatarReais(item.orcamento_diario)}/dia`;
     if (item.orcamento_total) return `${formatarReais(item.orcamento_total)} total`;
@@ -160,36 +161,72 @@ defineExpose({ mostrar, editar, pausar });
 const classeDestaque = (id) => (destacado.value === id ? 'bg-primary/10 outline outline-2 outline-primary/50' : '');
 const cta = ctaDoAnuncio;
 
-const COLUNAS = [
-    ['gasto', 'Gastos', (m) => formatarReais(m.gasto)],
-    ['impressoes', 'Impressões', (m) => formatarNumero(m.impressoes)],
-    ['alcance', 'Alcance', (m) => formatarNumero(m.alcance)],
-    ['cliques', 'Cliques', (m) => formatarNumero(m.cliques)],
-    ['cpc', 'CPC', (m) => (m.cpc === null ? '-' : formatarReais(m.cpc))],
-    ['compras', 'Compras', (m) => formatarNumero(m.compras)],
-    ['roas', 'ROAS', roas],
+// Colunas do funil (pedido do Lira 2026-11-18), na ordem do Gerenciador:
+// Clique > Página > Carrinho > Checkout > Venda. Cliques, CTR e CPC são do
+// clique NO LINK; custos = gasto ÷ eventos. Sem evento = "—".
+const VAZIO = '—';
+const vazio = (v) => v === null || v === undefined || v === 0;
+const emReais = (v) => (vazio(v) ? VAZIO : formatarReais(v));
+const emNumero = (v) => (vazio(v) ? VAZIO : formatarNumero(v));
+const decimal = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const GRUPOS = [
+    ['entrega', 'Entrega', [
+        ['gasto', 'Gastos', (m) => formatarReais(m.gasto ?? 0)],
+        ['impressoes', 'Impressões', (m) => emNumero(m.impressoes)],
+        ['alcance', 'Alcance', (m) => emNumero(m.alcance), 'Pessoas únicas; não se soma entre campanhas'],
+    ]],
+    ['clique', 'Clique', [
+        ['cliques_link', 'Cliques no link', (m) => emNumero(m.cliques_link)],
+        ['ctr_link', 'CTR do link', (m) => (vazio(m.ctr_link) ? VAZIO : `${decimal(m.ctr_link)}%`), 'Cliques no link ÷ impressões'],
+        ['cpc_link', 'CPC do link', (m) => emReais(m.cpc_link), 'Gasto ÷ cliques no link'],
+    ]],
+    ['pagina', 'Página', [
+        ['visualizacoes_pagina', 'Visualizações da página', (m) => emNumero(m.visualizacoes_pagina), 'Visualizações da página de destino'],
+        ['custo_pagina', 'Custo por visualização', (m) => emReais(m.custo_pagina)],
+    ]],
+    ['carrinho', 'Carrinho', [
+        ['carrinho', 'Adições ao carrinho', (m) => emNumero(m.carrinho)],
+        ['custo_carrinho', 'Custo por adição', (m) => emReais(m.custo_carrinho)],
+    ]],
+    ['checkout', 'Checkout', [
+        ['checkout', 'Finalizações iniciadas', (m) => emNumero(m.checkout)],
+        ['custo_checkout', 'Custo por finalização', (m) => emReais(m.custo_checkout)],
+    ]],
+    ['venda', 'Venda', [
+        ['compras', 'Compras', (m) => emNumero(m.compras)],
+        ['custo_compra', 'Custo por compra', (m) => emReais(m.custo_compra)],
+        ['roas', 'ROAS de compras', (m) => (vazio(m.roas) ? VAZIO : `${decimal(m.roas)}x`), 'Valor de conversão da compra ÷ gasto'],
+        ['vendas', 'Valor de conversão', (m) => emReais(m.vendas), 'Valor de conversão da compra'],
+    ]],
 ];
+const COLUNAS = GRUPOS.flatMap(([grupo, , colunas]) => colunas.map(([chave, rotulo, fmt, dica], i) => [chave, rotulo, fmt, dica, i === 0 && grupo !== 'entrega']));
+const totalColunas = computed(() => 5 + COLUNAS.length + (temAcoes.value ? 1 : 0));
+const INICIO_GRUPO = 'border-l border-[var(--surface-border)]';
 </script>
 
 <template>
     <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-        <table class="w-full min-w-[1380px] text-sm">
+        <table class="w-full min-w-[2200px] text-sm">
             <thead class="bg-slate-500/5 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                    <th scope="col" :class="COL_NOME" class="px-4 py-3">Nome</th>
-                    <th scope="col" class="px-3 py-3">Status</th>
-                    <th scope="col" class="px-3 py-3" title="Botão de chamada do anúncio, igual ao do Gerenciador">Botão (CTA)</th>
-                    <th scope="col" class="px-3 py-3 text-right">Orçamento</th>
-                    <th v-for="[chave, rotulo] in COLUNAS" :key="chave" scope="col" class="px-3 py-3 text-right"
-                        :title="chave === 'cpc' ? 'Custo por clique: gasto ÷ cliques (todos)' : (chave === 'roas' ? 'Valor das compras ÷ gasto' : undefined)">{{ rotulo }}</th>
-                    <th scope="col" class="min-w-[280px] px-3 py-3" title="Sugestões automáticas a partir dos números do período">O que fazer</th>
-                    <th v-if="temAcoes" scope="col" :class="COL_ACOES" class="py-3 text-center">Ações</th>
+                    <th scope="col" rowspan="2" :class="COL_NOME" class="px-3 py-3 sm:px-4">Nome</th>
+                    <th scope="col" rowspan="2" class="px-3 py-3">Status</th>
+                    <th scope="col" rowspan="2" class="px-3 py-3" title="Botão de chamada do anúncio, igual ao do Gerenciador">Botão (CTA)</th>
+                    <th scope="col" rowspan="2" class="px-3 py-3 text-right">Orçamento</th>
+                    <th v-for="[grupo, rotulo, colunas] in GRUPOS" :key="grupo" scope="colgroup" :colspan="colunas.length"
+                        class="px-3 pb-1 pt-3 text-center font-bold text-slate-600 dark:text-slate-300" :class="grupo !== 'entrega' ? INICIO_GRUPO : ''">{{ rotulo }}</th>
+                    <th scope="col" rowspan="2" class="min-w-[280px] px-3 py-3" title="Sugestões automáticas a partir dos números do período">O que fazer</th>
+                    <th v-if="temAcoes" scope="col" rowspan="2" :class="COL_ACOES" class="py-3 text-center">Ações</th>
+                </tr>
+                <tr>
+                    <th v-for="[chave, rotulo, , dica, inicio] in COLUNAS" :key="chave" scope="col" :title="dica"
+                        class="whitespace-nowrap px-3 pb-3 pt-1 text-right normal-case tracking-normal" :class="inicio ? INICIO_GRUPO : ''">{{ rotulo }}</th>
                 </tr>
             </thead>
             <tbody>
                 <template v-for="c in campanhas" :key="c.id">
                     <tr class="border-t border-[var(--surface-border)] bg-slate-500/[0.03] font-semibold">
-                        <td :class="COL_NOME" class="px-4 py-3">
+                        <td :class="COL_NOME" class="px-3 py-3 sm:px-4">
                             <button type="button" class="flex items-start gap-2 text-left" :aria-expanded="aberto(c, c.id)" @click="alternar(c, c.id)">
                                 <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-400 transition-transform" :class="{ 'rotate-90': aberto(c, c.id) }" aria-hidden="true"></i>
                                 <span>
@@ -217,7 +254,7 @@ const COLUNAS = [
                             <template v-else>{{ orcamento(c) }}</template>
                             <span v-if="c.orcamento_nivel === 'conjunto'" class="block text-[11px] font-normal text-slate-500">nos conjuntos</span>
                         </td>
-                        <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-3 text-right tabular-nums">{{ fmt(c.metricas) }}</td>
+                        <td v-for="[chave, , fmt, , inicio] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="inicio ? INICIO_GRUPO : ''">{{ fmt(c.metricas ?? {}) }}</td>
                         <td class="px-3 py-3 font-normal">
                             <button v-if="resumoDaCampanha(c.id).length" type="button" class="flex flex-wrap items-center gap-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                                 title="Abrir os conjuntos e anúncios com sugestão" @click="abrirSugestoes(c)">
@@ -249,7 +286,7 @@ const COLUNAS = [
                     <template v-if="aberto(c, c.id)">
                         <template v-for="s in c.conjuntos" :key="s.id">
                             <tr :id="`meta-linha-${s.id}`" tabindex="-1" class="border-t border-[var(--surface-border)] transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50" :class="classeDestaque(s.id)">
-                                <td :class="COL_NOME" class="py-2.5 pl-9 pr-4">
+                                <td :class="COL_NOME" class="py-2.5 pl-5 pr-3 sm:pl-9 sm:pr-4">
                                     <button type="button" class="flex items-start gap-2 text-left" :aria-expanded="aberto(c, s.id)" @click="alternar(c, s.id)">
                                         <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-400 transition-transform" :class="{ 'rotate-90': aberto(c, s.id) }" aria-hidden="true"></i>
                                         <span>
@@ -265,7 +302,7 @@ const COLUNAS = [
                                         :pode-editar="editarAnuncios" @mudou="emit('mudou', $event)" />
                                     <template v-else>{{ c.orcamento_nivel === 'conjunto' ? orcamento(s) : 'da campanha' }}</template>
                                 </td>
-                                <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{{ fmt(s.metricas) }}</td>
+                                <td v-for="[chave, , fmt, , inicio] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums" :class="inicio ? INICIO_GRUPO : ''">{{ fmt(s.metricas ?? {}) }}</td>
                                 <td class="px-3 py-2.5 align-top">
                                     <ul v-if="daLinha(s.id).length" class="space-y-1.5">
                                         <li v-for="cartao in visiveis(s.id)" :key="cartao.id" class="text-xs leading-snug">
@@ -299,7 +336,7 @@ const COLUNAS = [
                             <template v-if="aberto(c, s.id)">
                                 <tr v-for="a in s.anuncios" :id="`meta-linha-${a.id}`" :key="a.id" tabindex="-1"
                                     class="border-t border-[var(--surface-border)] text-slate-700 transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50 dark:text-slate-300" :class="classeDestaque(a.id)">
-                                    <td :class="COL_NOME" class="py-2 pl-16 pr-4">
+                                    <td :class="COL_NOME" class="py-2 pl-7 pr-3 sm:pl-16 sm:pr-4">
                                         <span class="flex items-center gap-2.5">
                                             <img v-if="a.miniatura" :src="a.miniatura" alt="" class="h-9 w-9 shrink-0 rounded object-cover" loading="lazy" referrerpolicy="no-referrer">
                                             <span v-else class="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-slate-500/10 text-slate-400"><i class="fas fa-image text-xs" aria-hidden="true"></i></span>
@@ -325,7 +362,7 @@ const COLUNAS = [
                                             :class="[cta(a.cta).vazio ? 'bg-slate-500/10 text-slate-500' : 'bg-slate-500/15 text-slate-700 dark:text-slate-200', { 'font-mono': cta(a.cta).mono }]">{{ cta(a.cta).texto }}</span>
                                     </td>
                                     <td class="px-3 py-2 text-right text-slate-400">-</td>
-                                    <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ fmt(a.metricas) }}</td>
+                                    <td v-for="[chave, , fmt, , inicio] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="inicio ? INICIO_GRUPO : ''">{{ fmt(a.metricas ?? {}) }}</td>
                                     <td class="px-3 py-2 align-top">
                                         <ul v-if="daLinha(a.id).length" class="space-y-1.5">
                                             <li v-for="cartao in visiveis(a.id)" :key="cartao.id" class="text-xs leading-snug">
@@ -378,6 +415,20 @@ const COLUNAS = [
                     <td :colspan="totalColunas" class="px-4 py-6 text-center text-slate-500">Nenhuma campanha na conta da Meta.</td>
                 </tr>
             </tbody>
+            <tfoot v-if="total && campanhas.length">
+                <tr class="border-t-2 border-[var(--surface-border)] bg-slate-500/[0.06] font-bold">
+                    <th scope="row" :class="COL_NOME" class="px-3 py-3 text-left sm:px-4">
+                        Total do período
+                        <span class="block text-xs font-normal text-slate-500">{{ plural(campanhas.length, 'campanha listada', 'campanhas listadas') }}; custos e ROAS sobre as somas</span>
+                    </th>
+                    <td class="px-3 py-3"></td>
+                    <td class="px-3 py-3"></td>
+                    <td class="px-3 py-3"></td>
+                    <td v-for="[chave, , fmt, , inicio] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-3 text-right tabular-nums" :class="inicio ? INICIO_GRUPO : ''">{{ fmt(total) }}</td>
+                    <td class="px-3 py-3"></td>
+                    <td v-if="temAcoes" :class="COL_ACOES" class="py-3"></td>
+                </tr>
+            </tfoot>
         </table>
         <AnuncioModais v-if="editarAnuncios" ref="modais" :produtos="produtos" :chamadas="chamadas" @mudou="emit('mudou')" />
         <GerenciarModais v-if="editarAnuncios" ref="gerenciar" @mudou="emit('mudou', $event)" />

@@ -345,3 +345,45 @@ telefone. **Não coleta nada novo**: só lê o que já existe.
    antes dos 6 meses, mesmo a pedido.
 5. Encarregado (DPO): hoje o próprio responsável (José Roberto Lira), como
    permite a Resolução CD/ANPD nº 2/2022 para agente de pequeno porte.
+
+## Infoprodutos e mapa de cliques (2026-11-19)
+
+Pedido do Lira em 19/11/2026: funil dos infoprodutos (digitalmktseller.com e
+elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
+(`/produtos/*`) e da FerraKora (`/produto/*`).
+
+- **Script:** `/js/kzm.js` (o mesmo nos 4 sites, < 3 KB, defer, carregado na loja
+  só depois que a página fica ociosa: `resources/js/Shared/medicao.js`). Envio em
+  lote por `sendBeacon` para `POST /api-infoprodutos/evento`
+  (`ColetaController`), aceito só dos domínios de `config/infoprodutos.php`
+  (`INFOPRODUTOS_ORIGENS`), com CORS próprio (fora de `/api/*`).
+- **O que vai:** página vista (produto, idioma, host do referrer, utm_*, se havia
+  `fbclid` — nunca o valor), rolagem 25/50/75/100 e rolagem máxima, play e % do
+  vídeo, clique em prévia/FAQ/botões de compra (com a posição), cada clique com
+  x em % da largura, y em px, largura da janela, link/botão/clique morto, id da
+  seção, texto curto do elemento (de campo de formulário só o nome da tag, nunca
+  o valor) e o nome estável `data-kzm`, ações nomeadas (`window.kzm.acao`) e o
+  tempo na página. Lista fechada: qualquer campo fora dela = 422.
+- **O que NÃO vai:** cookie (nenhum é lido ou criado), localStorage, fingerprint,
+  IP (não há coluna de IP; o país sai do `CF-IPCountry`, só quando a chamada vem
+  de IP da Cloudflare), nome, e-mail, telefone, texto digitado.
+- **Sessão:** código aleatório no `sessionStorage` (some ao fechar a aba). Não
+  liga visitas de dias diferentes nem a pessoa à compra; o link do checkout da
+  Kiwify leva `src` = posição do botão e `sck` = esse código, para saber qual
+  botão/anúncio vendeu.
+- **Prazo:** brutos (`infoproduto_eventos`) apagados aos 90 dias por
+  `infoprodutos:consolidar` (03:45); ficam os totais por dia
+  (`infoproduto_diarios`).
+- **Vendas da Kiwify** (`POST /api-infoprodutos/kiwify/webhook`, assinatura
+  HMAC-SHA1 com `KIWIFY_WEBHOOK_TOKEN`): gravamos id da venda, produto, tipo
+  (principal, order bump, upsell, downsell), valor, moeda, país, método e
+  UTMs/src/sck. Nome, e-mail, telefone, documento e IP do comprador NÃO são
+  gravados. Carrinho abandonado: só id, produto, país e data.
+- **Base legal / aviso de cookies:** dado anônimo, sem cookie e sem
+  identificação: não muda o pop-up da loja (`Cookies::VERSAO` não mudou). A
+  Política de Privacidade da loja ganhou o parágrafo "Mapa de cliques das
+  páginas de produto"; as políticas do digitalmktseller (es/pt/en) e do Código
+  Divino descrevem a medição.
+- **Testes de ponta a ponta:** visita com `utm_source=teste-medicao` fica marcada
+  (`teste = 1`) e fora do painel; apagar com
+  `DELETE FROM infoproduto_eventos WHERE teste = 1`.

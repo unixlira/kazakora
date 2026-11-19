@@ -9,7 +9,7 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e do Pixel da Meta (publicidade), carregado desde o primeiro acesso: ao navegar você concorda, conforme os Termos de Uso. Com o seu aceite ao finalizar a compra, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e do Pixel da Meta (publicidade), carregado desde o primeiro acesso: ao navegar você concorda, conforme os Termos de Uso. Com o seu aceite ao finalizar a compra, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Depois desse aceite, a tag do Google Ads (publicidade) também mede as compras vindas dos nossos anúncios no Google. Veja a Política de Cookies.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
@@ -102,7 +102,9 @@ const direitos = [
                         páginas abertas no site e quantas foram (LGPD, art. 7º, IX, legítimo interesse).
                         <strong>Publicidade</strong>: o Pixel da Meta (Facebook e Instagram), que mede as visitas, os produtos
                         colocados no carrinho e as compras vindas dos nossos anúncios; é carregado desde o primeiro acesso e
-                        pode ser bloqueado ou apagado nas configurações do seu navegador.
+                        pode ser bloqueado ou apagado nas configurações do seu navegador. A tag do Google Ads (Google), que
+                        mede as compras vindas dos nossos anúncios no Google, só é carregada depois do aceite registrado ao
+                        finalizar a compra.
                     </p>
                     <p>
                         Ao navegar na Loja, você concorda com o uso de cookies e dos seus dados de navegação (LGPD, art. 7º, I),
@@ -120,6 +122,11 @@ const direitos = [
                         o código de clique dos outros anúncios (como gclid), e a Loja passa a avisar a Meta, pelo nosso servidor
                         (API de Conversões), quando você coloca um produto no carrinho ou tem a compra aprovada, com e-mail,
                         telefone, nome, cidade e CEP embaralhados (hash SHA-256): a Meta não recebe o texto desses dados.
+                        Se você chegou por um anúncio do Google, o código de clique (gclid) fica na sua sessão, no nosso
+                        servidor, e só depois do aceite vira o cookie do Google Ads. Com o aceite, quando a compra é aprovada,
+                        a tag do Google Ads informa ao Google o valor e o número do pedido e pode mandar junto e-mail e telefone
+                        embaralhados (hash SHA-256), para medir os anúncios; o Google trata esses dados conforme a política
+                        de privacidade dele (policies.google.com/privacy).
                         No pagamento, o Mercado Pago pode usar cookies próprios, conforme a política de privacidade dele.
                     </p>
                     <p>
@@ -127,7 +134,7 @@ const direitos = [
                         onde vêm as visitas e medir os nossos anúncios. Não vendemos esses dados. O IP, a data e a hora de
                         cada acesso ficam guardados por 6 meses, em sigilo, por obrigação do Marco Civil da Internet
                         (Lei nº 12.965/14, art. 15); depois disso, IP, navegador e códigos de visitante e de clique são
-                        apagados e sobram só números gerais. O cookie de navegação dura 12 meses e os da Meta até 90 dias.
+                        apagados e sobram só números gerais. O cookie de navegação dura 12 meses e os da Meta e do Google até 90 dias.
                     </p>
                     <p>
                         Você pode apagar ou bloquear os cookies a qualquer momento nas configurações do seu navegador, e pedir
@@ -199,7 +206,7 @@ const direitos = [
                         <div><dt class="text-xs text-store-fg-faint">E-mail</dt><dd class="text-store-fg">{{ COMPANY.email }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">WhatsApp</dt><dd class="text-store-fg">{{ COMPANY.whatsappDisplay }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">Horário de atendimento</dt><dd class="text-store-fg">{{ COMPANY.horario }}</dd></div>
-                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">02/11/2026</dd></div>
+                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">19/11/2026</dd></div>
                     </dl>
                     <p class="mt-2">
                         Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados, para

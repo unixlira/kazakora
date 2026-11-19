@@ -32,10 +32,11 @@ class Cookies
     // 2026-10-24: aceite na frase do checkout, no lugar do aviso flutuante.
     // 2026-10-25: faixa de volta, aceite ao navegar (OK ou 3 s sem clique).
     // 2026-11-02: fbclid gravado em toda visita, sem esperar o aceite.
-    public const VERSAO = '2026-11-02';
+    // 2026-11-19: tag do Google Ads (Shared/tagGoogle.js), só depois do aceite.
+    public const VERSAO = '2026-11-19';
 
     /** OKs anteriores para os mesmos cookies (aviso de 2026-10-18): continuam valendo. */
-    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24', '2026-10-25'];
+    public const VERSOES_ANTERIORES = ['2026-10-18', '2026-10-24', '2026-10-25', '2026-11-02'];
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';
@@ -148,6 +149,7 @@ class Cookies
             $request->cookies->set(self::COOKIE_OK, self::VERSAO);
             $request->cookies->set(self::COOKIE_VISITANTE, $visitante);
             self::criarFbc($request);
+            self::criarGclAw($request);
         }
 
         return $visitante;
@@ -203,6 +205,30 @@ class Cookies
 
         $dominio = preg_replace('/^(www|seguro)\./', '', strtolower($request->getHost()));
         Cookie::queue(Cookie::make('_fbc', $fbc, self::DURACAO_FBC_MINUTOS, '/', '.'.$dominio, true, false, false, 'lax'));
+    }
+
+    /**
+     * _gcl_aw do clique do Google guardado na sessão (TrackSiteVisit::guardarGclid),
+     * no formato da tag do Google (GCL.<hora do clique em s>.<gclid>), 90 dias,
+     * no domínio da loja inteiro e sem criptografia (bootstrap/app.php), para a
+     * tag do Google Ads ler e ligar a compra ao clique (2026-11-19). Só depois
+     * do aceite, como o _fbc; não troca um _gcl_aw que a tag já criou.
+     */
+    private static function criarGclAw(Request $request): void
+    {
+        if (! $request->hasSession()) {
+            return;
+        }
+
+        $clique = $request->session()->get(TrackSiteVisit::SESSAO_GCLID);
+
+        if (! is_array($clique) || ! is_string($clique['valor'] ?? null) || ! is_int($clique['em'] ?? null)
+            || (string) ($request->cookie('_gcl_aw') ?? self::doVisitante($request)['_gcl_aw'] ?? '') !== '') {
+            return;
+        }
+
+        $dominio = preg_replace('/^(www|seguro)\./', '', strtolower($request->getHost()));
+        Cookie::queue(Cookie::make('_gcl_aw', 'GCL.'.$clique['em'].'.'.$clique['valor'], self::DURACAO_FBC_MINUTOS, '/', '.'.$dominio, true, false, false, 'lax'));
     }
 
     /** _fbc montado do fbclid da sessão, ou null. Também usado pela API de Conversões. */

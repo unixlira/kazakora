@@ -51,7 +51,7 @@ const usoProibido = [
                         conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/18), a
                         <Link href="/politica-de-privacidade" class="font-medium text-store-accent hover:underline">Política de Privacidade</Link>
                         e a <Link href="/politica-de-cookies" class="font-medium text-store-accent hover:underline">Política de Cookies</Link>.
-                        Isso inclui o Pixel da Meta (Facebook e Instagram), que mede as visitas e as compras vindas dos nossos anúncios.
+                        Isso inclui o Pixel da Meta (Facebook e Instagram), que mede as visitas e as compras vindas dos nossos anúncios, e, depois do aceite ao finalizar a compra, a tag do Google Ads, que mede as compras vindas dos nossos anúncios no Google.
                     </p>
                     <p>
                         Ao clicar em <strong>Finalizar pedido</strong>, você declara que leu e aceita estes Termos, a Política

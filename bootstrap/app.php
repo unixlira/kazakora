@@ -52,7 +52,8 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         // _fbc criado pelo servidor (Cookies::criarFbc) tem que sair legível para o Pixel.
-        $middleware->encryptCookies(except: ['_fbc', '_fbp']);
+        // _gcl_aw (Cookies::criarGclAw, 2026-11-19) idem, para a tag do Google Ads.
+        $middleware->encryptCookies(except: ['_fbc', '_fbp', '_gcl_aw']);
 
         $middleware->web(append: [
             // Antes do Inertia: os preços da loja já saem com o frete (2026-10-12).

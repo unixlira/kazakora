@@ -1,5 +1,6 @@
 <script setup>
 import { rastrearPurchase } from '@/Shared/pixelMeta';
+import { rastrearCompraGoogle } from '@/Shared/tagGoogle';
 // Checkout v2 (pedido 2026-10-10): uma tela só, sem topo e rodapé da loja,
 // feita pra fechar a venda, resumo do pedido ao lado. Desde 2026-10-23 no
 // modelo Yampi (referência seguro.mavoloja.com.br): 3 caixas em sequência
@@ -873,6 +874,8 @@ const acompanhar = (orderId) => {
                 pararTimers();
                 // Purchase do Pixel com o event_id do servidor (2026-10-18).
                 rastrearPurchase(dados.meta_purchase);
+                // Compra do Google Ads (2026-11-19): o servidor só manda com aceite.
+                rastrearCompraGoogle(dados.google_compra);
                 urlSucesso.value = `/pedidos/${orderId}`;
                 estado.value = 'success';
                 return;

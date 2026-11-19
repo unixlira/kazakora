@@ -129,12 +129,12 @@ class AppVendasTest extends TestCase
     public function test_deslogado_vai_para_o_login(): void
     {
         $this->get('/admin/vendas-app/kazakora/entrar')->assertRedirect();
-        $this->actingAs($this->admin())->get('/admin/vendas-app/kazakora/entrar')->assertRedirect('/app/kazakora/');
+        $this->actingAs($this->admin())->get('/admin/vendas-app/kazakora/entrar')->assertRedirect('https://app.kazakora.com/');
 
         // Vindo do POST de login do Inertia: troca de página inteira.
         $versao = (string) app(\App\Http\Middleware\HandleInertiaRequests::class)->version(request());
         $this->actingAs($this->admin())->get('/admin/vendas-app/ferrakora/entrar', ['X-Inertia' => 'true', 'X-Inertia-Version' => $versao])
-            ->assertStatus(409)->assertHeader('X-Inertia-Location', '/app/ferrakora/');
+            ->assertStatus(409)->assertHeader('X-Inertia-Location', 'https://app.ferrakora.com/');
     }
 
     public function test_enviar_teste_manda_so_para_o_app_e_apaga_inscricao_morta(): void
@@ -220,9 +220,9 @@ class AppVendasTest extends TestCase
 
         $this->assertSame('Vendeu: Parafusadeira 48V com 2 baterias e mais 1', $mensagem['title']);
         $this->assertSame('Pedido #'.$order->id.' · R$ 172,46', $mensagem['body']);
-        $this->assertSame('https://painel.kazakora.com/app/kazakora/icons/icon-192.png', $mensagem['icon']);
-        $this->assertSame('https://painel.kazakora.com/app/kazakora/icons/badge-96.png', $mensagem['badge']);
-        $this->assertSame('/admin/pedidos/'.$order->id, $mensagem['url']);
+        $this->assertSame('https://app.kazakora.com/icons/icon-192.png', $mensagem['icon']);
+        $this->assertSame('https://app.kazakora.com/icons/badge-96.png', $mensagem['badge']);
+        $this->assertSame('/#/pedidos/'.$order->id, $mensagem['url']);
 
         $texto = json_encode($mensagem, JSON_UNESCAPED_UNICODE);
         $this->assertStringNotContainsString('Maria', $texto);

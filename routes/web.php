@@ -335,13 +335,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('/notificacoes/{notification}', [NotificationController::class, 'destroy'])->name('notificacoes.excluir');
 });
 
-// Apps de vendas (2026-11-19): login próprio do app, fora do auth do painel.
-Route::prefix('admin/vendas-app/{app}')->name('admin.vendas-app.')
-    ->whereIn('app', \App\Modules\Notifications\Push\AppsDeVendas::TODOS)
-    ->controller(\App\Modules\Notifications\Push\Http\AppVendasController::class)->group(function () {
-        Route::get('sessao', 'sessao')->name('sessao');
-        Route::post('login', 'login')->middleware('throttle:10,1')->name('login');
-    });
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
@@ -352,13 +345,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->controller(\App\Modules\Notifications\Push\Http\AppVendasController::class)->group(function () {
             Route::get('entrar', 'entrar')->name('entrar');
             Route::get('estado', 'estado')->name('estado');
-            Route::get('metricas', 'metricas')->middleware('throttle:30,1')->name('metricas');
-            // Telas do próprio app (2026-11-19): Pedidos, Produtos e Campanhas em JSON.
-            Route::get('pedidos', 'pedidos')->middleware('throttle:60,1')->name('pedidos');
-            Route::get('pedidos/{pedido}', 'pedido')->whereNumber('pedido')->middleware('throttle:60,1')->name('pedido');
-            Route::get('produtos', 'produtos')->middleware('throttle:30,1')->name('produtos');
-            Route::get('campanhas', 'campanhas')->middleware('throttle:20,1')->name('campanhas');
-            Route::post('sair', 'sair')->name('sair');
             Route::post('inscrever', 'inscrever')->middleware('throttle:20,1')->name('inscrever');
             Route::post('cancelar', 'cancelar')->middleware('throttle:20,1')->name('cancelar');
             Route::post('teste', 'teste')->middleware('throttle:6,1')->name('teste');

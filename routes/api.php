@@ -256,6 +256,9 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     // Avaliações do KazaKora na página do produto (2026-10-28).
     Route::get('produtos/{id}/avaliacoes', [FerraKoraCatalogoController::class, 'avaliacoes'])
         ->where('id', 'kz-[0-9]{1,10}')->middleware('throttle:120,1,fk-avaliacoes')->name('produto.avaliacoes');
+    // Link antigo /produto/<slug>/ (título trocado, 2026-11-18): 301 para o atual, pelo Nginx do site.
+    Route::get('produto-antigo/{slug}', [FerraKoraCatalogoController::class, 'produtoAntigo'])
+        ->where('slug', '[a-z0-9-]{1,200}')->middleware('throttle:120,1,fk-produto-antigo')->name('produto.antigo');
     Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
 
     // Checkout próprio do FerraKora (2026-10-14): pedido e Mercado Pago pelo KazaKora.

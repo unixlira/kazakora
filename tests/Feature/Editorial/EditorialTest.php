@@ -48,6 +48,55 @@ class EditorialTest extends TestCase
         return array_merge(['slug' => 'novo', 'title' => 'Nova pauta', 'body' => 'Texto sem HTML', 'type' => 'news', 'category' => 'casa', 'status' => 'draft', 'rights_confirmed' => false, 'editorial_checked' => false, 'product_ids' => []], $data);
     }
 
+    public function test_feed_filters_paginates_and_supplies_interactions(): void
+    {
+        for ($i = 0; $i < 18; $i++) {
+            $this->editorial(['slug' => 'receita-'.$i, 'type' => 'recipe']);
+        }
+        $this->editorial(['slug' => 'outra', 'category' => 'jardim']);
+        $this->get('/blog?categoria=casa&tipo=recipe&utm_source=x')->assertInertia(fn ($p) => $p
+            ->has('posts', 16)->where('posts.0.interaction.canInteract', false)
+            ->where('hasMore', true)->where('filters.categoria', 'casa')
+            ->where('nextPageUrl', '/blog?categoria=casa&tipo=recipe&page=2'));
+        $this->get('/blog?categoria=casa&tipo=recipe&page=2')->assertInertia(fn ($p) => $p->has('posts', 2)->where('hasMore', false));
+        $this->get('/blog?categoria=inexistente')->assertInertia(fn ($p) => $p->has('posts', 0));
+        $this->get('/blog?categoria=&tipo=')->assertOk();
+    }
+
+    public function test_admin_catalog_search_and_selected_outside_first_page(): void
+    {
+        $products = Product::factory()->count(52)->create(['is_active' => true, 'so_ferrakora' => false, 'stock' => 3, 'price' => 99]);
+        $last = $products->last();
+        $last->update(['name' => 'Produto procurado exclusivo']);
+        $this->actingAs(User::factory()->create())->getJson('/admin/editorial/products?q=exclusivo')->assertForbidden();
+        $this->actingAs($this->admin())->getJson('/admin/editorial/products?q=exclusivo')->assertOk()->assertJsonCount(1, 'products')->assertJsonPath('products.0.id', $last->id)->assertJsonMissingPath('products.0.cost_price');
+        $this->getJson('/admin/editorial/products')->assertOk()->assertJsonCount(50, 'products')->assertJsonPath('hasMore', true);
+        $post = $this->editorial();
+        $post->products()->attach($last->id);
+        $this->get('/admin/editorial/posts/'.$post->id.'/edit')->assertInertia(fn ($p) => $p->where('selectedProducts.0.id', $last->id));
+    }
+
+    public function test_generic_links_insults_and_word_boundaries(): void
+    {
+        foreach (['acesse exemplo.xyz', 'Oferta exemplo.dev', 'xn--bcher-kva.xyz', 'exemplo [ponto] dev', "exem\u{200B}plo . xyz", 'Você é um idiota', '1d10t4', 'ｉｄｉｏｔａ'] as $body) {
+            $this->assertNull(\App\Modules\Editorial\Support\EditorialSafety::comment($body), $body);
+        }
+        foreach (['A disputa foi bonita', 'Computador bacana', 'Essa reportagem importa'] as $body) {
+            $this->assertSame($body, \App\Modules\Editorial\Support\EditorialSafety::comment($body));
+        }
+    }
+
+    public function test_video_requires_media_only_when_publishing(): void
+    {
+        $this->actingAs($this->admin());
+        $post = $this->editorial(['type' => 'video', 'status' => 'draft']);
+        $this->postJson('/admin/editorial/posts/'.$post->id.'/publish')->assertUnprocessable()->assertJsonValidationErrors('video_url');
+        foreach (['news', 'recipe'] as $type) {
+            $post->update(['type' => $type]);
+            $this->post('/admin/editorial/posts/'.$post->id.'/publish')->assertRedirect();
+        }
+    }
+
     public function test_category_fallback_excludes_unrelated_products(): void
     {
         $this->editorial();

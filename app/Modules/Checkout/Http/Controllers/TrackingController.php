@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CaptchaRastreio;
 use App\Modules\Checkout\Support\NovoPixDoPedido;
+use App\Modules\Marketplace\Support\RastreioDosCorreios;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -106,6 +107,34 @@ class TrackingController extends Controller
                 ]);
             }
 
+            // Pacote parado na agência (2026-11-20): quem tem o link assinado
+            // (o do WhatsApp) vê onde retirar sem login; só o código e a
+            // agência, nada do endereço do cliente.
+            $codigoPublico = $order->trackingCode();
+            $retiradaPublica = filled($codigoPublico) && $order->status === Order::STATUS_SHIPPED
+                ? RastreioDosCorreios::retirada(app(RastreioDosCorreios::class)->eventos((string) $codigoPublico)) : null;
+            if ($retiradaPublica) {
+                return Inertia::render('Checkout/Rastreio', [
+                    'pedido' => [
+                        'id' => $order->id,
+                        'numero' => $order->numero,
+                        'criado_em' => $order->created_at?->toIso8601String(),
+                        'status' => $order->status,
+                        'cancelado' => false,
+                        'publico' => true,
+                        'total' => (float) $order->total,
+                        'itens' => $order->items->map(fn ($item) => ['nome' => $item->product_name, 'quantidade' => $item->quantity])->values(),
+                        'cidade' => null,
+                        'codigo_rastreio' => $codigoPublico,
+                        'transportadora' => $order->shipping_carrier_name,
+                        'etapas' => [],
+                        'eventos' => [],
+                        'retirada' => $retiradaPublica,
+                        'pix' => null,
+                    ],
+                ]);
+            }
+
             if (! $user) {
                 return redirect()->guest(route('entrar'));
             }
@@ -114,6 +143,8 @@ class TrackingController extends Controller
         }
 
         $codigo = $order->trackingCode();
+        // Eventos reais dos Correios e, se o pacote foi para a agência, onde retirar (2026-11-20, #4172).
+        $eventos = filled($codigo) && $order->status !== Order::STATUS_COMPLETED ? app(RastreioDosCorreios::class)->eventos((string) $codigo) : [];
 
         return Inertia::render('Checkout/Rastreio', [
             'pedido' => [
@@ -129,6 +160,8 @@ class TrackingController extends Controller
                 'codigo_rastreio' => $codigo,
                 'transportadora' => $order->shipping_carrier_name,
                 'etapas' => $order->etapas(),
+                'eventos' => array_slice($eventos, 0, 12),
+                'retirada' => RastreioDosCorreios::retirada($eventos),
                 'pix' => $pix ? $this->dadosDoPix($ref, $pix) : null,
             ],
         ]);

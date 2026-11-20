@@ -90,6 +90,11 @@ class FunilInfoprodutosTest extends TestCase
         $anuncio = collect($f['anuncios'])->firstWhere('utm_content', 'ad-1');
         $this->assertSame([2, 1, 10.0, 5.0, 10.0, 2.9], [$anuncio['visitas'], $anuncio['compras'], $anuncio['custo_compra'], $anuncio['custo_visita'], $anuncio['gasto'], $anuncio['roas']]);
 
+        // Conta de anúncios em R$ e venda em US$: o ROAS usa o líquido em R$.
+        InfoprodutoVenda::query()->update(['valor_liquido' => 20, 'moeda_liquido' => 'BRL']);
+        $brl = collect(app(FunilInfoprodutos::class)->montar('pidelo-bien', $de, $ate, ['ad-1' => ['gasto' => 10.0, 'nome' => 'Vídeo 1']], 'BRL')['anuncios'])->firstWhere('utm_content', 'ad-1');
+        $this->assertSame([60.0, 6.0], [$brl['receita'], $brl['roas']]);
+
         $hero = collect($f['botoes'])->firstWhere('posicao', 'hero');
         $this->assertSame([1, 1, 100.0], [$hero['cliques'], $hero['compras'], $hero['conversao']]);
         $this->assertSame(60, $f['tempo_medio']);

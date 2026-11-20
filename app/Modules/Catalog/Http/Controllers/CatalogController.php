@@ -203,7 +203,7 @@ class CatalogController extends Controller
      * Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem.
      * Desde 2026-11-19 também no slug: o Livro Falante (id 213) mudou de nome e sumia de "livro".
      */
-    private static function filtrarBusca($query, string $search): void
+    public static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
             $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';

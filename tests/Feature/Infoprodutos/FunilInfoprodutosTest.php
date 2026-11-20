@@ -217,8 +217,13 @@ class FunilInfoprodutosTest extends TestCase
 
             $info = $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}")
                 ->assertOk()->assertJsonPath('situacao', 'pronto')->assertJsonPath('print.altura', 5000)->assertJsonPath('print.largura', 390)->json('print');
-            $this->assertStringStartsWith('/admin/publicidade/comportamento/print?', $info['url']); // relativo: vale no painel.kazakora.com
+            // Relativo (vale no painel.kazakora.com) e sem "publicidade" no caminho (bloqueador de anúncio corta).
+            $this->assertStringStartsWith('/admin/capturas-de-tela/'.basename($base).'?v=', $info['url']);
+            $this->assertStringNotContainsString('publicidade', $info['url']);
             $this->actingAs($admin)->get($info['url'])->assertOk()->assertHeader('Content-Type', 'image/webp');
+            $this->actingAs($admin)->get('/admin/capturas-de-tela/'.str_repeat('0', 32).'-celular')->assertNotFound();
+            $this->app['auth']->forgetGuards();
+            $this->get($info['url'])->assertRedirect();
         } finally {
             @unlink($base.'.webp');
             @unlink($base.'.json');

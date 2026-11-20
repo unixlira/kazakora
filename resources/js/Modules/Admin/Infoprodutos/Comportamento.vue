@@ -251,7 +251,28 @@ watch(() => `${props.pagina?.produto}|${props.pagina?.pagina}|${props.aparelho}|
     if (props.print) situacao.value = 'pronto';
     else if (props.pagina) { situacao.value = 'carregando'; buscarPrint(); }
 }, { immediate: true });
-watch(() => printAtual.value?.url, () => { imagemPronta.value = false; });
+// Se a imagem não abrir (extensão do navegador barrando, rede), tenta uma vez
+// por fetch e mostra o arquivo baixado; só então avisa o erro.
+const srcDoPrint = ref(null);
+let tentouPorFetch = false;
+const erroDaImagem = async () => {
+    const url = printAtual.value?.url;
+    if (!url || tentouPorFetch) { situacao.value = 'erro'; mensagem.value = 'O print não abriu.'; return; }
+    tentouPorFetch = true;
+    try {
+        const r = await fetch(url, { credentials: 'same-origin' });
+        if (!r.ok) throw new Error(String(r.status));
+        if (printAtual.value?.url === url) srcDoPrint.value = URL.createObjectURL(await r.blob());
+    } catch {
+        situacao.value = 'erro'; mensagem.value = 'O print não abriu.';
+    }
+};
+watch(() => printAtual.value?.url, (url) => {
+    imagemPronta.value = false;
+    tentouPorFetch = false;
+    if (srcDoPrint.value?.startsWith('blob:')) URL.revokeObjectURL(srcDoPrint.value);
+    srcDoPrint.value = url ?? null;
+}, { immediate: true });
 onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
 </script>
 
@@ -309,10 +330,10 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                         <div ref="tela" class="relative overflow-y-auto overflow-x-hidden bg-white" :class="celular ? 'rounded-[26px]' : ''"
                             :style="{ width: `${TELA_LARGURA}px`, height: `${TELA_ALTURA}px`, maxWidth: '100%' }">
                             <div class="relative" :style="{ width: `${TELA_LARGURA}px`, height: `${printAtual ? alturaConteudo : TELA_ALTURA}px` }">
-                                <img v-if="printAtual" :key="printAtual.url" :src="printAtual.url" :width="TELA_LARGURA" :height="alturaConteudo" alt="Print da página"
+                                <img v-if="printAtual" :key="printAtual.url" :src="srcDoPrint || printAtual.url" :width="TELA_LARGURA" :height="alturaConteudo" alt="Print da página"
                                     fetchpriority="high" class="absolute left-0 top-0 block max-w-none select-none" draggable="false"
                                     :style="{ width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"
-                                    @load="imagemPronta = true" @error="situacao = 'erro'; mensagem = 'O print não abriu.'">
+                                    @load="imagemPronta = true" @error="erroDaImagem">
                                 <canvas v-show="mostrarMapa" ref="canvas" class="pointer-events-none absolute left-0 top-0" :style="{ opacity: opacidade, width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"></canvas>
                                 <span v-for="o in ondas" :key="o.id" class="toque" :style="{ left: `${o.x}px`, top: `${o.y}px` }"></span>
                             </div>

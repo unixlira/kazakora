@@ -91,7 +91,9 @@ class Rotulos
             'acao' => self::nome((string) $e->valor, self::ACAO + self::CLIQUE, curto: true),
             'scroll' => (int) $e->valor >= 50 ? "rolou {$e->valor}%" : null,
             'play' => 'vídeo',
-            'buy' => 'comprar',
+            // Mesmo texto do clique com data-kzm, para não repetir o passo.
+            'buy' => ['hero' => 'Comprar (topo)', 'meio' => 'Comprar (meio)', 'final' => 'Comprar (final)', 'barra' => 'Comprar (barra fixa)',
+                'oferta' => 'aceitou a oferta (upsell/downsell)'][(string) $e->valor] ?? 'Comprar',
             'preview' => 'prévia',
             default => null,
         };

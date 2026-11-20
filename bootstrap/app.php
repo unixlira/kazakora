@@ -91,6 +91,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => EnsureHasPermission::class,
             'print.agent' => AuthenticatePrintAgent::class,
             'koraflex' => AuthenticateKoraFlex::class,
+            'vids' => \App\Http\Middleware\AuthenticateVids::class,
             'log.api' => LogApiRequest::class,
             // Sanctum 4.x parou de registrar esses alias sozinho (era
             // automático em versões antigas) — confirmado lendo o

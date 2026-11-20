@@ -3,7 +3,7 @@
 use App\Modules\Admin\Http\Controllers\AdsRechargeController;
 use App\Modules\Admin\Http\Controllers\ApiPartnerController;
 use App\Modules\Admin\Http\Controllers\AuditLogController;
-use App\Modules\Admin\Http\Controllers\MunckController;
+use App\Modules\Admin\Http\Controllers\VidsController;
 use App\Modules\Admin\Http\Controllers\BannerController;
 use App\Modules\Admin\Http\Controllers\CouponController;
 use App\Modules\Admin\Http\Controllers\CashFlowController;
@@ -881,10 +881,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware(['permission:operacional.create', 'throttle:5,1'])
         ->name('download-videos.store');
 
-    // Marketing › Munck (2026-11-20): a Máquina de Criativos que o Lira comprou.
+    // Marketing › Vids (2026-11-20): a Máquina de Criativos que o Lira comprou.
     // Ela roda no computador dele (painel em http://localhost:4848); a tela só
     // abre esse painel dentro do admin.
-    Route::get('munck', [MunckController::class, 'index'])->name('munck')->middleware('permission:cadastros.view');
+    Route::get('vids', [VidsController::class, 'index'])->name('vids')->middleware('permission:cadastros.view');
+    // Vids no servidor (2026-11-20): o nginx pergunta aqui, a cada pedido para
+    // /vids/, se quem está logado pode usar (auth_request; 204 libera, 401/403 barra).
+    Route::get('vids/acesso', fn () => response()->noContent())->name('vids.acesso')->middleware('permission:cadastros.view');
 
     // Marketing › Validação de criativos (2026-10-21): vídeos de anúncio
     // guardados no servidor até o Lira aprovar. Envio em partes de 8 MB.

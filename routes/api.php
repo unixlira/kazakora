@@ -49,6 +49,13 @@ Route::match(['get', 'head'], '/mercadopago/callback', fn () => response()->json
 Route::match(['get', 'head'], '/mercadopago/webhook', fn () => response()->json(['status' => 'ok']))->name('api.mercadopago.webhook.verify');
 
 
+// Vids (Máquina de Criativos, 2026-11-20): vídeo pronto vai para a Validação
+// de criativos, em partes de 8 MB (o servidor recusa pedido acima de 64 MB).
+Route::prefix('vids')->name('api.vids.')->middleware('vids')->group(function () {
+    Route::post('parte', [\App\Modules\Admin\Http\Controllers\ValidacaoCriativosController::class, 'enviarParte'])->middleware('throttle:600,1')->name('parte');
+    Route::post('criativos', [\App\Modules\Admin\Http\Controllers\ValidacaoCriativosController::class, 'store'])->middleware('throttle:60,1')->name('criativos');
+});
+
 Route::prefix('whatsapp')->name('api.whatsapp.')->group(function () {
     // Webhook oficial da Meta/WhatsApp. GET valida hub.challenge; POST recebe mensagens/status.
     Route::match(['get', 'head'], '/webhook', [WhatsAppWebhookController::class, 'verify'])->name('webhook.verify');

@@ -136,13 +136,18 @@ class Comportamento
     }
 
     /**
-     * Clique com posição de verdade. x = 0 e y = 0 juntos é clique sem
-     * coordenada (teclado, clique disparado por código): 80 dos 108 cliques
-     * do Jarvis em 2026-11-19 vieram assim e empilhavam no canto do mapa.
+     * Clique de pessoa com posição. x = 0 e y = 0 juntos é clique sem
+     * coordenada do script antigo (teclado, clique disparado por código): 80
+     * dos 108 cliques do Jarvis em 2026-11-19 vieram assim (o robô de revisão
+     * do Meta chamando el.click() em todo link) e empilhavam no canto do mapa.
+     * O script novo manda x/y null nesse caso, ou o centro do alvo com
+     * origem 'p' (programa/robô), que também fica fora do mapa e do
+     * Reproduzir; o clique de teclado (origem 't') entra, no centro do alvo.
      */
     public static function temPosicao(object $e): bool
     {
-        return $e->x !== null && $e->y !== null && ((int) $e->x !== 0 || (int) $e->y !== 0);
+        return $e->x !== null && $e->y !== null && ((int) $e->x !== 0 || (int) $e->y !== 0)
+            && ($e->origem ?? null) !== 'p';
     }
 
     /** Sessões da página no período, com o aparelho da primeira largura vista. */
@@ -172,7 +177,7 @@ class Comportamento
         return $sessoes->chunk(500)->flatMap(fn ($lote) => InfoprodutoEvento::query()
             ->whereIn('sessao', $lote->all())->where('produto', $produto)->where('pagina', $pagina)
             ->orderBy('created_at')->orderByRaw('COALESCE(ms, 0)')->orderBy('id')
-            ->get(['sessao', 'tipo', 'valor', 'ms', 'x', 'y', 'largura', 'alvo', 'secao', 'elemento', 'nome', 'rolagem_max']))->values();
+            ->get(['sessao', 'tipo', 'valor', 'ms', 'x', 'y', 'largura', 'alvo', 'secao', 'elemento', 'nome', 'origem', 'rolagem_max']))->values();
     }
 
     /** Cliques agrupados em células (1% de largura × 10 px) para o mapa de calor. */

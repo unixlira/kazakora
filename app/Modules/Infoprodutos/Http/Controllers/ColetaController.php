@@ -26,6 +26,7 @@ use Illuminate\Http\Response;
  * Corpo:
  *   {"s":"<sessão>","p":"<produto>","pg":"landing|oferta|oferta-2","l":"es|pt|en",
  *    "e":[{"t":"<tipo>","v":<valor>,"ms":<int>}],
+ *    (clique: {"t":"clk","x":%|null,"y":px|null,"w","k","sec","el","n","o":"t"|"p"}),
  *    "pv":{"r":"<host>","us":..,"um":..,"uc":..,"ut":..,"uk":..,"fb":0|1}}
  */
 class ColetaController extends Controller
@@ -96,7 +97,7 @@ class ColetaController extends Controller
                 'tipo' => 'pageview',
                 'valor' => null,
                 'ms' => 0,
-                'x' => null, 'y' => null, 'largura' => null, 'alvo' => null, 'secao' => null, 'elemento' => null, 'nome' => null, 'rolagem_max' => null,
+                'x' => null, 'y' => null, 'largura' => null, 'alvo' => null, 'secao' => null, 'elemento' => null, 'nome' => null, 'origem' => null, 'rolagem_max' => null,
                 'pais' => self::pais($request),
                 'dispositivo' => TrackSiteVisit::dispositivo($userAgent),
                 'referrer' => $pv['r'] ?? null,
@@ -126,6 +127,7 @@ class ColetaController extends Controller
                 'secao' => $evento['sec'] ?? null,
                 'elemento' => $evento['el'] ?? null,
                 'nome' => $evento['n'] ?? null,
+                'origem' => $evento['o'] ?? null,
                 'rolagem_max' => $evento['sm'] ?? null,
                 'pais' => null,
                 'dispositivo' => null,
@@ -217,7 +219,7 @@ class ColetaController extends Controller
             return null;
         }
         $permitidos = match ($t) {
-            'clk' => ['t', 'x', 'y', 'w', 'k', 'sec', 'el', 'n', 'ms'],
+            'clk' => ['t', 'x', 'y', 'w', 'k', 'sec', 'el', 'n', 'o', 'ms'],
             'exit' => ['t', 'v', 'ms', 'sm'],
             default => ['t', 'v', 'ms'],
         };
@@ -280,11 +282,18 @@ class ColetaController extends Controller
     }
 
     /**
-     * Clique do mapa: posição, largura da janela, tipo de alvo, seção e texto
-     * curto do elemento (o script nunca manda o que foi digitado).
+     * Clique do mapa: posição, largura da janela, tipo de alvo, seção, texto
+     * curto do elemento (o script nunca manda o que foi digitado) e origem.
+     *
+     * Posição desconhecida é null, nunca 0: x/y ausentes ou null (alvo
+     * escondido) e o 0,0 do script antigo, que era o clique sem ponteiro
+     * (teclado ou el.click() de robô: 80 dos 108 cliques do Jarvis em
+     * 2026-11-19, todos do robô de revisão do Meta), viram null.
+     * Origem: null = mouse/toque; 't' = teclado; 'p' = clique de programa
+     * (el.click()/dispatchEvent, robô), com o centro do alvo como posição.
      *
      * @param  array<string, mixed>  $e
-     * @return array{x: int, y: int, w: int, k: string, sec: ?string, el: ?string}|null
+     * @return array{x: ?int, y: ?int, w: int, k: string, sec: ?string, el: ?string, n: ?string, o: ?string}|null
      */
     private static function clique(array $e): ?array
     {
@@ -292,9 +301,13 @@ class ColetaController extends Controller
         $y = $e['y'] ?? null;
         $w = $e['w'] ?? null;
         $k = $e['k'] ?? null;
-        if (! is_int($x) || $x < 0 || $x > 100 || ! is_int($y) || $y < 0 || $y > 50000
-            || ! is_int($w) || $w < 200 || $w > 4000 || ! in_array($k, ['a', 'b', 'm'], true)) {
+        $o = $e['o'] ?? null;
+        if (($x !== null && (! is_int($x) || $x < 0 || $x > 100)) || ($y !== null && (! is_int($y) || $y < 0 || $y > 50000))
+            || ! is_int($w) || $w < 200 || $w > 4000 || ! in_array($k, ['a', 'b', 'm'], true) || ! in_array($o, [null, 't', 'p'], true)) {
             return null;
+        }
+        if ($x === null || $y === null || ($x === 0 && $y === 0)) {
+            $x = $y = null;
         }
 
         $sec = $e['sec'] ?? '';
@@ -312,7 +325,7 @@ class ColetaController extends Controller
         }
 
         return ['x' => $x, 'y' => $y, 'w' => $w, 'k' => $k, 'sec' => $sec !== '' ? $sec : null,
-            'el' => trim($el) !== '' ? trim($el) : null, 'n' => $n !== '' ? $n : null];
+            'el' => trim($el) !== '' ? trim($el) : null, 'n' => $n !== '' ? $n : null, 'o' => $o];
     }
 
     /** @return array<string, mixed>|null */

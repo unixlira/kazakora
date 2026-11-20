@@ -137,6 +137,8 @@ class FunilInfoprodutosTest extends TestCase
         $this->evento('k2xxxxxxxxxxxxxxxx', 'clk', $base + ['x' => 20, 'y' => 700, 'largura' => 390, 'alvo' => 'm', 'secao' => 'beneficios', 'elemento' => 'Frete grátis', 'ms' => 2000]);
         // Clique sem coordenada (x = 0 e y = 0): conta no ranking, fica fora do mapa e do Reproduzir.
         $this->evento('k2xxxxxxxxxxxxxxxx', 'clk', $base + ['x' => 0, 'y' => 0, 'largura' => 390, 'alvo' => 'a', 'nome' => 'whatsapp', 'ms' => 5000]);
+        // Clique de programa/robô (origem p) no centro do alvo: também fora do mapa e do Reproduzir.
+        $this->evento('k2xxxxxxxxxxxxxxxx', 'clk', $base + ['x' => 77, 'y' => 3333, 'largura' => 390, 'alvo' => 'a', 'nome' => 'whatsapp', 'origem' => 'p', 'ms' => 5001]);
         $this->evento('k1xxxxxxxxxxxxxxxx', 'exit', $base + ['valor' => '30', 'rolagem_max' => 90, 'ms' => 30000]);
         $this->evento('k2xxxxxxxxxxxxxxxx', 'exit', $base + ['valor' => '10', 'rolagem_max' => 40, 'ms' => 10000]);
 
@@ -160,6 +162,7 @@ class FunilInfoprodutosTest extends TestCase
         // Toques mais comuns do "Reproduzir": de cima para baixo, com a mediana do ponto.
         $this->assertSame(['clicou na 1ª imagem da galeria', 'clique morto em "Frete grátis" (seção beneficios)', 'clicou em Comprar'], array_column($m['toques'], 'texto'));
         $this->assertNull(collect($m['pontos'])->first(fn ($p) => $p['x'] === 0 && $p['y'] === 5));
+        $this->assertNull(collect($m['pontos'])->first(fn ($p) => $p['x'] === 77));
         $this->assertNotNull(collect($m['onde_clicam'])->firstWhere('elemento', 'clicou no WhatsApp'));
         $comprar = $m['toques'][2];
         $this->assertSame([50, 1203, 2, 100.0], [$comprar['x'], $comprar['y'], $comprar['visitas'], $comprar['pct']]);

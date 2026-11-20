@@ -49,6 +49,7 @@ class CartController extends Controller
         $quantidade = min($data['quantity'], $product->stock);
         $this->cart->add($product->id, $quantidade);
         $this->addToCartNaMeta($request, $product, $quantidade);
+        CheckoutEvento::naPaginaDoProduto($request, CheckoutEvento::PRODUTO_CARRINHO, $product->id);
 
         return back()->with('success', 'Produto adicionado ao carrinho.');
     }

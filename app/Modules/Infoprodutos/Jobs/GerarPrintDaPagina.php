@@ -24,7 +24,7 @@ class GerarPrintDaPagina implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 1;
 
-    public int $timeout = 100;
+    public int $timeout = 150;
 
     public int $uniqueFor = 300;
 

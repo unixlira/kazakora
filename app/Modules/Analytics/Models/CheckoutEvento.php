@@ -49,6 +49,9 @@ class CheckoutEvento extends Model
 
     public const PRODUTO_COMPRAR = 'produto_comprar';
 
+    /** Adicionar ao carrinho na loja (servidor, 2026-11-20): `campo` = id do produto. Tela Comportamento. */
+    public const PRODUTO_CARRINHO = 'produto_carrinho';
+
     public const PEDIDO_CRIADO = 'pedido_criado';
 
     protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem', 'jornada_chave', 'jornada'];

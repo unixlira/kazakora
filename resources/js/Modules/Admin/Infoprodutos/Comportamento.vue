@@ -17,6 +17,11 @@
  * aparece a onda do toque e o nome da ação. Fonte: a visita escolhida (na
  * ordem e no ritmo dela, 1x/2x/4x) ou os toques mais comuns do período.
  * Sem biblioteca: setTimeout, scrollTo e uma animação CSS.
+ *
+ * Lista de páginas (2026-11-20): TODA página acessada das lojas e dos
+ * infoprodutos (PaginasDoSite), com nome, visitas, carrinho e checkout, numa
+ * lista com busca na coluna da esquerda; embaixo, o funil da loja no período
+ * (visitas → carrinho → checkout → pedido).
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
@@ -28,6 +33,8 @@ const props = defineProps({
     aparelho: { type: String, required: true },
     loja: { type: String, default: 'kazakora' },
     paginas: { type: Array, default: () => [] },
+    totais: { type: Object, default: () => ({}) },
+    robos: { type: Boolean, default: false },
     pagina: { type: Object, default: null },
     print: { type: Object, default: null },
     dados: { type: Object, default: null },
@@ -39,8 +46,29 @@ const pct = (v) => (v === null || v === undefined ? '-' : `${Number(v).toLocaleS
 const hora = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 const paginasDaLoja = computed(() => props.paginas.filter((p) => p.loja === props.loja));
+const buscaPagina = ref('');
+const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const paginasFiltradas = computed(() => {
+    const q = semAcento(buscaPagina.value.trim());
+    return q ? paginasDaLoja.value.filter((p) => semAcento(p.rotulo).includes(q) || p.produto.includes(q)) : paginasDaLoja.value;
+});
+const ehEscolhida = (p) => props.pagina && p.produto === props.pagina.produto && p.pagina === props.pagina.pagina;
+
+// Funil da loja no período: cada degrau com a % do degrau anterior.
+const funil = computed(() => {
+    const t = props.totais?.[props.loja];
+    if (!t) return [];
+    const degraus = [
+        { nome: 'Visitas', valor: t.visitas, cor: 'bg-indigo-500' },
+        { nome: props.loja === 'ferrakora' ? 'Clicou em comprar' : 'Carrinho', valor: t.carrinho, cor: 'bg-sky-500' },
+        { nome: props.loja === 'infoprodutos' ? 'Foi ao checkout (Kiwify)' : 'Checkout', valor: t.checkout, cor: 'bg-amber-500' },
+        { nome: props.loja === 'infoprodutos' ? 'Vendas' : 'Pedidos', valor: t.pedidos, cor: 'bg-emerald-500' },
+    ].filter((d) => d.valor !== null && d.valor !== undefined);
+    const topo = Math.max(1, degraus[0]?.valor || 0);
+    return degraus.map((d, i) => ({ ...d, largura: Math.max(2, Math.round((d.valor / topo) * 100)), taxa: i && degraus[i - 1].valor ? (d.valor / degraus[i - 1].valor) * 100 : null }));
+});
 const ir = (mudanca) => router.get('/admin/publicidade/comportamento', {
-    loja: props.loja, produto: props.pagina?.produto, pagina: props.pagina?.pagina, aparelho: props.aparelho, periodo: props.periodo, ...mudanca,
+    loja: props.loja, produto: props.pagina?.produto, pagina: props.pagina?.pagina, aparelho: props.aparelho, periodo: props.periodo, robos: props.robos ? 1 : undefined, ...mudanca,
 }, { preserveScroll: true });
 const escolherPagina = (valor) => {
     const [produto, pagina] = valor.split('|');
@@ -314,13 +342,23 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                     <button v-for="(nome, chave) in LOJAS" :key="chave" type="button" @click="ir({ loja: chave, produto: undefined, pagina: undefined })"
                         class="rounded-full border px-3 py-1" :class="chave === loja ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600'">{{ nome }}</button>
                 </div>
-                <label class="block">
-                    <span class="mb-1 block text-xs text-slate-500">Página</span>
-                    <select class="w-full rounded border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-800" :value="pagina ? `${pagina.produto}|${pagina.pagina}` : ''" @change="escolherPagina($event.target.value)">
-                        <option v-if="!paginasDaLoja.length" value="">Sem visitas no período</option>
-                        <option v-for="p in paginasDaLoja" :key="`${p.produto}|${p.pagina}`" :value="`${p.produto}|${p.pagina}`">{{ p.rotulo.length > 60 ? `${p.rotulo.slice(0, 58)}…` : p.rotulo }} ({{ n(p.visitas) }})</option>
-                    </select>
-                </label>
+                <div>
+                    <div class="mb-1 flex items-baseline justify-between text-xs text-slate-500">
+                        <span>Páginas ({{ n(paginasDaLoja.length) }})</span>
+                        <span>visitas · carrinho · checkout</span>
+                    </div>
+                    <input v-model="buscaPagina" type="search" placeholder="Buscar página ou produto" class="mb-1 w-full rounded border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+                    <div class="max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
+                        <button v-for="p in paginasFiltradas" :key="`${p.produto}|${p.pagina}`" type="button" :title="p.rotulo"
+                            class="flex w-full items-center gap-2 border-b border-slate-100 px-2 py-1 text-left text-xs last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+                            :class="ehEscolhida(p) ? 'bg-indigo-50 font-semibold dark:bg-indigo-900/30' : ''" @click="escolherPagina(`${p.produto}|${p.pagina}`)">
+                            <span class="min-w-0 flex-1 truncate">{{ p.rotulo }}</span>
+                            <span class="shrink-0 tabular-nums">{{ n(p.visitas) }}</span>
+                            <span class="w-14 shrink-0 text-right tabular-nums text-slate-500">{{ n(p.carrinho) }} · {{ n(p.checkout) }}</span>
+                        </button>
+                        <p v-if="!paginasFiltradas.length" class="px-2 py-2 text-xs text-slate-500">{{ paginasDaLoja.length ? 'Nenhuma página com esse nome.' : 'Sem visitas no período.' }}</p>
+                    </div>
+                </div>
                 <div class="flex overflow-hidden rounded border border-slate-300 dark:border-slate-600">
                     <button type="button" class="flex-1 px-3 py-1" :class="celular ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'celular' })"><i class="fas fa-mobile-screen"></i> Celular</button>
                     <button type="button" class="flex-1 px-3 py-1" :class="!celular ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'computador' })"><i class="fas fa-desktop"></i> Computador</button>
@@ -333,6 +371,9 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 </label>
                 <div class="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                     <label class="flex items-center gap-2"><input v-model="mostrarMapa" type="checkbox"> Mapa de calor</label>
+                    <label class="flex items-center gap-2" title="O robô que revisa os anúncios da Meta abre a página e clica em tudo; fica fora das contas por padrão.">
+                        <input type="checkbox" :checked="robos" @change="ir({ robos: $event.target.checked ? 1 : undefined })"> Incluir robô da Meta (revisão de anúncio)
+                    </label>
                     <label class="flex items-center gap-2">Opacidade <input v-model.number="opacidade" type="range" min="0.1" max="1" step="0.05" class="min-w-0 flex-1"></label>
                     <div class="flex items-center gap-2 text-xs text-slate-500">
                         pouco <span class="h-2 flex-1 rounded" style="background: linear-gradient(90deg, #005aff, #00c850, #ffe600, #ff0000)"></span> muito
@@ -341,6 +382,22 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <p v-if="printAtual?.em" class="text-xs text-slate-400">
                     Print de {{ hora(printAtual.em) }}<template v-if="printAtual.pagina_url"> · <a :href="printAtual.pagina_url" target="_blank" rel="noopener" class="underline">abrir a página</a></template>
                 </p>
+
+                <!-- Funil da loja no período (todas as páginas) -->
+                <section v-if="funil.length" class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                    <h2 class="text-sm font-semibold">Funil · {{ LOJAS[loja] }} · {{ periodos[periodo] || periodo }}</h2>
+                    <p class="mb-2 text-xs text-slate-500">Pessoas diferentes, sem robôs e sem a equipe. {{ n(totais[loja]?.paginas) }} páginas acessadas.</p>
+                    <ol class="space-y-1.5">
+                        <li v-for="d in funil" :key="d.nome">
+                            <div class="flex items-baseline justify-between text-xs">
+                                <span>{{ d.nome }}</span>
+                                <span><b class="text-sm tabular-nums">{{ n(d.valor) }}</b><span v-if="d.taxa !== null" class="ml-1 text-slate-500">({{ pct(d.taxa) }})</span></span>
+                            </div>
+                            <div class="h-2 rounded bg-slate-100 dark:bg-slate-800"><div class="h-2 rounded" :class="d.cor" :style="{ width: `${d.largura}%` }"></div></div>
+                        </li>
+                    </ol>
+                    <p class="mt-2 text-[11px] text-slate-400">% = do degrau anterior.<template v-if="loja === 'ferrakora'"> Comprar: cliques medidos na página do produto.</template><template v-if="loja === 'infoprodutos'"> Checkout: clicou em comprar; vendas aprovadas.</template></p>
+                </section>
             </div>
 
             <!-- Coluna 2: o aparelho com o print, o mapa e o Reproduzir -->
@@ -404,10 +461,17 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <Deferred data="dados">
                     <template #fallback><p class="py-10 text-center text-sm text-slate-500">Lendo os cliques…</p></template>
                     <div v-if="dados" class="space-y-2.5 text-xs">
-                        <div class="flex gap-4">
-                            <div><div class="text-slate-500">Visitas</div><div class="text-lg font-bold">{{ n(dados.visitas) }}</div></div>
-                            <div><div class="text-slate-500">Tempo médio</div><div class="text-lg font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>
+                        <div v-if="pagina" class="grid grid-cols-4 gap-2">
+                            <div><div class="text-slate-500">Visitas</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.visitas) }}</div></div>
+                            <div><div class="text-slate-500">{{ loja === 'ferrakora' ? 'Comprar' : 'Carrinho' }}</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.carrinho) }}</div></div>
+                            <div><div class="text-slate-500">Checkout</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.checkout) }}</div></div>
+                            <div><div class="text-slate-500">{{ loja === 'infoprodutos' ? 'Vendas' : 'Pedidos' }}</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.pedidos) }}</div></div>
                         </div>
+                        <div class="flex gap-4">
+                            <div><div class="text-slate-500">Medidas no mapa</div><div class="text-base font-bold tabular-nums">{{ n(dados.visitas) }}</div></div>
+                            <div><div class="text-slate-500">Tempo médio</div><div class="text-base font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>
+                        </div>
+                        <p v-if="!dados.visitas" class="text-slate-500">Esta página ainda não tem medição de cliques (o mapa só aparece onde a tag de medição roda). As visitas vêm do registro de acessos.</p>
 
                         <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
                             <h2 class="mb-1.5 text-sm font-semibold">Onde clicam</h2>

@@ -15,7 +15,9 @@ use Throwable;
  * - KazaKora: todo produto pai ativo da loja (kz/<slug>);
  * - FerraKora: todo produto publicado no site (fk/<slug do site>);
  * - Infoprodutos: a landing de cada produto da config e as ofertas que já
- *   tiveram visita.
+ *   tiveram visita;
+ * - as outras páginas das lojas (início, departamentos, carrinho...) com
+ *   visita na última semana (PaginasDoSite, 2026-11-20).
  *
  * assinatura() muda quando a página muda: nas lojas pelo updated_at do
  * produto (e das variações); nas landings pelo hash do HTML (as páginas da
@@ -33,12 +35,15 @@ class PaginasMedidas
             ->filter()->map(fn ($slug) => ['produto' => 'kz/'.$slug, 'pagina' => 'produto']);
         $fk = $this->ferrakora()->keys()->map(fn ($slug) => ['produto' => 'fk/'.$slug, 'pagina' => 'produto']);
         $landings = collect(array_keys((array) config('infoprodutos.produtos')))->map(fn ($p) => ['produto' => $p, 'pagina' => 'landing']);
-        $vistas = InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)
+        $vistas = InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()
             ->where('created_at', '>=', now()->subDays(30))
             ->where('produto', 'not like', 'kz/%')->where('produto', 'not like', 'fk/%')
             ->distinct()->get(['produto', 'pagina'])->map(fn ($e) => ['produto' => $e->produto, 'pagina' => $e->pagina]);
 
-        return $landings->concat($vistas)->concat($kz)->concat($fk)
+        // Outras páginas das lojas (início, departamentos, carrinho...) com visita na semana (2026-11-20).
+        $doSite = rescue(fn () => app(PaginasDoSite::class)->visitadas(now()->subDays(7))->filter(fn ($p) => PaginasDoSite::paginaDeLoja($p['produto'])), collect(), false);
+
+        return $landings->concat($vistas)->concat($kz)->concat($fk)->concat($doSite)
             ->filter(fn ($p) => PrintDaPagina::url($p['produto'], $p['pagina']) !== null)
             ->unique(fn ($p) => $p['produto'].'|'.$p['pagina'])->values()->all();
     }
@@ -46,6 +51,10 @@ class PaginasMedidas
     /** null = a página não existe mais (produto saiu da loja, landing fora do ar). */
     public function assinatura(string $produto, string $pagina): ?string
     {
+        // Página da loja que não é produto: o HTML muda a cada acesso; refaz toda semana.
+        if (PaginasDoSite::paginaDeLoja($produto)) {
+            return PaginasDoSite::url($produto) !== null ? md5('pagina|'.$produto.'|'.now()->format('o-W')) : null;
+        }
         if (str_starts_with($produto, 'kz/')) {
             $p = Product::query()->naKazaKora()->whereNull('parent_product_id')->where('slug', substr($produto, 3))->first();
 
@@ -62,6 +71,12 @@ class PaginasMedidas
         $url = PrintDaPagina::url($produto, $pagina);
 
         return $url === null ? null : PrintDaPagina::hashDoHtml($url);
+    }
+
+    /** Nome de cada produto publicado na FerraKora: slug do site => título. */
+    public function nomesFerraKora(): array
+    {
+        return $this->ferrakora()->map(fn ($r) => (string) ($r->titulo ?: $r->product?->name))->filter()->all();
     }
 
     /** @return Collection<string, FerraKoraProduto> */

@@ -10,6 +10,7 @@ use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use App\Modules\Infoprodutos\Support\Comportamento;
 use App\Modules\Infoprodutos\Support\FunilInfoprodutos;
+use App\Modules\Infoprodutos\Support\PaginasDoSite;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
 use App\Modules\Notifications\Push\AppsDeVendas;
 use App\Modules\Notifications\Push\MetricasDaLoja;
@@ -40,6 +41,8 @@ class InfoprodutosPainelController extends Controller
     public function index(Request $request): Response
     {
         FunilInfoprodutos::$comTestes = $request->boolean('testes');
+        // Sessões do robô de revisão da Meta ficam fora; ?robos=1 mostra (2026-11-20).
+        InfoprodutoEvento::$comRobos = $request->boolean('robos');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         $produtos = (array) config('infoprodutos.produtos');
         $produto = array_key_exists((string) $request->query('produto'), $produtos) ? (string) $request->query('produto') : FunilInfoprodutos::TODOS;
@@ -147,10 +150,14 @@ class InfoprodutosPainelController extends Controller
     public function comportamento(Request $request, Comportamento $comportamento): Response
     {
         Comportamento::$comTestes = $request->boolean('testes');
+        InfoprodutoEvento::$comRobos = $request->boolean('robos');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         [$de, $ate] = FunilInfoprodutos::intervalo($periodo);
         $aparelho = $request->query('aparelho') === Comportamento::COMPUTADOR ? Comportamento::COMPUTADOR : Comportamento::CELULAR;
-        $paginas = $comportamento->paginas($de, $ate);
+        // Toda página acessada (lojas e infoprodutos), com o funil (PaginasDoSite, 2026-11-20).
+        $lista = Cache::remember('comportamento:paginas:'.$periodo.':'.(int) Comportamento::$comTestes.(int) InfoprodutoEvento::$comRobos, 120,
+            fn () => app(PaginasDoSite::class)->montar($de, $ate));
+        $paginas = $lista['paginas'];
         $loja = in_array($request->query('loja'), ['kazakora', 'ferrakora', 'infoprodutos'], true) ? (string) $request->query('loja') : null;
 
         $escolhida = collect($paginas)->first(fn ($p) => $p['produto'] === $request->query('produto') && $p['pagina'] === ($request->query('pagina') ?: $p['pagina']))
@@ -160,8 +167,10 @@ class InfoprodutosPainelController extends Controller
             'periodo' => $periodo,
             'periodos' => FunilInfoprodutos::PERIODOS,
             'aparelho' => $aparelho,
+            'robos' => InfoprodutoEvento::$comRobos,
             'loja' => $loja ?? ($escolhida['loja'] ?? 'kazakora'),
             'paginas' => $paginas,
+            'totais' => $lista['totais'],
             'pagina' => $escolhida,
             'print' => $escolhida ? $this->infoDoPrint($escolhida['produto'], $escolhida['pagina'], $aparelho) : null,
             'dados' => Inertia::defer(fn () => $escolhida

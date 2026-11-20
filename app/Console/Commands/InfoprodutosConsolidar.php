@@ -45,7 +45,7 @@ class InfoprodutosConsolidar extends Command
         $de = $dia->copy()->startOfDay();
         $ate = $dia->copy()->endOfDay();
 
-        $pageviews = InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)
+        $pageviews = InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()
             ->whereBetween('created_at', [$de, $ate])->orderBy('id')
             ->get(['sessao', 'produto', 'utm_source', 'utm_campaign', 'utm_content', 'pais'])
             ->unique(fn ($e) => $e->sessao.'|'.$e->produto);

@@ -101,7 +101,7 @@ class TrackSiteVisit
 
         $referer = $request->headers->get('referer');
 
-        self::gravar($request, $visitorId, $consentiu, $request->path(), $this->origem($referer), [
+        self::gravar($request, $visitorId, $consentiu, self::caminho($request->path(), $request->query()), $this->origem($referer), [
             'utm_source' => $this->utm($request, 'utm_source', 80),
             'utm_medium' => $this->utm($request, 'utm_medium', 80),
             'utm_campaign' => $this->utm($request, 'utm_campaign', 120),
@@ -161,7 +161,7 @@ class TrackSiteVisit
         parse_str($pagina['query'] ?? '', $query);
         $utm = fn (string $campo, int $limite) => is_string($query[$campo] ?? null) && $query[$campo] !== '' ? Str::limit(strip_tags($query[$campo]), $limite, '') : null;
 
-        $path = '/'.ltrim($pagina['path'] ?? '/', '/');
+        $path = self::caminho($pagina['path'] ?? '/', $query);
         $recente = rescue(fn () => SiteVisit::query()->daLoja()
             ->where('visitor_id', $visitorId)
             ->where('path', Str::limit($path, 250, ''))
@@ -184,7 +184,7 @@ class TrackSiteVisit
         }
 
         // O Referer aqui é a própria página da loja: sem UTM/clique, a origem é Interno.
-        rescue(fn () => self::gravar($request, $visitorId, true, $pagina['path'] ?? '/', null, [
+        rescue(fn () => self::gravar($request, $visitorId, true, $path, null, [
             'utm_source' => $utm('utm_source', 80),
             'utm_medium' => $utm('utm_medium', 80),
             'utm_campaign' => $utm('utm_campaign', 120),
@@ -225,6 +225,29 @@ class TrackSiteVisit
             'dispositivo' => self::dispositivo((string) $request->userAgent()),
             'consentiu' => $consentiu,
         ]);
+    }
+
+    /**
+     * Caminho gravado (2026-11-20, tela Comportamento): o departamento e a
+     * busca da vitrine são o "/" com ?categoria= / ?search=, e se perdiam no
+     * Início. O departamento fica como "/?categoria=<slug>"; a busca vira
+     * "/?busca", sem o que foi digitado.
+     *
+     * @param  array<string, mixed>  $query
+     */
+    public static function caminho(string $path, array $query): string
+    {
+        $path = '/'.ltrim($path, '/');
+        if ($path !== '/') {
+            return $path;
+        }
+        $categoria = $query['categoria'] ?? null;
+        if (is_string($categoria) && preg_match('/^[a-z0-9-]{1,80}$/', $categoria) === 1) {
+            return '/?categoria='.$categoria;
+        }
+        $busca = $query['search'] ?? null;
+
+        return is_string($busca) && trim($busca) !== '' ? '/?busca' : '/';
     }
 
     /** Site de onde veio, sem o "?..." (busca, e-mail e afins ficam de fora). */

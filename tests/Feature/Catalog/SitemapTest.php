@@ -39,7 +39,7 @@ class SitemapTest extends TestCase
     public function test_link_da_home_compartilhado_leva_a_logo_oficial(): void
     {
         $this->get('/')->assertOk()
-            ->assertSee('<meta property="og:title" content="'.config('app.name').'">', false)
+            ->assertSee('<meta property="og:title" content="KazaKora: Loja de Casa, Cozinha e Eletrônicos">', false)
             ->assertSee('<meta property="og:image" content="'.url('/images/marca/og-kazakora.png').'">', false)
             ->assertSee('<meta name="twitter:card" content="summary_large_image">', false);
 

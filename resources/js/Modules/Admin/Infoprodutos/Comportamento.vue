@@ -78,6 +78,9 @@ const escolherPagina = (valor) => {
 // Aparelho e escala -------------------------------------------------------
 const celular = computed(() => props.aparelho !== 'computador');
 const TELA_LARGURA = computed(() => (celular.value ? 270 : 320));
+// Faixa da barra de rolagem fora do print (Lira, 2026-11-20): a barra cobria
+// a lateral direita da página; o aparelho ficou mais largo e o print, inteiro.
+const FAIXA_ROLAGEM = 12;
 const TELA_ALTURA = computed(() => (celular.value ? 560 : 230));
 const larguraOriginal = computed(() => printAtual.value?.largura || (celular.value ? 390 : 1024));
 const escala = computed(() => TELA_LARGURA.value / larguraOriginal.value);
@@ -406,8 +409,8 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <template v-else>
                     <div class="relative max-w-full shadow-xl" :class="celular ? 'rounded-[34px] border-[8px] border-slate-900 bg-slate-900' : 'rounded-lg border-[8px] border-slate-800 bg-slate-800'">
                         <div v-if="celular" class="absolute left-1/2 top-0 z-20 h-3 w-16 -translate-x-1/2 rounded-b-xl bg-slate-900"></div>
-                        <div ref="tela" class="relative overflow-y-auto overflow-x-hidden bg-white" @scroll.passive="aoRolar" :class="celular ? 'rounded-[26px]' : ''"
-                            :style="{ width: `${TELA_LARGURA}px`, height: `${TELA_ALTURA}px`, maxWidth: '100%' }">
+                        <div ref="tela" class="tela-rolagem relative overflow-y-auto overflow-x-hidden bg-white" @scroll.passive="aoRolar" :class="celular ? 'rounded-[26px]' : ''"
+                            :style="{ width: `${TELA_LARGURA + FAIXA_ROLAGEM}px`, height: `${TELA_ALTURA}px`, maxWidth: '100%' }">
                             <div class="relative" :style="{ width: `${TELA_LARGURA}px`, height: `${printAtual ? alturaConteudo : TELA_ALTURA}px` }">
                                 <div v-if="printAtual?.miniatura" class="absolute inset-0 overflow-hidden" aria-hidden="true">
                                     <div class="absolute -inset-2 bg-no-repeat" :style="{ backgroundImage: `url(${printAtual.miniatura})`, backgroundSize: '100% 100%', filter: 'blur(6px)' }"></div>
@@ -545,6 +548,12 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
 </template>
 
 <style scoped>
+/* Barra fina e discreta, na faixa que sobra à direita do print. */
+.tela-rolagem { scrollbar-width: thin; scrollbar-color: rgba(100, 116, 139, 0.6) transparent; }
+.tela-rolagem::-webkit-scrollbar { width: 8px; }
+.tela-rolagem::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.6); border-radius: 8px; }
+.tela-rolagem::-webkit-scrollbar-track { background: transparent; }
+
 /* Onda do toque: anel que cresce e some (só CSS, sem biblioteca). */
 .toque {
     position: absolute;

@@ -10,6 +10,7 @@ use App\Modules\Infoprodutos\Support\EquipeDaLoja;
 use App\Modules\Infoprodutos\Support\OrigemInfoproduto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * POST /api-infoprodutos/evento (pedido do Lira em 2026-11-19): o script
@@ -81,11 +82,19 @@ class ColetaController extends Controller
             return response()->noContent();
         }
 
+        // Robô de revisão de anúncios da Meta (2026-11-20): vem da rede da
+        // Meta (TrackSiteVisit::REDES_DA_META, AS32934) com cara de celular. A
+        // sessão inteira fica marcada e sai das contagens; o IP não é gravado.
+        $robo = IpUtils::checkIp((string) $request->ip(), TrackSiteVisit::REDES_DA_META)
+            || ($dados['pv'] === null && InfoprodutoEvento::query()->where('sessao', $dados['s'])->whereNotNull('robo')->exists())
+            ? InfoprodutoEvento::ROBO_META : null;
+
         $base = [
             'sessao' => $dados['s'],
             'produto' => $dados['p'],
             'pagina' => $dados['pg'],
             'idioma' => $dados['l'],
+            'robo' => $robo,
         ];
         $agora = now();
         $linhas = [];

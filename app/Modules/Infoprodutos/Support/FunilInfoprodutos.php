@@ -47,7 +47,7 @@ class FunilInfoprodutos
         $vendas = InfoprodutoVenda::query()->where('status', InfoprodutoVenda::APROVADA)->where('aprovada_em', '>=', $de);
 
         return [
-            'visitas' => (int) InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)->where('pagina', 'landing')
+            'visitas' => (int) InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()->where('pagina', 'landing')
                 ->whereIn('produto', array_keys((array) config('infoprodutos.produtos')))
                 ->where('created_at', '>=', $de)->distinct()->count('sessao'),
             'vendas' => (int) (clone $vendas)->where('tipo', 'principal')->count(),
@@ -144,7 +144,7 @@ class FunilInfoprodutos
     private function pageviews(string $produto, Carbon $de, Carbon $ate): Collection
     {
         return InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))->where('pagina', 'landing')
+            ->where('tipo', 'pageview')->dePessoas(self::$comTestes)->where('pagina', 'landing')
             ->when($produto === self::TODOS, fn ($q) => $q->whereIn('produto', array_keys((array) config('infoprodutos.produtos'))),
                 fn ($q) => $q->where('produto', $produto))
             ->whereBetween('created_at', [$de, $ate])

@@ -34,6 +34,7 @@ const props = defineProps({
     loja: { type: String, default: 'kazakora' },
     paginas: { type: Array, default: () => [] },
     totais: { type: Object, default: () => ({}) },
+    robos: { type: Boolean, default: false },
     pagina: { type: Object, default: null },
     print: { type: Object, default: null },
     dados: { type: Object, default: null },
@@ -67,7 +68,7 @@ const funil = computed(() => {
     return degraus.map((d, i) => ({ ...d, largura: Math.max(2, Math.round((d.valor / topo) * 100)), taxa: i && degraus[i - 1].valor ? (d.valor / degraus[i - 1].valor) * 100 : null }));
 });
 const ir = (mudanca) => router.get('/admin/publicidade/comportamento', {
-    loja: props.loja, produto: props.pagina?.produto, pagina: props.pagina?.pagina, aparelho: props.aparelho, periodo: props.periodo, ...mudanca,
+    loja: props.loja, produto: props.pagina?.produto, pagina: props.pagina?.pagina, aparelho: props.aparelho, periodo: props.periodo, robos: props.robos ? 1 : undefined, ...mudanca,
 }, { preserveScroll: true });
 const escolherPagina = (valor) => {
     const [produto, pagina] = valor.split('|');
@@ -370,6 +371,9 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 </label>
                 <div class="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                     <label class="flex items-center gap-2"><input v-model="mostrarMapa" type="checkbox"> Mapa de calor</label>
+                    <label class="flex items-center gap-2" title="O robô que revisa os anúncios da Meta abre a página e clica em tudo; fica fora das contas por padrão.">
+                        <input type="checkbox" :checked="robos" @change="ir({ robos: $event.target.checked ? 1 : undefined })"> Incluir robô da Meta (revisão de anúncio)
+                    </label>
                     <label class="flex items-center gap-2">Opacidade <input v-model.number="opacidade" type="range" min="0.1" max="1" step="0.05" class="min-w-0 flex-1"></label>
                     <div class="flex items-center gap-2 text-xs text-slate-500">
                         pouco <span class="h-2 flex-1 rounded" style="background: linear-gradient(90deg, #005aff, #00c850, #ffe600, #ff0000)"></span> muito

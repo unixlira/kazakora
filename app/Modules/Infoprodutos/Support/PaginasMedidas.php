@@ -35,7 +35,7 @@ class PaginasMedidas
             ->filter()->map(fn ($slug) => ['produto' => 'kz/'.$slug, 'pagina' => 'produto']);
         $fk = $this->ferrakora()->keys()->map(fn ($slug) => ['produto' => 'fk/'.$slug, 'pagina' => 'produto']);
         $landings = collect(array_keys((array) config('infoprodutos.produtos')))->map(fn ($p) => ['produto' => $p, 'pagina' => 'landing']);
-        $vistas = InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)
+        $vistas = InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()
             ->where('created_at', '>=', now()->subDays(30))
             ->where('produto', 'not like', 'kz/%')->where('produto', 'not like', 'fk/%')
             ->distinct()->get(['produto', 'pagina'])->map(fn ($e) => ['produto' => $e->produto, 'pagina' => $e->pagina]);

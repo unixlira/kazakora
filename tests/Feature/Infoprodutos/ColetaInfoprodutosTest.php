@@ -108,6 +108,25 @@ class ColetaInfoprodutosTest extends TestCase
         $this->assertSame(0, InfoprodutoEvento::count());
     }
 
+    /** Robô de revisão de anúncios da Meta (2026-11-20): rede da Meta marca a sessão inteira e sai das contas. */
+    public function test_robo_de_revisao_da_meta_fica_marcado_e_fora_das_contas(): void
+    {
+        $this->enviar($this->corpo(), ip: '2a03:2880:30ff:9::')->assertNoContent();
+        // Lote seguinte da mesma sessão, mesmo que viesse de outro IP.
+        $this->enviar($this->corpo(['pv' => null, 'e' => [['t' => 'play', 'ms' => 100]]]))->assertNoContent();
+        $this->enviar($this->corpo(['s' => 'GenteDeVerdade0123']))->assertNoContent();
+
+        $this->assertSame(4, InfoprodutoEvento::where('robo', InfoprodutoEvento::ROBO_META)->count());
+        $this->assertSame(['GenteDeVerdade0123'], InfoprodutoEvento::query()->dePessoas()->distinct()->pluck('sessao')->all());
+
+        InfoprodutoEvento::$comRobos = true;
+        try {
+            $this->assertSame(2, InfoprodutoEvento::query()->dePessoas()->distinct()->count('sessao'));
+        } finally {
+            InfoprodutoEvento::$comRobos = false;
+        }
+    }
+
     public function test_visita_de_teste_fica_marcada_na_sessao_inteira(): void
     {
         $this->enviar($this->corpo(['pv' => ['us' => 'teste-medicao', 'fb' => 0, 'r' => '']]))->assertNoContent();

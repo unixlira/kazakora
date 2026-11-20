@@ -61,7 +61,7 @@ class CriativosMetaTest extends TestCase
             $url = $r->url();
             $dados = $r->data();
             // Cada conta com o próprio token.
-            if (str_contains($url, 'act_1996921014601792') || str_contains($url, 'ids=')) {
+            if (str_contains($url, 'act_1996921014601792') || preg_match('#/v23\.0/v\d#', $url)) {
                 $this->assertSame(['Bearer token-gk'], $r->header('Authorization'));
             }
 
@@ -74,12 +74,12 @@ class CriativosMetaTest extends TestCase
                     self::linha('a4', 80, 8000, 120, 80, 2400, 4000, [1500, 600, 300, 100], 0, 1, 7, 4),
                     self::linha('a5', 10, 1000, 5, 4, 300, 500, [100, 50, 10, 5], 0, 0, 0, 3),
                 ]]),
-                str_contains($url, 'act_1996921014601792') => Http::response(['currency' => 'USD']),
-                ($dados['fields'] ?? '') === 'length' => Http::response(collect(['v1', 'v2', 'v3', 'v4', 'v5'])->mapWithKeys(fn ($v) => [$v => ['id' => $v, 'length' => 56.0]])->all()),
-                str_contains((string) ($dados['fields'] ?? ''), 'effective_status') => Http::response(collect(['a1', 'a2', 'a3', 'a4', 'a5'])->mapWithKeys(fn ($a, $i) => [$a => [
-                    'effective_status' => 'ACTIVE', 'preview_shareable_link' => "https://fb.me/{$a}",
+                ($dados['fields'] ?? '') === 'length' => Http::response(['id' => 'v', 'length' => 56.0]),
+                str_contains($url, 'act_1996921014601792/ads') => Http::response(['data' => collect(['a1', 'a2', 'a3', 'a4', 'a5'])->map(fn ($a, $i) => [
+                    'id' => $a, 'effective_status' => 'ACTIVE', 'preview_shareable_link' => "https://fb.me/{$a}",
                     'creative' => ['thumbnail_url' => "https://cdn/{$a}.jpg", 'video_id' => 'v'.($i + 1)],
-                ]])->all()),
+                ])->all()]),
+                str_contains($url, 'act_1996921014601792') => Http::response(['currency' => 'USD']),
                 default => Http::response(['data' => []]),
             };
         });

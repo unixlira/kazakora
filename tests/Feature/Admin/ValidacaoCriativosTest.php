@@ -265,4 +265,16 @@ class ValidacaoCriativosTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/vids/acesso')->assertUnauthorized();
         $this->actingAs($this->admin())->get('/admin/vids/acesso')->assertNoContent();
     }
+
+    public function test_busca_de_produto_da_vids_acha_pelo_texto_da_descricao(): void
+    {
+        $admin = $this->admin();
+        \App\Modules\Catalog\Models\Product::factory()->create(['name' => 'Durma Sem Dor no Pescoço', 'description' => 'Travesseiro cervical borboleta', 'is_active' => true, 'so_ferrakora' => false]);
+        \App\Modules\Catalog\Models\Product::factory()->create(['name' => 'Parafusadeira 48V', 'description' => 'Ferramenta', 'is_active' => true, 'so_ferrakora' => false]);
+
+        $this->actingAs($admin)->getJson('/admin/vids/produtos?q=travesseiro')
+            ->assertOk()
+            ->assertJsonCount(1, 'produtos')
+            ->assertJsonPath('produtos.0.nome', 'Durma Sem Dor no Pescoço');
+    }
 }

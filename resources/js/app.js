@@ -9,7 +9,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
 
 createInertiaApp({
-    title: (title) => (title ? `${appName} - ${title}` : appName),
+    title: (title) => (!title ? appName : title.includes(appName) ? title : `${appName} - ${title}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Modules/${name}.vue`,

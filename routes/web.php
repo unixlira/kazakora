@@ -875,6 +875,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware(['permission:operacional.create', 'throttle:5,1'])
         ->name('download-videos.store');
 
+    // Marketing › Munck (2026-11-20): a Máquina de Criativos que o Lira comprou.
+    // Ela roda no computador dele (painel em http://localhost:4848); a tela só
+    // abre esse painel dentro do admin.
+    Route::inertia('munck', 'Admin/Munck/Index')->name('munck')->middleware('permission:cadastros.view');
+
     // Marketing › Validação de criativos (2026-10-21): vídeos de anúncio
     // guardados no servidor até o Lira aprovar. Envio em partes de 8 MB.
     Route::prefix('validacao-criativos')->name('validacao-criativos.')->group(function () {

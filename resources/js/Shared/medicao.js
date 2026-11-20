@@ -25,8 +25,10 @@ const quandoOcioso = (fn) => (window.requestIdleCallback ? window.requestIdleCal
 /** Começa a medir a página (p = "kz/<slug>" ou "fk/<slug>"); devolve a função que para. */
 export function carregarMedicao(p, pg = 'produto', l = 'pt') {
     let ativo = true;
+    // Hora da abertura: o tempo na página conta desde aqui, não desde que o script desceu.
+    const inicio = performance.now();
     quandoOcioso(() => carregar().then((kzm) => {
-        try { if (ativo) kzm?.page(p, pg, l); } catch { /* medição nunca quebra a página */ }
+        try { if (ativo) kzm?.page(p, pg, l, inicio); } catch { /* medição nunca quebra a página */ }
     }));
     return () => {
         ativo = false;

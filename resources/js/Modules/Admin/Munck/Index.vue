@@ -4,9 +4,25 @@
 // abre no navegador desse computador. A tela não guarda nada: só mostra o painel.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+
+const props = defineProps({
+    produtos: { type: Array, default: () => [] },
+});
 
 const URL_MUNCK = 'http://localhost:4848/';
+const ORIGEM_MUNCK = 'http://localhost:4848';
+const quadro = ref(null);
+
+// Manda a lista de produtos para o painel (ele troca o link por um select).
+function enviarProdutos() {
+    const produtos = props.produtos.map((p) => ({ nome: p.nome, url: p.url }));
+    quadro.value?.contentWindow?.postMessage({ tipo: 'munck-produtos', produtos }, ORIGEM_MUNCK);
+}
+
+function aoMensagem(e) {
+    if (e.origin === ORIGEM_MUNCK && e.data?.tipo === 'munck-pronta') enviarProdutos();
+}
 const estado = ref('verificando'); // verificando | ligada | desligada
 const chave = ref(0);
 
@@ -30,7 +46,11 @@ function recarregar() {
     verificar();
 }
 
-onMounted(verificar);
+onMounted(() => {
+    window.addEventListener('message', aoMensagem);
+    verificar();
+});
+onBeforeUnmount(() => window.removeEventListener('message', aoMensagem));
 </script>
 
 <template>
@@ -68,7 +88,9 @@ onMounted(verificar);
 
         <iframe
             :key="chave"
+            ref="quadro"
             :src="URL_MUNCK"
+            @load="enviarProdutos"
             title="Munck"
             allow="clipboard-read; clipboard-write; local-network-access"
             class="w-full rounded-lg border bg-white"

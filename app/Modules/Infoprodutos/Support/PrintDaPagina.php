@@ -19,7 +19,16 @@ use Throwable;
  */
 class PrintDaPagina
 {
-    public const LARGURAS = ['celular' => 390, 'computador' => 1280];
+    public const LARGURAS = ['celular' => 390, 'computador' => 1024];
+
+    /** Altura de cada fatia (a tela carrega a 1ª na hora e as outras depois). */
+    public const FATIA = 1400;
+
+    /** Formato dos arquivos: 2 = fatias + miniatura borrada (2026-11-20). */
+    public const VERSAO = 2;
+
+    /** Teto da miniatura borrada (vai junto da página, em base64). */
+    public const MINIATURA_MAX = 3000;
 
     public const ALTURA_MAXIMA = 16000;
 
@@ -46,8 +55,9 @@ class PrintDaPagina
     }
 
     /**
-     * Print de uma página/aparelho com o hash do HTML (para o
-     * comportamento:prints saber quando a página mudou).
+     * Print de uma página/aparelho com a assinatura da página
+     * (PaginasMedidas::assinatura, para o comportamento:prints saber quando
+     * ela mudou).
      *
      * @return array<string, mixed>
      */
@@ -57,7 +67,7 @@ class PrintDaPagina
         if ($url === null) {
             throw new RuntimeException('Esta página não tem endereço conhecido para o print.');
         }
-        $hash ??= static::hashDoHtml($url);
+        $hash ??= app(PaginasMedidas::class)->assinatura($produto, $pagina);
         $destino = self::arquivo($produto, $pagina, $aparelho);
         $info = $this->tirar($url, self::LARGURAS[$aparelho] ?? self::LARGURAS['celular'], $destino) + ['hash' => $hash];
         file_put_contents($destino.'.json', json_encode($info));
@@ -134,13 +144,55 @@ class PrintDaPagina
                 mkdir(dirname($destino), 0775, true);
             }
             file_put_contents($destino.'.webp', base64_decode($imagem));
-            $info = ['altura' => $altura, 'largura' => $largura, 'secoes' => array_values($medida['s'] ?? []), 'url' => $url, 'em' => now()->toIso8601String()];
+
+            // Fatias de FATIA px: a 1ª aparece na hora, as outras chegam em seguida.
+            $fatias = [];
+            for ($y = 0, $i = 0; $y < $altura; $y += self::FATIA, $i++) {
+                $h = min(self::FATIA, $altura - $y);
+                $pedaco = $this->comando('Page.captureScreenshot', ['format' => 'webp', 'quality' => 70, 'captureBeyondViewport' => true,
+                    'clip' => ['x' => 0, 'y' => $y, 'width' => $largura, 'height' => $h, 'scale' => 1]], $sessao, 60)['data'] ?? null;
+                if (! is_string($pedaco)) {
+                    throw new RuntimeException('O Chrome não devolveu a fatia '.($i + 1).' do print.');
+                }
+                file_put_contents(self::fatia($destino, $i), base64_decode($pedaco));
+                $fatias[] = $h;
+            }
+            foreach (glob($destino.'-f*.webp') ?: [] as $velha) {
+                if ((int) substr((string) strrchr(basename($velha, '.webp'), 'f'), 1) >= count($fatias)) {
+                    @unlink($velha);
+                }
+            }
+
+            $info = ['altura' => $altura, 'largura' => $largura, 'secoes' => array_values($medida['s'] ?? []), 'url' => $url, 'em' => now()->toIso8601String(),
+                'versao' => self::VERSAO, 'fatias' => $fatias, 'miniatura' => $this->miniatura($sessao, $largura, $altura)];
             file_put_contents($destino.'.json', json_encode($info));
 
             return $info;
         } finally {
             $this->fechar();
         }
+    }
+
+    public static function fatia(string $destino, int $i): string
+    {
+        return $destino.'-f'.$i.'.webp';
+    }
+
+    /**
+     * Miniatura minúscula da página inteira (cerca de 24 px de largura) em
+     * data URI: aparece borrada na hora, antes de qualquer fatia chegar.
+     */
+    private function miniatura(string $sessao, int $largura, int $altura): ?string
+    {
+        foreach ([[24, 30], [16, 20], [10, 10]] as [$px, $qualidade]) {
+            $dados = $this->comando('Page.captureScreenshot', ['format' => 'webp', 'quality' => $qualidade, 'captureBeyondViewport' => true,
+                'clip' => ['x' => 0, 'y' => 0, 'width' => $largura, 'height' => $altura, 'scale' => $px / $largura]], $sessao, 60)['data'] ?? null;
+            if (is_string($dados) && strlen($dados) <= self::MINIATURA_MAX) {
+                return 'data:image/webp;base64,'.$dados;
+            }
+        }
+
+        return null;
     }
 
     private function abrir(): void

@@ -134,7 +134,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*') || ($request->expectsJson() && ($request->is('blog/*') || $request->is('admin/editorial/*'))),
         );
 
         // Pedido 2026-10-18: visitante deslogado que bate numa página restrita

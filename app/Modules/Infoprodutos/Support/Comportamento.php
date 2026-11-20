@@ -125,14 +125,24 @@ class Comportamento
                 'segundo' => round($ms / 1000, 1),
                 'desde_anterior' => $anterior !== null ? round(max($ms - $anterior, 0) / 1000, 1) : null,
                 'pagina' => $e->pagina,
-                'x' => $e->x,
-                'y' => $e->y,
+                'x' => self::temPosicao($e) ? $e->x : null,
+                'y' => self::temPosicao($e) ? $e->y : null,
                 'valor' => $e->tipo === 'scroll' ? (int) $e->valor : null,
             ];
             $anterior = $ms;
 
             return $linha;
         })->all();
+    }
+
+    /**
+     * Clique com posição de verdade. x = 0 e y = 0 juntos é clique sem
+     * coordenada (teclado, clique disparado por código): 80 dos 108 cliques
+     * do Jarvis em 2026-11-19 vieram assim e empilhavam no canto do mapa.
+     */
+    public static function temPosicao(object $e): bool
+    {
+        return $e->x !== null && $e->y !== null && ((int) $e->x !== 0 || (int) $e->y !== 0);
     }
 
     /** Sessões da página no período, com o aparelho da primeira largura vista. */
@@ -168,7 +178,7 @@ class Comportamento
     /** Cliques agrupados em células (1% de largura × 10 px) para o mapa de calor. */
     private function pontos(Collection $cliques): array
     {
-        return $cliques->filter(fn ($c) => $c->x !== null && $c->y !== null)
+        return $cliques->filter(fn ($c) => self::temPosicao($c))
             ->groupBy(fn ($c) => $c->x.':'.intdiv((int) $c->y, 10))
             ->map(fn ($g) => ['x' => (int) $g->first()->x, 'y' => intdiv((int) $g->first()->y, 10) * 10 + 5, 'n' => $g->count(), 'morto' => $g->every(fn ($c) => $c->alvo === 'm')])
             ->sortByDesc('n')->take(4000)->values()->all();
@@ -187,7 +197,7 @@ class Comportamento
             return (int) $v[intdiv($v->count(), 2)];
         };
 
-        return $cliques->filter(fn ($c) => $c->x !== null && $c->y !== null)
+        return $cliques->filter(fn ($c) => self::temPosicao($c))
             ->groupBy(fn ($c) => Rotulos::chave($c))
             ->map(fn ($g) => [
                 'texto' => Rotulos::evento($g->first()),

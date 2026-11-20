@@ -24,7 +24,6 @@ function aoMensagem(e) {
     if (e.origin === ORIGEM_VIDS && e.data?.tipo === 'munck-pronta') enviarProdutos();
 }
 const estado = ref('verificando'); // verificando | ligada | desligada
-const chave = ref(0);
 
 async function verificar() {
     estado.value = 'verificando';
@@ -40,10 +39,6 @@ async function verificar() {
     }
 }
 
-function recarregar() {
-    chave.value++;
-    verificar();
-}
 
 onMounted(() => {
     window.addEventListener('message', aoMensagem);
@@ -69,23 +64,14 @@ onBeforeUnmount(() => window.removeEventListener('message', aoMensagem));
                     {{ estado === 'ligada' ? 'Ligada' : estado === 'desligada' ? 'Desligada' : 'Verificando…' }}
                 </span>
             </div>
-            <div class="flex gap-2">
-                <button type="button" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50" @click="recarregar">
-                    <i class="fas fa-rotate-right mr-1" aria-hidden="true"></i>Recarregar
-                </button>
-                <a :href="URL_VIDS" target="_blank" rel="noopener" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">
-                    <i class="fas fa-up-right-from-square mr-1" aria-hidden="true"></i>Abrir em nova aba
-                </a>
-            </div>
         </div>
 
         <div v-if="estado === 'desligada'" class="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            A Vids não respondeu no servidor. Clique em Recarregar; se continuar assim,
+            A Vids não respondeu no servidor. Atualize a página; se continuar assim,
             o serviço <code>vids</code> da VPS está parado.
         </div>
 
         <iframe
-            :key="chave"
             ref="quadro"
             :src="URL_VIDS"
             @load="enviarProdutos"

@@ -1218,17 +1218,17 @@ class MetaAdsService
                 'limit' => 200,
             ]);
 
+        // Status e criativo pela borda /ads da conta (o ?ids= foi descontinuado na v26).
         $ids = array_values(array_unique(array_map(fn ($l) => (string) $l['ad_id'], $linhas)));
         $anuncios = [];
         foreach (array_chunk($ids, 50) as $lote) {
-            $resposta = $this->get('', [
-                'ids' => implode(',', $lote),
-                'fields' => 'effective_status,preview_shareable_link,creative{thumbnail_url,image_url,video_id,object_type,asset_feed_spec{videos}}',
-            ]);
-            foreach ($resposta as $id => $a) {
-                if (is_array($a)) {
-                    $anuncios[(string) $id] = $a;
-                }
+            foreach ($this->getPaginado($this->conta().'/ads', [
+                'filtering' => json_encode([['field' => 'id', 'operator' => 'IN', 'value' => $lote]]),
+                'effective_status' => json_encode(self::STATUS_LISTAVEIS),
+                'fields' => 'id,effective_status,preview_shareable_link,creative{thumbnail_url,image_url,video_id,object_type,asset_feed_spec{videos}}',
+                'limit' => 100,
+            ]) as $a) {
+                $anuncios[(string) $a['id']] = $a;
             }
         }
 
@@ -1267,8 +1267,8 @@ class MetaAdsService
     }
 
     /**
-     * Duração (s) dos vídeos, por id (GET /?ids=..&fields=length). Vídeo que a
-     * Meta não devolve fica de fora.
+     * Duração (s) dos vídeos, por id (GET /{video_id}?fields=length). Vídeo que
+     * a Meta não devolve fica de fora.
      *
      * @param  list<string>  $ids
      * @return array<string, float>
@@ -1278,11 +1278,15 @@ class MetaAdsService
     public function duracaoDosVideos(array $ids): array
     {
         $duracoes = [];
-        foreach (array_chunk(array_values(array_unique(array_filter($ids))), 50) as $lote) {
-            foreach ($this->get('', ['ids' => implode(',', $lote), 'fields' => 'length']) as $id => $v) {
-                if (is_array($v) && isset($v['length'])) {
-                    $duracoes[(string) $id] = round((float) $v['length'], 1);
-                }
+        // Um GET por vídeo (o ?ids= foi descontinuado na v26), no máximo 40.
+        foreach (array_slice(array_values(array_unique(array_filter($ids))), 0, 40) as $id) {
+            try {
+                $v = $this->get((string) $id, ['fields' => 'length']);
+            } catch (MetaAdsException) {
+                continue; // vídeo de outra página/sem permissão: fica só o tempo em segundos
+            }
+            if (isset($v['length'])) {
+                $duracoes[(string) $id] = round((float) $v['length'], 1);
             }
         }
 

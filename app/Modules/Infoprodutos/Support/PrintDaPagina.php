@@ -2,7 +2,9 @@
 
 namespace App\Modules\Infoprodutos\Support;
 
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 /**
  * Print da página inteira para o fundo do mapa de cliques (2026-11-19).
@@ -41,6 +43,38 @@ class PrintDaPagina
     public static function arquivo(string $produto, string $pagina, string $aparelho): string
     {
         return self::pasta().'/'.md5($produto.'|'.$pagina).'-'.$aparelho;
+    }
+
+    /**
+     * Print de uma página/aparelho com o hash do HTML (para o
+     * comportamento:prints saber quando a página mudou).
+     *
+     * @return array<string, mixed>
+     */
+    public function gerar(string $produto, string $pagina, string $aparelho, ?string $hash = null): array
+    {
+        $url = self::url($produto, $pagina);
+        if ($url === null) {
+            throw new RuntimeException('Esta página não tem endereço conhecido para o print.');
+        }
+        $hash ??= static::hashDoHtml($url);
+        $destino = self::arquivo($produto, $pagina, $aparelho);
+        $info = $this->tirar($url, self::LARGURAS[$aparelho] ?? self::LARGURAS['celular'], $destino) + ['hash' => $hash];
+        file_put_contents($destino.'.json', json_encode($info));
+
+        return $info;
+    }
+
+    /** Hash do HTML sem nonce/csrf (muda só quando a página muda). */
+    public static function hashDoHtml(string $url): ?string
+    {
+        try {
+            $r = Http::timeout(15)->withUserAgent('KazaKoraPrint/1.0 (bot)')->get($url);
+
+            return $r->successful() ? md5((string) preg_replace('/nonce="[^"]*"|csrf[^>]*>/i', '', $r->body())) : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** Endereço público da página (o mesmo que o visitante abre). */

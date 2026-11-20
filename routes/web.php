@@ -800,7 +800,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // A imagem do print fora de /publicidade/ (2026-11-20): bloqueador de anúncio
         // corta imagem com "publicidade" no endereço e o print nunca chegava ao painel.
         Route::get('capturas-de-tela/{nome}', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'captura'])
-            ->where('nome', '[a-f0-9]{32}-(celular|computador)')->name('capturas-de-tela');
+            ->where('nome', '[a-f0-9]{32}-(celular|computador)(-f[0-9]{1,2})?')->name('capturas-de-tela');
     });
     // Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
     // com vários conjuntos e anúncios e ela vai para a Meta pausada. Ver é

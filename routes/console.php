@@ -402,3 +402,6 @@ Schedule::command('avaliacoes:miniaturas --limite=2000')->hourlyAt(29)->withoutO
 // (fundo do mapa de cliques) quando a página muda ou o print passa de 24 h.
 Schedule::command('infoprodutos:consolidar')->dailyAt('03:45')->withoutOverlapping(60);
 Schedule::command('comportamento:prints')->hourlyAt(17)->withoutOverlapping(50)->runInBackground();
+// Todas as páginas das lojas e landings de madrugada (2026-11-20): o print já
+// está pronto quando o Lira abre a tela Comportamento.
+Schedule::command('comportamento:prints --todas --limite=1000 --dias=3')->dailyAt('02:20')->withoutOverlapping(240)->runInBackground();

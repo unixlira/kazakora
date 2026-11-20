@@ -202,7 +202,10 @@ class FunilInfoprodutosTest extends TestCase
                         mkdir(dirname($destino), 0775, true);
                     }
                     file_put_contents($destino.'.webp', 'RIFFxxxxWEBP');
-                    $info = ['altura' => 5000, 'largura' => $largura, 'secoes' => [], 'url' => $url, 'em' => now()->toIso8601String()];
+                    file_put_contents(PrintDaPagina::fatia($destino, 0), 'RIFFxxxxWEBP');
+                    file_put_contents(PrintDaPagina::fatia($destino, 1), 'RIFFxxxxWEBP');
+                    $info = ['altura' => 2000, 'largura' => $largura, 'secoes' => [], 'url' => $url, 'em' => now()->toIso8601String(),
+                        'versao' => PrintDaPagina::VERSAO, 'fatias' => [1400, 600], 'miniatura' => 'data:image/webp;base64,UklGRg=='];
                     file_put_contents($destino.'.json', json_encode($info));
 
                     return $info;
@@ -216,17 +219,20 @@ class FunilInfoprodutosTest extends TestCase
             (new GerarPrintDaPagina($produto, 'produto', 'celular'))->handle(app(PrintDaPagina::class));
 
             $info = $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}")
-                ->assertOk()->assertJsonPath('situacao', 'pronto')->assertJsonPath('print.altura', 5000)->assertJsonPath('print.largura', 390)->json('print');
+                ->assertOk()->assertJsonPath('situacao', 'pronto')->assertJsonPath('print.altura', 2000)
+                ->assertJsonPath('print.fatias.1.topo', 1400)->assertJsonPath('print.fatias.1.altura', 600)
+                ->assertJsonPath('print.miniatura', 'data:image/webp;base64,UklGRg==')->assertJsonPath('print.largura', 390)->json('print');
             // Relativo (vale no painel.kazakora.com) e sem "publicidade" no caminho (bloqueador de anúncio corta).
             $this->assertStringStartsWith('/admin/capturas-de-tela/'.basename($base).'?v=', $info['url']);
             $this->assertStringNotContainsString('publicidade', $info['url']);
             $this->actingAs($admin)->get($info['url'])->assertOk()->assertHeader('Content-Type', 'image/webp');
+            $this->actingAs($admin)->get($info['fatias'][1]['url'])->assertOk()->assertHeader('Content-Type', 'image/webp');
+            $this->assertStringContainsString(basename($base).'-f1', $info['fatias'][1]['url']);
             $this->actingAs($admin)->get('/admin/capturas-de-tela/'.str_repeat('0', 32).'-celular')->assertNotFound();
             $this->app['auth']->forgetGuards();
             $this->get($info['url'])->assertRedirect();
         } finally {
-            @unlink($base.'.webp');
-            @unlink($base.'.json');
+            array_map('unlink', glob($base.'*') ?: []);
         }
     }
 
@@ -263,6 +269,26 @@ class FunilInfoprodutosTest extends TestCase
         $this->actingAs($admin)->getJson('/admin/publicidade/comportamento/print/info?produto=nao-existe&pagina=landing')
             ->assertOk()->assertJsonPath('situacao', 'sem_endereco');
         Queue::assertPushed(GerarPrintDaPagina::class, 1);
+    }
+
+    /** Rotina noturna: todo produto pai ativo da KazaKora e as landings dos infoprodutos. */
+    public function test_paginas_conhecidas_e_assinatura_da_loja(): void
+    {
+        $ativo = Product::factory()->create(['slug' => 'luminaria', 'is_active' => true, 'so_ferrakora' => false]);
+        Product::factory()->create(['slug' => 'parado', 'is_active' => false]);
+
+        $todas = collect(app(\App\Modules\Infoprodutos\Support\PaginasMedidas::class)->todas())->map(fn ($p) => $p['produto'].'|'.$p['pagina']);
+        $this->assertContains('kz/luminaria|produto', $todas);
+        $this->assertNotContains('kz/parado|produto', $todas);
+        $this->assertContains('jarvis|landing', $todas);
+
+        $medidas = new \App\Modules\Infoprodutos\Support\PaginasMedidas;
+        $antes = $medidas->assinatura('kz/luminaria', 'produto');
+        $this->assertNotNull($antes);
+        $this->assertNull($medidas->assinatura('kz/parado', 'produto'));
+        Carbon::setTestNow(now()->addMinute());
+        $ativo->update(['name' => 'Luminária nova']);
+        $this->assertNotSame($antes, $medidas->assinatura('kz/luminaria', 'produto'));
     }
 
     public function test_telas_abrem_para_quem_tem_permissao(): void

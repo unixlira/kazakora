@@ -276,7 +276,13 @@ class FunilInfoprodutos
         // Receita do anúncio = tudo o que a mesma venda trouxe (bump, upsell) com o mesmo utm_content.
         foreach ($vendas->where('status', InfoprodutoVenda::APROVADA)->groupBy(fn ($v) => (string) $v->utm_content) as $conteudo => $grupo) {
             if (isset($linhas[$conteudo])) {
-                $linhas[$conteudo]['receita'] = round((float) $grupo->filter(fn ($v) => $moedaMeta === null || $v->moeda === $moedaMeta)->sum('valor'), 2);
+                // Na moeda da conta de anúncios: o valor cobrado quando é a mesma moeda;
+                // senão o líquido que a Kiwify repassa (ex.: venda em US$, conta em R$).
+                $linhas[$conteudo]['receita'] = round((float) $grupo->sum(fn ($v) => match (true) {
+                    $moedaMeta === null || $v->moeda === $moedaMeta => (float) $v->valor,
+                    $v->moeda_liquido === $moedaMeta => (float) $v->valor_liquido,
+                    default => 0.0,
+                }), 2);
             }
         }
         foreach ($gasto as $conteudo => $g) {

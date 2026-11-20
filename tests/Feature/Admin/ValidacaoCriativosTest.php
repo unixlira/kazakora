@@ -261,7 +261,8 @@ class ValidacaoCriativosTest extends TestCase
 
     public function test_acesso_da_vids_libera_equipe_e_barra_quem_nao_entrou(): void
     {
-        $this->getJson('/admin/vids/acesso')->assertUnauthorized();
-        $this->actingAs($this->admin())->getJson('/admin/vids/acesso')->assertNoContent();
+        $this->get('/admin/vids/acesso')->assertUnauthorized();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/vids/acesso')->assertUnauthorized();
+        $this->actingAs($this->admin())->get('/admin/vids/acesso')->assertNoContent();
     }
 }

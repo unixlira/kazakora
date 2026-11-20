@@ -9,6 +9,9 @@ import { computed, reactive, ref } from 'vue';
 // em partes (tamanhoParte) porque o servidor recusa requisição acima de 64 MB.
 const props = defineProps({
     criativos: { type: Object, default: () => ({ data: [], links: [] }) },
+    // Cards por produto (Lira, 2026-11-20): null quando um produto está aberto.
+    cards: { type: Array, default: null },
+    produtoAtual: { type: Object, default: null },
     totais: { type: Object, default: () => ({}) },
     filtros: { type: Object, default: () => ({}) },
     plataformas: { type: Object, default: () => ({}) },
@@ -41,6 +44,7 @@ const filtros = reactive({
     plataforma: props.filtros.plataforma ?? '',
     busca: props.filtros.busca ?? '',
     lixeira: !!props.filtros.lixeira,
+    produto: props.filtros.produto ?? '',
 });
 
 const buscar = () => {
@@ -49,8 +53,15 @@ const buscar = () => {
         plataforma: filtros.plataforma || undefined,
         busca: filtros.busca || undefined,
         lixeira: filtros.lixeira ? 1 : undefined,
+        produto: filtros.produto || undefined,
     }, { preserveState: true, preserveScroll: true, replace: true });
 };
+const abrirProduto = (id) => {
+    filtros.produto = String(id ?? '');
+    filtros.busca = '';
+    buscar();
+};
+const modoCards = computed(() => Array.isArray(props.cards));
 const escolherAba = (status, lixeira = false) => {
     filtros.status = lixeira ? '' : status;
     filtros.lixeira = lixeira;
@@ -60,7 +71,7 @@ const totalGeral = computed(() => ['aguardando', 'aprovado', 'ajustar', 'reprova
 const contagem = (chave) => (chave ? props.totais[chave] ?? 0 : totalGeral.value);
 
 // Envio ----------------------------------------------------------------------
-const envioAberto = ref(props.criativos.data.length === 0 && !props.filtros.lixeira);
+const envioAberto = ref((Array.isArray(props.cards) ? props.cards.length === 0 : props.criativos.data.length === 0) && !props.filtros.lixeira);
 const novo = reactive({ plataforma: 'meta', produto_id: '', observacao: '' });
 const fila = ref([]); // { arquivo, titulo, identificacao, progresso, estado: 'esperando'|'enviando'|'pronto'|'erro', erro }
 const enviando = ref(false);
@@ -365,6 +376,38 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
             </div>
         </form>
 
+        <template v-if="modoCards">
+            <p v-if="props.cards.length === 0" class="rounded-xl border border-dashed border-[var(--surface-border)] p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                Nenhum criativo aqui. Use "Enviar criativos" para subir o primeiro.
+            </p>
+            <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+                <button v-for="g in props.cards" :key="g.id" type="button" @click="abrirProduto(g.id)"
+                    class="flex flex-col overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] text-left shadow-sm transition hover:border-primary hover:shadow-md">
+                    <div class="flex aspect-square w-full items-center justify-center bg-slate-100 dark:bg-slate-800">
+                        <img v-if="g.foto" :src="g.foto" :alt="g.nome" loading="lazy" class="h-full w-full object-cover">
+                        <i v-else class="fas fa-box-open text-3xl text-slate-400" aria-hidden="true"></i>
+                    </div>
+                    <div class="flex flex-1 flex-col gap-2 p-3">
+                        <h2 class="line-clamp-2 text-sm font-semibold">{{ g.nome }}</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ g.total }} {{ g.total === 1 ? 'criativo' : 'criativos' }}</p>
+                        <div class="mt-auto flex flex-wrap gap-1">
+                            <span v-for="(qtd, st) in g.porStatus" :key="st" :class="['rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS[st]?.[1]]">
+                                {{ STATUS[st]?.[0] ?? st }} {{ qtd }}
+                            </span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </template>
+
+        <template v-else>
+        <div v-if="props.produtoAtual" class="mb-3 flex items-center gap-3">
+            <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800" @click="abrirProduto('')">
+                <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Produtos
+            </button>
+            <h2 class="text-lg font-semibold">{{ props.produtoAtual.nome }}</h2>
+        </div>
+
         <p v-if="props.criativos.data.length === 0" class="rounded-xl border border-dashed border-[var(--surface-border)] p-8 text-center text-sm text-slate-500 dark:text-slate-400">
             {{ filtros.lixeira ? 'A lixeira está vazia.' : 'Nenhum criativo aqui. Use "Enviar criativos" para subir o primeiro.' }}
         </p>
@@ -492,5 +535,6 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
         <div class="mt-4">
             <ServerPagination :paginator="props.criativos" embedded />
         </div>
+        </template>
     </AdminLayout>
 </template>

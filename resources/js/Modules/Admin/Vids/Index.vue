@@ -1,7 +1,7 @@
 <script setup>
-// Munck (2026-11-20): a Máquina de Criativos que o Lira comprou, dentro do admin.
-// Ela roda no computador dele (WSL, painel em http://localhost:4848), então só
-// abre no navegador desse computador. A tela não guarda nada: só mostra o painel.
+// Vids (2026-11-20): a Máquina de Criativos que o Lira comprou, dentro do admin.
+// Roda na VPS (serviço vids, usuário próprio munck) e o nginx a serve em /vids/,
+// com o mesmo login do admin. A tela só mostra o painel e manda os produtos.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
@@ -10,18 +10,18 @@ const props = defineProps({
     produtos: { type: Array, default: () => [] },
 });
 
-const URL_MUNCK = 'http://localhost:4848/';
-const ORIGEM_MUNCK = 'http://localhost:4848';
+const URL_VIDS = '/vids/';
+const ORIGEM_VIDS = window.location.origin;
 const quadro = ref(null);
 
 // Manda a lista de produtos para o painel (ele troca o link por um select).
 function enviarProdutos() {
-    const produtos = props.produtos.map((p) => ({ nome: p.nome, url: p.url }));
-    quadro.value?.contentWindow?.postMessage({ tipo: 'munck-produtos', produtos }, ORIGEM_MUNCK);
+    const produtos = props.produtos.map((p) => ({ id: p.id, nome: p.nome, url: p.url }));
+    quadro.value?.contentWindow?.postMessage({ tipo: 'munck-produtos', produtos }, ORIGEM_VIDS);
 }
 
 function aoMensagem(e) {
-    if (e.origin === ORIGEM_MUNCK && e.data?.tipo === 'munck-pronta') enviarProdutos();
+    if (e.origin === ORIGEM_VIDS && e.data?.tipo === 'munck-pronta') enviarProdutos();
 }
 const estado = ref('verificando'); // verificando | ligada | desligada
 const chave = ref(0);
@@ -31,9 +31,8 @@ async function verificar() {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 3000);
     try {
-        // no-cors: a resposta vem opaca, mas só chega se o painel estiver no ar.
-        await fetch(URL_MUNCK, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
-        estado.value = 'ligada';
+        const r = await fetch(`${URL_VIDS}api/projetos`, { cache: 'no-store', signal: ctrl.signal, credentials: 'same-origin' });
+        estado.value = r.ok ? 'ligada' : 'desligada';
     } catch {
         estado.value = 'desligada';
     } finally {
@@ -54,11 +53,11 @@ onBeforeUnmount(() => window.removeEventListener('message', aoMensagem));
 </script>
 
 <template>
-    <Head title="Munck" />
+    <Head title="Vids" />
     <AdminLayout>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
-                <h1 class="text-xl font-semibold">Munck</h1>
+                <h1 class="text-xl font-semibold">Vids</h1>
                 <span
                     class="rounded-full px-2.5 py-0.5 text-xs font-medium"
                     :class="{
@@ -74,25 +73,24 @@ onBeforeUnmount(() => window.removeEventListener('message', aoMensagem));
                 <button type="button" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50" @click="recarregar">
                     <i class="fas fa-rotate-right mr-1" aria-hidden="true"></i>Recarregar
                 </button>
-                <a :href="URL_MUNCK" target="_blank" rel="noopener" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">
+                <a :href="URL_VIDS" target="_blank" rel="noopener" class="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50">
                     <i class="fas fa-up-right-from-square mr-1" aria-hidden="true"></i>Abrir em nova aba
                 </a>
             </div>
         </div>
 
         <div v-if="estado === 'desligada'" class="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            A Munck roda no computador da loja e parece estar desligada. Dê dois cliques em
-            <strong>Ligar Munck</strong> na área de trabalho e clique em Recarregar.
-            Ela só abre no computador onde está instalada.
+            A Vids não respondeu no servidor. Clique em Recarregar; se continuar assim,
+            o serviço <code>vids</code> da VPS está parado.
         </div>
 
         <iframe
             :key="chave"
             ref="quadro"
-            :src="URL_MUNCK"
+            :src="URL_VIDS"
             @load="enviarProdutos"
-            title="Munck"
-            allow="clipboard-read; clipboard-write; local-network-access"
+            title="Vids"
+            allow="clipboard-read; clipboard-write"
             class="w-full rounded-lg border bg-white"
             style="height: calc(100vh - 170px); min-height: 520px"
         ></iframe>

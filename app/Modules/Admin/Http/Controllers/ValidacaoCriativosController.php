@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Models\CriativoValidacao;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Marketplace\Support\DuracaoDeVideo;
 use App\Modules\Marketplace\Support\FormatoDeVideo;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -56,15 +57,22 @@ class ValidacaoCriativosController extends Controller
             'plataforma' => ['nullable', Rule::in(array_keys(CriativoValidacao::PLATAFORMAS))],
             'busca' => ['nullable', 'string', 'max:100'],
             'lixeira' => ['nullable', 'boolean'],
+            // Cards por produto (Lira, 2026-11-20): sem produto escolhido a tela
+            // mostra um card por produto; "sem" = criativos sem produto.
+            'produto' => ['nullable', 'regex:/^(sem|\d{1,10})$/'],
         ]);
         $busca = trim((string) ($filtros['busca'] ?? ''));
         $lixeira = (bool) ($filtros['lixeira'] ?? false);
+        $produto = $filtros['produto'] ?? null;
+        $modoCards = $produto === null && $busca === '' && ! $lixeira;
 
         $this->limparEnviosEsquecidos();
 
-        $criativos = CriativoValidacao::query()
+        $criativos = $modoCards ? null : CriativoValidacao::query()
             ->with(['produto:id,name', 'enviadoPor:id,name', 'avaliadoPor:id,name'])
             ->when($lixeira, fn (Builder $q) => $q->onlyTrashed())
+            ->when($produto === 'sem', fn (Builder $q) => $q->whereNull('produto_id'))
+            ->when($produto !== null && $produto !== 'sem', fn (Builder $q) => $q->where('produto_id', (int) $produto))
             ->when($filtros['status'] ?? null, fn (Builder $q, $status) => $q->where('status', $status))
             ->when($filtros['plataforma'] ?? null, fn (Builder $q, $plataforma) => $q->where('plataforma', $plataforma))
             ->when($busca !== '', function (Builder $q) use ($busca) {
@@ -86,7 +94,11 @@ class ValidacaoCriativosController extends Controller
             ->pluck('total', 'status');
 
         return Inertia::render('Admin/ValidacaoCriativos/Index', [
-            'criativos' => $criativos,
+            'criativos' => $criativos ?? ['data' => [], 'links' => []],
+            'cards' => $modoCards ? $this->cardsPorProduto($filtros['status'] ?? null, $filtros['plataforma'] ?? null) : null,
+            'produtoAtual' => $produto === null ? null : ($produto === 'sem'
+                ? ['id' => 'sem', 'nome' => 'Sem produto']
+                : ['id' => (int) $produto, 'nome' => (string) Product::query()->whereKey((int) $produto)->value('name')]),
             'totais' => collect(CriativoValidacao::STATUS)->mapWithKeys(fn ($s) => [$s => (int) ($porStatus[$s] ?? 0)])->all()
                 + ['lixeira' => CriativoValidacao::onlyTrashed()->count()],
             'filtros' => [
@@ -94,6 +106,7 @@ class ValidacaoCriativosController extends Controller
                 'plataforma' => $filtros['plataforma'] ?? '',
                 'busca' => $busca,
                 'lixeira' => $lixeira,
+                'produto' => $produto ?? '',
             ],
             'plataformas' => CriativoValidacao::PLATAFORMAS,
             'produtos' => Product::query()->whereNull('parent_product_id')->orderBy('name')->get(['id', 'name'])
@@ -332,6 +345,45 @@ class ValidacaoCriativosController extends Controller
         $medida = in_array($tipo, ['image/jpeg', 'image/png'], true) ? @getimagesize($caminho) : false;
 
         return $medida ? ['largura' => (int) $medida[0], 'altura' => (int) $medida[1]] : null;
+    }
+
+    /**
+     * Um card por produto com a contagem por situação, o mais recente primeiro.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function cardsPorProduto(?string $status, ?string $plataforma): array
+    {
+        $linhas = CriativoValidacao::query()->toBase()
+            ->whereNull('deleted_at')
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($plataforma, fn ($q) => $q->where('plataforma', $plataforma))
+            ->selectRaw('produto_id, status, COUNT(*) as total, MAX(created_at) as ultimo')
+            ->groupBy('produto_id', 'status')
+            ->get();
+
+        $ids = $linhas->pluck('produto_id')->filter()->unique()->values();
+        $produtos = Product::query()->whereIn('id', $ids)->get(['id', 'name'])->keyBy('id');
+        // Uma foto por produto (limit no eager load cortaria para uma foto no total).
+        $fotos = ProductImage::query()->whereIn('product_id', $ids)->orderBy('position')->get()->unique('product_id')->keyBy('product_id');
+
+        return $linhas->groupBy(fn ($l) => $l->produto_id ?? 'sem')
+            ->map(function ($grupo, $chave) use ($produtos, $fotos) {
+                $p = $chave === 'sem' ? null : $produtos->get((int) $chave);
+                $foto = $chave === 'sem' ? null : $fotos->get((int) $chave);
+
+                return [
+                    'id' => $chave === 'sem' ? 'sem' : (int) $chave,
+                    'nome' => $chave === 'sem' ? 'Sem produto' : ($p?->name ?? 'Produto #'.$chave),
+                    'foto' => $foto?->thumb_url,
+                    'total' => (int) $grupo->sum('total'),
+                    'porStatus' => $grupo->mapWithKeys(fn ($l) => [$l->status => (int) $l->total])->all(),
+                    'ultimo' => (string) $grupo->max('ultimo'),
+                ];
+            })
+            ->sortByDesc('ultimo')
+            ->values()
+            ->all();
     }
 
     private function limparEnviosEsquecidos(): void

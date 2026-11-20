@@ -34,7 +34,7 @@ const buscar = () => {
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-const formatDia = (value) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
+const formatDataLimite = (value) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
 const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value));
 
 const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-box-open', 'fa-truck-fast', 'fa-house-circle-check'];
@@ -198,7 +198,7 @@ onBeforeUnmount(() => clearInterval(consulta));
                         </div>
                         <p v-if="pedido.retirada.ate" class="rounded-lg bg-white px-4 py-3 font-medium">
                             <i class="fa-solid fa-hourglass-half mr-1 text-orange-500"></i>
-                            Retire até <b>{{ formatDia(pedido.retirada.ate) }}</b>. Depois disso, os Correios devolvem o pacote para nós.
+                            Retire até <b>{{ formatDataLimite(pedido.retirada.ate) }}</b>. Depois disso, os Correios devolvem o pacote para nós.
                         </p>
                     </div>
                 </section>

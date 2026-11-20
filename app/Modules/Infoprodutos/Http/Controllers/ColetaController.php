@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Support\GeoDoVisitante;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
+use App\Modules\Infoprodutos\Support\EquipeDaLoja;
 use App\Modules\Infoprodutos\Support\OrigemInfoproduto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -89,10 +90,13 @@ class ColetaController extends Controller
         $agora = now();
         $linhas = [];
 
+        // Equipe (EquipeDaLoja, 2026-11-20): o IP só é conferido, nunca gravado;
+        // a visita entra como teste e fica fora da tela Comportamento.
+        $daEquipe = rescue(fn () => EquipeDaLoja::ip($request->ip()), false, false);
         $teste = false;
         if ($dados['pv'] !== null) {
             $pv = $dados['pv'];
-            $teste = ($pv['us'] ?? null) === config('infoprodutos.utm_teste');
+            $teste = $daEquipe || ($pv['us'] ?? null) === config('infoprodutos.utm_teste');
             $linhas[] = $base + [
                 'tipo' => 'pageview',
                 'valor' => null,
@@ -112,7 +116,7 @@ class ColetaController extends Controller
             ];
         } else {
             // A marca de teste vale para a sessão inteira.
-            $teste = InfoprodutoEvento::query()->where('sessao', $dados['s'])->where('tipo', 'pageview')->where('teste', true)->exists();
+            $teste = $daEquipe || InfoprodutoEvento::query()->where('sessao', $dados['s'])->where('tipo', 'pageview')->where('teste', true)->exists();
         }
 
         foreach ($dados['e'] as $evento) {

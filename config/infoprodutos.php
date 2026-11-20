@@ -94,6 +94,13 @@ return [
     'chrome' => env('COMPORTAMENTO_CHROME', '/opt/chrome-headless-shell/chrome-headless-shell'),
 
     /*
+     * IPs da equipe que a tela Comportamento não conta (2026-11-20), separados
+     * por vírgula; aceita faixa (ex.: 189.1.2.0/24). Além destes, saem sempre
+     * os IPs em que alguém da equipe navegou logado nos últimos 30 dias.
+     */
+    'ips_equipe' => array_values(array_filter(array_map('trim', explode(',', (string) env('COMPORTAMENTO_IPS_EQUIPE', ''))))),
+
+    /*
      * Conta de anúncios da Meta dos infoprodutos (GreenKora), lida com o
      * token próprio dela (não é o mesmo usuário do sistema da KazaKora).
      * Só leitura: gasto por anúncio para custo por visita/compra e ROAS.

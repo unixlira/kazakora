@@ -86,6 +86,17 @@ class ValidacaoCriativosTest extends TestCase
             ->assertInertia(fn (AssertableInertia $p) => $p
                 ->where('totais.aguardando', 1)
                 ->where('podeAvaliar', true)
+                ->has('cards', 1)
+                ->where('cards.0.id', 'sem')
+                ->where('cards.0.total', 1)
+                ->has('criativos.data', 0));
+
+        // Cards por produto (2026-11-20): o card abre os vídeos daquele produto.
+        $this->actingAs($admin)->get(self::BASE.'?produto=sem')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('cards', null)
+                ->where('produtoAtual.nome', 'Sem produto')
                 ->has('criativos.data', 1));
 
         $this->actingAs($admin)->get("/admin/validacao-criativos/{$criativo->id}/arquivo")
@@ -209,5 +220,49 @@ class ValidacaoCriativosTest extends TestCase
             'path' => 'criativos/2026-10/teste.mp4',
             'tamanho' => 100,
         ]);
+    }
+
+    public function test_vids_envia_pela_api_com_token_e_cai_no_card_do_produto(): void
+    {
+        $admin = $this->admin();
+        $produto = \App\Modules\Catalog\Models\Product::factory()->create(['name' => 'Travesseiro Borboleta']);
+        config(['services.vids.token' => 'chave-vids', 'services.vids.usuario_id' => $admin->id]);
+        $conteudo = $this->conteudoMp4(2500);
+        $envio = (string) Str::uuid();
+
+        $this->post('/api/vids/parte', ['envio' => $envio, 'inicio' => 0, 'parte' => UploadedFile::fake()->createWithContent('parte.bin', $conteudo)], ['Accept' => 'application/json'])
+            ->assertUnauthorized();
+
+        $cabecalho = ['Authorization' => 'Bearer chave-vids', 'Accept' => 'application/json'];
+        $this->post('/api/vids/parte', ['envio' => $envio, 'inicio' => 0, 'parte' => UploadedFile::fake()->createWithContent('parte.bin', $conteudo)], $cabecalho)
+            ->assertOk()->assertJson(['recebido' => 2500]);
+        $this->postJson('/api/vids/criativos', [
+            'envio' => $envio, 'nome_original' => 'MC_travesseiro_C01_9x16.mp4', 'tamanho' => 2500,
+            'titulo' => 'Travesseiro Borboleta · C01', 'plataforma' => 'meta', 'produto_id' => $produto->id,
+        ], $cabecalho)->assertCreated();
+
+        $criativo = CriativoValidacao::sole();
+        $this->assertSame($produto->id, $criativo->produto_id);
+        $this->assertSame($admin->id, $criativo->enviado_por);
+
+        $this->actingAs($admin)->get(self::BASE)
+            ->assertInertia(fn (AssertableInertia $p) => $p
+                ->where('cards.0.id', $produto->id)
+                ->where('cards.0.nome', 'Travesseiro Borboleta')
+                ->where('cards.0.porStatus.aguardando', 1));
+    }
+
+    public function test_vids_sem_configuracao_nao_aceita_nada(): void
+    {
+        config(['services.vids.token' => null, 'services.vids.usuario_id' => null]);
+
+        $this->postJson('/api/vids/criativos', [], ['Authorization' => 'Bearer qualquer'])->assertStatus(503);
+    }
+
+    public function test_acesso_da_vids_libera_equipe_e_barra_quem_nao_entrou(): void
+    {
+        $this->get('/admin/vids/acesso')->assertUnauthorized();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/vids/acesso')->assertUnauthorized();
+        $this->actingAs($this->admin())->get('/admin/vids/acesso')->assertNoContent();
     }
 }

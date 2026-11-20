@@ -1,0 +1,27 @@
+# Vids (Máquina de Criativos) na VPS, 2026-11-20.
+# /etc/systemd/system/vids.service — painel em 127.0.0.1:4848, servido pelo
+# nginx em painel.kazakora.com/vids/ (nginx-painel-vids.conf).
+# Usuário próprio, sem sudo: o Claude da máquina tem terminal e não pode
+# tocar na loja. Limites para o render de vídeo não derrubar o site.
+[Unit]
+Description=Vids - Maquina de Criativos
+After=network-online.target
+
+[Service]
+User=munck
+Group=munck
+WorkingDirectory=/home/munck/maquina-de-criativos
+Environment=HOME=/home/munck
+Environment=PATH=/home/munck/maquina-de-criativos/.ferramentas/bin:/opt/node24/bin:/home/munck/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=MUNCK_ORIGENS=https://painel.kazakora.com
+ExecStart=/opt/node24/bin/node painel/servidor.mjs
+Restart=always
+RestartSec=5
+Nice=10
+CPUQuota=250%
+MemoryMax=7G
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

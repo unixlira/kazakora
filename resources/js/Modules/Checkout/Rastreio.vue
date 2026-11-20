@@ -34,6 +34,7 @@ const buscar = () => {
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+const formatDataLimite = (value) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
 const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value));
 
 const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-box-open', 'fa-truck-fast', 'fa-house-circle-check'];
@@ -171,6 +172,37 @@ onBeforeUnmount(() => clearInterval(consulta));
                     </div>
                 </section>
 
+                <!-- Pacote na agência (2026-11-20, #4172): endereço para retirar, em destaque. -->
+                <section v-if="pedido.retirada" class="mt-8 overflow-hidden rounded-2xl border-2 border-orange-400 bg-orange-50 text-orange-950">
+                    <div class="bg-orange-500 px-6 py-3 text-white">
+                        <p class="text-lg font-bold"><i class="fa-solid fa-store mr-2"></i>Seu pedido está esperando você na agência</p>
+                    </div>
+                    <div class="flex flex-col gap-3 p-6 text-sm">
+                        <p>Os Correios deixaram o pacote disponível para retirada. Ele não será entregue no seu endereço.</p>
+                        <div v-if="pedido.retirada.endereco">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-orange-700">Onde retirar</p>
+                            <p class="mt-1 text-base font-semibold">{{ pedido.retirada.endereco }}</p>
+                            <a :href="pedido.retirada.mapa" target="_blank" rel="noopener"
+                                class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 font-semibold text-white hover:bg-orange-600">
+                                <i class="fa-solid fa-location-dot"></i> Abrir no mapa
+                            </a>
+                        </div>
+                        <p v-else>Consulte o endereço da agência pelo botão "Ver nos Correios" com o código abaixo.</p>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-orange-700">Leve</p>
+                            <p class="mt-1">Documento com foto e o código <span class="font-store-mono font-semibold">{{ pedido.codigo_rastreio }}</span>
+                                <button type="button" class="ml-1 rounded border border-orange-300 px-2 py-0.5 text-xs" @click="copiarCodigo">
+                                    <i class="fa-regular mr-1" :class="copiado ? 'fa-circle-check' : 'fa-copy'"></i>{{ copiado ? 'Copiado' : 'Copiar' }}
+                                </button>
+                            </p>
+                        </div>
+                        <p v-if="pedido.retirada.ate" class="rounded-lg bg-white px-4 py-3 font-medium">
+                            <i class="fa-solid fa-hourglass-half mr-1 text-orange-500"></i>
+                            Retire até <b>{{ formatDataLimite(pedido.retirada.ate) }}</b>. Depois disso, os Correios devolvem o pacote para nós.
+                        </p>
+                    </div>
+                </section>
+
                 <div v-if="!pedido.publico" class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <p class="text-lg font-semibold">Pedido {{ pedido.numero ?? pedido.id }}</p>
@@ -229,6 +261,20 @@ onBeforeUnmount(() => clearInterval(consulta));
                 <p v-else-if="!pedido.cancelado && !pedido.publico && !pix" class="mt-4 rounded-2xl border border-dashed border-store-border px-6 py-4 text-sm text-store-fg-muted">
                     <i class="fa-regular fa-clock mr-1"></i> O código de rastreio aparece aqui assim que o pedido for despachado.
                 </p>
+
+                <div v-if="pedido.eventos?.length && !pedido.publico" class="mt-4 rounded-2xl border border-store-border bg-store-bg-raised p-6">
+                    <p class="text-sm font-semibold">Andamento na transportadora</p>
+                    <ol class="mt-3 flex flex-col gap-3">
+                        <li v-for="(evento, index) in pedido.eventos" :key="index" class="border-l-2 pl-3"
+                            :class="index === 0 ? 'border-store-accent' : 'border-store-border'">
+                            <p class="text-sm font-medium" :class="index === 0 ? '' : 'text-store-fg-muted'">{{ evento.titulo }}</p>
+                            <p v-if="evento.info" class="text-xs text-store-fg-muted">{{ evento.info }}</p>
+                            <p class="text-xs text-store-fg-faint">
+                                <span v-if="evento.em">{{ formatDate(evento.em) }}</span><span v-if="evento.local"> · {{ evento.local }}</span>
+                            </p>
+                        </li>
+                    </ol>
+                </div>
 
                 <div class="mt-4 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <p class="text-sm font-semibold">Itens</p>

@@ -451,6 +451,8 @@ return [
                     'pedido_entregue' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE'),
                     'pedido_entregue_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IDIOMA', 'pt_BR'),
                     'pedido_entregue_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
+                    'pedido_retirada' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA', 'pedido_aguardando_retirada_ferrakora'),
+                    'pedido_retirada_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA_IDIOMA', 'pt_BR'),
                 ],
             ],
         ],
@@ -490,6 +492,9 @@ return [
             'pedido_entregue' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE'),
             'pedido_entregue_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE_IDIOMA', 'pt_BR'),
             'pedido_entregue_imagem' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
+            // Pacote parado na agência dos Correios (loja:avisar-retirada, 2026-11-20).
+            'pedido_retirada' => env('WHATSAPP_TEMPLATE_PEDIDO_RETIRADA', 'pedido_aguardando_retirada_kazakora'),
+            'pedido_retirada_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_RETIRADA_IDIOMA', 'pt_BR'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

@@ -29,6 +29,7 @@ Schedule::command('correios:acompanhar-pre-postagens')->cron('40 */2 * * *')->wi
 // Pedido do site com etiqueta do Melhor Envio (2026-11-09, #3978): o mesmo
 // fluxo pela API do Melhor Envio (rastreio, postado, entregue, WhatsApp).
 Schedule::command('melhorenvio:acompanhar')->everyThirtyMinutes()->withoutOverlapping(25);
+Schedule::command('loja:avisar-retirada')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // Carrinho abandonado (lead_checkout): 3 meses desde a última interação (decisão do Lira 2026-10-24).

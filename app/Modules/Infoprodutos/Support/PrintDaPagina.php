@@ -32,6 +32,23 @@ class PrintDaPagina
 
     public const ALTURA_MAXIMA = 16000;
 
+    /**
+     * Some com aviso de cookies/consentimento (e o fundo escuro dele) antes
+     * do print (2026-11-20: o print da FerraKora saía com o modal de cookies
+     * na frente e não dava para ver o comportamento). Só some com elemento
+     * fixo/grudado na tela cujo id, classe ou rótulo fale de cookie,
+     * consentimento ou LGPD; roda de novo a cada 250 ms porque o aviso do
+     * React aparece depois do carregamento.
+     */
+    private const SEM_AVISO_DE_COOKIES = <<<'JS'
+(()=>{const re=/cookie|consent|lgpd|gdpr|privacidad/i;
+const sumir=()=>{document.querySelectorAll('body *').forEach(e=>{const cs=getComputedStyle(e);if(cs.position!=='fixed'&&cs.position!=='sticky')return;
+const txt=(e.id||'')+' '+(typeof e.className==='string'?e.className:'')+' '+(e.getAttribute('aria-labelledby')||'')+' '+(e.getAttribute('aria-label')||'');
+if(re.test(txt))e.style.setProperty('display','none','important')});
+for(const el of [document.documentElement,document.body]){if(el&&getComputedStyle(el).overflow==='hidden')el.style.setProperty('overflow','visible','important')}};
+addEventListener('DOMContentLoaded',sumir);setInterval(sumir,250);})()
+JS;
+
     /** @var resource|null */
     private $proc = null;
 
@@ -127,6 +144,7 @@ class PrintDaPagina
                 $this->comando('Emulation.setTouchEmulationEnabled', ['enabled' => true, 'maxTouchPoints' => 5], $sessao);
             }
             $this->comando('Page.enable', [], $sessao);
+            $this->comando('Page.addScriptToEvaluateOnNewDocument', ['source' => self::SEM_AVISO_DE_COOKIES], $sessao);
             $this->comando('Page.navigate', ['url' => $url], $sessao);
             $this->esperarEvento('Page.loadEventFired', 30);
             // Desce a página devagar para carregar as imagens "lazy" e volta ao topo.

@@ -1,15 +1,26 @@
 <script setup>
 /**
- * Comportamento (pedido do Lira em 2026-11-19): mapa de cliques sobre o print
- * da página (celular 390 px numa moldura de iPhone, ou computador 1280 px num
- * monitor), onde clicam, cliques mortos, curva de rolagem por seção,
- * sequências mais comuns e a linha do tempo de cada visita (anônima).
- * Print e mapa carregam sob demanda (o print é WebP, gerado pelo
- * comportamento:prints com o Chrome headless).
+ * Comportamento (pedido do Lira em 2026-11-19; celular menor, print na hora e Reproduzir no mesmo dia): mapa de cliques sobre o print
+ * da página, onde clicam, cliques mortos, rolagem, caminhos e a linha do
+ * tempo de cada visita (anônima).
+ *
+ * Layout em 3 colunas no computador (filtros | celular | dados) e empilhado
+ * no celular. O aparelho é pequeno (tela de 270 px no celular, 320 px no
+ * computador): o print e o mapa de calor são desenhados na MESMA escala
+ * (largura da tela ÷ largura do print), então o x (% da largura) e o y (px da
+ * página) de cada clique caem no lugar certo do print reduzido.
+ *
+ * O print chega com a página quando já existe; senão a tela pede um
+ * (GerarPrintDaPagina, Chrome headless da VPS) e mostra "gerando a tela…".
+ *
+ * "▶ Reproduzir" anima os toques dentro do celular: a tela rola até o ponto,
+ * aparece a onda do toque e o nome da ação. Fonte: a visita escolhida (na
+ * ordem e no ritmo dela, 1x/2x/4x) ou os toques mais comuns do período.
+ * Sem biblioteca: setTimeout, scrollTo e uma animação CSS.
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
     periodo: { type: String, required: true },
@@ -25,6 +36,7 @@ const props = defineProps({
 const LOJAS = { kazakora: 'KazaKora', ferrakora: 'FerraKora', infoprodutos: 'Infoprodutos' };
 const n = (v) => (v === null || v === undefined ? '-' : new Intl.NumberFormat('pt-BR').format(v));
 const pct = (v) => (v === null || v === undefined ? '-' : `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
+const hora = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 const paginasDaLoja = computed(() => props.paginas.filter((p) => p.loja === props.loja));
 const ir = (mudanca) => router.get('/admin/publicidade/comportamento', {
@@ -35,17 +47,50 @@ const escolherPagina = (valor) => {
     ir({ produto, pagina });
 };
 
-// Mapa de calor ------------------------------------------------------------
+// Aparelho e escala -------------------------------------------------------
+const celular = computed(() => props.aparelho !== 'computador');
+const TELA_LARGURA = computed(() => (celular.value ? 270 : 320));
+const TELA_ALTURA = computed(() => (celular.value ? 560 : 230));
+const larguraOriginal = computed(() => printAtual.value?.largura || (celular.value ? 390 : 1280));
+const escala = computed(() => TELA_LARGURA.value / larguraOriginal.value);
+const alturaPrint = computed(() => Math.min(printAtual.value?.altura || 3000, 16000));
+const alturaConteudo = computed(() => Math.round(alturaPrint.value * escala.value));
+
+// Print da página (na hora, ou gerado sob demanda) ------------------------
+const printAtual = ref(props.print);
+const situacao = ref(props.print ? 'pronto' : 'carregando'); // pronto | carregando | gerando | erro | sem_endereco
+const mensagem = ref('');
+const imagemPronta = ref(false);
+const tela = ref(null);
+let consulta = null;
+let tentativas = 0;
+
+const buscarPrint = async (deNovo = false) => {
+    clearTimeout(consulta);
+    if (!props.pagina) return;
+    const alvo = `${props.pagina.produto}|${props.pagina.pagina}|${props.aparelho}`;
+    const q = new URLSearchParams({ produto: props.pagina.produto, pagina: props.pagina.pagina, aparelho: props.aparelho });
+    if (deNovo) q.set('de_novo', '1');
+    let r = null;
+    try {
+        const resp = await fetch(`/admin/publicidade/comportamento/print/info?${q}`, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        r = resp.ok ? await resp.json() : null;
+    } catch { r = null; }
+    // A página mudou enquanto esperava: ignora a resposta velha.
+    if (alvo !== `${props.pagina?.produto}|${props.pagina?.pagina}|${props.aparelho}`) return;
+    if (!r) { situacao.value = 'erro'; mensagem.value = 'Não consegui consultar o print agora.'; return; }
+    if (r.situacao === 'pronto') { printAtual.value = r.print; situacao.value = 'pronto'; return; }
+    situacao.value = r.situacao;
+    mensagem.value = r.mensagem || '';
+    if (r.situacao === 'gerando' && ++tentativas < 60) consulta = setTimeout(() => buscarPrint(), 3000);
+};
+
+
+// Mapa de calor (desenhado já na escala da tela) --------------------------
 const mostrarMapa = ref(true);
 const opacidade = ref(0.7);
 const canvas = ref(null);
-const imagemPronta = ref(false);
-const larguraTela = computed(() => (props.aparelho === 'celular' ? 390 : 1280));
-// O computador aparece reduzido dentro do monitor.
-const escala = computed(() => (props.aparelho === 'celular' ? 1 : 0.5));
-const alturaPrint = computed(() => props.print?.altura || 3000);
 
-// Paleta azul → verde → amarelo → vermelho (pouco → muito clicado).
 let paleta = null;
 const montarPaleta = () => {
     const c = document.createElement('canvas');
@@ -63,25 +108,26 @@ const montarPaleta = () => {
 
 const desenhar = () => {
     const el = canvas.value;
-    const pontos = props.dados?.pontos ?? [];
     if (!el) return;
-    const w = larguraTela.value;
-    const h = Math.min(alturaPrint.value, 16000);
+    const w = TELA_LARGURA.value;
+    const h = Math.max(1, alturaConteudo.value);
+    const e = escala.value;
     el.width = w; el.height = h;
     const ctx = el.getContext('2d');
     ctx.clearRect(0, 0, w, h);
+    const pontos = props.dados?.pontos ?? [];
     if (!pontos.length) return;
     paleta ??= montarPaleta();
     const max = Math.max(...pontos.map((p) => p.n));
-    const raio = props.aparelho === 'celular' ? 22 : 30;
+    const raio = Math.max(8, Math.round((celular.value ? 22 : 30) * e * (celular.value ? 1 : 2)));
     for (const p of pontos) {
         const x = (p.x / 100) * w;
-        const g = ctx.createRadialGradient(x, p.y, 0, x, p.y, raio);
-        const a = Math.min(1, 0.15 + (p.n / max) * 0.85);
-        g.addColorStop(0, `rgba(0,0,0,${a})`);
+        const y = p.y * e;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, raio);
+        g.addColorStop(0, `rgba(0,0,0,${Math.min(1, 0.15 + (p.n / max) * 0.85)})`);
         g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g;
-        ctx.fillRect(x - raio, p.y - raio, raio * 2, raio * 2);
+        ctx.fillRect(x - raio, y - raio, raio * 2, raio * 2);
     }
     const img = ctx.getImageData(0, 0, w, h);
     const d = img.data;
@@ -93,40 +139,120 @@ const desenhar = () => {
     }
     ctx.putImageData(img, 0, 0);
 };
-watch(() => [props.dados, imagemPronta.value, mostrarMapa.value], () => nextTick(desenhar));
-
-// Sob demanda: a imagem (pesada) só entra quando a área aparece na tela.
-const area = ref(null);
-const carregar = ref(false);
-let observador = null;
-watch(area, (el) => {
-    if (!el || carregar.value) return;
-    observador = new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) { carregar.value = true; observador.disconnect(); } }, { rootMargin: '200px' });
-    observador.observe(el);
-});
-onBeforeUnmount(() => observador?.disconnect());
+watch(() => [props.dados, printAtual.value, mostrarMapa.value, escala.value], () => nextTick(desenhar), { immediate: true });
 
 // Rolagem por seção: % das visitas que chegam ao topo de cada seção do print.
 const secoes = computed(() => {
     const curva = props.dados?.rolagem ?? [];
     const altura = alturaPrint.value;
-    return (props.print?.secoes ?? []).map((s) => {
+    return (printAtual.value?.secoes ?? []).map((s) => {
         const p = Math.min(100, Math.floor((s.topo / altura) * 100 / 5) * 5);
         return { id: s.id, topo: s.topo, pct: curva.find((c) => c.pct_pagina === p)?.pct_visitas ?? null };
     });
 });
 
-// Linha do tempo de uma visita -------------------------------------------------
+// Linha do tempo de uma visita ---------------------------------------------
 const visita = ref(null);
 const passos = ref([]);
+const carregandoVisita = ref(false);
 const abrirVisita = async (v) => {
+    parar();
     visita.value = v;
     passos.value = [];
+    carregandoVisita.value = true;
     const url = `/admin/publicidade/comportamento/visita?sessao=${encodeURIComponent(v.sessao)}&produto=${encodeURIComponent(props.pagina.produto)}`;
-    const r = await fetch(url, { headers: { Accept: 'application/json' } });
-    passos.value = r.ok ? (await r.json()).passos : [];
+    try {
+        const r = await fetch(url, { headers: { Accept: 'application/json' } });
+        passos.value = r.ok ? (await r.json()).passos : [];
+    } catch { passos.value = []; }
+    carregandoVisita.value = false;
+    if (visita.value?.sessao === v.sessao && passos.value.length) reproduzir('visita');
 };
-const hora = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+// Reproduzir -----------------------------------------------------------------
+const player = reactive({ fonte: 'comuns', estado: 'parado', i: 0, vel: 1, fila: [] });
+const legenda = ref('');
+const ondas = ref([]);
+let relogio = null;
+let idOnda = 0;
+
+const filaDaVisita = () => passos.value.map((p) => {
+    const daPagina = p.pagina === props.pagina?.pagina;
+    let x = null; let y = null;
+    if (daPagina && p.x !== null && p.x !== undefined && p.y !== null && p.y !== undefined) { x = p.x; y = p.y; }
+    else if (daPagina && p.tipo === 'scroll' && p.valor !== null && p.valor !== undefined) y = (alturaPrint.value * p.valor) / 100;
+    else if (daPagina && p.tipo === 'pageview') y = 0;
+    return {
+        texto: daPagina || !p.pagina ? p.texto : `${p.texto} (${p.pagina})`,
+        x, y, toque: x !== null,
+        espera: p.desde_anterior === null || p.desde_anterior === undefined ? 0 : p.desde_anterior * 1000,
+        rotuloTempo: p.desde_anterior ? `+${p.desde_anterior} s` : `${p.segundo ?? 0} s`,
+    };
+});
+const filaComum = () => (props.dados?.toques ?? []).map((t, i) => ({
+    texto: `${t.texto} · ${pct(t.pct)} das visitas`, x: t.x, y: t.y, toque: true, espera: i ? 1800 : 0, rotuloTempo: `${i + 1}º`,
+}));
+
+const rolarAte = (y) => {
+    const el = tela.value;
+    if (!el || y === null) return;
+    el.scrollTo({ top: Math.max(0, y * escala.value - TELA_ALTURA.value / 2), behavior: player.vel > 2 ? 'auto' : 'smooth' });
+};
+const mostrarPasso = (p) => {
+    legenda.value = p.texto;
+    rolarAte(p.y);
+    if (!p.toque) return;
+    const id = ++idOnda;
+    const atraso = Math.round(450 / player.vel);
+    setTimeout(() => {
+        ondas.value = [...ondas.value, { id, x: (p.x / 100) * TELA_LARGURA.value, y: p.y * escala.value }];
+        setTimeout(() => { ondas.value = ondas.value.filter((o) => o.id !== id); }, 1250);
+    }, atraso);
+};
+const proximo = () => {
+    if (player.estado !== 'tocando') return;
+    if (player.i >= player.fila.length) {
+        player.estado = 'fim';
+        legenda.value = player.fonte === 'visita' ? 'Fim da visita' : 'Fim dos toques mais comuns';
+        return;
+    }
+    mostrarPasso(player.fila[player.i]);
+    player.i += 1;
+    const prox = player.fila[player.i];
+    const espera = prox ? Math.min(4000, Math.max(800, prox.espera)) : 1500;
+    relogio = setTimeout(proximo, espera / player.vel);
+};
+const reproduzir = (fonte = player.fonte) => {
+    clearTimeout(relogio);
+    player.fonte = fonte;
+    player.fila = fonte === 'visita' ? filaDaVisita() : filaComum();
+    player.i = 0;
+    ondas.value = [];
+    if (!player.fila.length) { player.estado = 'parado'; legenda.value = fonte === 'visita' ? 'Escolha uma visita na lista' : 'Nenhum toque no período'; return; }
+    player.estado = 'tocando';
+    proximo();
+};
+const pausar = () => { clearTimeout(relogio); player.estado = 'pausado'; };
+const continuar = () => { player.estado = 'tocando'; proximo(); };
+function parar() {
+    clearTimeout(relogio);
+    player.estado = 'parado';
+    player.i = 0;
+    ondas.value = [];
+    legenda.value = '';
+}
+// Trocou de página/aparelho: para a reprodução e mostra o print novo (ou pede um).
+watch(() => `${props.pagina?.produto}|${props.pagina?.pagina}|${props.aparelho}|${props.print?.url ?? ''}`, () => {
+    parar();
+    clearTimeout(consulta);
+    tentativas = 0;
+    printAtual.value = props.print;
+    if (tela.value) tela.value.scrollTop = 0;
+    if (props.print) situacao.value = 'pronto';
+    else if (props.pagina) { situacao.value = 'carregando'; buscarPrint(); }
+}, { immediate: true });
+watch(() => printAtual.value?.url, () => { imagemPronta.value = false; });
+onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
 </script>
 
 <template>
@@ -138,122 +264,194 @@ const hora = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', mo
             Onde as pessoas clicam, até onde rolam e como navegam. Anônimo: sem cookie, sem IP, só um código aleatório por aba.
         </p>
 
-        <div class="mb-4 flex flex-wrap items-center gap-2">
-            <button v-for="(nome, chave) in LOJAS" :key="chave" type="button" @click="ir({ loja: chave, produto: undefined, pagina: undefined })"
-                class="rounded-full border px-3 py-1 text-sm" :class="chave === loja ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600'">{{ nome }}</button>
-            <select class="max-w-xs rounded border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-800" :value="pagina ? `${pagina.produto}|${pagina.pagina}` : ''" @change="escolherPagina($event.target.value)">
-                <option v-if="!paginasDaLoja.length" value="">Sem visitas no período</option>
-                <option v-for="p in paginasDaLoja" :key="`${p.produto}|${p.pagina}`" :value="`${p.produto}|${p.pagina}`">{{ p.rotulo }} ({{ n(p.visitas) }})</option>
-            </select>
-            <div class="flex overflow-hidden rounded border border-slate-300 text-sm dark:border-slate-600">
-                <button type="button" class="px-3 py-1" :class="aparelho === 'celular' ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'celular' })"><i class="fas fa-mobile-screen"></i> Celular</button>
-                <button type="button" class="px-3 py-1" :class="aparelho === 'computador' ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'computador' })"><i class="fas fa-desktop"></i> Computador</button>
-            </div>
-            <select class="rounded border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-800" :value="periodo" @change="ir({ periodo: $event.target.value })">
-                <option v-for="(rotulo, chave) in periodos" :key="chave" :value="chave">{{ rotulo }}</option>
-            </select>
-        </div>
-
-        <p v-if="!pagina" class="rounded bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800">Nenhuma visita medida nesta loja no período.</p>
-
-        <div v-else class="grid gap-6 lg:grid-cols-[auto,1fr]">
-            <!-- Aparelho com o print e o mapa -->
-            <div>
-                <div class="mb-2 flex items-center gap-3 text-sm">
-                    <label class="flex items-center gap-1"><input v-model="mostrarMapa" type="checkbox"> mapa de calor</label>
-                    <label class="flex items-center gap-1">opacidade <input v-model.number="opacidade" type="range" min="0.1" max="1" step="0.05" class="w-24"></label>
+        <div class="grid min-w-0 gap-5 lg:grid-cols-3">
+            <!-- Coluna 1: filtros -->
+            <div class="min-w-0 space-y-3 text-sm">
+                <div class="flex flex-wrap gap-1.5">
+                    <button v-for="(nome, chave) in LOJAS" :key="chave" type="button" @click="ir({ loja: chave, produto: undefined, pagina: undefined })"
+                        class="rounded-full border px-3 py-1" :class="chave === loja ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 dark:border-slate-600'">{{ nome }}</button>
                 </div>
-                <div ref="area" :class="aparelho === 'celular' ? 'mx-auto w-[414px] rounded-[48px] border-[12px] border-slate-900 bg-slate-900 p-0 shadow-xl' : 'mx-auto w-[664px] rounded-xl border-[12px] border-slate-800 bg-slate-800 shadow-xl'">
-                    <div v-if="aparelho === 'celular'" class="mx-auto mb-1 h-5 w-32 rounded-b-2xl bg-slate-900"></div>
-                    <div class="relative overflow-y-auto overflow-x-hidden bg-white" :class="aparelho === 'celular' ? 'h-[760px] rounded-[30px]' : 'h-[420px]'"
-                        :style="{ width: `${larguraTela * escala}px` }">
-                        <div class="relative origin-top-left" :style="{ width: `${larguraTela}px`, height: `${alturaPrint}px`, transform: `scale(${escala})` }">
-                            <img v-if="print && carregar" :src="print.url" :width="print.largura" :height="print.altura" alt="Print da página" decoding="async"
-                                class="absolute left-0 top-0 max-w-none" @load="imagemPronta = true">
-                            <div v-else-if="!print" class="p-6 text-sm text-slate-500">Print desta página ainda não foi gerado (sai na próxima hora, pelo comportamento:prints).</div>
-                            <canvas v-show="mostrarMapa" ref="canvas" class="pointer-events-none absolute left-0 top-0" :style="{ opacity: opacidade }"></canvas>
-                        </div>
+                <label class="block">
+                    <span class="mb-1 block text-xs text-slate-500">Página</span>
+                    <select class="w-full rounded border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-800" :value="pagina ? `${pagina.produto}|${pagina.pagina}` : ''" @change="escolherPagina($event.target.value)">
+                        <option v-if="!paginasDaLoja.length" value="">Sem visitas no período</option>
+                        <option v-for="p in paginasDaLoja" :key="`${p.produto}|${p.pagina}`" :value="`${p.produto}|${p.pagina}`">{{ p.rotulo.length > 60 ? `${p.rotulo.slice(0, 58)}…` : p.rotulo }} ({{ n(p.visitas) }})</option>
+                    </select>
+                </label>
+                <div class="flex overflow-hidden rounded border border-slate-300 dark:border-slate-600">
+                    <button type="button" class="flex-1 px-3 py-1" :class="celular ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'celular' })"><i class="fas fa-mobile-screen"></i> Celular</button>
+                    <button type="button" class="flex-1 px-3 py-1" :class="!celular ? 'bg-indigo-600 text-white' : ''" @click="ir({ aparelho: 'computador' })"><i class="fas fa-desktop"></i> Computador</button>
+                </div>
+                <label class="block">
+                    <span class="mb-1 block text-xs text-slate-500">Período</span>
+                    <select class="w-full rounded border-slate-300 text-sm dark:border-slate-600 dark:bg-slate-800" :value="periodo" @change="ir({ periodo: $event.target.value })">
+                        <option v-for="(rotulo, chave) in periodos" :key="chave" :value="chave">{{ rotulo }}</option>
+                    </select>
+                </label>
+                <div class="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                    <label class="flex items-center gap-2"><input v-model="mostrarMapa" type="checkbox"> Mapa de calor</label>
+                    <label class="flex items-center gap-2">Opacidade <input v-model.number="opacidade" type="range" min="0.1" max="1" step="0.05" class="min-w-0 flex-1"></label>
+                    <div class="flex items-center gap-2 text-xs text-slate-500">
+                        pouco <span class="h-2 flex-1 rounded" style="background: linear-gradient(90deg, #005aff, #00c850, #ffe600, #ff0000)"></span> muito
                     </div>
                 </div>
-                <div v-if="aparelho === 'computador'" class="mx-auto h-6 w-40 bg-slate-700"></div>
-                <div class="mx-auto mt-2 flex w-64 items-center gap-2 text-xs text-slate-500">
-                    pouco <span class="h-2 flex-1 rounded" style="background: linear-gradient(90deg, #005aff, #00c850, #ffe600, #ff0000)"></span> muito
-                </div>
-                <p v-if="print" class="mt-1 text-center text-xs text-slate-400">Print de {{ print.em ? hora(print.em) : '-' }}</p>
+                <p v-if="printAtual?.em" class="text-xs text-slate-400">
+                    Print de {{ hora(printAtual.em) }}<template v-if="printAtual.pagina_url"> · <a :href="printAtual.pagina_url" target="_blank" rel="noopener" class="underline">abrir a página</a></template>
+                </p>
             </div>
 
-            <!-- Leituras -->
-            <Deferred data="dados">
-                <template #fallback><p class="py-10 text-center text-sm text-slate-500">Lendo os cliques…</p></template>
-                <div v-if="dados" class="space-y-4 text-sm">
-                    <div class="flex gap-4">
-                        <div><div class="text-xs text-slate-500">Visitas</div><div class="text-xl font-bold">{{ n(dados.visitas) }}</div></div>
-                        <div><div class="text-xs text-slate-500">Tempo médio</div><div class="text-xl font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>
+            <!-- Coluna 2: o aparelho com o print, o mapa e o Reproduzir -->
+            <div class="flex min-w-0 flex-col items-center">
+                <p v-if="!pagina" class="w-full rounded bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800">Nenhuma visita medida nesta loja no período.</p>
+                <template v-else>
+                    <div class="relative max-w-full shadow-xl" :class="celular ? 'rounded-[34px] border-[8px] border-slate-900 bg-slate-900' : 'rounded-lg border-[8px] border-slate-800 bg-slate-800'">
+                        <div v-if="celular" class="absolute left-1/2 top-0 z-20 h-3 w-16 -translate-x-1/2 rounded-b-xl bg-slate-900"></div>
+                        <div ref="tela" class="relative overflow-y-auto overflow-x-hidden bg-white" :class="celular ? 'rounded-[26px]' : ''"
+                            :style="{ width: `${TELA_LARGURA}px`, height: `${TELA_ALTURA}px`, maxWidth: '100%' }">
+                            <div class="relative" :style="{ width: `${TELA_LARGURA}px`, height: `${printAtual ? alturaConteudo : TELA_ALTURA}px` }">
+                                <img v-if="printAtual" :key="printAtual.url" :src="printAtual.url" :width="TELA_LARGURA" :height="alturaConteudo" alt="Print da página"
+                                    fetchpriority="high" class="absolute left-0 top-0 block max-w-none select-none" draggable="false"
+                                    :style="{ width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"
+                                    @load="imagemPronta = true" @error="situacao = 'erro'; mensagem = 'O print não abriu.'">
+                                <canvas v-show="mostrarMapa" ref="canvas" class="pointer-events-none absolute left-0 top-0" :style="{ opacity: opacidade, width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"></canvas>
+                                <span v-for="o in ondas" :key="o.id" class="toque" :style="{ left: `${o.x}px`, top: `${o.y}px` }"></span>
+                            </div>
+                        </div>
+                        <!-- Aviso por cima da tela enquanto o print não aparece -->
+                        <div v-if="situacao !== 'pronto' || (printAtual && !imagemPronta)" class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center text-xs text-slate-500">
+                            <span v-if="situacao === 'gerando' || situacao === 'carregando'" class="rounded bg-white/90 px-3 py-2 shadow"><i class="fas fa-spinner fa-spin"></i> gerando a tela…</span>
+                            <span v-else-if="situacao === 'pronto'" class="rounded bg-white/90 px-3 py-2 shadow"><i class="fas fa-spinner fa-spin"></i> carregando a tela…</span>
+                            <span v-else class="pointer-events-auto rounded bg-white/95 px-3 py-2 shadow">{{ mensagem }}
+                                <button v-if="situacao === 'erro'" type="button" class="mt-1 block w-full text-indigo-600 underline" @click="situacao = 'gerando'; buscarPrint(true)">tentar de novo</button>
+                            </span>
+                        </div>
+                        <!-- Nome da ação que está sendo reproduzida -->
+                        <div v-if="legenda" class="pointer-events-none absolute inset-x-2 bottom-3 z-20 rounded-lg bg-slate-900/85 px-2.5 py-1.5 text-center text-xs font-medium text-white shadow">
+                            <span v-if="player.fila[player.i - 1]" class="mr-1 text-indigo-300">{{ player.fila[player.i - 1].rotuloTempo }}</span>{{ legenda }}
+                        </div>
                     </div>
+                    <div v-if="!celular" class="h-4 w-24 bg-slate-700"></div>
 
-                    <section class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                        <h2 class="mb-2 font-semibold">Onde clicam</h2>
-                        <ol class="space-y-1">
-                            <li v-for="c in dados.onde_clicam" :key="c.elemento" class="flex items-center gap-2">
-                                <span class="flex-1 truncate" :title="c.elemento">{{ c.elemento }}</span>
-                                <span class="h-2 w-24 overflow-hidden rounded bg-slate-100 dark:bg-slate-800"><span class="block h-2 bg-indigo-500" :style="{ width: `${Math.min(100, c.pct ?? 0)}%` }"></span></span>
-                                <span class="w-14 text-right font-semibold">{{ pct(c.pct) }}</span>
-                            </li>
-                            <li v-if="!dados.onde_clicam.length" class="text-slate-500">Nenhum clique ainda.</li>
-                        </ol>
-                    </section>
-
-                    <section class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                        <h2 class="mb-1 font-semibold">Cliques mortos</h2>
-                        <p class="mb-2 text-xs text-slate-500">Onde a pessoa achou que dava para clicar e não dava.</p>
-                        <ul class="space-y-1">
-                            <li v-for="c in dados.cliques_mortos" :key="`${c.secao}|${c.elemento}`" class="flex justify-between gap-2">
-                                <span class="truncate">{{ c.elemento }}</span><span class="shrink-0 text-slate-500">{{ n(c.cliques) }} cliques · {{ pct(c.pct) }}</span>
-                            </li>
-                            <li v-if="!dados.cliques_mortos.length" class="text-slate-500">Nenhum.</li>
-                        </ul>
-                    </section>
-
-                    <section class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                        <h2 class="mb-2 font-semibold">Até onde rolam</h2>
-                        <div class="flex h-24 items-end gap-0.5">
-                            <div v-for="c in dados.rolagem" :key="c.pct_pagina" class="flex-1 rounded-t bg-indigo-400" :style="{ height: `${c.pct_visitas ?? 0}%` }"
-                                :title="`${c.pct_pagina}% da página: ${pct(c.pct_visitas)} das visitas`"></div>
+                    <div class="mt-3 w-full max-w-[300px] space-y-2 text-xs">
+                        <div class="flex overflow-hidden rounded border border-slate-300 dark:border-slate-600">
+                            <button type="button" class="flex-1 px-2 py-1" :class="player.fonte === 'visita' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : ''"
+                                :disabled="!visita" :title="visita ? '' : 'Clique numa visita na lista'" @click="player.fonte = 'visita'; parar()">Visita escolhida</button>
+                            <button type="button" class="flex-1 px-2 py-1" :class="player.fonte === 'comuns' ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : ''" @click="player.fonte = 'comuns'; parar()">Toques mais comuns</button>
                         </div>
-                        <div class="flex justify-between text-[10px] text-slate-400"><span>topo</span><span>fim da página</span></div>
-                        <ul v-if="secoes.length" class="mt-2 space-y-0.5">
-                            <li v-for="s in secoes" :key="s.id" class="flex justify-between"><span>#{{ s.id }}</span><span class="font-semibold">{{ pct(s.pct) }} chegam</span></li>
-                        </ul>
-                    </section>
-
-                    <section class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                        <h2 class="mb-2 font-semibold">Caminhos mais comuns</h2>
-                        <ol class="space-y-1">
-                            <li v-for="s in dados.sequencias" :key="s.sequencia" class="flex justify-between gap-2"><span>{{ s.sequencia }}</span><span class="shrink-0 text-slate-500">{{ n(s.visitas) }}</span></li>
-                        </ol>
-                    </section>
-
-                    <section class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                        <h2 class="mb-2 font-semibold">Visitas (anônimas)</h2>
-                        <div class="max-h-64 overflow-y-auto">
-                            <button v-for="v in dados.visitas_recentes" :key="v.sessao" type="button" @click="abrirVisita(v)"
-                                class="flex w-full justify-between gap-2 border-t border-slate-100 py-1 text-left hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
-                                :class="visita?.sessao === v.sessao ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''">
-                                <span>{{ hora(v.inicio) }} · {{ v.pais || '??' }} · <span class="text-slate-500">{{ v.origem }}</span></span>
-                                <span class="shrink-0 text-slate-500">{{ v.acoes }} ações · {{ v.segundos }} s</span>
-                            </button>
+                        <div class="flex items-center gap-1.5">
+                            <button v-if="player.estado === 'tocando'" type="button" class="flex-1 rounded bg-indigo-600 px-3 py-1.5 font-semibold text-white" @click="pausar">❚❚ Pausar</button>
+                            <button v-else-if="player.estado === 'pausado'" type="button" class="flex-1 rounded bg-indigo-600 px-3 py-1.5 font-semibold text-white" @click="continuar">▶ Continuar</button>
+                            <button v-else type="button" class="flex-1 rounded bg-indigo-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50" :disabled="situacao !== 'pronto'" @click="reproduzir()">▶ Reproduzir</button>
+                            <button type="button" class="rounded border border-slate-300 px-2.5 py-1.5 dark:border-slate-600" :disabled="player.estado === 'parado'" title="Parar" @click="parar">■</button>
+                            <button v-for="v in [1, 2, 4]" :key="v" type="button" class="rounded border px-2 py-1.5" :class="player.vel === v ? 'border-indigo-600 text-indigo-600' : 'border-slate-300 dark:border-slate-600'" @click="player.vel = v">{{ v }}x</button>
                         </div>
-                        <ol v-if="visita" class="mt-3 border-l-2 border-indigo-300 pl-3">
-                            <li v-for="(p, i) in passos" :key="i" class="relative py-0.5">
-                                <span class="absolute -left-[17px] top-2 h-2 w-2 rounded-full bg-indigo-500"></span>
-                                <span class="text-xs text-slate-400">{{ p.segundo }} s<span v-if="p.desde_anterior !== null"> (+{{ p.desde_anterior }} s)</span></span>
-                                {{ p.texto }}
-                            </li>
-                            <li v-if="!passos.length" class="text-slate-500">Carregando…</li>
-                        </ol>
-                    </section>
-                </div>
-            </Deferred>
+                        <p v-if="player.estado !== 'parado'" class="text-center text-slate-400">{{ Math.min(player.i, player.fila.length) }} de {{ player.fila.length }}</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Coluna 3: dados compactos -->
+            <div class="min-w-0">
+                <Deferred data="dados">
+                    <template #fallback><p class="py-10 text-center text-sm text-slate-500">Lendo os cliques…</p></template>
+                    <div v-if="dados" class="space-y-2.5 text-xs">
+                        <div class="flex gap-4">
+                            <div><div class="text-slate-500">Visitas</div><div class="text-lg font-bold">{{ n(dados.visitas) }}</div></div>
+                            <div><div class="text-slate-500">Tempo médio</div><div class="text-lg font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>
+                        </div>
+
+                        <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="mb-1.5 text-sm font-semibold">Onde clicam</h2>
+                            <ol class="space-y-0.5">
+                                <li v-for="c in dados.onde_clicam.slice(0, 12)" :key="c.elemento" class="flex items-center gap-2">
+                                    <span class="min-w-0 flex-1 truncate" :title="c.elemento">{{ c.elemento }}</span>
+                                    <span class="h-1.5 w-14 shrink-0 overflow-hidden rounded bg-slate-100 dark:bg-slate-800"><span class="block h-1.5 bg-indigo-500" :style="{ width: `${Math.min(100, c.pct ?? 0)}%` }"></span></span>
+                                    <span class="w-11 shrink-0 text-right font-semibold">{{ pct(c.pct) }}</span>
+                                </li>
+                                <li v-if="!dados.onde_clicam.length" class="text-slate-500">Nenhum clique ainda.</li>
+                            </ol>
+                        </section>
+
+                        <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="text-sm font-semibold">Cliques mortos</h2>
+                            <p class="mb-1 text-slate-500">Onde acharam que dava para clicar e não dava.</p>
+                            <ul class="space-y-0.5">
+                                <li v-for="c in dados.cliques_mortos.slice(0, 8)" :key="`${c.secao}|${c.elemento}`" class="flex justify-between gap-2">
+                                    <span class="min-w-0 truncate" :title="c.elemento">{{ c.elemento }}</span><span class="shrink-0 text-slate-500">{{ n(c.cliques) }} · {{ pct(c.pct) }}</span>
+                                </li>
+                                <li v-if="!dados.cliques_mortos.length" class="text-slate-500">Nenhum.</li>
+                            </ul>
+                        </section>
+
+                        <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="mb-1.5 text-sm font-semibold">Rolagem</h2>
+                            <div class="flex h-14 items-end gap-0.5">
+                                <div v-for="c in dados.rolagem" :key="c.pct_pagina" class="flex-1 rounded-t bg-indigo-400" :style="{ height: `${c.pct_visitas ?? 0}%` }"
+                                    :title="`${c.pct_pagina}% da página: ${pct(c.pct_visitas)} das visitas`"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-400"><span>topo</span><span>fim da página</span></div>
+                            <ul v-if="secoes.length" class="mt-1 space-y-0.5">
+                                <li v-for="s in secoes" :key="s.id" class="flex justify-between"><button type="button" class="hover:underline" @click="rolarAte(s.topo + TELA_ALTURA / 2 / escala)">#{{ s.id }}</button><span class="font-semibold">{{ pct(s.pct) }} chegam</span></li>
+                            </ul>
+                        </section>
+
+                        <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="mb-1.5 text-sm font-semibold">Caminhos mais comuns</h2>
+                            <ol class="space-y-0.5">
+                                <li v-for="s in dados.sequencias" :key="s.sequencia" class="flex justify-between gap-2"><span class="min-w-0">{{ s.sequencia }}</span><span class="shrink-0 text-slate-500">· {{ n(s.visitas) }}</span></li>
+                                <li v-if="!dados.sequencias.length" class="text-slate-500">Nenhum ainda.</li>
+                            </ol>
+                        </section>
+
+                        <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="text-sm font-semibold">Visitas (anônimas)</h2>
+                            <p class="mb-1 text-slate-500">Clique numa visita para ver ela no celular.</p>
+                            <div class="max-h-56 overflow-y-auto">
+                                <button v-for="v in dados.visitas_recentes" :key="v.sessao" type="button" @click="abrirVisita(v)"
+                                    class="flex w-full justify-between gap-2 border-t border-slate-100 px-1 py-1 text-left hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+                                    :class="visita?.sessao === v.sessao ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''">
+                                    <span class="min-w-0 truncate">▶ {{ hora(v.inicio) }} · {{ v.pais || '??' }} · <span class="text-slate-500">{{ v.origem }}</span></span>
+                                    <span class="shrink-0 text-slate-500">{{ v.acoes }} ações · {{ v.segundos }} s</span>
+                                </button>
+                                <p v-if="!dados.visitas_recentes.length" class="text-slate-500">Nenhuma visita no período.</p>
+                            </div>
+                            <ol v-if="visita" class="mt-2 border-l-2 border-indigo-300 pl-3">
+                                <li v-for="(p, i) in passos" :key="i" class="relative py-0.5" :class="player.fonte === 'visita' && player.estado !== 'parado' && player.i - 1 === i ? 'font-semibold text-indigo-600' : ''">
+                                    <span class="absolute -left-[17px] top-1.5 h-2 w-2 rounded-full bg-indigo-500"></span>
+                                    <span class="text-slate-400">{{ p.segundo }} s<span v-if="p.desde_anterior !== null"> (+{{ p.desde_anterior }} s)</span></span>
+                                    {{ p.texto }}
+                                </li>
+                                <li v-if="carregandoVisita" class="text-slate-500">Carregando…</li>
+                            </ol>
+                        </section>
+                    </div>
+                </Deferred>
+            </div>
         </div>
     </AdminLayout>
 </template>
+
+<style scoped>
+/* Onda do toque: anel que cresce e some (só CSS, sem biblioteca). */
+.toque {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 5px, rgba(236, 72, 153, 0.45) 6px);
+    border: 3px solid rgba(236, 72, 153, 0.95);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    z-index: 5;
+    animation: toque 1.2s ease-out forwards;
+}
+@keyframes toque {
+    0% { transform: scale(0.5); opacity: 1; }
+    60% { transform: scale(1.4); opacity: 0.8; }
+    100% { transform: scale(2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .toque { animation-duration: 0.01s; }
+}
+</style>

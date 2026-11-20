@@ -34,7 +34,7 @@ class Comportamento
     public function paginas(Carbon $de, Carbon $ate): array
     {
         $linhas = InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))
+            ->where('tipo', 'pageview')->dePessoas(self::$comTestes)
             ->whereBetween('created_at', [$de, $ate])
             ->selectRaw('produto, pagina, COUNT(DISTINCT sessao) as visitas')
             ->groupBy('produto', 'pagina')
@@ -150,7 +150,7 @@ class Comportamento
     private function sessoes(string $produto, string $pagina, string $aparelho, Carbon $de, Carbon $ate): Collection
     {
         $pv = InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))
+            ->where('tipo', 'pageview')->dePessoas(self::$comTestes)
             ->where('produto', $produto)->where('pagina', $pagina)
             ->whereBetween('created_at', [$de, $ate])
             ->orderBy('id')

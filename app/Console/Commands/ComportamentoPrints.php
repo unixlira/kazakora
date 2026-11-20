@@ -31,7 +31,7 @@ class ComportamentoPrints extends Command
     {
         $paginas = $this->option('todas')
             ? collect($medidas->todas())
-            : InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)
+            : InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()
                 ->where('created_at', '>=', now()->subDays(7))
                 ->selectRaw('produto, pagina, COUNT(*) as n')->groupBy('produto', 'pagina')
                 ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => $p->produto, 'pagina' => $p->pagina])

@@ -204,7 +204,7 @@ class PaginasDoSite
     private function doMjs(Carbon $de, Carbon $ate): void
     {
         $linhas = InfoprodutoEvento::query()
-            ->where('tipo', 'pageview')->when(! Comportamento::$comTestes, fn ($q) => $q->where('teste', false))
+            ->where('tipo', 'pageview')->dePessoas(Comportamento::$comTestes)
             ->whereBetween('created_at', [$de, $ate])
             ->selectRaw('produto, pagina, COUNT(DISTINCT sessao) as visitas')
             ->groupBy('produto', 'pagina')->limit(1000)->toBase()->get();
@@ -331,7 +331,7 @@ class PaginasDoSite
     /** Sessões do m.js que clicaram em Comprar/Carrinho, por página de produto (FerraKora). */
     private function cliquesDeCompra(string $prefixo, Carbon $de, Carbon $ate): array
     {
-        return InfoprodutoEvento::query()->where('produto', 'like', $prefixo.'%')->where('teste', false)
+        return InfoprodutoEvento::query()->where('produto', 'like', $prefixo.'%')->dePessoas()
             ->whereBetween('created_at', [$de, $ate])
             ->where(fn ($q) => $q->where('tipo', 'buy')
                 ->orWhere(fn ($q) => $q->where('tipo', 'clk')->where(fn ($q) => $q->where('nome', 'carrinho')->orWhere('nome', 'like', 'comprar%'))))
@@ -342,7 +342,7 @@ class PaginasDoSite
     private function dosInfoprodutos(Carbon $de, Carbon $ate): void
     {
         $base = InfoprodutoEvento::query()->where('produto', 'not like', 'kz/%')->where('produto', 'not like', 'fk/%')
-            ->when(! Comportamento::$comTestes, fn ($q) => $q->where('teste', false))
+            ->dePessoas(Comportamento::$comTestes)
             ->whereBetween('created_at', [$de, $ate]);
         $compra = (clone $base)->where('tipo', 'buy')->selectRaw('produto, pagina, COUNT(DISTINCT sessao) as n')
             ->groupBy('produto', 'pagina')->toBase()->get();

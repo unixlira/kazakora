@@ -41,6 +41,8 @@ class InfoprodutosPainelController extends Controller
     public function index(Request $request): Response
     {
         FunilInfoprodutos::$comTestes = $request->boolean('testes');
+        // Sessões do robô de revisão da Meta ficam fora; ?robos=1 mostra (2026-11-20).
+        InfoprodutoEvento::$comRobos = $request->boolean('robos');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         $produtos = (array) config('infoprodutos.produtos');
         $produto = array_key_exists((string) $request->query('produto'), $produtos) ? (string) $request->query('produto') : FunilInfoprodutos::TODOS;
@@ -148,11 +150,12 @@ class InfoprodutosPainelController extends Controller
     public function comportamento(Request $request, Comportamento $comportamento): Response
     {
         Comportamento::$comTestes = $request->boolean('testes');
+        InfoprodutoEvento::$comRobos = $request->boolean('robos');
         $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
         [$de, $ate] = FunilInfoprodutos::intervalo($periodo);
         $aparelho = $request->query('aparelho') === Comportamento::COMPUTADOR ? Comportamento::COMPUTADOR : Comportamento::CELULAR;
         // Toda página acessada (lojas e infoprodutos), com o funil (PaginasDoSite, 2026-11-20).
-        $lista = Cache::remember('comportamento:paginas:'.$periodo.':'.(int) Comportamento::$comTestes, 120,
+        $lista = Cache::remember('comportamento:paginas:'.$periodo.':'.(int) Comportamento::$comTestes.(int) InfoprodutoEvento::$comRobos, 120,
             fn () => app(PaginasDoSite::class)->montar($de, $ate));
         $paginas = $lista['paginas'];
         $loja = in_array($request->query('loja'), ['kazakora', 'ferrakora', 'infoprodutos'], true) ? (string) $request->query('loja') : null;
@@ -164,6 +167,7 @@ class InfoprodutosPainelController extends Controller
             'periodo' => $periodo,
             'periodos' => FunilInfoprodutos::PERIODOS,
             'aparelho' => $aparelho,
+            'robos' => InfoprodutoEvento::$comRobos,
             'loja' => $loja ?? ($escolhida['loja'] ?? 'kazakora'),
             'paginas' => $paginas,
             'totais' => $lista['totais'],

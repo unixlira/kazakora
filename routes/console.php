@@ -60,6 +60,11 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // Resultado às 06:30 com o dia anterior fechado (11/11/2026): depois do gasto
 // de anúncio das 06:00, das cobranças das 05:50 e da conciliação das 05:40.
 Schedule::command('loja:resultado-diario')->dailyAt('06:30')->withoutOverlapping(30);
+// Autorizado em 20/11/2026: base de fornecedores, sem Telegram; não é pagamento.
+Schedule::command('financeiro:fornecedores-d10')
+    ->dailyAt('06:00')->timezone('America/Sao_Paulo')->environments(['production'])
+    ->when(fn () => app(\App\Modules\Financeiro\Support\PrevisaoFornecedores::class)->elegivel(now('America/Sao_Paulo')->toDateString()))
+    ->onOneServer()->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 // Auditoria semanal do dinheiro que caiu (pedido do Lira em 12/11/2026): toda
 // segunda de manhã (pedido de 17/11), a semana anterior fechada: quanto TikTok,

@@ -451,7 +451,7 @@ return [
                     'pedido_entregue' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE'),
                     'pedido_entregue_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IDIOMA', 'pt_BR'),
                     'pedido_entregue_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
-                    'pedido_retirada' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA'),
+                    'pedido_retirada' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA', 'pedido_aguardando_retirada_ferrakora'),
                     'pedido_retirada_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA_IDIOMA', 'pt_BR'),
                 ],
             ],

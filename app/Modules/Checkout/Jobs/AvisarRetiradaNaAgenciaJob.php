@@ -71,7 +71,9 @@ class AvisarRetiradaNaAgenciaJob implements ShouldQueue
         $nome = Str::of(trim((string) ($order->shipping_name ?: $order->user?->name)))->explode(' ')->first() ?: 'cliente';
         $codigo = (string) $order->trackingCode();
         $ate = $this->ate ? Carbon::parse($this->ate)->format('d/m/Y') : 'os próximos dias';
-        $imagem = asset('images/whatsapp/pedido-aguardando-retirada.jpg');
+        $imagem = asset($loja === WhatsAppNumeros::FERRAKORA
+            ? 'images/whatsapp/pedido-aguardando-retirada-ferrakora.jpg'
+            : 'images/whatsapp/pedido-aguardando-retirada.jpg');
 
         try {
             $response = $client->paraLoja($loja)->sendTemplate(

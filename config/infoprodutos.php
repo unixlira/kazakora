@@ -23,6 +23,8 @@ return [
         'agenda-serena-2027' => 'Agenda Serena 2027',
         'pidelo-bien' => 'Pídelo Bien',
         'jarvis' => 'Jarvis',
+        // 20/11: faltava; as visitas da campanha do Jarvis Voz eram descartadas.
+        'jarvis-voz' => 'Jarvis Voz',
         'codigo-divino' => 'El Código Divino',
     ],
 
@@ -71,6 +73,7 @@ return [
         'nomes' => [
             ['expansion agencia', 'jarvis', 'upsell'],
             ['procesos de tu agencia', 'jarvis', 'downsell'],
+            ['jarvis voz', 'jarvis-voz', 'principal'],
             ['jarvis', 'jarvis', 'principal'],
             ['pack preescolar completo', 'abc-en-mis-manos', 'upsell'],
             ['pack preescolar mini', 'abc-en-mis-manos', 'downsell'],

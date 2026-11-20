@@ -49,11 +49,46 @@ class EditorialController extends Controller
         return array_merge($this->dto($p), $p->only(['status', 'rights_confirmed', 'editorial_checked', 'editor_id', 'reviewer_id']), ['product_ids' => $p->products()->pluck('products.id')->all()]);
     }
 
-    public function index()
+    public function index(Request $r)
     {
-        $posts = EditorialPost::visible()->latest('published_at')->limit(30)->get()->map(fn ($p) => $this->dto($p))->all();
+        $filters = $r->validate(['categoria' => 'nullable|string|max:100', 'tipo' => 'nullable|in:recipe,news,video', 'page' => 'nullable|integer|min:1|max:10000']);
+        $query = EditorialPost::visible();
+        foreach (['categoria' => 'category', 'tipo' => 'type'] as $key => $column) {
+            if (! empty($filters[$key])) {
+                $query->where($column, $filters[$key]);
+            }
+        }
+        $page = (int) ($filters['page'] ?? 1);
+        $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset(($page - 1) * 16)->limit(17)->get();
+        $hasMore = $items->count() > 16;
+        $posts = $items->take(16)->map(function ($p) use ($r) {
+            $post = $this->dto($p);
+            $post['interaction'] = ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')];
+            return $post;
+        })->values()->all();
+        $params = array_filter(['categoria' => $filters['categoria'] ?? '', 'tipo' => $filters['tipo'] ?? ''], fn ($v) => $v !== null && $v !== '');
+        return Inertia::render('Blog/Index', ['posts' => $posts, 'filters' => $params, 'hasMore' => $hasMore, 'nextPageUrl' => $hasMore ? '/blog?'.http_build_query(array_merge($params, ['page' => $page + 1])) : null, 'previousPageUrl' => $page > 1 ? '/blog?'.http_build_query(array_merge($params, ['page' => $page - 1])) : null, 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all()]);
+    }
 
-        return Inertia::render('Blog/Index', ['posts' => $posts, 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all()]);
+    private function catalogProducts(string $search = '', array $ids = []): array
+    {
+        $query = Product::query()->naKazaKora()->comEstoque();
+        if ($search !== '') {
+            $query->where('name', 'like', '%'.$search.'%');
+        }
+        if ($ids) {
+            $query->whereIn('products.id', $ids);
+        }
+        $items = $query->forCard()->orderBy('products.id')->limit(51)->get();
+        return ['products' => $items->take(50)->map(function ($p) {
+            return ['id' => $p->id, 'name' => $p->name, 'slug' => $p->slug, 'url' => '/produtos/'.$p->slug, 'image_url' => $p->images->first()?->url, 'price' => (float) ($p->preco_vitrine['final_price'] ?? $p->final_price)];
+        })->filter(fn ($p) => $p['price'] > 0)->values()->all(), 'hasMore' => $items->count() > 50];
+    }
+
+    public function catalog(Request $r)
+    {
+        $data = $r->validate(['q' => 'nullable|string|max:150']);
+        return response()->json($this->catalogProducts(trim($data['q'] ?? '')));
     }
 
     private function showResponse(Request $r, EditorialPost $p)
@@ -110,7 +145,7 @@ class EditorialController extends Controller
 
     public function edit(EditorialPost $post)
     {
-        return Inertia::render('Admin/Editorial/Edit', ['post' => $this->adminDto($post), 'products' => $this->products()]);
+        return Inertia::render('Admin/Editorial/Edit', ['post' => $this->adminDto($post), 'products' => $this->catalogProducts()['products'], 'selectedProducts' => $post->products()->get(['products.id', 'products.name'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->all()]);
     }
 
     private function validated(Request $r, ?EditorialPost $post = null): array
@@ -158,6 +193,9 @@ class EditorialController extends Controller
 
     public function publish(Request $r, EditorialPost $post)
     {
+        if ($post->type === 'video' && ! $post->video_url) {
+            throw ValidationException::withMessages(['video_url' => 'Informe o vídeo antes de publicar este tipo de conteúdo.']);
+        }
         if (! $post->rights_confirmed || ! $post->editorial_checked) {
             throw ValidationException::withMessages(['rights_confirmed' => 'Confirme direitos da mídia e checagem editorial antes de publicar.']);
         } $post->update(['status' => 'published', 'published_at' => $post->published_at ?? now(), 'reviewer_id' => $r->user()->id]);

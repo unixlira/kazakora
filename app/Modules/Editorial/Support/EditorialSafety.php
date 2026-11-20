@@ -41,7 +41,9 @@ class EditorialSafety
         $scan = Str::lower(Str::ascii(strtr($body, ['о' => 'o', 'а' => 'a', 'е' => 'e', 'і' => 'i', 'с' => 'c'])));
         $scan = strtr($scan, ['0' => 'o', '1' => 'i', '3' => 'e', '4' => 'a', '5' => 's', '7' => 't', '@' => 'a', '$' => 's']);
         $compact = preg_replace('/[^a-z0-9.:\/]/', '', $scan);
-        if (preg_match('/[<>]|&(?:lt|gt|#)/i', $body) || preg_match('/https?|www|javascript|\.(com|net|org|br|io|test)\b|(?:dot|ponto)(?:com|net|org|br)/', $compact) || preg_match('/porra|caralho|merda|puta|foder|foda|vagabund|fdp|buceta|fuck|shit/', $compact)) {
+        $links = preg_replace('/\s*(?:\[\s*(?:dot|ponto)\s*\]|\(\s*(?:dot|ponto)\s*\)|\bdot\b|\bponto\b)\s*/i', '.', $scan);
+        $links = preg_replace('/\s+/u', '', $links);
+        if (preg_match('/[<>]|&(?:lt|gt|#)/i', $body) || preg_match('/https?:|www\.|javascript:|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:[a-z]{2,63}|xn--[a-z0-9-]+)(?![a-z0-9-])/i', $links) || preg_match('/\b(?:porra|caralho|merda|puta|puto|foder|foda|vagabund[oa]s?|fdp|buceta|fuck|shit|idiotas?|imbecil|imbecis|babacas?|otari[oa]s?)\b/', $scan)) {
             return null;
         }
 

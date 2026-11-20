@@ -10,6 +10,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/blog/{slug}/comments', [Editorial::class, 'comment'])->middleware('throttle:5,1')->name('blog.comments');
 });
 Route::prefix('admin/editorial')->middleware(['auth', 'admin'])->group(function () {
+    Route::get('/products', [Editorial::class, 'catalog'])->middleware('throttle:60,1');
     Route::get('/posts', [Editorial::class, 'adminIndex']);
     Route::get('/posts/create', [Editorial::class, 'create']);
     Route::post('/posts', [Editorial::class, 'store']);

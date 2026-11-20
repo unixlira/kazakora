@@ -15,7 +15,10 @@ DTO e formulários concretos no handoff externo `backend-contract.json`. Compone
 - Comentários autenticados: normalização Unicode NFKC quando disponível, remoção de invisíveis, análise ASCII/leet/homoglifos e bloqueio heurístico HTML/links/ofensas comuns. Aceitos sempre pending; humano admin aprova/rejeita com moderator_id/moderated_at. Não é filtro infalível de abuso, falsidade ou links.
 - Likes autenticados PUT/DELETE idempotentes, unicidade no banco. CSRF web preservado; comentários 5/min e likes 30/min por identidade autenticada.
 - Produtos: vínculos curados ou fallback categoria por slug; naKazaKora/comEstoque/forCard e preço real preco_vitrine.final_price/final_price; DTO explícito sem custo. PDP não modificada.
-- Listas limitadas (30 posts públicos, 100 posts/comentários admin, 100 comentários aprovados por post, 12 produtos); paginação e pesquisa administrativa ficam para evolução.
+- Feed: GET `/blog?categoria=slug&tipo=recipe|news|video&page=1`. Filtros vazios significam todos; combinação sem resultados permanece vazia. 16 posts por página, consulta limitada a 17 para `hasMore`, ordenação published_at/id; links anterior/próximo preservam somente filtros editoriais, sem UTM. Canonical permanece `/blog` sem query. Texto completo e ações sociais por post no feed; comentários aprovados são lidos no detalhe. Visitantes não enviam mutações sem canInteract explícito.
+- Busca CMS: GET `/admin/editorial/products?q=nome` admin-only, throttle 60/min, q até 150 caracteres; até 50 resultados elegíveis (naKazaKora/comEstoque/forCard), DTO público e hasMore para refinar busca. Edição fornece selectedProducts (id/nome) mesmo fora da busca ou indisponíveis; seleção não é substituída ao buscar/falhar. Vínculos até 30 IDs. Exibição pública contextual permanece limitada a 12 produtos.
+- Publicação type=video sem video_url retorna 422; rascunho incompleto, receita e notícia sem vídeo são permitidos. Fontes/direitos continuam sob revisão humana, sem comprovação automática.
+- Listas admin limitadas a 100 posts/comentários e leitura do detalhe a 100 comentários aprovados; sem paginação administrativa nesta etapa.
 - Exclusão é definitiva e cascata interações; usar despublicar para preservar registro. Retenção LGPD/denúncias e histórico imutável de revisões não implementados.
 
 ## Laboratório

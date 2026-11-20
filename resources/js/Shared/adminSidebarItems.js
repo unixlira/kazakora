@@ -157,6 +157,8 @@ export const sidebarSections = [
             { label: 'Oportunidades em PDF', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', cor: 'vermelho', permission: 'relatorios.view' },
             { label: 'Baixar vídeos', href: '/admin/download-videos', icon: 'fas fa-download', cor: 'azul', permission: 'operacional.create' },
             // Validação de criativos (2026-10-21): vídeos de anúncio esperando o Lira aprovar.
+            // Munck (2026-11-20): a Máquina de Criativos, que roda no computador do Lira.
+            { label: 'Munck', href: '/admin/munck', icon: 'fas fa-wand-magic-sparkles', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Validação de criativos', href: '/admin/validacao-criativos', icon: 'fas fa-clapperboard', cor: 'violeta', permission: 'cadastros.view', badgeKey: 'criativosAguardando' },
         ],
     },

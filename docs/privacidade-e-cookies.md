@@ -360,10 +360,16 @@ elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
 - **O que vai:** página vista (produto, idioma, host do referrer, utm_*, se havia
   `fbclid` — nunca o valor), rolagem 25/50/75/100 e rolagem máxima, play e % do
   vídeo, clique em prévia/FAQ/botões de compra (com a posição), cada clique com
-  x em % da largura, y em px, largura da janela, link/botão/clique morto, id da
+  x em % da largura do documento, y em px do topo do documento (do ponteiro do
+  mouse ou do toque), largura da janela, link/botão/clique morto, id da
   seção, texto curto do elemento (de campo de formulário só o nome da tag, nunca
   o valor) e o nome estável `data-kzm`, ações nomeadas (`window.kzm.acao`) e o
-  tempo na página. Lista fechada: qualquer campo fora dela = 422.
+  tempo na página. Clique sem ponteiro (Enter no teclado = origem `t`;
+  `el.click()` de programa ou robô = origem `p`) vai com o centro do elemento,
+  ou sem posição (null) se o elemento não aparece; nunca 0,0. Clique de origem
+  `p` fica fora do mapa e do Reproduzir (2026-11-20: o robô de revisão do Meta
+  "clica" em todos os links de cada anúncio novo). Lista fechada: qualquer
+  campo fora dela = 422.
 - **O que NÃO vai:** cookie (nenhum é lido ou criado), localStorage, fingerprint,
   IP (não há coluna de IP; o país sai do `CF-IPCountry`, só quando a chamada vem
   de IP da Cloudflare), nome, e-mail, telefone, texto digitado.

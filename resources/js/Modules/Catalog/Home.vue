@@ -190,7 +190,7 @@ onBeforeUnmount(() => observador?.disconnect());
 </script>
 
 <template>
-    <Head :title="filters.search ? `Busca: ${filters.search}` : 'KazaKora — eletrônicos, gadgets e cozinha'" />
+    <Head :title="filters.search ? `Busca: ${filters.search}` : 'KazaKora: Loja de Casa, Cozinha e Eletrônicos'" />
 
     <AppLayout>
         <!-- Banner rotativo -->

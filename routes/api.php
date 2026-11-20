@@ -56,6 +56,13 @@ Route::prefix('vids')->name('api.vids.')->middleware('vids')->group(function () 
     Route::post('criativos', [\App\Modules\Admin\Http\Controllers\ValidacaoCriativosController::class, 'store'])->middleware('throttle:60,1')->name('criativos');
 });
 
+// Fila de PDFs de brinde (20/11/2026): o Homer pega a próxima e entrega o PDF (mesmo token da Vids).
+Route::prefix('pdf-brindes')->name('api.pdf-brindes.')->middleware(['vids', 'throttle:120,1'])->group(function () {
+    Route::post('proxima', [\App\Http\Controllers\Api\PdfBrindeFilaController::class, 'proxima'])->name('proxima');
+    Route::post('{item}/entregar', [\App\Http\Controllers\Api\PdfBrindeFilaController::class, 'entregar'])->whereNumber('item')->name('entregar');
+    Route::post('{item}/erro', [\App\Http\Controllers\Api\PdfBrindeFilaController::class, 'erro'])->whereNumber('item')->name('erro');
+});
+
 Route::prefix('whatsapp')->name('api.whatsapp.')->group(function () {
     // Webhook oficial da Meta/WhatsApp. GET valida hub.challenge; POST recebe mensagens/status.
     Route::match(['get', 'head'], '/webhook', [WhatsAppWebhookController::class, 'verify'])->name('webhook.verify');

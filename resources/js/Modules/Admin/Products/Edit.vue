@@ -9,6 +9,7 @@ import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
 import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
 import VariationsManager from '@/Modules/Admin/Products/VariationsManager.vue';
+import BrindesManager from '@/Modules/Admin/Products/BrindesManager.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -103,6 +104,8 @@ const tabs = [
     { key: 'desconto-quantidade', label: 'Desconto por quantidade' },
     { key: 'midia', label: 'Fotos e vídeo' },
     { key: 'anuncio', label: 'Conteúdo do anúncio' },
+    // PDFs de brinde e a fila de criação deles (pedido do Lira 20/11/2026).
+    { key: 'brindes', label: 'Brindes (PDF)' },
     { key: 'canais', label: 'Canais de venda' },
     { key: 'estoque', label: 'Histórico de estoque' },
 ];
@@ -308,6 +311,8 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                         </ol>
                     </div>
                 </div>
+
+                <BrindesManager v-else-if="activeTab === 'brindes'" :product="product" />
 
                 <ChannelsManager v-else-if="activeTab === 'canais'" :product="product" :channels="channels"
                     :channel-listings="channelListings" />

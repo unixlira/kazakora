@@ -107,10 +107,11 @@ class Rotulos
         $alvo = trim((string) ($e->elemento ?? ''));
         $onde = $e->secao ? " (seção {$e->secao})" : '';
 
+        // Sem texto (ícone, seta, imagem): diz o que era em vez de "".
         return match ($e->alvo) {
             'm' => 'clique morto em "'.($alvo !== '' ? $alvo : 'área vazia').'"'.$onde,
-            'a' => 'clicou no link "'.$alvo.'"'.$onde,
-            default => 'clicou em "'.$alvo.'"'.$onde,
+            'a' => $alvo !== '' ? 'clicou no link "'.$alvo.'"'.$onde : 'clicou num link sem texto (ícone ou imagem)'.$onde,
+            default => $alvo !== '' ? 'clicou em "'.$alvo.'"'.$onde : 'clicou num botão sem texto (ícone ou seta)'.$onde,
         };
     }
 

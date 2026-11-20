@@ -2,6 +2,7 @@
 
 namespace App\Modules\Infoprodutos\Support;
 
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -32,21 +33,26 @@ class Comportamento
     /** Páginas com visita no período (mais visitadas primeiro). */
     public function paginas(Carbon $de, Carbon $ate): array
     {
-        return InfoprodutoEvento::query()
+        $linhas = InfoprodutoEvento::query()
             ->where('tipo', 'pageview')->when(! self::$comTestes, fn ($q) => $q->where('teste', false))
             ->whereBetween('created_at', [$de, $ate])
             ->selectRaw('produto, pagina, COUNT(DISTINCT sessao) as visitas')
             ->groupBy('produto', 'pagina')
             ->orderByDesc('visitas')
             ->limit(300)
-            ->get()
-            ->map(fn ($p) => [
-                'produto' => $p->produto,
-                'pagina' => $p->pagina,
-                'loja' => self::loja($p->produto),
-                'rotulo' => self::rotuloDaPagina($p->produto, $p->pagina),
-                'visitas' => (int) $p->visitas,
-            ])->all();
+            ->get();
+
+        // Nome legível do produto da KazaKora (o slug é enorme).
+        $slugs = $linhas->pluck('produto')->filter(fn ($p) => str_starts_with($p, 'kz/'))->map(fn ($p) => substr($p, 3))->unique()->values();
+        $nomes = $slugs->isEmpty() ? collect() : Product::query()->withTrashed()->whereIn('slug', $slugs->all())->pluck('name', 'slug');
+
+        return $linhas->map(fn ($p) => [
+            'produto' => $p->produto,
+            'pagina' => $p->pagina,
+            'loja' => self::loja($p->produto),
+            'rotulo' => self::rotuloDaPagina($p->produto, $p->pagina, $nomes[substr($p->produto, 3)] ?? null),
+            'visitas' => (int) $p->visitas,
+        ])->all();
     }
 
     public static function loja(string $produto): string
@@ -58,9 +64,10 @@ class Comportamento
         };
     }
 
-    public static function rotuloDaPagina(string $produto, string $pagina): string
+    public static function rotuloDaPagina(string $produto, string $pagina, ?string $nomeDoCatalogo = null): string
     {
-        $nome = config("infoprodutos.produtos.{$produto}") ?? (string) preg_replace('/^(kz|fk)\//', '', $produto);
+        $nome = config("infoprodutos.produtos.{$produto}") ?? $nomeDoCatalogo
+            ?? ucfirst(str_replace('-', ' ', (string) preg_replace('/^(kz|fk)\//', '', $produto)));
         $sufixo = ['oferta' => ' · upsell', 'oferta-2' => ' · downsell'][$pagina] ?? '';
 
         return $nome.$sufixo;
@@ -84,6 +91,7 @@ class Comportamento
             'cliques_mortos' => $this->mortos($cliques, $visitas),
             'rolagem' => $this->rolagem($eventos, $visitas),
             'sequencias' => $this->sequencias($eventos),
+            'toques' => $this->toques($cliques, $visitas),
             'tempo_medio' => ($t = $eventos->where('tipo', 'exit')->groupBy('sessao')->map(fn ($g) => (int) $g->max(fn ($e) => (int) $e->valor))) ->isNotEmpty() ? (int) round($t->avg()) : null,
             'visitas_recentes' => $sessoes->sortByDesc('inicio')->take(50)->values()->map(fn ($s) => [
                 'sessao' => $s['sessao'],
@@ -117,7 +125,9 @@ class Comportamento
                 'segundo' => round($ms / 1000, 1),
                 'desde_anterior' => $anterior !== null ? round(max($ms - $anterior, 0) / 1000, 1) : null,
                 'pagina' => $e->pagina,
+                'x' => $e->x,
                 'y' => $e->y,
+                'valor' => $e->tipo === 'scroll' ? (int) $e->valor : null,
             ];
             $anterior = $ms;
 
@@ -162,6 +172,30 @@ class Comportamento
             ->groupBy(fn ($c) => $c->x.':'.intdiv((int) $c->y, 10))
             ->map(fn ($g) => ['x' => (int) $g->first()->x, 'y' => intdiv((int) $g->first()->y, 10) * 10 + 5, 'n' => $g->count(), 'morto' => $g->every(fn ($c) => $c->alvo === 'm')])
             ->sortByDesc('n')->take(4000)->values()->all();
+    }
+
+    /**
+     * Toques mais comuns para o "Reproduzir" (até 10): o ponto do meio
+     * (mediana) de cada elemento clicado, o texto e quantas visitas tocaram.
+     * Em ordem de posição na página (de cima para baixo), como alguém rolando.
+     */
+    private function toques(Collection $cliques, int $visitas): array
+    {
+        $mediana = function (Collection $v): int {
+            $v = $v->sort()->values();
+
+            return (int) $v[intdiv($v->count(), 2)];
+        };
+
+        return $cliques->filter(fn ($c) => $c->x !== null && $c->y !== null)
+            ->groupBy(fn ($c) => Rotulos::chave($c))
+            ->map(fn ($g) => [
+                'texto' => Rotulos::evento($g->first()),
+                'x' => $mediana($g->pluck('x')),
+                'y' => $mediana($g->pluck('y')),
+                'visitas' => $n = $g->pluck('sessao')->unique()->count(),
+                'pct' => $visitas > 0 ? round($n / $visitas * 100, 1) : null,
+            ])->sortByDesc('visitas')->take(10)->sortBy('y')->values()->all();
     }
 
     /** Elemento legível + % das visitas que clicaram nele. */

@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Publicidade\CampanhasMetaPorLoja;
 use App\Modules\Admin\Support\Publicidade\CriativosMeta;
+use App\Modules\Infoprodutos\Jobs\GerarPrintDaPagina;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use App\Modules\Infoprodutos\Support\Comportamento;
@@ -190,6 +191,35 @@ class InfoprodutosPainelController extends Controller
         return response()->file($arquivo, ['Content-Type' => 'image/webp', 'Cache-Control' => 'private, max-age=300']);
     }
 
+    /**
+     * Situação do print da página escolhida. Sem print, pede um na fila
+     * (GerarPrintDaPagina) e a tela consulta de novo até ele chegar.
+     */
+    public function printInfo(Request $request): JsonResponse
+    {
+        $dados = $request->validate([
+            'produto' => ['required', 'string', 'max:130', 'regex:/^[a-z0-9\/_-]+$/'],
+            'pagina' => ['required', 'string', 'max:20', 'regex:/^[a-z0-9-]+$/'],
+            'aparelho' => ['nullable', 'in:celular,computador'],
+        ]);
+        $aparelho = ($dados['aparelho'] ?? null) === Comportamento::COMPUTADOR ? Comportamento::COMPUTADOR : Comportamento::CELULAR;
+
+        if ($info = $this->infoDoPrint($dados['produto'], $dados['pagina'], $aparelho)) {
+            return response()->json(['situacao' => 'pronto', 'print' => $info]);
+        }
+        if (PrintDaPagina::url($dados['produto'], $dados['pagina']) === null) {
+            return response()->json(['situacao' => 'sem_endereco', 'mensagem' => 'Esta página não tem endereço conhecido para tirar o print.']);
+        }
+        $chaveErro = GerarPrintDaPagina::chaveDoErro($dados['produto'], $dados['pagina'], $aparelho);
+        if (($erro = Cache::get($chaveErro)) && ! $request->boolean('de_novo')) {
+            return response()->json(['situacao' => 'erro', 'mensagem' => "Não deu para tirar o print: {$erro}"]);
+        }
+        Cache::forget($chaveErro);
+        GerarPrintDaPagina::dispatch($dados['produto'], $dados['pagina'], $aparelho);
+
+        return response()->json(['situacao' => 'gerando']);
+    }
+
     /** @return array<string, mixed>|null */
     private function infoDoPrint(string $produto, string $pagina, string $aparelho): ?array
     {
@@ -200,7 +230,7 @@ class InfoprodutosPainelController extends Controller
         $info = json_decode((string) file_get_contents($base.'.json'), true) ?: [];
 
         return [
-            'url' => route('admin.publicidade.comportamento.print', ['produto' => $produto, 'pagina' => $pagina, 'aparelho' => $aparelho, 'v' => md5((string) ($info['em'] ?? ''))]),
+            'url' => route('admin.publicidade.comportamento.print', ['produto' => $produto, 'pagina' => $pagina, 'aparelho' => $aparelho, 'v' => md5((string) ($info['em'] ?? ''))], false),
             'largura' => (int) ($info['largura'] ?? PrintDaPagina::LARGURAS[$aparelho]),
             'altura' => (int) ($info['altura'] ?? 0),
             'secoes' => $info['secoes'] ?? [],

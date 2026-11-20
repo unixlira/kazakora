@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use Throwable;
 
 /**
@@ -33,8 +32,8 @@ class ComportamentoPrints extends Command
             if ($url === null) {
                 continue;
             }
-            $hash = $this->hash($url);
-            foreach (PrintDaPagina::LARGURAS as $aparelho => $largura) {
+            $hash = PrintDaPagina::hashDoHtml($url);
+            foreach (array_keys(PrintDaPagina::LARGURAS) as $aparelho) {
                 $destino = PrintDaPagina::arquivo($p->produto, $p->pagina, $aparelho);
                 $info = is_file($destino.'.json') ? json_decode((string) file_get_contents($destino.'.json'), true) : null;
                 $velho = ! $info || ! is_file($destino.'.webp') || now()->subDay()->greaterThan($info['em'] ?? '2000-01-01')
@@ -43,8 +42,7 @@ class ComportamentoPrints extends Command
                     continue;
                 }
                 try {
-                    $novo = $print->tirar($url, $largura, $destino);
-                    file_put_contents($destino.'.json', json_encode($novo + ['hash' => $hash]));
+                    $novo = $print->gerar($p->produto, $p->pagina, $aparelho, $hash);
                     $this->line("ok {$url} {$aparelho} ({$novo['altura']} px)");
                 } catch (Throwable $e) {
                     $this->warn("falhou {$url} {$aparelho}: {$e->getMessage()}");
@@ -53,16 +51,5 @@ class ComportamentoPrints extends Command
         }
 
         return self::SUCCESS;
-    }
-
-    private function hash(string $url): ?string
-    {
-        try {
-            $r = Http::timeout(15)->withUserAgent('KazaKoraPrint/1.0 (bot)')->get($url);
-
-            return $r->successful() ? md5((string) preg_replace('/nonce="[^"]*"|csrf[^>]*>/i', '', $r->body())) : null;
-        } catch (Throwable) {
-            return null;
-        }
     }
 }

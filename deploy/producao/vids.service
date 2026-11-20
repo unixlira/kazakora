@@ -2,7 +2,7 @@
 # /etc/systemd/system/vids.service — painel em 127.0.0.1:4848, servido pelo
 # nginx em painel.kazakora.com/vids/ (nginx-painel-vids.conf).
 # Usuário próprio, sem sudo: o Claude da máquina tem terminal e não pode
-# tocar na loja. Limites para o render de vídeo não derrubar o site.
+# tocar na loja. /etc/vids.env (root, 600) guarda CLAUDE_CODE_OAUTH_TOKEN (claude setup-token do Lira, 1 ano). Limites para o render de vídeo não derrubar o site.
 [Unit]
 Description=Vids - Maquina de Criativos
 After=network-online.target
@@ -13,6 +13,7 @@ Group=munck
 WorkingDirectory=/home/munck/maquina-de-criativos
 Environment=HOME=/home/munck
 Environment=PATH=/home/munck/maquina-de-criativos/.ferramentas/bin:/opt/node24/bin:/home/munck/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/vids.env
 Environment=MUNCK_ORIGENS=https://painel.kazakora.com
 ExecStart=/opt/node24/bin/node painel/servidor.mjs
 Restart=always

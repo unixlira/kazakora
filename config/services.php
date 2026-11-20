@@ -724,4 +724,11 @@ return [
         ],
     ],
 
+
+    // Vids (Máquina de Criativos, 2026-11-20): envia os vídeos prontos para a
+    // Validação de criativos por /api/vids/* (AuthenticateVids).
+    'vids' => [
+        'token' => env('VIDS_TOKEN'),
+        'usuario_id' => env('VIDS_USUARIO_ID'),
+    ],
 ];

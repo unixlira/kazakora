@@ -3,6 +3,8 @@
 namespace App\Modules\Cart\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\TrackSiteVisit;
+use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
@@ -48,6 +50,7 @@ class CartController extends Controller
         $quantidade = min($data['quantity'], $product->stock);
         $this->cart->add($product->id, $quantidade);
         $this->addToCartNaMeta($request, $product, $quantidade);
+        $this->registrarNoFunil($request, $product->id);
 
         return back()->with('success', 'Produto adicionado ao carrinho.');
     }
@@ -112,8 +115,30 @@ class CartController extends Controller
         $quantidade = min($data['quantity'], $product->stock);
         $this->cart->iniciarCompraDireta($product->id, $quantidade);
         $this->addToCartNaMeta($request, $product, $quantidade);
+        $this->registrarNoFunil($request, $product->id);
 
         return redirect()->route('finalizacao.entrega');
+    }
+
+    /**
+     * Funil da tela Comportamento (2026-11-20): quem pôs o produto no carrinho
+     * ou clicou em COMPRAR AGORA. Só o visitante, o aparelho e o id do
+     * produto (docs/privacidade-e-cookies.md); nunca quebra a compra.
+     */
+    private function registrarNoFunil(Request $request, int $produtoId): void
+    {
+        rescue(function () use ($request, $produtoId) {
+            if (! TrackSiteVisit::dominioDaLoja($request) || TrackSiteVisit::naoENavegador($request)) {
+                return;
+            }
+            CheckoutEvento::create([
+                'visitor_id' => CheckoutEvento::visitante($request),
+                'user_id' => $request->user()?->id,
+                'evento' => CheckoutEvento::PRODUTO_CARRINHO,
+                'campo' => (string) $produtoId,
+                'dispositivo' => TrackSiteVisit::dispositivo((string) $request->userAgent()),
+            ]);
+        }, null, false);
     }
 
     /**

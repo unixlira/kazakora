@@ -24,8 +24,12 @@ class PrintDaPagina
     /** Altura de cada fatia (a tela carrega a 1ª na hora e as outras depois). */
     public const FATIA = 1400;
 
-    /** Formato dos arquivos: 2 = fatias + miniatura borrada (2026-11-20). */
-    public const VERSAO = 2;
+    /**
+     * Formato dos arquivos: 2 = fatias + miniatura borrada (2026-11-20);
+     * 3 = sem as faixas vazias das animações de entrada (2026-11-20). Subir o
+     * número faz o comportamento:prints refazer todos os prints antigos.
+     */
+    public const VERSAO = 3;
 
     /** Teto da miniatura borrada (vai junto da página, em base64). */
     public const MINIATURA_MAX = 3000;
@@ -47,6 +51,48 @@ const txt=(e.id||'')+' '+(typeof e.className==='string'?e.className:'')+' '+(e.g
 if(re.test(txt))e.style.setProperty('display','none','important')});
 for(const el of [document.documentElement,document.body]){if(el&&getComputedStyle(el).overflow==='hidden')el.style.setProperty('overflow','visible','important')}};
 addEventListener('DOMContentLoaded',sumir);setInterval(sumir,250);})()
+JS;
+
+    /**
+     * Animação de entrada pronta antes do print (2026-11-20). As landings
+     * escondem cada bloco (".rv{opacity:0}" até o IntersectionObserver pôr
+     * ".in") e o print saía com faixas vazias enormes: a descida rápida
+     * (600 px a cada 120 ms) não dava tempo de o observador marcar tudo, e o
+     * que passava de 16.000 px nem era visitado. Aqui: animação e transição
+     * com duração zero e as classes de "reveal" mais comuns já no estado
+     * final. Junto vai a emulação de prefers-reduced-motion (o script da
+     * landing nem esconde os blocos nesse caso).
+     */
+    private const SEM_ANIMACAO = <<<'JS'
+(()=>{const css='*,*::before,*::after{animation-delay:0s!important;animation-duration:0s!important;animation-iteration-count:1!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important}'
++'.rv,.reveal,.revealed,.fade,.fade-in,.fade-up,.fadeIn,.fadeInUp,.fade-in-up,.animate,.animated,.animate__animated,.aos-init,[data-aos],.wow,.sr,.scroll-reveal,[data-reveal],[data-animate],[data-scroll],.lazyload,.lazyloading{opacity:1!important;transform:none!important;visibility:visible!important;filter:none!important;clip-path:none!important}';
+const por=()=>{if(document.getElementById('kz-print-css'))return;const s=document.createElement('style');s.id='kz-print-css';s.textContent=css;(document.head||document.documentElement).appendChild(s)};
+por();document.addEventListener('DOMContentLoaded',por);})()
+JS;
+
+    /**
+     * Desce a página devagar (60% da tela a cada 220 ms, até ALTURA_MAXIMA)
+     * para o conteúdo que monta ao rolar aparecer, tira o "lazy" das imagens e
+     * espera elas carregarem (até 8 s). Depois, o que ainda estiver invisível
+     * ocupando espaço na página (opacidade 0 fora de carrossel/modal) aparece,
+     * e a barra fixa de baixo (Comprar) some: no print ela ficaria parada no
+     * meio da página. Volta ao topo.
+     */
+    private const PREPARAR = <<<'JS'
+(async()=>{const dorme=ms=>new Promise(r=>setTimeout(r,ms));const MAX=%d;
+document.querySelectorAll('img[loading="lazy"]').forEach(i=>{i.loading='eager'});
+const passo=Math.max(300,Math.round(innerHeight*0.6));
+for(let y=0;y<Math.min(document.documentElement.scrollHeight,MAX);y+=passo){scrollTo(0,y);await dorme(220)}
+scrollTo(0,Math.min(document.documentElement.scrollHeight,MAX));await dorme(600);
+const imgs=[...document.images].filter(i=>!i.complete);
+await Promise.race([Promise.all(imgs.map(i=>new Promise(r=>{i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true})}))),dorme(8000)]);
+let n=0;document.querySelectorAll('body *').forEach(e=>{const cs=getComputedStyle(e);
+if(cs.position==='absolute'||cs.position==='fixed'||cs.display==='none'||e.closest('[aria-hidden="true"]'))return;
+if(e.offsetHeight<20||e.offsetWidth<20)return;
+if(parseFloat(cs.opacity)<0.05||cs.visibility==='hidden'){e.style.setProperty('opacity','1','important');e.style.setProperty('visibility','visible','important');e.style.setProperty('transform','none','important');n++}});
+scrollTo(0,0);await dorme(800);
+document.querySelectorAll('body *').forEach(e=>{if(getComputedStyle(e).position!=='fixed')return;const r=e.getBoundingClientRect();if(r.height>0&&r.top>innerHeight/2)e.style.setProperty('display','none','important')});
+return n})()
 JS;
 
     /** @var resource|null */
@@ -107,6 +153,9 @@ JS;
     /** Endereço público da página (o mesmo que o visitante abre). */
     public static function url(string $produto, string $pagina, string $idioma = 'es'): ?string
     {
+        if (PaginasDoSite::paginaDeLoja($produto)) {
+            return PaginasDoSite::url($produto);
+        }
         if (str_starts_with($produto, 'kz/')) {
             return 'https://kazakora.com/produtos/'.substr($produto, 3);
         }
@@ -143,12 +192,14 @@ JS;
             if ($celular) {
                 $this->comando('Emulation.setTouchEmulationEnabled', ['enabled' => true, 'maxTouchPoints' => 5], $sessao);
             }
+            $this->comando('Emulation.setEmulatedMedia', ['features' => [['name' => 'prefers-reduced-motion', 'value' => 'reduce']]], $sessao);
             $this->comando('Page.enable', [], $sessao);
             $this->comando('Page.addScriptToEvaluateOnNewDocument', ['source' => self::SEM_AVISO_DE_COOKIES], $sessao);
+            $this->comando('Page.addScriptToEvaluateOnNewDocument', ['source' => self::SEM_ANIMACAO], $sessao);
             $this->comando('Page.navigate', ['url' => $url], $sessao);
             $this->esperarEvento('Page.loadEventFired', 30);
-            // Desce a página devagar para carregar as imagens "lazy" e volta ao topo.
-            $this->avaliar('(async()=>{for(let y=0;y<document.documentElement.scrollHeight&&y<'.self::ALTURA_MAXIMA.';y+=600){scrollTo(0,y);await new Promise(r=>setTimeout(r,120))}scrollTo(0,0);await new Promise(r=>setTimeout(r,800));return 1})()', $sessao);
+            // Desce devagar, espera as imagens e mostra o que ficou escondido (PREPARAR).
+            $this->avaliar(sprintf(self::PREPARAR, self::ALTURA_MAXIMA), $sessao, 90);
             $medida = json_decode((string) $this->avaliar('JSON.stringify({h:document.documentElement.scrollHeight,s:[...document.querySelectorAll("[id]")].filter(e=>/^[A-Za-z0-9_-]{1,40}$/.test(e.id)&&e.offsetHeight>80).slice(0,60).map(e=>({id:e.id,topo:Math.round(e.getBoundingClientRect().top+scrollY)}))})', $sessao), true) ?: ['h' => 0, 's' => []];
             $altura = (int) min(max((int) $medida['h'], 1), self::ALTURA_MAXIMA);
 
@@ -251,9 +302,9 @@ JS;
         }
     }
 
-    private function avaliar(string $js, string $sessao): mixed
+    private function avaliar(string $js, string $sessao, int $segundos = 60): mixed
     {
-        return $this->comando('Runtime.evaluate', ['expression' => $js, 'awaitPromise' => true, 'returnByValue' => true], $sessao, 60)['result']['value'] ?? null;
+        return $this->comando('Runtime.evaluate', ['expression' => $js, 'awaitPromise' => true, 'returnByValue' => true], $sessao, $segundos)['result']['value'] ?? null;
     }
 
     private function enviar(string $metodo, array $params, ?string $sessao = null): int

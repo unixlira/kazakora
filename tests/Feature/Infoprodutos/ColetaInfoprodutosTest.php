@@ -137,4 +137,25 @@ class ColetaInfoprodutosTest extends TestCase
         $this->enviar(['s' => 'Sessao0123456789AB', 'p' => 'kz/x', 'pg' => 'produto', 'e' => [['t' => 'clk', 'x' => 140, 'y' => 1, 'w' => 390, 'k' => 'a']]], 'https://kazakora.com')->assertStatus(422);
         $this->enviar(['s' => 'Sessao0123456789AB', 'p' => 'kz/x', 'pg' => 'produto', 'e' => [['t' => 'acao', 'v' => '<script>']]], 'https://kazakora.com')->assertStatus(422);
     }
+
+    public function test_clique_sem_ponteiro_vai_com_origem_e_sem_posicao_inventada(): void
+    {
+        $this->enviar([
+            's' => 'Sessao0123456789AC', 'p' => 'kz/arvore-de-natal', 'pg' => 'produto', 'l' => 'pt',
+            'e' => [
+                // Enter no teclado: centro do alvo + origem t.
+                ['t' => 'clk', 'x' => 24, 'y' => 574, 'w' => 1280, 'k' => 'a', 'n' => 'comprar', 'o' => 't', 'ms' => 1000],
+                // el.click() de robô em alvo escondido: sem posição (null no JSON).
+                ['t' => 'clk', 'x' => null, 'y' => null, 'w' => 1050, 'k' => 'a', 'el' => 'Saltar al contenido', 'o' => 'p', 'ms' => 1001],
+                // Script antigo: 0,0 = posição desconhecida.
+                ['t' => 'clk', 'x' => 0, 'y' => 0, 'w' => 1050, 'k' => 'a', 'el' => 'Privacidad', 'ms' => 1002],
+            ],
+        ], 'https://kazakora.com')->assertNoContent();
+
+        $cliques = InfoprodutoEvento::where('tipo', 'clk')->orderBy('ms')->get();
+        $this->assertSame([[24, 574, 't'], [null, null, 'p'], [null, null, null]], $cliques->map(fn ($c) => [$c->x, $c->y, $c->origem])->all());
+
+        // Origem fora da lista = 422.
+        $this->enviar(['s' => 'Sessao0123456789AC', 'p' => 'kz/x', 'pg' => 'produto', 'e' => [['t' => 'clk', 'x' => 1, 'y' => 1, 'w' => 390, 'k' => 'a', 'o' => 'x']]], 'https://kazakora.com')->assertStatus(422);
+    }
 }

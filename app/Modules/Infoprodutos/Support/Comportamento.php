@@ -57,11 +57,7 @@ class Comportamento
 
     public static function loja(string $produto): string
     {
-        return match (true) {
-            str_starts_with($produto, 'kz/') => 'kazakora',
-            str_starts_with($produto, 'fk/') => 'ferrakora',
-            default => 'infoprodutos',
-        };
+        return PaginasDoSite::loja($produto);
     }
 
     public static function rotuloDaPagina(string $produto, string $pagina, ?string $nomeDoCatalogo = null): string

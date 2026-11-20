@@ -271,6 +271,15 @@ rolagem máxima, e o pedido criado (servidor).
   o código tirado do IP, igual ao das visitas da FerraKora; o IP em si não é
   gravado aqui. Sem cookie novo e sem terceiros. Leitura:
   `php artisan checkout:funil --site=ferrakora`. Mesmo prazo de 6 meses.
+- **Adicionar ao carrinho (2026-11-20):** o servidor grava
+  `produto_carrinho` com o id do produto quando alguém põe um item no
+  carrinho da loja ou clica em COMPRAR AGORA (`CartController`). Mesmo dado
+  mínimo (visitante, aparelho, id do produto), sem cookie novo. Serve ao
+  funil da tela Comportamento.
+- **Equipe fora da tela Comportamento (2026-11-20):** a coleta dos
+  infoprodutos confere o IP de quem manda o evento contra a lista da equipe
+  (`COMPORTAMENTO_IPS_EQUIPE` e os IPs em que a equipe navegou logada) e marca
+  a visita como teste. O IP continua sem ser gravado.
 
 ### Carrinho abandonado (`lead_checkout`, pedido 2026-10-24)
 Quem preenche a Identificação do checkout e clica em "Ir para Entrega" (e de

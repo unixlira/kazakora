@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
+use App\Modules\Infoprodutos\Support\PaginasDoSite;
 use App\Modules\Infoprodutos\Support\PaginasMedidas;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
 use Illuminate\Console\Command;
@@ -33,7 +34,10 @@ class ComportamentoPrints extends Command
             : InfoprodutoEvento::query()->where('tipo', 'pageview')->where('teste', false)
                 ->where('created_at', '>=', now()->subDays(7))
                 ->selectRaw('produto, pagina, COUNT(*) as n')->groupBy('produto', 'pagina')
-                ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => $p->produto, 'pagina' => $p->pagina]);
+                ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => $p->produto, 'pagina' => $p->pagina])
+                // E as páginas das lojas visitadas na semana (início, departamentos, produtos...), 2026-11-20.
+                ->concat(app(PaginasDoSite::class)->visitadas(now()->subDays(7)))
+                ->unique(fn ($p) => $p['produto'].'|'.$p['pagina'])->values();
         $paginas = $paginas->when($this->option('produto'), fn ($c, $p) => $c->where('produto', $p))->take((int) $this->option('limite'));
 
         $feitos = 0;

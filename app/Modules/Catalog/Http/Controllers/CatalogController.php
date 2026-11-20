@@ -205,7 +205,7 @@ class CatalogController extends Controller
      * Desde 2026-11-19 também na descrição completa: título persuasivo sem a palavra básica
      * ("livro", "parafusadeira") ainda acha o produto. Quem tem a palavra no nome segue na frente.
      */
-    private static function filtrarBusca($query, string $search): void
+    public static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
             $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';

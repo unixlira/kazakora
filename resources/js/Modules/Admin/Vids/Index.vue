@@ -6,22 +6,32 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
-const props = defineProps({
-    produtos: { type: Array, default: () => [] },
-});
+
 
 const URL_VIDS = '/vids/';
 const ORIGEM_VIDS = window.location.origin;
 const quadro = ref(null);
 
-// Manda a lista de produtos para o painel (ele troca o link por um select).
-function enviarProdutos() {
-    const produtos = props.produtos.map((p) => ({ id: p.id, nome: p.nome, url: p.url }));
-    quadro.value?.contentWindow?.postMessage({ tipo: 'munck-produtos', produtos }, ORIGEM_VIDS);
+// Busca de produtos (Lira, 20/11): o painel manda o que a pessoa digitou e a
+// tela responde com a busca do site (/admin/vids/produtos).
+const enviar = (dados) => quadro.value?.contentWindow?.postMessage(dados, ORIGEM_VIDS);
+function ligarBusca() {
+    enviar({ tipo: 'munck-busca-ligada' });
+}
+async function buscar(q) {
+    try {
+        const r = await fetch(`/admin/vids/produtos?q=${encodeURIComponent(q || '')}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        const d = await r.json();
+        enviar({ tipo: 'munck-resultados', q: d.q, produtos: d.produtos || [] });
+    } catch {
+        enviar({ tipo: 'munck-resultados', q, produtos: [], erro: true });
+    }
 }
 
 function aoMensagem(e) {
-    if (e.origin === ORIGEM_VIDS && e.data?.tipo === 'munck-pronta') enviarProdutos();
+    if (e.origin !== ORIGEM_VIDS) return;
+    if (e.data?.tipo === 'munck-pronta') ligarBusca();
+    else if (e.data?.tipo === 'munck-buscar') buscar(String(e.data.q || '').slice(0, 100));
 }
 const estado = ref('verificando'); // verificando | ligada | desligada
 
@@ -74,7 +84,7 @@ onBeforeUnmount(() => window.removeEventListener('message', aoMensagem));
         <iframe
             ref="quadro"
             :src="URL_VIDS"
-            @load="enviarProdutos"
+            @load="ligarBusca"
             title="Vids"
             allow="clipboard-read; clipboard-write"
             class="w-full rounded-lg border bg-white"

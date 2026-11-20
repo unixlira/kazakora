@@ -195,7 +195,7 @@ class InfoprodutosPainelController extends Controller
     public function captura(string $nome): BinaryFileResponse
     {
         $arquivo = PrintDaPagina::pasta().'/'.$nome.'.webp';
-        abort_unless(preg_match('/^[a-f0-9]{32}-(celular|computador)$/', $nome) === 1 && is_file($arquivo), 404);
+        abort_unless(preg_match('/^[a-f0-9]{32}-(celular|computador)(-f[0-9]{1,2})?$/', $nome) === 1 && is_file($arquivo), 404);
 
         // O endereço muda (?v=) quando o print é refeito: pode guardar.
         return response()->file($arquivo, ['Content-Type' => 'image/webp', 'Cache-Control' => 'private, max-age=2592000, immutable']);
@@ -239,8 +239,23 @@ class InfoprodutosPainelController extends Controller
         }
         $info = json_decode((string) file_get_contents($base.'.json'), true) ?: [];
 
+        $v = substr(md5((string) ($info['em'] ?? '')), 0, 10);
+        $topo = 0;
+        $fatias = [];
+        foreach ((array) ($info['fatias'] ?? []) as $i => $altura) {
+            if (! is_file(PrintDaPagina::fatia($base, (int) $i))) {
+                $fatias = [];
+                break;
+            }
+            $fatias[] = ['url' => route('admin.capturas-de-tela', ['nome' => basename($base).'-f'.$i, 'v' => $v], false), 'topo' => $topo, 'altura' => (int) $altura];
+            $topo += (int) $altura;
+        }
+
         return [
-            'url' => route('admin.capturas-de-tela', ['nome' => basename($base), 'v' => substr(md5((string) ($info['em'] ?? '')), 0, 10)], false),
+            'url' => route('admin.capturas-de-tela', ['nome' => basename($base), 'v' => $v], false),
+            // Pedaços de 1.400 px (a tela mostra o 1º na hora) e a miniatura borrada (data URI, ≤ 3 KB).
+            'fatias' => $fatias,
+            'miniatura' => is_string($info['miniatura'] ?? null) ? $info['miniatura'] : null,
             'largura' => (int) ($info['largura'] ?? PrintDaPagina::LARGURAS[$aparelho]),
             'altura' => (int) ($info['altura'] ?? 0),
             'secoes' => $info['secoes'] ?? [],

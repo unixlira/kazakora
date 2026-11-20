@@ -51,7 +51,7 @@ const escolherPagina = (valor) => {
 const celular = computed(() => props.aparelho !== 'computador');
 const TELA_LARGURA = computed(() => (celular.value ? 270 : 320));
 const TELA_ALTURA = computed(() => (celular.value ? 560 : 230));
-const larguraOriginal = computed(() => printAtual.value?.largura || (celular.value ? 390 : 1280));
+const larguraOriginal = computed(() => printAtual.value?.largura || (celular.value ? 390 : 1024));
 const escala = computed(() => TELA_LARGURA.value / larguraOriginal.value);
 const alturaPrint = computed(() => Math.min(printAtual.value?.altura || 3000, 16000));
 const alturaConteudo = computed(() => Math.round(alturaPrint.value * escala.value));
@@ -251,27 +251,49 @@ watch(() => `${props.pagina?.produto}|${props.pagina?.pagina}|${props.aparelho}|
     if (props.print) situacao.value = 'pronto';
     else if (props.pagina) { situacao.value = 'carregando'; buscarPrint(); }
 }, { immediate: true });
-// Se a imagem não abrir (extensão do navegador barrando, rede), tenta uma vez
+// Fatias do print (1.400 px cada): a 1ª entra na hora, as outras em sequência
+// (e a que estiver na tela pula a fila). Print antigo sem fatias = 1 pedaço só.
+// Por cima de uma miniatura borrada (≤ 3 KB, vem junto da página).
+const fatias = computed(() => {
+    const p = printAtual.value;
+    if (!p) return [];
+    return p.fatias?.length ? p.fatias : [{ url: p.url, topo: 0, altura: p.altura }];
+});
+const carregadas = ref(1);
+const srcs = ref({});
+const tentouPorFetch = new Set();
+const fatiaPronta = (i) => {
+    if (i === 0) imagemPronta.value = true;
+    carregadas.value = Math.max(carregadas.value, Math.min(fatias.value.length, i + 2));
+};
+// Se uma fatia não abrir (extensão do navegador barrando, rede), tenta uma vez
 // por fetch e mostra o arquivo baixado; só então avisa o erro.
-const srcDoPrint = ref(null);
-let tentouPorFetch = false;
-const erroDaImagem = async () => {
-    const url = printAtual.value?.url;
-    if (!url || tentouPorFetch) { situacao.value = 'erro'; mensagem.value = 'O print não abriu.'; return; }
-    tentouPorFetch = true;
+const erroDaFatia = async (i) => {
+    const url = fatias.value[i]?.url;
+    if (!url || tentouPorFetch.has(url)) { if (i === 0) { situacao.value = 'erro'; mensagem.value = 'O print não abriu.'; } return; }
+    tentouPorFetch.add(url);
     try {
         const r = await fetch(url, { credentials: 'same-origin' });
         if (!r.ok) throw new Error(String(r.status));
-        if (printAtual.value?.url === url) srcDoPrint.value = URL.createObjectURL(await r.blob());
+        const blob = URL.createObjectURL(await r.blob());
+        if (fatias.value[i]?.url === url) srcs.value = { ...srcs.value, [i]: blob };
     } catch {
-        situacao.value = 'erro'; mensagem.value = 'O print não abriu.';
+        if (i === 0) { situacao.value = 'erro'; mensagem.value = 'O print não abriu.'; }
     }
 };
-watch(() => printAtual.value?.url, (url) => {
+const aoRolar = () => {
+    const el = tela.value;
+    if (!el || !fatias.value.length) return;
+    const y = (el.scrollTop + TELA_ALTURA.value) / escala.value;
+    const na = fatias.value.findIndex((f) => f.topo + f.altura >= y);
+    carregadas.value = Math.max(carregadas.value, (na < 0 ? fatias.value.length : na + 1));
+};
+watch(() => printAtual.value?.url, () => {
     imagemPronta.value = false;
-    tentouPorFetch = false;
-    if (srcDoPrint.value?.startsWith('blob:')) URL.revokeObjectURL(srcDoPrint.value);
-    srcDoPrint.value = url ?? null;
+    carregadas.value = 1;
+    Object.values(srcs.value).forEach((u) => URL.revokeObjectURL(u));
+    srcs.value = {};
+    tentouPorFetch.clear();
 }, { immediate: true });
 onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
 </script>
@@ -327,19 +349,25 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <template v-else>
                     <div class="relative max-w-full shadow-xl" :class="celular ? 'rounded-[34px] border-[8px] border-slate-900 bg-slate-900' : 'rounded-lg border-[8px] border-slate-800 bg-slate-800'">
                         <div v-if="celular" class="absolute left-1/2 top-0 z-20 h-3 w-16 -translate-x-1/2 rounded-b-xl bg-slate-900"></div>
-                        <div ref="tela" class="relative overflow-y-auto overflow-x-hidden bg-white" :class="celular ? 'rounded-[26px]' : ''"
+                        <div ref="tela" class="relative overflow-y-auto overflow-x-hidden bg-white" @scroll.passive="aoRolar" :class="celular ? 'rounded-[26px]' : ''"
                             :style="{ width: `${TELA_LARGURA}px`, height: `${TELA_ALTURA}px`, maxWidth: '100%' }">
                             <div class="relative" :style="{ width: `${TELA_LARGURA}px`, height: `${printAtual ? alturaConteudo : TELA_ALTURA}px` }">
-                                <img v-if="printAtual" :key="printAtual.url" :src="srcDoPrint || printAtual.url" :width="TELA_LARGURA" :height="alturaConteudo" alt="Print da página"
-                                    fetchpriority="high" class="absolute left-0 top-0 block max-w-none select-none" draggable="false"
-                                    :style="{ width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"
-                                    @load="imagemPronta = true" @error="erroDaImagem">
+                                <div v-if="printAtual?.miniatura" class="absolute inset-0 overflow-hidden" aria-hidden="true">
+                                    <div class="absolute -inset-2 bg-no-repeat" :style="{ backgroundImage: `url(${printAtual.miniatura})`, backgroundSize: '100% 100%', filter: 'blur(6px)' }"></div>
+                                </div>
+                                <template v-if="printAtual">
+                                    <img v-for="(f, i) in fatias" v-show="i < carregadas" :key="f.url" :src="i < carregadas ? (srcs[i] || f.url) : undefined"
+                                        :width="TELA_LARGURA" :height="Math.round(f.altura * escala)" :alt="i === 0 ? 'Print da página' : ''"
+                                        :fetchpriority="i === 0 ? 'high' : 'auto'" class="absolute left-0 block max-w-none select-none" draggable="false"
+                                        :style="{ top: `${Math.round(f.topo * escala)}px`, width: `${TELA_LARGURA}px`, height: `${Math.round(f.altura * escala)}px` }"
+                                        @load="fatiaPronta(i)" @error="erroDaFatia(i)">
+                                </template>
                                 <canvas v-show="mostrarMapa" ref="canvas" class="pointer-events-none absolute left-0 top-0" :style="{ opacity: opacidade, width: `${TELA_LARGURA}px`, height: `${alturaConteudo}px` }"></canvas>
                                 <span v-for="o in ondas" :key="o.id" class="toque" :style="{ left: `${o.x}px`, top: `${o.y}px` }"></span>
                             </div>
                         </div>
                         <!-- Aviso por cima da tela enquanto o print não aparece -->
-                        <div v-if="situacao !== 'pronto' || (printAtual && !imagemPronta)" class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center text-xs text-slate-500">
+                        <div v-if="situacao !== 'pronto' || (printAtual && !imagemPronta && !printAtual.miniatura)" class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center text-xs text-slate-500">
                             <span v-if="situacao === 'gerando' || situacao === 'carregando'" class="rounded bg-white/90 px-3 py-2 shadow"><i class="fas fa-spinner fa-spin"></i> gerando a tela…</span>
                             <span v-else-if="situacao === 'pronto'" class="rounded bg-white/90 px-3 py-2 shadow"><i class="fas fa-spinner fa-spin"></i> carregando a tela…</span>
                             <span v-else class="pointer-events-auto rounded bg-white/95 px-3 py-2 shadow">{{ mensagem }}

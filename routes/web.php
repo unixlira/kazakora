@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KoraSyncController;
 use App\Modules\Admin\Http\Controllers\LivroDigitalController;
+use App\Modules\Admin\Http\Controllers\PdfBrindeController;
 use App\Modules\Admin\Http\Controllers\EnviosFlexController;
 use App\Modules\Admin\Http\Controllers\DevolucoesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
@@ -450,6 +451,18 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::patch('entregaveis/livros-digitais/{livro}/ativo', [LivroDigitalController::class, 'alternar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.alternar');
     Route::get('entregaveis/livros-digitais/{livro}/pdf', [LivroDigitalController::class, 'baixar'])->whereNumber('livro')->middleware('permission:cadastros.view')->name('entregaveis.livros.baixar');
     Route::delete('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'destroy'])->whereNumber('livro')->middleware('permission:cadastros.delete')->name('entregaveis.livros.excluir');
+    // Fila de PDFs de brinde (pedido do Lira 20/11/2026): a fila inteira e a aba "Brindes (PDF)" do produto.
+    Route::get('entregaveis/fila-pdfs', [PdfBrindeController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.fila.listar');
+    Route::post('entregaveis/fila-pdfs/montar', [PdfBrindeController::class, 'montarParaTodos'])->middleware('permission:cadastros.create')->name('entregaveis.fila.montar');
+    Route::get('produtos/{product}/brindes', [PdfBrindeController::class, 'doProduto'])->middleware('permission:cadastros.view')->name('produtos.brindes');
+    Route::post('produtos/{product}/brindes/sugerir', [PdfBrindeController::class, 'sugerir'])->middleware('permission:cadastros.create')->name('produtos.brindes.sugerir');
+    Route::post('produtos/{product}/brindes/fila', [PdfBrindeController::class, 'store'])->middleware('permission:cadastros.create')->name('produtos.brindes.fila.criar');
+    Route::post('produtos/{product}/brindes/livros/{livro}', [PdfBrindeController::class, 'ligar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('produtos.brindes.ligar');
+    Route::delete('produtos/{product}/brindes/livros/{livro}', [PdfBrindeController::class, 'desligar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('produtos.brindes.desligar');
+    Route::put('entregaveis/fila-pdfs/{item}', [PdfBrindeController::class, 'update'])->whereNumber('item')->middleware('permission:cadastros.edit')->name('entregaveis.fila.atualizar');
+    Route::post('entregaveis/fila-pdfs/{item}/aprovar', [PdfBrindeController::class, 'aprovar'])->whereNumber('item')->middleware('permission:cadastros.edit')->name('entregaveis.fila.aprovar');
+    Route::post('entregaveis/fila-pdfs/{item}/devolver', [PdfBrindeController::class, 'devolver'])->whereNumber('item')->middleware('permission:cadastros.edit')->name('entregaveis.fila.devolver');
+    Route::delete('entregaveis/fila-pdfs/{item}', [PdfBrindeController::class, 'destroy'])->whereNumber('item')->middleware('permission:cadastros.delete')->name('entregaveis.fila.excluir');
     Route::get('entregaveis/sorteios', [SorteioController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.sorteios.listar');
     Route::post('entregaveis/sorteios', [SorteioController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.sorteios.armazenar');
     Route::put('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'update'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.atualizar');

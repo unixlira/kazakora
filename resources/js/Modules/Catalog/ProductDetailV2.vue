@@ -66,15 +66,8 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
     : (Number(props.product.checkout_discount_amount ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
-// Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
-// Fileira do "PAGAMENTO SEGURO E RÁPIDO" na ordem da Mavo (tarefa 2656); Diners
-// entra porque o checkout aceita (CheckoutV2, detecção da bandeira).
-const PAYMENT_BRANDS = ['visa', 'mastercard', 'elo', 'amex', 'diners', 'hipercard', 'pix', 'boleto'];
-// Versão no endereço: o CDN guarda os SVG por dias; troque ao redesenhar uma bandeira (AMEX maior, 2026-10-24).
-const VERSAO_BANDEIRAS = '20261024';
 // Bandeiras do bloco de formas de pagamento (mesmas imagens do rodapé, pedido 2026-10-14).
 const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
-const NOME_BANDEIRA = { visa: 'Visa', mastercard: 'Mastercard', elo: 'Elo', amex: 'American Express', diners: 'Diners Club', hipercard: 'Hipercard', pix: 'Pix', boleto: 'Boleto' };
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
@@ -1003,14 +996,6 @@ const submitReview = () => {
                             </template>
                             <p v-else ref="botaoCompraEl" class="esgotado">Produto esgotado</p>
 
-                            <!-- "PAGAMENTO SEGURO E RÁPIDO" com os cartões logo abaixo do Comprar, igual ao homolog
-                                 (faltou na publicação do frete; Lira em 2026-10-26: "tá faltando os cartãozinho"). -->
-                            <div class="pagamento-seguro">
-                                <div class="ps-topo"><i class="far fa-credit-card" aria-hidden="true"></i> PAGAMENTO SEGURO E RÁPIDO</div>
-                                <div class="bandeiras">
-                                    <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/mavo/${brand}.svg?v=${VERSAO_BANDEIRAS}`" :alt="NOME_BANDEIRA[brand]" width="38" height="24" loading="lazy">
-                                </div>
-                            </div>
 
                             <!-- Dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26):
                                  "Frete Grátis para todo o Brasil." e, em verde, "Expresso Turbo para todas as regiões do Brasil";
@@ -1870,11 +1855,6 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .compra .comprar-agora:hover { background: #089a3f; }
 .pd2 .compra .acao.sem-variacao .comprar-agora { opacity: .55; }
 .pd2 .compra .total { margin: 10px 0 0; text-align: center; }
-.pd2 .compra .pagamento-seguro { margin: 18px 0 10px; border: 1px solid #f6f6f8; border-radius: 6px; padding: 2px 2px 10px; background: #fff; }
-.pd2 .compra .ps-topo { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border-radius: 6px; background: #f6f6f8; color: #565656; font-size: 12px; font-weight: 700; letter-spacing: 0; }
-.pd2 .compra .ps-topo i { font-size: 15px; color: #333; }
-.pd2 .compra .pagamento-seguro .bandeiras { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin: 10px 0 0; }
-.pd2 .compra .pagamento-seguro .bandeiras img { width: 38px; max-width: calc((100% - 7 * 4px) / 8); height: auto; padding: 0; background: #fff; border: 1px solid #e6e6e6; border-radius: 3px; box-sizing: border-box; overflow: hidden; }
 .pd2 .compra .checks { margin: 10px 0 0; font-size: 14px; line-height: 1.6; }
 /* Selos em caixinhas separadas, como "Frete Grátis" e "Devoluções Gratuitas" da Mavo:
    borda #f5f5f5, cantos de 6px, título 13px em negrito preto e texto 12px. */
@@ -1905,7 +1885,7 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .compra .prazo-cep { margin: 0 0 10px; padding: 14px 10px; border: 1px solid #f5f5f5; border-radius: 6px; background: #fff; }
 .pd2 .compra .prazo-cep label { font-size: 14px; font-weight: 600; color: #1c1c1c; }
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
-.pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #00c3ee; font: 600 17px Manrope, 'DM Sans', sans-serif; }
+.pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #111; font: 600 17px Manrope, 'DM Sans', sans-serif; }
 /* Endereço do CEP no azul do botão "calcular" desta caixa (#00c3ee, pedido do Lira 2026-10-24). */
 .pd2 .compra .prazo-cep .rua { color: #00c3ee; }
 /* Selo de desconto ao lado do preço (pedido 2026-10-26): seta para baixo + "9%" quando o preço caiu. */
@@ -1913,15 +1893,13 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .selo-desconto i { font-size: 12px; }
 .pd2 .fav-foto { position: absolute; top: 10px; right: 10px; z-index: 2; width: 40px; height: 40px; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
 .dark .pd2 .compra, .dark .pd2 .compra h1, .dark .pd2 .compra .por, .dark .pd2 .compra .parc, .dark .pd2 .compra .parc i, .dark .pd2 .compra .linha-pix,
-.dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b, .dark .pd2 .compra .ps-topo i { color: var(--ink); }
-.dark .pd2 .compra .nota, .dark .pd2 .compra .nota .media, .dark .pd2 .compra .subtitulo, .dark .pd2 .compra .valor-escolhido, .dark .pd2 .compra .ps-topo { color: var(--text); }
+.dark .pd2 .compra .estoque-baixo p, .dark .pd2 .compra .estoque-baixo b { color: var(--ink); }
+.dark .pd2 .compra .nota, .dark .pd2 .compra .nota .media, .dark .pd2 .compra .subtitulo, .dark .pd2 .compra .valor-escolhido { color: var(--text); }
 .dark .pd2 .compra .divisor { border-top-color: var(--line); }
 .dark .pd2 .compra .opcao { background: var(--card); color: var(--ink); border-color: var(--line); }
 .dark .pd2 .compra .opcao.atual { background: var(--sunk); border-color: var(--ink); }
 .dark .pd2 .compra .estoque-barra { background: rgba(255, 255, 255, .15); }
 .dark .pd2 .compra .estoque-barra span { background: #e5e7eb; }
-.dark .pd2 .compra .pagamento-seguro { background: var(--card); border-color: var(--line); }
-.dark .pd2 .compra .ps-topo { background: var(--sunk); }
 .dark .pd2 .compra { border-color: var(--line); }
 .dark .pd2 .compra .fretefundo li, .dark .pd2 .compra .prazo-cep { background: var(--card); border-color: var(--line); color: var(--text); }
 .dark .pd2 .compra .fretefundo b, .dark .pd2 .compra .prazo-cep label { color: var(--ink); }
@@ -1990,17 +1968,20 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     .pd2 .beneficios-quadros { grid-template-columns: 1fr; }
 }
 
-/* Oferta do produto acima do preço: caixa escura com o laranja da KazaKora (o da faixa do topo, #F37021).
-   Na FerraKora a mesma caixa usa as cores de lá; aqui ficam as da KazaKora. */
-.pd2 .compra .oferta-bf { position: relative; overflow: hidden; margin: 0 0 16px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(243, 112, 33, .5); background: radial-gradient(circle at 100% 0%, rgba(243, 112, 33, .28), transparent 55%), linear-gradient(135deg, #141414 0%, #0d1b3e 100%); color: #fff; box-shadow: 0 8px 20px -10px rgba(13, 27, 62, .6); }
-.pd2 .compra .oferta-bf-selo { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; padding: 5px 10px; border-radius: 999px; background: #f37021; color: #111; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: .7px; text-transform: uppercase; }
-.pd2 .compra .oferta-bf-selo i { font-size: 10px; color: #111; }
-.pd2 .compra .oferta-bf strong { position: relative; display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; color: #fcbd10; text-transform: uppercase; text-wrap: balance; }
-.pd2 .compra .oferta-bf p { position: relative; margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: rgba(255, 255, 255, .88); text-wrap: pretty; }
-.pd2 .compra .oferta-bf-faixas { position: relative; list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.pd2 .compra .oferta-bf-faixas li { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .16); }
-.pd2 .compra .oferta-bf-faixas span { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255, 255, 255, .75); }
-.pd2 .compra .oferta-bf-faixas b { font-size: 15px; line-height: 1.2; color: #fff; }
+/* Oferta do produto acima do preço, sem caixa (pedido do Lira 20/11/2026): texto solto na página, título e
+   rótulos em amarelo (#fcbd10, o da faixa do topo) com uma sombra fina para ler no fundo branco.
+   Na FerraKora o mesmo bloco usa as cores de lá; aqui ficam as da KazaKora. */
+.pd2 .compra .oferta-bf { margin: 0 0 16px; color: var(--ink); }
+.pd2 .compra .oferta-bf-selo { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 6px; color: #f37021; font-size: 11px; font-weight: 800; line-height: 1; letter-spacing: .7px; text-transform: uppercase; }
+.pd2 .compra .oferta-bf-selo i { font-size: 11px; color: #f37021; }
+.pd2 .compra .oferta-bf strong, .pd2 .compra .oferta-bf-faixas span { color: #fcbd10; text-shadow: 0 1px 1px rgba(0, 0, 0, .45); }
+.pd2 .compra .oferta-bf strong { display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; text-transform: uppercase; text-wrap: balance; }
+.pd2 .compra .oferta-bf p { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--text); text-wrap: pretty; }
+.pd2 .compra .oferta-bf-faixas { list-style: none; margin: 6px 0 0; padding: 0; }
+.pd2 .compra .oferta-bf-faixas li { margin: 2px 0 0; font-size: 15px; line-height: 1.35; }
+.pd2 .compra .oferta-bf-faixas span { font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
+.pd2 .compra .oferta-bf-faixas span::after { content: ': '; }
+.pd2 .compra .oferta-bf-faixas b { color: var(--ink); }
 @media (max-width: 767px) {
     /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
     .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }

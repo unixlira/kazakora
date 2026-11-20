@@ -71,7 +71,7 @@ class PrevisaoFornecedores
 
                 continue;
             }
-            $key = implode('|', [$row['sku'] ?? $row['product_name'], $row['variation'] ?? '', $row['unitario_centavos'], $row['custo_fonte'], $row['base_fonte']]);
+            $key = implode('|', [$row['order_id'] ?? '', $row['origin'], $row['sku'] ?? $row['product_name'], $row['variation'] ?? '', $row['unitario_centavos'], $row['custo_fonte'], $row['base_fonte']]);
             $supplier = $row['supplier'];
             if (isset($r['fornecedores'][$supplier][$key])) {
                 $r['fornecedores'][$supplier][$key]['quantity'] += $q;
@@ -110,7 +110,14 @@ class PrevisaoFornecedores
     public function texto(array $r): string
     {
         $money = fn ($v) => $v === null ? 'não informado' : 'R$ '.number_format($v / 100, 2, ',', '.');
+        $items = [...array_merge([], ...array_values($r['fornecedores'])), ...$r['pendencias']];
+        $known = array_sum(array_column($items, 'total_centavos'));
+        $unknown = count(array_filter($items, fn ($i) => $i['total_centavos'] === null));
+        $withoutSupplier = count(array_filter($items, fn ($i) => empty($i['supplier'])));
         $out = ['KazaKora — previsão de fornecedores — '.$r['data'], '',
+            'Custo de aquisição conhecido para conferência: '.$money($known).' (inclui pendências; não é dívida comprovada).',
+            'Fornecedores identificados: '.count($r['fornecedores']).' grupos | Sem fornecedor: '.$withoutSupplier.' linhas | Sem custo informado: '.$unknown.' linhas (NULL; não somadas).',
+            'Total agrupado por fornecedor sem pendências: '.$money($r['total_centavos']), '',
             'D+10 dias corridos desde pagamento comprador quando registrado; sem data autêntica, usa created_at apenas como referência de pedido/importação. Isto não é repasse real nem dívida comprovada.',
             'Pagamento ao fornecedor NÃO verificado. Confira sua planilha antes de pagar. E-mail enviado não significa quitado.',
             'Somente vencimentos rolados para esta data. Backlog histórico excluído. Sábados, domingos, nacionais e São Paulo/SP (25/01, 09/07, Sexta Santa, Corpus Christi) passam ao próximo útil.',
@@ -139,10 +146,10 @@ class PrevisaoFornecedores
     public function csv(array $r): string
     {
         $f = fopen('php://temp', 'r+');
-        fputcsv($f, ['Fornecedor', 'Produto', 'Variante', 'Quantidade', 'Custo unitário BRL', 'Custo total BRL', 'Fonte custo', 'Base data', 'Fonte data', 'Pendência'], ';', '"', '');
+        fputcsv($f, ['Pedido', 'Canal', 'Fornecedor', 'Produto', 'Variante', 'Quantidade', 'Custo unitário BRL', 'Custo total BRL', 'Fonte custo', 'Base data', 'Fonte data', 'Pendência'], ';', '"', '');
         foreach ([...array_merge([], ...array_values($r['fornecedores'])), ...$r['pendencias']] as $i) {
             $safe = fn ($v) => preg_match('/^[=+@\-]/', (string) $v) ? "'".$v : $v;
-            fputcsv($f, array_map($safe, [$i['supplier'] ?? '', $i['product_name'], $i['variation'] ?? '', $i['quantity'], $i['unitario_centavos'] === null ? '' : number_format($i['unitario_centavos'] / 100, 2, ',', ''), $i['total_centavos'] === null ? '' : number_format($i['total_centavos'] / 100, 2, ',', ''), $i['custo_fonte'], $i['base_data'], $i['base_fonte'], $i['pendencia']]), ';', '"', '');
+            fputcsv($f, array_map($safe, [$i['order_id'] ?? '', $i['origin'] ?? '', $i['supplier'] ?? '', $i['product_name'], $i['variation'] ?? '', $i['quantity'], $i['unitario_centavos'] === null ? '' : number_format($i['unitario_centavos'] / 100, 2, ',', ''), $i['total_centavos'] === null ? '' : number_format($i['total_centavos'] / 100, 2, ',', ''), $i['custo_fonte'], $i['base_data'], $i['base_fonte'], $i['pendencia']]), ';', '"', '');
         }
         rewind($f);
 

@@ -14,7 +14,8 @@
             $seoProduto = $seoProduto !== null ? json_decode(json_encode($seoProduto), true) : null;
             $seoProduto = is_array($seoProduto) && filled($seoProduto['name'] ?? null) ? $seoProduto : null;
         @endphp
-        <title inertia>{{ config('app.name', 'KazaKora').($seoProduto ? ' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : '') }}</title>
+        {{-- Início com título próprio (2026-11-20): no Google aparecia só "KazaKora" e a descrição repetia o nome. --}}
+        <title inertia>{{ $seoProduto ? config('app.name', 'KazaKora').' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : (request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora')) }}</title>
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
@@ -30,7 +31,7 @@
                     ? trim($seoProduto['seo_description'])
                     : ($seoProduto && filled($seoProduto['description'] ?? null)
                     ? \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($seoProduto['description'])))), 155)
-                    : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.');
+                    : 'Utilidades domésticas, gadgets e achados do cotidiano. Entrega em todo o Brasil, compra segura, 5% de desconto no Pix.');
                 // Tags do produto (só do site): meta keywords e keywords do JSON-LD.
                 $tagsSeo = collect($seoProduto['tags'] ?? [])->map(fn ($t) => trim((string) $t))->filter()->values()->all();
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
@@ -88,8 +89,12 @@
             @else
                 {{-- Link da loja compartilhado no WhatsApp/Instagram/Facebook saía sem logo
                      (pedido 2026-10-23): fora da página de produto vai a logo oficial 1200x630. --}}
-                <meta property="og:title" content="{{ config('app.name', 'KazaKora') }}">
+                <meta property="og:title" content="{{ request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora') }}">
                 <meta property="og:description" content="{{ $descricao }}">
+                @if (request()->path() === '/')
+                    {{-- Nome do site no resultado do Google (em vez de "kazakora.com"). --}}
+                    <script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => 'KazaKora', 'alternateName' => ['Kaza Kora', 'Loja KazaKora'], 'url' => rtrim(config('app.url'), '/').'/', 'inLanguage' => 'pt-BR'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+                @endif
                 <meta property="og:image" content="{{ url('/images/marca/og-kazakora.png') }}">
                 <meta property="og:image:type" content="image/png">
                 <meta property="og:image:width" content="1200">

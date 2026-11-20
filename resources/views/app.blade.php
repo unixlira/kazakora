@@ -21,7 +21,7 @@
             $seoHomeLimpa = $seoHome && request()->query() === [];
         @endphp
         {{-- Título com o nome da página antes da marca (tarefa 4037, 10/11), igual ao <Head> do Vue (resources/js/app.js). --}}
-        <title inertia>{{ $seoProduto ? \App\Modules\Catalog\Support\SeoDaLoja::tituloDoProduto($seoProduto) : ($seoDepartamento ? $seoDepartamento['name'].' | KazaKora' : ($seoHomeLimpa ? 'KazaKora — eletrônicos, gadgets e cozinha' : config('app.name', 'KazaKora'))) }}</title>
+        <title inertia>{{ $seoProduto ? \App\Modules\Catalog\Support\SeoDaLoja::tituloDoProduto($seoProduto) : ($seoDepartamento ? $seoDepartamento['name'].' | KazaKora' : ($seoHomeLimpa ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora'))) }}</title>
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
@@ -132,7 +132,7 @@
                         '@context' => 'https://schema.org',
                         '@graph' => [
                             ['@type' => 'Organization', '@id' => rtrim(config('app.url'), '/').'/#loja', 'name' => 'KazaKora', 'url' => rtrim(config('app.url'), '/').'/', 'logo' => url('/images/marca/favicon-180.png')],
-                            ['@type' => 'WebSite', 'name' => 'KazaKora', 'url' => rtrim(config('app.url'), '/').'/', 'inLanguage' => 'pt-BR', 'publisher' => ['@id' => rtrim(config('app.url'), '/').'/#loja'],
+                            ['@type' => 'WebSite', 'name' => 'KazaKora', 'alternateName' => ['Kaza Kora', 'Loja KazaKora'], 'url' => rtrim(config('app.url'), '/').'/', 'inLanguage' => 'pt-BR', 'publisher' => ['@id' => rtrim(config('app.url'), '/').'/#loja'],
                                 'potentialAction' => ['@type' => 'SearchAction', 'target' => rtrim(config('app.url'), '/').'/?search={search_term_string}', 'query-input' => 'required name=search_term_string']],
                         ],
                     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>

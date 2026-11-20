@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  */
 class SeoDaLoja
 {
-    public const DESCRICAO_PADRAO = 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.';
+    public const DESCRICAO_PADRAO = 'Utilidades domésticas, gadgets e achados do cotidiano. Entrega em todo o Brasil, compra segura, 5% de desconto no Pix.';
 
     /** Texto limpo: sem HTML, sem emoji/símbolo e com espaços normais. */
     public static function textoLimpo(?string $texto): string

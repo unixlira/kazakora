@@ -4,14 +4,20 @@ namespace Tests\Feature\Infoprodutos;
 
 use App\Console\Commands\InfoprodutosConsolidar;
 use App\Models\User;
+use App\Modules\Catalog\Models\Product;
+use App\Modules\Infoprodutos\Jobs\GerarPrintDaPagina;
 use App\Modules\Infoprodutos\Models\InfoprodutoCarrinho;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use App\Modules\Infoprodutos\Support\Comportamento;
 use App\Modules\Infoprodutos\Support\FunilInfoprodutos;
+use App\Modules\Infoprodutos\Support\PrintDaPagina;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use Tests\TestCase;
 
 /** Agregação do funil, consolidação diária e leituras do mapa de cliques. */
@@ -147,6 +153,107 @@ class FunilInfoprodutosTest extends TestCase
         $linha = app(Comportamento::class)->visita('k1xxxxxxxxxxxxxxxx', 'kz/arvore');
         $this->assertSame(['entrou na página', 'clicou na 1ª imagem da galeria', 'clicou em Comprar', 'saiu depois de 30 s (viu 90% da página)'], array_column($linha, 'texto'));
         $this->assertSame(3.0, $linha[2]['desde_anterior']);
+        $this->assertSame([50, 1200], [$linha[2]['x'], $linha[2]['y']]);
+
+        // Toques mais comuns do "Reproduzir": de cima para baixo, com a mediana do ponto.
+        $this->assertSame(['clicou na 1ª imagem da galeria', 'clique morto em "Frete grátis" (seção beneficios)', 'clicou em Comprar'], array_column($m['toques'], 'texto'));
+        $comprar = $m['toques'][2];
+        $this->assertSame([50, 1203, 2, 100.0], [$comprar['x'], $comprar['y'], $comprar['visitas'], $comprar['pct']]);
+    }
+
+    public function test_rotulo_da_pagina_da_loja_usa_o_nome_do_produto(): void
+    {
+        Product::factory()->create(['name' => 'Árvore de Natal 1,80 m', 'slug' => 'arvore']);
+        $this->evento('k1xxxxxxxxxxxxxxxx', 'pageview', ['produto' => 'kz/arvore', 'pagina' => 'produto']);
+        $this->evento('k2xxxxxxxxxxxxxxxx', 'pageview', ['produto' => 'fk/serra-tico-tico', 'pagina' => 'produto']);
+
+        [$de, $ate] = FunilInfoprodutos::intervalo('7d');
+        $rotulos = collect(app(Comportamento::class)->paginas($de, $ate))->pluck('rotulo', 'produto');
+
+        $this->assertSame('Árvore de Natal 1,80 m', $rotulos['kz/arvore']);
+        $this->assertSame('Serra tico tico', $rotulos['fk/serra-tico-tico']);
+    }
+
+    /** Print sob demanda: sem arquivo pede o job; com arquivo devolve o endereço relativo e serve a imagem. */
+    public function test_print_sob_demanda_e_servido_pela_rota(): void
+    {
+        Queue::fake();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $produto = 'kz/teste-print-'.uniqid();
+        $base = PrintDaPagina::arquivo($produto, 'produto', 'celular');
+        $q = http_build_query(['produto' => $produto, 'pagina' => 'produto', 'aparelho' => 'celular']);
+
+        try {
+            $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}")
+                ->assertOk()->assertJsonPath('situacao', 'gerando');
+            Queue::assertPushed(GerarPrintDaPagina::class, fn ($j) => $j->produto === $produto && $j->pagina === 'produto' && $j->aparelho === 'celular');
+            $this->actingAs($admin)->get("/admin/publicidade/comportamento/print?{$q}")->assertNotFound();
+
+            // O job roda (Chrome falso) e grava o print.
+            $this->app->instance(PrintDaPagina::class, new class extends PrintDaPagina
+            {
+                public function tirar(string $url, int $largura, string $destino): array
+                {
+                    if (! is_dir(dirname($destino))) {
+                        mkdir(dirname($destino), 0775, true);
+                    }
+                    file_put_contents($destino.'.webp', 'RIFFxxxxWEBP');
+                    $info = ['altura' => 5000, 'largura' => $largura, 'secoes' => [], 'url' => $url, 'em' => now()->toIso8601String()];
+                    file_put_contents($destino.'.json', json_encode($info));
+
+                    return $info;
+                }
+
+                public static function hashDoHtml(string $url): ?string
+                {
+                    return 'h';
+                }
+            });
+            (new GerarPrintDaPagina($produto, 'produto', 'celular'))->handle(app(PrintDaPagina::class));
+
+            $info = $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}")
+                ->assertOk()->assertJsonPath('situacao', 'pronto')->assertJsonPath('print.altura', 5000)->assertJsonPath('print.largura', 390)->json('print');
+            $this->assertStringStartsWith('/admin/publicidade/comportamento/print?', $info['url']); // relativo: vale no painel.kazakora.com
+            $this->actingAs($admin)->get($info['url'])->assertOk()->assertHeader('Content-Type', 'image/webp');
+        } finally {
+            @unlink($base.'.webp');
+            @unlink($base.'.json');
+        }
+    }
+
+    public function test_print_que_falhou_mostra_o_erro_e_tenta_de_novo_quando_pedido(): void
+    {
+        Queue::fake();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $produto = 'kz/teste-falha-'.uniqid();
+        $this->app->instance(PrintDaPagina::class, new class extends PrintDaPagina
+        {
+            public function tirar(string $url, int $largura, string $destino): array
+            {
+                throw new RuntimeException('Chrome não respondeu a tempo (Page.loadEventFired).');
+            }
+
+            public static function hashDoHtml(string $url): ?string
+            {
+                return null;
+            }
+        });
+        (new GerarPrintDaPagina($produto, 'produto', 'computador'))->handle(app(PrintDaPagina::class));
+        $this->assertNotNull(Cache::get(GerarPrintDaPagina::chaveDoErro($produto, 'produto', 'computador')));
+
+        $q = http_build_query(['produto' => $produto, 'pagina' => 'produto', 'aparelho' => 'computador']);
+        $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}")
+            ->assertOk()->assertJsonPath('situacao', 'erro');
+        Queue::assertNothingPushed();
+
+        $this->actingAs($admin)->getJson("/admin/publicidade/comportamento/print/info?{$q}&de_novo=1")
+            ->assertOk()->assertJsonPath('situacao', 'gerando');
+        Queue::assertPushed(GerarPrintDaPagina::class, 1);
+
+        // Página sem endereço conhecido não vai para a fila.
+        $this->actingAs($admin)->getJson('/admin/publicidade/comportamento/print/info?produto=nao-existe&pagina=landing')
+            ->assertOk()->assertJsonPath('situacao', 'sem_endereco');
+        Queue::assertPushed(GerarPrintDaPagina::class, 1);
     }
 
     public function test_telas_abrem_para_quem_tem_permissao(): void

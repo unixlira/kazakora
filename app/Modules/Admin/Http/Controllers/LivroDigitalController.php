@@ -88,6 +88,11 @@ class LivroDigitalController extends Controller
         // A troca de produtos (pivot) não dispara o saved do model.
         PromocoesDoProduto::limparCache();
 
+        // Aba "Brindes (PDF)" do produto (20/11/2026) sobe por aqui e continua na tela do produto.
+        if ($request->boolean('voltar')) {
+            return back()->with('success', 'Livro digital cadastrado.');
+        }
+
         return redirect()->route('admin.entregaveis.livros.listar')->with('success', 'Livro digital cadastrado.');
     }
 

@@ -96,6 +96,9 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 PDFs de brinde que aparecem na página do produto ("Compre hoje e receba … livros digitais grátis"). Ative ou desative a qualquer momento e escolha em quais produtos cada livro aparece.
             </p>
+            <Link href="/admin/entregaveis/fila-pdfs" class="mt-2 inline-block text-sm font-medium text-primary hover:underline">
+                <i class="fas fa-list-check mr-1" aria-hidden="true"></i>Fila de criação dos PDFs
+            </Link>
         </div>
 
         <div class="mb-6 flex max-w-2xl items-start gap-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">

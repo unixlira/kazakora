@@ -18,6 +18,18 @@ class PrevisaoFornecedoresTest extends TestCase
         self::assertTrue($s->elegivel('2026-11-23'));
     }
 
+    public function test_summary_includes_known_pending_costs_and_csv_order_channel(): void
+    {
+        $s = new PrevisaoFornecedores;
+        $base = ['order_id' => 123, 'status' => 'paid', 'origin' => 'shopee', 'created_at' => '2026-11-13', 'product_name' => 'A', 'quantity' => 2, 'cost_price' => 10, 'supplier' => null];
+        $r = $s->montar('2026-11-23', [$base, array_replace($base, ['cost_price' => null])]);
+        self::assertStringContainsString('Custo de aquisição conhecido para conferência: R$ 20,00', $s->texto($r));
+        self::assertStringContainsString('Sem fornecedor: 2 linhas', $s->texto($r));
+        self::assertStringContainsString('Sem custo informado: 1 linhas', $s->texto($r));
+        self::assertStringContainsString('Pedido;Canal;', $s->csv($r));
+        self::assertStringContainsString('123;shopee;', $s->csv($r));
+    }
+
     public function test_cohort_cost_manual_total_missing_and_grouping(): void
     {
         $s = new PrevisaoFornecedores;

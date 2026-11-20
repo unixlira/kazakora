@@ -4,11 +4,11 @@ namespace App\Modules\Infoprodutos\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\TrackSiteVisit;
+use App\Modules\Analytics\Support\GeoDoVisitante;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Support\OrigemInfoproduto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\IpUtils;
 
 /**
  * POST /api-infoprodutos/evento (pedido do Lira em 2026-11-19): o script
@@ -19,8 +19,8 @@ use Symfony\Component\HttpFoundation\IpUtils;
  * Privacidade (docs/privacidade-e-cookies.md, seção Infoprodutos):
  *  - Nenhum cookie é lido nem criado; a sessão é um código aleatório que o
  *    navegador guarda só na aba (sessionStorage).
- *  - O IP NÃO é gravado: só o país, pelo CF-IPCountry quando a chamada
- *    chega pela Cloudflare.
+ *  - O IP NÃO é gravado: só o país (CF-IPCountry pela Cloudflare ou a
+ *    base DB-IP do servidor, consultada em memória).
  *  - Lista FECHADA de eventos e campos; qualquer coisa fora dela = 422.
  *
  * Corpo:
@@ -349,16 +349,19 @@ class ColetaController extends Controller
         return $saida;
     }
 
-    /** País pelo CF-IPCountry, só quando a chamada chegou de um IP da Cloudflare. */
+    /**
+     * País da visita: CF-IPCountry quando a chamada chega de IP da Cloudflare
+     * e, senão, a base DB-IP do próprio servidor (GeoDoVisitante::localizar,
+     * a mesma das visitas da loja). O IP é usado só nesta consulta, em
+     * memória, e nunca é gravado.
+     */
     private static function pais(Request $request): ?string
     {
-        $remoto = (string) $request->server->get('REMOTE_ADDR');
-        $proxies = Request::getTrustedProxies();
-        if ($remoto === '' || $proxies === [] || ! IpUtils::checkIp($remoto, $proxies)) {
+        try {
+            $pais = strtoupper((string) (app(GeoDoVisitante::class)->localizar($request)['pais'] ?? ''));
+        } catch (\Throwable) {
             return null;
         }
-
-        $pais = strtoupper((string) $request->header('CF-IPCountry'));
 
         return preg_match('/^[A-Z]{2}$/', $pais) === 1 && ! in_array($pais, ['XX', 'T1'], true) ? $pais : null;
     }

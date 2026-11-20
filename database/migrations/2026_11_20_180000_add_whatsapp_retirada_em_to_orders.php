@@ -9,6 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Produção já ficou com a coluna de uma tentativa de deploy que voltou atrás (20/11).
+        if (Schema::hasColumn('orders', 'whatsapp_retirada_em')) {
+            return;
+        }
+
         Schema::table('orders', function (Blueprint $table) {
             $table->timestamp('whatsapp_retirada_em')->nullable()->after('whatsapp_entregue_em');
         });

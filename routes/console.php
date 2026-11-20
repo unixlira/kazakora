@@ -48,6 +48,11 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // fora, no homolog): resultado do dia às 23:50 e pedidos separados que foram
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
 Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
+// Autorizado em 20/11/2026: base de fornecedores, sem Telegram; não é pagamento.
+Schedule::command('financeiro:fornecedores-d10')
+    ->dailyAt('06:00')->timezone('America/Sao_Paulo')->environments(['production'])
+    ->when(fn () => app(\App\Modules\Financeiro\Support\PrevisaoFornecedores::class)->elegivel(now('America/Sao_Paulo')->toDateString()))
+    ->onOneServer()->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.

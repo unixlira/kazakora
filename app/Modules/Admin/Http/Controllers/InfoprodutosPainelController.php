@@ -191,6 +191,16 @@ class InfoprodutosPainelController extends Controller
         return response()->file($arquivo, ['Content-Type' => 'image/webp', 'Cache-Control' => 'private, max-age=300']);
     }
 
+    /** Imagem do print (endereço sem "publicidade": ver a rota). */
+    public function captura(string $nome): BinaryFileResponse
+    {
+        $arquivo = PrintDaPagina::pasta().'/'.$nome.'.webp';
+        abort_unless(preg_match('/^[a-f0-9]{32}-(celular|computador)$/', $nome) === 1 && is_file($arquivo), 404);
+
+        // O endereço muda (?v=) quando o print é refeito: pode guardar.
+        return response()->file($arquivo, ['Content-Type' => 'image/webp', 'Cache-Control' => 'private, max-age=2592000, immutable']);
+    }
+
     /**
      * Situação do print da página escolhida. Sem print, pede um na fila
      * (GerarPrintDaPagina) e a tela consulta de novo até ele chegar.
@@ -230,7 +240,7 @@ class InfoprodutosPainelController extends Controller
         $info = json_decode((string) file_get_contents($base.'.json'), true) ?: [];
 
         return [
-            'url' => route('admin.publicidade.comportamento.print', ['produto' => $produto, 'pagina' => $pagina, 'aparelho' => $aparelho, 'v' => md5((string) ($info['em'] ?? ''))], false),
+            'url' => route('admin.capturas-de-tela', ['nome' => basename($base), 'v' => substr(md5((string) ($info['em'] ?? '')), 0, 10)], false),
             'largura' => (int) ($info['largura'] ?? PrintDaPagina::LARGURAS[$aparelho]),
             'altura' => (int) ($info['altura'] ?? 0),
             'secoes' => $info['secoes'] ?? [],

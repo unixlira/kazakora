@@ -148,4 +148,11 @@ return [
     | lead sai do banco, aberto ou convertido (leads:limpar, todo dia).
     */
     'lead_checkout_dias_guarda' => (int) env('LOJA_LEAD_CHECKOUT_DIAS_GUARDA', 90),
+
+    /*
+    | Sequência de carrinho abandonado (pedido do Lira 21/11/2026, comando
+    | loja:carrinho-abandonado-sequencia): no máximo tantos carrinhos por
+    | rodada de 10 minutos, para não estourar a cota do WhatsApp/e-mail.
+    */
+    'carrinho_sequencia_limite' => (int) env('CARRINHO_SEQUENCIA_LIMITE', 50),
 ];

@@ -46,13 +46,24 @@ const formatDate = (value) => (value ? new Date(value).toLocaleDateString('pt-BR
 // Cor real de cada plataforma (mesma fonte da calculadora de precificação,
 // Shared/marketplaceFees.js) — pedido explícito 2026-08-09.
 const ORIGIN_STYLES = {
-    loja: { label: 'Loja', color: '#1B3A5C' },
+    loja: { label: 'KazaKora', color: '#F97316' },
+    ferrakora: { label: 'FerraKora', color: '#1B3A5C' },
+    beautykora: { label: 'Beauty Kora', color: '#DB2777' },
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
     shopee: { label: 'Shopee', color: '#EE4D2D' },
     amazon: { label: 'Amazon', color: '#146EB4' },
     tiktok_shop: { label: 'TikTok Shop', color: '#FE2C55' },
     shein: { label: 'Shein', color: '#000000' },
     nota_fiscal_avulsa: { label: 'Emissão manual', color: '#7C3AED' },
+};
+
+// O servidor manda a plataforma já resolvida (nota de bonificação/devolução
+// herda a da venda): a coluna sempre mostra a empresa, nunca o origin cru.
+const plataformaDa = (row) => {
+    const p = row.plataforma;
+    if (!p) return { label: 'Via SEFAZ', color: '#64748B' };
+    const estilo = ORIGIN_STYLES[p.site] ?? ORIGIN_STYLES[p.origin];
+    return { label: p.label, color: estilo?.color ?? '#64748B' };
 };
 
 const hexToRgba = (hex, alpha) => {
@@ -90,9 +101,9 @@ const columns = [
     {
         id: 'origin',
         header: 'Plataforma',
-        accessorFn: (row) => ORIGIN_STYLES[row.order?.origin]?.label ?? row.order?.origin ?? 'Via SEFAZ',
+        accessorFn: (row) => plataformaDa(row).label,
         cell: ({ row }) => {
-            const style = ORIGIN_STYLES[row.original.order?.origin] ?? { label: row.original.order?.origin ?? 'Via SEFAZ', color: '#64748B' };
+            const style = plataformaDa(row.original);
             return h('span', {
                 class: 'inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold',
                 style: { color: style.color, background: hexToRgba(style.color, 0.12) },

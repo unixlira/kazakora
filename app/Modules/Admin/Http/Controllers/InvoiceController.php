@@ -38,7 +38,7 @@ class InvoiceController extends Controller
 
     // Mesmos rótulos de ORIGIN_STYLES em Invoices/Index.vue.
     private const ORIGIN_LABELS = [
-        'loja' => 'Loja',
+        'loja' => 'KazaKora',
         'mercado_livre' => 'Mercado Livre',
         'shopee' => 'Shopee',
         'amazon' => 'Amazon',
@@ -81,7 +81,7 @@ class InvoiceController extends Controller
         // listagem (pedido explícito 2026-08-09, fica só na tela de view),
         // então só precisa do essencial pra pintar a plataforma colorida.
         $invoices = Invoice::query()
-            ->with('order:id,origin,external_order_id')
+            ->with('order:id,origin,external_order_id,site_origem,fiscal_referenced_nfe_key')
             ->when($tab !== 'all', fn ($query) => $query->whereIn('status', self::TAB_STATUSES[$tab]))
             ->when($search, function ($query) use ($search, $numeroSerie, $matchingOrigins) {
                 $query->where(function ($query) use ($search, $numeroSerie, $matchingOrigins) {
@@ -104,6 +104,8 @@ class InvoiceController extends Controller
             ->orderByDesc('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
+
+        $this->comPlataforma($invoices->getCollection());
 
         // Cards do topo sempre contam TODAS as notas (independente de aba e
         // busca, como já era) — agregado direto no SQL, sem carregar linha.
@@ -136,6 +138,44 @@ class InvoiceController extends Controller
                 'failed_count' => (int) ($totals->failed_count ?? 0),
             ],
         ]);
+    }
+
+    /**
+     * Coluna Plataforma (2026-11-21, pedido do Lira): sempre o nome da
+     * empresa, nunca o origin cru. Venda do site sai KazaKora/FerraKora/
+     * Beauty Kora; nota técnica (bonificação, devolução de venda) herda a
+     * plataforma da venda que ela referencia; sem venda, é da KazaKora.
+     */
+    private function comPlataforma($invoices): void
+    {
+        $chaves = $invoices
+            ->filter(fn (Invoice $invoice) => in_array($invoice->order?->origin, Order::ORIGENS_FISCAIS_TECNICAS, true))
+            ->map(fn (Invoice $invoice) => $invoice->order->fiscal_referenced_nfe_key)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $vendas = $chaves->isEmpty() ? collect() : Invoice::query()
+            ->whereIn('chave_acesso', $chaves)
+            ->with('order:id,origin,site_origem')
+            ->get()
+            ->keyBy('chave_acesso');
+
+        foreach ($invoices as $invoice) {
+            $order = $invoice->order;
+            if ($order && in_array($order->origin, Order::ORIGENS_FISCAIS_TECNICAS, true)) {
+                $order = $vendas->get($order->fiscal_referenced_nfe_key)?->order;
+                $origin = $order?->origin ?? Order::ORIGIN_STORE;
+            } else {
+                $origin = $order?->origin;
+            }
+
+            $invoice->setAttribute('plataforma', $origin === null ? null : [
+                'origin' => $origin,
+                'site' => $origin === Order::ORIGIN_STORE ? $order?->site_origem : null,
+                'label' => Order::rotuloDoCanal($origin, $origin === Order::ORIGIN_STORE ? $order?->site_origem : null),
+            ]);
+        }
     }
 
     /**

@@ -186,4 +186,20 @@ class NotaBonificacaoBrindeTest extends TestCase
         $this->actingAs($admin)->put("/admin/produtos/{$produto->id}/brinde-fisico", ['nome' => ''])->assertRedirect();
         $this->assertNull($produto->fresh()->brinde_fisico);
     }
+
+    public function test_tela_de_notas_mostra_a_empresa_da_venda_na_nota_de_bonificacao(): void
+    {
+        Queue::fake();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $venda = $this->venda($this->livro());
+        $bonus = app(BonificacaoDoPedido::class)->criarPara($venda);
+        Invoice::create(['order_id' => $bonus->id, 'status' => Invoice::STATUS_AUTHORIZED, 'ambiente' => 'producao', 'serie' => 2, 'numero' => 3702, 'chave_acesso' => '35261165604590000107550020000037021000000013']);
+
+        $this->actingAs($admin)->get('/admin/notas-fiscais')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('invoices.data.0.plataforma.label', 'KazaKora')
+                ->where('invoices.data.0.plataforma.origin', Order::ORIGIN_STORE)
+                ->where('invoices.data.1.plataforma.label', 'KazaKora'));
+    }
 }

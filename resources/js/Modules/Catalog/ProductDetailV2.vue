@@ -1722,9 +1722,12 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 
 .pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; margin: 20px 0; }
 .pd2 .confianca div { display: flex; align-items: center; gap: 19px; color: var(--text); background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 24px 20px; }
-.pd2 .confianca i { font-size: 48px; color: #000; width: 56px; text-align: center; flex: 0 0 auto; }
-.dark .pd2 .confianca i { color: var(--ink); }
-.pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
+/* Faixa de confiança: ícone e título no laranja da KazaKora (#F37021) e texto em preto (pedido do Lira 20/11/2026). */
+.pd2 .confianca i { font-size: 48px; color: #f37021; width: 56px; text-align: center; flex: 0 0 auto; }
+.dark .pd2 .confianca i { color: #f37021; }
+.pd2 .confianca strong { display: block; color: #f37021; font-size: 20px; font-weight: 700; }
+.pd2 .confianca span { color: #000; }
+.dark .pd2 .confianca span { color: var(--text); }
 .pd2 .relacionados h2 { margin-top: 10px; }
 
 /* Barra presa no rodapé: só no celular (pedido 2026-10-24). No computador o

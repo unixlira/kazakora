@@ -20,6 +20,62 @@ class EtiquetaComMarcaTest extends TestCase
         return $pdf->Output('S');
     }
 
+    /**
+     * Etiqueta térmica (pedido do Lira 21/11/2026): o símbolo da KazaKora é
+     * só o desenho da casa, sem fundo. O favicon com o quadrado laranja saía
+     * como um bloco preto na impressora.
+     */
+    public function test_simbolo_da_kazakora_nao_tem_fundo(): void
+    {
+        $arquivo = public_path(EtiquetaMelhorEnvioComMarca::SIMBOLO);
+        $this->assertFileExists($arquivo);
+        $img = imagecreatefrompng($arquivo);
+        [$w, $h] = [imagesx($img), imagesy($img)];
+        $this->assertGreaterThanOrEqual(300, $w, 'símbolo pequeno demais para imprimir nítido');
+
+        $opacos = 0;
+        $total = 0;
+        for ($y = 0; $y < $h; $y += 2) {
+            for ($x = 0; $x < $w; $x += 2) {
+                $alfa = (imagecolorat($img, $x, $y) >> 24) & 0x7F; // 127 = transparente
+                $opacos += $alfa < 64 ? 1 : 0;
+                $total++;
+            }
+        }
+        // Só as linhas: a maior parte da imagem é transparente.
+        $this->assertLessThan(0.5, $opacos / $total);
+        foreach ([[0, $h - 1], [$w - 1, $h - 1]] as [$x, $y]) {
+            $this->assertSame(127, (imagecolorat($img, $x, $y) >> 24) & 0x7F, 'canto de baixo com fundo');
+        }
+    }
+
+    /** Térmica: o símbolo e a palavra KazaKora da etiqueta são só preto (nada colorido que suma). */
+    public function test_simbolo_e_palavra_da_etiqueta_sao_pretos(): void
+    {
+        foreach ([EtiquetaMelhorEnvioComMarca::SIMBOLO, EtiquetaMelhorEnvioComMarca::LOGO] as $arquivo) {
+            $img = imagecreatefrompng(public_path($arquivo));
+            for ($y = 0; $y < imagesy($img); $y += 3) {
+                for ($x = 0; $x < imagesx($img); $x += 3) {
+                    $c = imagecolorat($img, $x, $y);
+                    if ((($c >> 24) & 0x7F) < 100) {
+                        $this->assertSame(0, $c & 0xFFFFFF, "{$arquivo}: pixel colorido em {$x},{$y}");
+                    }
+                }
+            }
+        }
+    }
+
+    public function test_kazakora_sai_com_simbolo_e_palavra_ferrakora_so_com_o_logo(): void
+    {
+        $original = $this->pdf();
+        $kaza = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1);
+        $ferra = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'JeT Standard', 1, SiteAtual::FERRAKORA);
+
+        // PNG com transparência vira imagem + máscara no PDF: a KazaKora tem um desenho a mais.
+        $this->assertGreaterThan(substr_count($ferra, '/Subtype /Image'), substr_count($kaza, '/Subtype /Image'));
+        $this->assertStringContainsString('/SMask', $kaza);
+    }
+
     public function test_jet_ganha_o_logo_e_continua_uma_pagina_do_mesmo_tamanho(): void
     {
         $original = $this->pdf();
@@ -82,8 +138,8 @@ class EtiquetaComMarcaTest extends TestCase
     public function test_ferrakora_sai_com_o_logo_preto_e_branco_dela(): void
     {
         $this->assertSame('images/marca/logo-ferrakora-etiqueta-v2.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::FERRAKORA));
-        $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::KAZAKORA));
-        $this->assertSame('images/marca/logo-kazakora-fiel.png', EtiquetaMelhorEnvioComMarca::logo(null));
+        $this->assertSame('images/marca/logo-kazakora-etiqueta.png', EtiquetaMelhorEnvioComMarca::logo(SiteAtual::KAZAKORA));
+        $this->assertSame('images/marca/logo-kazakora-etiqueta.png', EtiquetaMelhorEnvioComMarca::logo(null));
 
         // O PNG da térmica é cinza de 1 canal (preto no branco, sem cor nem
         // transparência): no PDF não tem /DeviceRGB, o da KazaKora tem.

@@ -18,16 +18,29 @@ use Throwable;
  */
 class EtiquetaMelhorEnvioComMarca
 {
-    private const LOGO = 'images/marca/logo-kazakora-fiel.png';
+    /**
+     * Palavra KazaKora da etiqueta, toda em preto (21/11/2026): a térmica
+     * imprime uma cor só e os dois K laranja do logo colorido sumiam.
+     */
+    public const LOGO = 'images/marca/logo-kazakora-etiqueta.png';
 
     /**
-     * Desenho do favicon da KazaKora (a casa com KK), em cima da palavra
-     * KazaKora na etiqueta (pedido do Lira em 21/11/2026).
+     * Símbolo da KazaKora (a casa com KK) em cima da palavra KazaKora na
+     * etiqueta (pedido do Lira em 21/11/2026). Só as linhas, fundo
+     * transparente, igual ao ícone do menu Oportunidades: a etiqueta é
+     * térmica e o quadrado laranja do favicon saía como um bloco preto.
+     * Feito do favicon de 512 px: as linhas em preto, que a térmica imprime nítido.
      */
-    private const FAVICON = 'images/marca/favicon-512.png';
+    public const SIMBOLO = 'images/marca/simbolo-kazakora-etiqueta.png';
 
-    /** Altura do desenho do favicon em relação à altura da palavra KazaKora. */
-    private const FAVICON_ESCALA = 1.9;
+    /** Altura máxima do bloco símbolo + palavra (fração da página): o tamanho do logo da Loggi. */
+    private const ALTURA_BLOCO = 0.072;
+
+    /** Altura da palavra KazaKora em relação à altura do símbolo, na mesma linha. */
+    private const PALAVRA_INLINE = 0.55;
+
+    /** Espaço entre o símbolo e a palavra, em relação à altura do símbolo. */
+    private const VAO_INLINE = 0.15;
 
     /** Margem mínima entre o logo e a borda de cima da etiqueta (fração da página). */
     private const MARGEM_BORDA = 0.05;
@@ -180,17 +193,32 @@ class EtiquetaMelhorEnvioComMarca
                         if ($site === \App\Support\SiteAtual::FERRAKORA) {
                             $fpdi->Image($logo, $centroX - $largura / 2, ($y0 + $y1) / 2 * $h - $altura / 2, $largura, $altura);
                         } else {
-                            // KazaKora (pedido do Lira em 21/11/2026): desenho do
-                            // favicon em cima e a palavra KazaKora embaixo, no
-                            // mesmo tamanho de antes, os dois centralizados. O
-                            // bloco fica na área do logo e não encosta na borda
-                            // de cima da etiqueta.
-                            $lado = $altura * self::FAVICON_ESCALA;
-                            $vao = $altura * 0.25;
-                            $bloco = $lado + $vao + $altura;
-                            $topo = max(($y0 + $y1) / 2 * $h - $bloco / 2, self::MARGEM_BORDA * $h);
-                            $fpdi->Image(public_path(self::FAVICON), $centroX - $lado / 2, $topo, $lado, $lado);
-                            $fpdi->Image($logo, $centroX - $largura / 2, $topo + $lado + $vao, $largura, $altura);
+                            // KazaKora (pedido do Lira em 21/11/2026): símbolo (a
+                            // casa com KK, preto e traço grosso) e a palavra
+                            // KazaKora na mesma linha, do tamanho do logo da
+                            // transportadora. Área do lado direito: encosta à
+                            // direita e pode crescer até o meio da etiqueta;
+                            // do lado esquerdo: fica na largura da área. Nunca
+                            // encosta na borda de cima.
+                            $simbolo = public_path(self::SIMBOLO);
+                            [$sw, $sh] = getimagesize($simbolo);
+                            $direita = ($x0 + $x1) / 2 > 0.5;
+                            $maxLargura = $direita ? ($x1 - 0.5) * $w : ($x1 - $x0) * $w;
+                            $maxAltura = min(self::ALTURA_BLOCO * $h, max(($y1 - $y0) * $h, self::ALTURA_BLOCO * $h * 0.6));
+                            $proporcaoPalavra = $lw / $lh;
+                            // Largura do bloco por unidade de altura do símbolo.
+                            $porUnidade = $sw / $sh + self::VAO_INLINE + self::PALAVRA_INLINE * $proporcaoPalavra;
+                            $altSimbolo = min($maxAltura, $maxLargura / $porUnidade);
+                            $largSimbolo = $altSimbolo * $sw / $sh;
+                            $altPalavra = $altSimbolo * self::PALAVRA_INLINE;
+                            $largPalavra = $altPalavra * $proporcaoPalavra;
+                            $vao = $altSimbolo * self::VAO_INLINE;
+                            $larguraBloco = $largSimbolo + $vao + $largPalavra;
+                            $esquerda = $direita ? $x1 * $w - $larguraBloco : $x0 * $w;
+                            $topo = max(($y0 + $y1) / 2 * $h - $altSimbolo / 2, self::MARGEM_BORDA * $h);
+                            $fpdi->Image($simbolo, $esquerda, $topo, $largSimbolo, $altSimbolo);
+                            // Palavra com a base alinhada à base da casa.
+                            $fpdi->Image($logo, $esquerda + $largSimbolo + $vao, $topo + $altSimbolo - $altPalavra, $largPalavra, $altPalavra);
                         }
                     }
 

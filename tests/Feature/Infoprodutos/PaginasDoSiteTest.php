@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Infoprodutos\Support\EquipeDaLoja;
 use App\Modules\Infoprodutos\Support\FunilInfoprodutos;
 use App\Modules\Infoprodutos\Support\PaginasDoSite;
@@ -91,6 +93,36 @@ class PaginasDoSiteTest extends TestCase
         $this->assertSame('Departamento: Natal', $paginas['kzp/departamento/natal|pagina']['rotulo']);
         $this->assertSame(1, $paginas['kzp/carrinho|pagina']['visitas']);
         $this->assertSame(['visitas' => 3, 'carrinho' => 1, 'checkout' => 1, 'pedidos' => 1], array_intersect_key($r['totais']['kazakora'], array_flip(['visitas', 'carrinho', 'checkout', 'pedidos'])));
+    }
+
+    public function test_vendidos_conta_so_pedido_pago_do_produto_e_das_variacoes(): void
+    {
+        $pai = Product::factory()->create(['slug' => 'trena']);
+        $variacao = Product::factory()->create(['slug' => 'trena-5m', 'parent_product_id' => $pai->id]);
+        $outro = Product::factory()->create(['slug' => 'serra']);
+        SiteVisit::create(['site' => 'kazakora', 'visitor_id' => 'a', 'path' => '/produtos/trena', 'ip' => '1.1.1.1', 'consentiu' => true]);
+        SiteVisit::create(['site' => 'kazakora', 'visitor_id' => 'b', 'path' => '/produtos/serra', 'ip' => '1.1.1.2', 'consentiu' => true]);
+        $pedido = function (string $status, array $produtos, ?string $site = null) {
+            $order = Order::create(['status' => $status, 'origin' => Order::ORIGIN_STORE, 'site_origem' => $site, 'shipping_name' => 'X', 'shipping_phone' => '1',
+                'shipping_zip' => '1', 'shipping_street' => 'R', 'shipping_number' => '1', 'shipping_neighborhood' => 'B', 'shipping_city' => 'C',
+                'shipping_state' => 'SP', 'subtotal' => 10, 'shipping_cost' => 0, 'total' => 10]);
+            foreach ($produtos as $p) {
+                $order->items()->create(['product_id' => $p->id, 'product_name' => 'x', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10, 'item_type' => OrderItem::TYPE_PRODUCT]);
+            }
+        };
+        $pedido(Order::STATUS_PAID, [$pai, $variacao]);   // conta 1 vez na trena
+        $pedido(Order::STATUS_COMPLETED, [$variacao]);    // variação conta na página do pai
+        $pedido(Order::STATUS_AWAITING_PAYMENT, [$pai]);  // Pix não pago: fora
+        $pedido(Order::STATUS_CANCELLED, [$outro]);       // cancelado: fora
+        $pedido(Order::STATUS_SHIPPED, [$pai], Order::SITE_FERRAKORA); // outro site: fora
+
+        [$de, $ate] = FunilInfoprodutos::intervalo('7d');
+        $r = app(PaginasDoSite::class)->montar($de, $ate);
+        $paginas = collect($r['paginas'])->keyBy(fn ($p) => $p['produto'].'|'.$p['pagina']);
+
+        $this->assertSame(2, $paginas['kz/trena|produto']['vendidos']);
+        $this->assertSame(0, $paginas['kz/serra|produto']['vendidos']);
+        $this->assertSame(2, $r['totais']['kazakora']['vendidos']);
     }
 
     public function test_departamento_e_busca_ficam_no_caminho_da_visita(): void

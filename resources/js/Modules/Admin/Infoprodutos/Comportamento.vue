@@ -464,11 +464,13 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <Deferred data="dados">
                     <template #fallback><p class="py-10 text-center text-sm text-slate-500">Lendo os cliques…</p></template>
                     <div v-if="dados" class="space-y-2.5 text-xs">
-                        <div v-if="pagina" class="grid grid-cols-4 gap-2">
+                        <div v-if="pagina" class="grid grid-cols-5 gap-2">
                             <div><div class="text-slate-500">Visitas</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.visitas) }}</div></div>
                             <div><div class="text-slate-500">{{ loja === 'ferrakora' ? 'Comprar' : 'Carrinho' }}</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.carrinho) }}</div></div>
                             <div><div class="text-slate-500">Checkout</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.checkout) }}</div></div>
                             <div><div class="text-slate-500">{{ loja === 'infoprodutos' ? 'Vendas' : 'Pedidos' }}</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.pedidos) }}</div></div>
+                            <!-- Vendidos (2026-11-21): só pedidos pagos; Pedidos conta até Pix não pago. -->
+                            <div title="Pedidos pagos (pago, enviado ou entregue) no período"><div class="text-slate-500">Vendidos</div><div class="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{{ n(pagina.vendidos) }}</div></div>
                         </div>
                         <div class="flex gap-4">
                             <div><div class="text-slate-500">Medidas no mapa</div><div class="text-base font-bold tabular-nums">{{ n(dados.visitas) }}</div></div>

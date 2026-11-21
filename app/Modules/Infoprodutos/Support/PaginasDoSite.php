@@ -6,6 +6,9 @@ use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Models\FerraKoraProduto;
+use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use Illuminate\Support\Carbon;
@@ -193,7 +196,7 @@ class PaginasDoSite
         if (! isset($this->paginas[$k])) {
             $this->paginas[$k] = [
                 'produto' => $produto, 'pagina' => $pagina, 'loja' => self::loja($produto), 'rotulo' => $produto,
-                'visitas' => 0, 'medidas' => 0, 'carrinho' => null, 'checkout' => null, 'pedidos' => null, '_quem' => [],
+                'visitas' => 0, 'medidas' => 0, 'carrinho' => null, 'checkout' => null, 'pedidos' => null, 'vendidos' => null, '_quem' => [],
             ];
         }
 
@@ -317,7 +320,15 @@ class PaginasDoSite
             unset($p);
         }
 
+        $vendidos = $this->vendidos($loja, $de, $ate);
+        foreach ($this->paginas as $k => $p) {
+            if ($p['loja'] === $loja) {
+                $this->paginas[$k]['vendidos'] = $p['pagina'] === 'produto' ? ($vendidos['por_pagina'][$p['produto']] ?? 0) : null;
+            }
+        }
+
         $this->totais[$loja] = [
+            'vendidos' => $vendidos['total'],
             'visitas' => count($todos),
             'carrinho' => $loja === 'kazakora'
                 ? count(array_filter($todos, fn ($a) => $tem($a, $carrinho)))
@@ -326,6 +337,56 @@ class PaginasDoSite
             'pedidos' => count($pedidos),
             'paginas' => count($porPagina),
         ];
+    }
+
+    /**
+     * Vendidos (pedido do Lira 2026-11-21): pedidos PAGOS (pago, enviado ou
+     * entregue) feitos no site no período. "Pedidos" conta quem gerou o
+     * pedido, até Pix que não foi pago; aqui só o que virou venda. Por página
+     * de produto: pedidos pagos com o produto ou uma variação dele.
+     *
+     * @return array{total: int, por_pagina: array<string, int>}
+     */
+    private function vendidos(string $loja, Carbon $de, Carbon $ate): array
+    {
+        $pedidos = Order::query()
+            ->where('origin', Order::ORIGIN_STORE)
+            ->when($loja === 'kazakora', fn ($q) => $q->whereNull('site_origem'), fn ($q) => $q->where('site_origem', $loja))
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
+            ->whereBetween('created_at', [$de, $ate])
+            ->with('items:id,order_id,product_id')
+            ->get(['id']);
+
+        $ids = $pedidos->pluck('items')->flatten()->pluck('product_id')->filter()->unique()->values();
+        $produtos = $ids->isEmpty() ? collect() : Product::query()->withTrashed()->whereIn('id', $ids->all())->get(['id', 'slug', 'parent_product_id'])->keyBy('id');
+        $paiDe = fn (int $id) => (int) ($produtos[$id]->parent_product_id ?? 0) ?: $id;
+
+        $paginaDoPai = [];
+        if ($loja === 'ferrakora') {
+            $catalogo = app(CatalogoFerraKora::class);
+            foreach (FerraKoraProduto::query()->get() as $registro) {
+                $slug = $catalogo->slugPublicado($registro);
+                if ($slug) {
+                    $paginaDoPai[(int) $registro->product_id] = 'fk/'.$slug;
+                }
+            }
+        } else {
+            $pais = Product::query()->withTrashed()->whereIn('id', $ids->map($paiDe)->unique()->all())->pluck('slug', 'id');
+            foreach ($pais as $id => $slug) {
+                $paginaDoPai[(int) $id] = 'kz/'.$slug;
+            }
+        }
+
+        $porPagina = [];
+        foreach ($pedidos as $pedido) {
+            $paginas = $pedido->items->pluck('product_id')->filter()
+                ->map(fn ($id) => $paginaDoPai[$paiDe((int) $id)] ?? null)->filter()->unique();
+            foreach ($paginas as $pagina) {
+                $porPagina[$pagina] = ($porPagina[$pagina] ?? 0) + 1;
+            }
+        }
+
+        return ['total' => $pedidos->count(), 'por_pagina' => $porPagina];
     }
 
     /** Sessões do m.js que clicaram em Comprar/Carrinho, por página de produto (FerraKora). */
@@ -355,6 +416,7 @@ class PaginasDoSite
             }
             $this->paginas[$k]['checkout'] = (int) ($compra->first(fn ($c) => $c->produto === $p['produto'] && $c->pagina === $p['pagina'])->n ?? 0);
             $this->paginas[$k]['pedidos'] = $p['pagina'] === 'landing' ? (int) ($vendas[$p['produto']] ?? 0) : null;
+            $this->paginas[$k]['vendidos'] = $this->paginas[$k]['pedidos'];
         }
 
         $this->totais['infoprodutos'] = [
@@ -362,6 +424,7 @@ class PaginasDoSite
             'carrinho' => null,
             'checkout' => (int) (clone $base)->where('tipo', 'buy')->distinct()->count('sessao'),
             'pedidos' => (int) $vendas->sum(),
+            'vendidos' => (int) $vendas->sum(),
             'paginas' => collect($this->paginas)->where('loja', 'infoprodutos')->count(),
         ];
     }

@@ -1968,20 +1968,18 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     .pd2 .beneficios-quadros { grid-template-columns: 1fr; }
 }
 
-/* Oferta do produto acima do preço, sem caixa (pedido do Lira 20/11/2026): texto solto na página, título e
-   rótulos em amarelo (#fcbd10, o da faixa do topo) com uma sombra fina para ler no fundo branco.
-   Na FerraKora o mesmo bloco usa as cores de lá; aqui ficam as da KazaKora. */
-.pd2 .compra .oferta-bf { margin: 0 0 16px; color: var(--ink); }
-.pd2 .compra .oferta-bf-selo { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 6px; color: #f37021; font-size: 11px; font-weight: 800; line-height: 1; letter-spacing: .7px; text-transform: uppercase; }
-.pd2 .compra .oferta-bf-selo i { font-size: 11px; color: #f37021; }
-.pd2 .compra .oferta-bf strong, .pd2 .compra .oferta-bf-faixas span { color: #fcbd10; text-shadow: 0 1px 1px rgba(0, 0, 0, .45); }
-.pd2 .compra .oferta-bf strong { display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; text-transform: uppercase; text-wrap: balance; }
-.pd2 .compra .oferta-bf p { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--text); text-wrap: pretty; }
-.pd2 .compra .oferta-bf-faixas { list-style: none; margin: 6px 0 0; padding: 0; }
-.pd2 .compra .oferta-bf-faixas li { margin: 2px 0 0; font-size: 15px; line-height: 1.35; }
-.pd2 .compra .oferta-bf-faixas span { font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
-.pd2 .compra .oferta-bf-faixas span::after { content: ': '; }
-.pd2 .compra .oferta-bf-faixas b { color: var(--ink); }
+/* Oferta do produto acima do preço: caixa escura com o laranja da KazaKora (o da faixa do topo, #F37021).
+   Na FerraKora a mesma caixa usa as cores de lá; aqui ficam as da KazaKora.
+   As linhas Brinde e Cupom ficam soltas dentro da caixa, sem quadrinho (pedido do Lira 20/11/2026). */
+.pd2 .compra .oferta-bf { position: relative; overflow: hidden; margin: 0 0 16px; padding: 16px 18px; border-radius: 16px; border: 1px solid rgba(243, 112, 33, .5); background: radial-gradient(circle at 100% 0%, rgba(243, 112, 33, .28), transparent 55%), linear-gradient(135deg, #141414 0%, #0d1b3e 100%); color: #fff; box-shadow: 0 8px 20px -10px rgba(13, 27, 62, .6); }
+.pd2 .compra .oferta-bf-selo { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 10px; padding: 5px 10px; border-radius: 999px; background: #f37021; color: #111; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: .7px; text-transform: uppercase; }
+.pd2 .compra .oferta-bf-selo i { font-size: 10px; color: #111; }
+.pd2 .compra .oferta-bf strong { position: relative; display: block; font-size: 21px; line-height: 1.15; font-weight: 800; letter-spacing: -.2px; color: #fcbd10; text-transform: uppercase; text-wrap: balance; }
+.pd2 .compra .oferta-bf p { position: relative; margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: rgba(255, 255, 255, .88); text-wrap: pretty; }
+.pd2 .compra .oferta-bf-faixas { position: relative; list-style: none; margin: 10px 0 0; padding: 0; }
+.pd2 .compra .oferta-bf-faixas li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 4px 0 0; }
+.pd2 .compra .oferta-bf-faixas span { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255, 255, 255, .75); }
+.pd2 .compra .oferta-bf-faixas b { font-size: 15px; line-height: 1.2; color: #fff; }
 @media (max-width: 767px) {
     /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
     .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }

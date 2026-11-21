@@ -52,7 +52,14 @@ class SequenciaCarrinhoAbandonado extends Command
                 ->limit($limite)
                 ->get();
 
-            $simular ? $this->listar($vez, $disparador) : $this->mandar($vez, $paradas, $disparador);
+            if ($simular) {
+                $this->listar($vez, $disparador);
+            } elseif (! config('loja.carrinho_sequencia_ativa')) {
+                // Homolog/local: importa e para, mas nunca fala com o cliente.
+                $this->warn("Envio desligado (CARRINHO_SEQUENCIA_ATIVA; só liga no kazakora.com): {$vez->count()} disparo(s) na hora, nada foi enviado.");
+            } else {
+                $this->mandar($vez, $paradas, $disparador);
+            }
         } finally {
             if ($simular) {
                 DB::rollBack();

@@ -31,6 +31,8 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         // Quarta-feira, 11h em São Paulo: dentro da janela de envio.
         $this->travelTo(Carbon::parse('2026-11-18 11:00', 'America/Sao_Paulo'));
         config([
+            // Fora do kazakora.com o envio fica desligado; os testes de envio ligam.
+            'loja.carrinho_sequencia_ativa' => true,
             'services.gemini.api_key' => null,
             'services.whatsapp.access_token' => null,
             'services.whatsapp.phone_number_id' => null,
@@ -376,6 +378,45 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         $this->artisan('loja:carrinho-abandonado-sequencia');
         $this->assertSame(1, Registro::count());
         Mail::assertSentCount(1);
+    }
+
+    public function test_desligada_importa_e_para_mas_nao_envia_nada(): void
+    {
+        Mail::fake();
+        $this->ligarWhatsApp();
+        config(['loja.carrinho_sequencia_ativa' => false]);
+        $this->lead([], 60 * 24 * 3);
+        $this->lead(['email' => 'comprou@exemplo.com', 'telefone' => '21966665555'], 60 * 24 * 3);
+        Order::create([
+            'status' => Order::STATUS_PAID, 'shipping_email' => 'comprou@exemplo.com',
+            'shipping_name' => 'Ana', 'shipping_phone' => '21966665555', 'shipping_zip' => '03187040',
+            'shipping_street' => 'Rua X', 'shipping_number' => '1', 'shipping_neighborhood' => 'Mooca',
+            'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
+            'subtotal' => 100, 'shipping_cost' => 0, 'total' => 100,
+        ]);
+
+        $this->artisan('loja:carrinho-abandonado-sequencia')
+            ->expectsOutputToContain('Envio desligado')
+            ->assertSuccessful();
+
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+        $this->assertSame(2, Registro::count());
+        $this->assertSame(0, (int) Registro::sum('disparos_enviados'));
+        $this->assertSame(Registro::PAROU_COMPROU, Registro::where('email', 'comprou@exemplo.com')->sole()->motivo_parada);
+
+        // --simular funciona mesmo desligada.
+        $this->artisan('loja:carrinho-abandonado-sequencia', ['--simular' => true])
+            ->expectsOutputToContain('Mandaria 1 disparo(s).')
+            ->assertSuccessful();
+        Mail::assertNothingSent();
+    }
+
+    public function test_chave_so_liga_no_kazakora_com(): void
+    {
+        // Ambiente de teste (APP_URL fora do kazakora.com): padrão desligado.
+        $config = fn () => require base_path('config/loja.php');
+        $this->assertFalse($config()['carrinho_sequencia_ativa']);
     }
 
     public function test_simular_nao_manda_nem_grava(): void

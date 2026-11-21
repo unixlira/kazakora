@@ -217,7 +217,7 @@ class CancelamentoAutomaticoDaNota
             ->when($orderId, fn ($q) => $q->where('order_id', $orderId))
             ->whereHas('order', fn ($q) => $q
                 ->where('status', Order::STATUS_CANCELLED)
-                ->whereNotIn('origin', [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE])
+                ->whereNotIn('origin', [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_BONUS_INVOICE])
                 ->whereNotIn('id', array_merge($valeram, $cobertosPeloMl)))
             ->with('order')
             ->orderBy('autorizada_em');

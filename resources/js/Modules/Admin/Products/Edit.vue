@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ProductForm from '@/Modules/Admin/Products/ProductForm.vue';
 import FiscalForm from '@/Modules/Admin/Products/FiscalForm.vue';
+import BrindeFisicoForm from '@/Modules/Admin/Products/BrindeFisicoForm.vue';
 import LogisticsForm from '@/Modules/Admin/Products/LogisticsForm.vue';
 import QuantityDiscountsManager from '@/Modules/Admin/Products/QuantityDiscountsManager.vue';
 import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
@@ -256,7 +257,10 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                 <VariationsManager v-else-if="activeTab === 'variacoes'" :product="product" :variations="variations" :images="images"
                     :linkable-orphans="linkableOrphans" />
 
-                <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />
+                <div v-else-if="activeTab === 'fiscal'" class="space-y-6">
+                    <FiscalForm :product="product" :fiscal-data="fiscalData" />
+                    <BrindeFisicoForm :product="product" />
+                </div>
 
                 <LogisticsForm v-else-if="activeTab === 'logistica'" :product="product" :fiscal-data="fiscalData" />
 

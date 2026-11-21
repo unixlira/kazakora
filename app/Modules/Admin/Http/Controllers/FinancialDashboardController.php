@@ -249,7 +249,7 @@ class FinancialDashboardController extends Controller
         $marketplaceFeeAllTimeFromOrders = round((float) OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
             ->where(function ($query) {
-                $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
+                $query->whereNotIn('orders.origin', Order::ORIGENS_FISCAIS_TECNICAS)
                     ->orWhereNull('orders.origin');
             })
             ->where(function ($query) {
@@ -529,7 +529,7 @@ class FinancialDashboardController extends Controller
             ->leftJoin('products as p', 'p.id', '=', 'oi.product_id')
             ->whereIn('o.status', self::REVENUE_STATUSES)
             ->where(function ($query) {
-                $query->whereNotIn('o.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
+                $query->whereNotIn('o.origin', Order::ORIGENS_FISCAIS_TECNICAS)
                     ->orWhereNull('o.origin');
             })
             ->where(function ($query) {
@@ -546,7 +546,7 @@ class FinancialDashboardController extends Controller
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
             ->where('orders.created_at', '>=', $startOfMonth)
             ->where(function ($query) {
-                $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
+                $query->whereNotIn('orders.origin', Order::ORIGENS_FISCAIS_TECNICAS)
                     ->orWhereNull('orders.origin');
             })
             ->where(function ($query) {
@@ -565,7 +565,7 @@ class FinancialDashboardController extends Controller
                 ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
                 ->where('orders.created_at', '>=', $startOfMonth)
                 ->where(function ($query) {
-                    $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
+                    $query->whereNotIn('orders.origin', Order::ORIGENS_FISCAIS_TECNICAS)
                         ->orWhereNull('orders.origin');
                 })
                 ->where(function ($query) {

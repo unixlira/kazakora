@@ -193,6 +193,16 @@ class Order extends Model
     // separado de venda operacional, expedição, marketplace e métricas.
     public const ORIGIN_SALES_RETURN_INVOICE = 'nota_devolucao_venda';
 
+    // Nota de bonificação do brinde físico da oferta (2026-11-21, pedido do
+    // Lira): pedido fiscal técnico, filho de uma venda do site, só com o
+    // brinde a R$ 0,00 (CFOP 5910/6910). Fica fora de venda, expedição e
+    // métricas, como as devoluções. fiscal_referenced_nfe_key = chave da
+    // nota de venda (liga as duas; o XML não referencia, finalidade normal).
+    public const ORIGIN_BONUS_INVOICE = 'nota_bonificacao';
+
+    /** Pedidos fiscais técnicos: não são venda, não contam em métrica nem expedição. */
+    public const ORIGENS_FISCAIS_TECNICAS = [self::ORIGIN_PURCHASE_RETURN_INVOICE, self::ORIGIN_SALES_RETURN_INVOICE, self::ORIGIN_BONUS_INVOICE];
+
     /**
      * Número de endereço sem nenhum dígito ("", "S/N", "Lopes") — achado
      * real 2026-10-08: pedidos Amazon saíram com nota e etiqueta "S/N" e
@@ -590,7 +600,7 @@ class Order extends Model
     {
         return $query
             ->where(function ($query) {
-                $query->whereNotIn($this->qualifyColumn('origin'), [self::ORIGIN_PURCHASE_RETURN_INVOICE, self::ORIGIN_SALES_RETURN_INVOICE])
+                $query->whereNotIn($this->qualifyColumn('origin'), self::ORIGENS_FISCAIS_TECNICAS)
                     ->orWhereNull($this->qualifyColumn('origin'));
             })
             ->where(function ($query) {

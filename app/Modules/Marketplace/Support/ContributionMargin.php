@@ -909,7 +909,7 @@ class ContributionMargin
             ->where(fn ($q) => $q->where("{$orders}.origin", '!=', Order::ORIGIN_MANUAL_INVOICE)->orWhereNull("{$orders}.origin"))
             ->whereNull("{$orders}.estornado_em")
             ->whereNull("{$orders}.amostra_em")
-            ->where(fn ($q) => $q->whereNotIn("{$orders}.origin", [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])->orWhereNull("{$orders}.origin"))
+            ->where(fn ($q) => $q->whereNotIn("{$orders}.origin", Order::ORIGENS_FISCAIS_TECNICAS)->orWhereNull("{$orders}.origin"))
             ->where(fn ($q) => $q->whereNotIn("{$orders}.fiscal_operation_type", ['purchase_return', 'sales_return'])->orWhereNull("{$orders}.fiscal_operation_type"));
 
         self::semDevolucaoConcluida($query, $orders);

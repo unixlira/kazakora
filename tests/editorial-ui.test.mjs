@@ -22,6 +22,13 @@ test('missing and guest interaction capabilities never send mutation requests', 
     assert.equal(requests, 0);
   }
 });
+test('feed comment labels and share dialogs are scoped to their post', () => {
+  const social = read('Blog/Components/SocialActions.vue');
+  assert.match(social, /:for="`editorial-comment-\$\{post.id\}`"/);
+  assert.match(social, /:id="`editorial-comment-\$\{post.id\}`"/);
+  assert.match(social, /:aria-labelledby="`share-title-\$\{post.id\}`"/);
+  assert.match(social, /:id="`share-title-\$\{post.id\}`"/);
+});
 test('admin search exposes status and preserves selections on failed searches', () => {
   const edit = read('Admin/Editorial/Edit.vue');
   assert.match(edit, /selectedProducts/);

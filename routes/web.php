@@ -56,6 +56,7 @@ use App\Modules\Admin\Http\Controllers\WhatsAppSettingsController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
+use App\Modules\Admin\Http\Controllers\ProductBrindeFisicoController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
 use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
@@ -539,6 +540,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('produtos/{product}/descricao-ia', [ProductController::class, 'descricaoPelasFotos'])->middleware('throttle:10,1')->name('produtos.descricao-ia');
     Route::get('produtos/{product}/descricao-ia/{pedido}', [ProductController::class, 'descricaoPelasFotosClaude'])->whereNumber('pedido')->name('produtos.descricao-ia.claude');
     Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
+    Route::put('produtos/{product}/brinde-fisico', [ProductBrindeFisicoController::class, 'update'])->name('produtos.brinde-fisico.atualizar');
     Route::put('produtos/{product}/descontos-quantidade', [ProductQuantityDiscountController::class, 'update'])->name('produtos.descontos-quantidade.atualizar');
     Route::post('produtos/{product}/imagens', [ProductImageController::class, 'store'])->name('produtos.imagens.adicionar');
     Route::put('produtos/{product}/imagens/ordem', [ProductImageController::class, 'reorder'])->name('produtos.imagens.ordenar');

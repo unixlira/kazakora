@@ -68,6 +68,8 @@ class NFeXmlBuilderService
         $isPurchaseReturn = $order->fiscal_operation_type === 'purchase_return';
         $isSalesReturn = $order->fiscal_operation_type === 'sales_return';
         $isFiscalReturn = $isPurchaseReturn || $isSalesReturn;
+        // Bonificação do brinde físico (2026-11-21): sem pagamento (tPag 90).
+        $isBonificacao = $order->origin === Order::ORIGIN_BONUS_INVOICE;
 
         $make = new Make();
 
@@ -438,8 +440,8 @@ class NFeXmlBuilderService
             'boleto' => '15',
         ];
 
-        if ($isFiscalReturn) {
-            // Devolução não movimenta dinheiro aqui: tPag 90 = sem pagamento.
+        if ($isFiscalReturn || $isBonificacao) {
+            // Devolução e bonificação não movimentam dinheiro: tPag 90 = sem pagamento.
             $detPag = new stdClass();
             $detPag->indPag = 0;
             $detPag->tPag = '90';

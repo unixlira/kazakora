@@ -119,7 +119,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         // antes de a nota sair continua precisando dela (emissão manual do
         // admin aceita esses status), e as notas técnicas (avulsa,
         // devolução de compra/venda) já nascem concluídas.
-        $origemTecnica = in_array($order->origin, [Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true);
+        $origemTecnica = in_array($order->origin, [Order::ORIGIN_MANUAL_INVOICE, ...Order::ORIGENS_FISCAIS_TECNICAS], true);
 
         if (! $origemTecnica && in_array($order->status, [Order::STATUS_CANCELLED, Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT], true)) {
             Log::warning('nfe.emissao_ignorada_pedido_nao_pago', ['order_id' => $order->id, 'status' => $order->status, 'origin' => $order->origin]);
@@ -316,9 +316,15 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             // envio/etiqueta daqui (isso já dispara direto na importação do
             // pedido, em paralelo, ver OrderImportService).
             if ($invoice->status === Invoice::STATUS_AUTHORIZED
-                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, ...Order::ORIGENS_FISCAIS_TECNICAS], true)) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
             }
+
+            // Brinde físico da oferta (2026-11-21): nota de venda do site
+            // autorizada abre a nota de bonificação do brinde; a de
+            // bonificação autorizada manda as duas notas ao cliente, e a
+            // recusada por valor zerado sai de novo com R$ 0,01.
+            app(\App\Modules\Fiscal\Services\BonificacaoDoPedido::class)->depoisDaNota($order->fresh(), $invoice);
 
             // Pedido do site: a etiqueta dos Correios precisa da chave da
             // nota, então o envio nasce aqui (ver LojaShippingDriver).
@@ -370,7 +376,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             $travaDoCarrinho?->release();
         }
 
-        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+        if (! in_array($order->origin, Order::ORIGENS_FISCAIS_TECNICAS, true)) {
             SendOrderReceiptEmailJob::dispatch($order->id);
         }
     }
@@ -455,7 +461,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $exception?->getMessage() ?? 'Erro desconhecido'));
         }
 
-        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+        if (! in_array($order->origin, Order::ORIGENS_FISCAIS_TECNICAS, true)) {
             SendOrderReceiptEmailJob::dispatch($order->id);
         }
     }

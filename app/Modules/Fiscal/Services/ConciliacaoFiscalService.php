@@ -45,7 +45,7 @@ class ConciliacaoFiscalService
     /** Faixa maior que isso não é inutilizada sozinha: provavelmente é configuração errada. */
     public const MAIOR_FAIXA_AUTOMATICA = 20;
 
-    private const ORIGENS_DOCUMENTO = [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE];
+    private const ORIGENS_DOCUMENTO = [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_BONUS_INVOICE];
 
     /** @var array<string, array{titulo: string, acao: string, link: ?string}> */
     public const GRUPOS = [

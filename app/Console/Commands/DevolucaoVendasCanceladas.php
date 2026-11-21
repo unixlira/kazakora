@@ -126,7 +126,7 @@ class DevolucaoVendasCanceladas extends Command
             ->where('autorizada_em', '>=', $this->option('desde') ?: '2026-08-01')
             ->where('autorizada_em', '<=', now()->subHours($horas))
             ->whereHas('order', fn ($q) => $q
-                ->whereNotIn('origin', [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE])
+                ->whereNotIn('origin', [Order::ORIGIN_SALES_RETURN_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_BONUS_INVOICE])
                 ->where(fn ($q) => $q->where('status', Order::STATUS_CANCELLED)->orWhereNotNull('estornado_em'))
                 ->when($pedidos !== [], fn ($q) => $q->whereIn('id', $pedidos)))
             ->with('order.items')

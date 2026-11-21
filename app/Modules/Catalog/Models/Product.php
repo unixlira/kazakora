@@ -55,6 +55,7 @@ class Product extends Model
         'seo_title',
         'seo_description',
         'tags',
+        'brinde_fisico',
     ];
 
     protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
@@ -66,6 +67,7 @@ class Product extends Model
     {
         return [
             'parent_product_id' => 'integer',
+            'brinde_fisico' => 'array',
             'price' => 'decimal:2',
             'cost_price' => 'decimal:2',
             'discount_percentage' => 'decimal:4',

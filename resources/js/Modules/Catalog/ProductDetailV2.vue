@@ -1227,17 +1227,17 @@ const submitReview = () => {
                             </div>
                         </section>
 
-                        <section class="card">
-                            <h2>Pagamento Seguro</h2>
-                            <div class="bandeiras esquerda">
-                                <img v-for="brand in BANDEIRAS_FORMAS" :key="brand" :src="`/images/payments/novas/${brand}.webp`" :alt="brand" loading="lazy">
-                            </div>
-                            <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
-                            <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
-                        </section>
-
                     </main>
                 </div>
+
+                <!-- PERGUNTAS FREQUENTES (largura total), acima das avaliações (pedido do Lira 21/11/2026) -->
+                <section class="card largura-total">
+                    <h2>Perguntas Frequentes</h2>
+                    <details v-for="[pergunta, resposta] in FAQ" :key="pergunta">
+                        <summary><i class="fas fa-caret-right fechado"></i><i class="fas fa-caret-up aberto"></i> {{ pergunta }}</summary>
+                        <p>{{ resposta }}</p>
+                    </details>
+                </section>
 
                 <!-- AVALIAÇÕES (largura total) -->
                 <section v-if="showReviews" id="avaliacoes" class="card largura-total" data-kzm="avaliacoes">
@@ -1308,15 +1308,6 @@ const submitReview = () => {
                     </div>
                 </Teleport>
 
-                <!-- PERGUNTAS FREQUENTES (largura total) -->
-                <section class="card largura-total">
-                    <h2>Perguntas Frequentes</h2>
-                    <details v-for="[pergunta, resposta] in FAQ" :key="pergunta">
-                        <summary><i class="fas fa-caret-right fechado"></i><i class="fas fa-caret-up aberto"></i> {{ pergunta }}</summary>
-                        <p>{{ resposta }}</p>
-                    </details>
-                </section>
-
                 <!-- FAIXA DE CONFIANÇA (card do frete sem os raios e o FULL e FLEX, pedido 2026-10-25) -->
                 <div class="confianca">
                     <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis</strong>Entrega em todo Brasil</span></div>
@@ -1325,11 +1316,6 @@ const submitReview = () => {
                     <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>
                 </div>
 
-                <section v-if="relatedProducts.length" class="relacionados">
-                    <h2>Você também pode gostar de</h2>
-                    <CarrosselProdutos :produtos="relatedProducts" :favorite-ids="relatedFavoriteIds"
-                        :reviewable-product-ids="relatedReviewableIds" :reviewed-product-ids="relatedReviewedIds" />
-                </section>
             </div>
 
             <!-- Barra fixa no rodapé (pedido 2026-10-23): valor no Pix à esquerda, botão à direita.

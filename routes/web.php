@@ -207,6 +207,8 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
     // Links do e-mail de carrinho abandonado (pedido 2026-10-10), assinados.
     Route::get('/recuperar/{carrinho}', [CartController::class, 'recuperar'])->middleware('signed')->name('recuperar');
     Route::get('/lembretes/parar/{carrinho}', [CartController::class, 'pararLembretes'])->middleware('signed')->name('lembretes.parar');
+    // Descadastro do e-mail da sequência de carrinho abandonado (2026-11-21), assinado.
+    Route::get('/sequencia/parar/{registro}', [CartController::class, 'pararSequencia'])->middleware('signed')->name('sequencia.parar');
     Route::post('/', [CartController::class, 'store'])->name('adicionar');
     Route::patch('/{product}', [CartController::class, 'update'])->name('atualizar');
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
@@ -706,6 +708,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
     // Carrinho abandonado (pedido 2026-10-24): só leitura, nada é enviado ao cliente daqui.
     Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
+    // Sequência de carrinho abandonado (pedido 2026-11-21): só leitura, quem manda é o comando.
+    Route::get('carrinhos-abandonados/sequencia', [\App\Modules\Admin\Http\Controllers\CarrinhoSequenciaController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.sequencia');
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');

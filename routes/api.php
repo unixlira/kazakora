@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BeautyKoraCheckoutController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraPerfilController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
+use App\Http\Controllers\Api\FerraKoraAvaliacaoController;
 use App\Http\Controllers\Api\FerraKoraBancadaController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Controllers\Api\FerraKoraCheckoutController;
@@ -302,6 +303,11 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');
         Route::post('sair', [FerraKoraContaController::class, 'sair'])->name('sair');
         Route::get('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->name('pedidos');
+
+        // Modal "Avalie sua compra" no site (pedido do Lira 2026-11-21).
+        Route::get('avaliacao/pendente', [FerraKoraAvaliacaoController::class, 'pendente'])->name('avaliacao.pendente');
+        Route::post('avaliacao/{produto}', [FerraKoraAvaliacaoController::class, 'avaliar'])
+            ->where('produto', 'kz-[0-9]{1,10}')->middleware('throttle:10,1,fk-avaliacao')->name('avaliacao.enviar');
 
         // Minha Bancada (favoritos, 2026-10-15): ids "kz-<id>" do catálogo.
         Route::prefix('bancada')->name('bancada.')->controller(FerraKoraBancadaController::class)->group(function () {

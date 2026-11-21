@@ -1706,14 +1706,14 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 details[open] summary { color: var(--blue); }
 .pd2 details p { padding: 0 15px 15px; margin: 0; }
 
-.pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; margin: 20px 0; }
-.pd2 .confianca div { display: flex; align-items: center; gap: 19px; color: var(--text); background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 24px 20px; }
-/* Faixa de confiança: ícone e título no laranja da KazaKora (#F37021) e texto em preto (pedido do Lira 20/11/2026). */
-.pd2 .confianca i { font-size: 48px; color: #f37021; width: 56px; text-align: center; flex: 0 0 auto; }
-.dark .pd2 .confianca i { color: #f37021; }
-.pd2 .confianca strong { display: block; color: #f37021; font-size: 20px; font-weight: 700; }
+/* Faixa de confiança no mesmo tamanho da FerraKora (pedido do Lira 21/11/2026): círculo laranja
+   da KazaKora (#F37021) com ícone preto, título laranja em negrito e texto em preto. */
+.pd2 .confianca { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: stretch; margin: 20px 0; }
+.pd2 .confianca div { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / .08); color: #000; font-size: 14px; line-height: 1.35; }
+.pd2 .confianca i { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: 0 0 48px; border-radius: 999px; background: #f37021; color: #000; font-size: 22px; }
+.dark .pd2 .confianca i { color: #000; }
+.pd2 .confianca strong { display: block; font-size: 16px; font-weight: 700; line-height: 1.2; color: #f37021; margin-bottom: 2px; }
 .pd2 .confianca span { color: #000; }
-.dark .pd2 .confianca span { color: var(--text); }
 .pd2 .relacionados h2 { margin-top: 10px; }
 
 /* Barra presa no rodapé: só no celular (pedido 2026-10-24). No computador o
@@ -1724,7 +1724,7 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 @media (max-width: 1024px) {
     .pd2 .card { padding: 30px; }
     .pd2 .galeria-card { padding: 10px; }
-    .pd2 .confianca { grid-template-columns: repeat(2, 1fr); }
+    .pd2 .confianca { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 .aval-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
@@ -1764,10 +1764,10 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }
-    .pd2 .confianca { grid-template-columns: 1fr 1fr; gap: 16px; }
-    .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 6px; font-size: 14px; padding: 18px 12px; }
-    .pd2 .confianca i { font-size: 40px; }
-    .pd2 .confianca strong { font-size: 16px; }
+    .pd2 .confianca { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 10px; font-size: 12.5px; }
+    .pd2 .confianca i { width: 44px; height: 44px; flex-basis: 44px; font-size: 20px; }
+    .pd2 .confianca strong { font-size: 14.5px; }
     .pd2 .barra { display: flex; align-items: center; gap: 12px; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); transform: none; visibility: visible; transition: none; }
     .pd2 .barra-preco { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
     .pd2 .barra-preco strong { font-size: 17px; font-weight: 700; color: #00851c; font-variant-numeric: tabular-nums; white-space: nowrap; }

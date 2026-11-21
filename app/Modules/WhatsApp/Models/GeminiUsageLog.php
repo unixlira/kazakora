@@ -22,6 +22,9 @@ class GeminiUsageLog extends Model
     /** Separação das buscas do Google Trends por assunto no Radar (2026-10-12). */
     public const PURPOSE_RADAR = 'radar';
 
+    /** Notícia do produto na sequência de carrinho abandonado (2026-11-21). */
+    public const PURPOSE_CARRINHO = 'carrinho';
+
     protected $fillable = ['model', 'purpose', 'prompt_tokens', 'output_tokens', 'total_tokens'];
 
     protected function casts(): array

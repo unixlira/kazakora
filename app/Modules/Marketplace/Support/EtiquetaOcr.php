@@ -29,7 +29,7 @@ class EtiquetaOcr
 
     /**
      * Palavras da 1ª página. null quando o OCR não está disponível ou falhou
-     * (quem chama decide: sem OCR não se bloqueia nada).
+     * (quem chama decide; a etiqueta da loja não imprime sem a conferência).
      *
      * @return list<array{texto: string, x0: float, y0: float, x1: float, y1: float, linha: string}>|null
      */
@@ -56,7 +56,29 @@ class EtiquetaOcr
                 return null;
             }
 
-            $ocr = Process::timeout(60)->run(['tesseract', $imagem, '-', '--psm', '11', 'tsv']);
+            // #4356 (21/11/2026): várias leituras ao mesmo tempo, cada uma com
+            // 4 threads do OpenMP nos 4 núcleos da VPS, travaram o tesseract
+            // por mais de 60 s (sozinho leva 0,5 s). Uma thread por leitura e
+            // até 3 tentativas antes de desistir.
+            $ocr = null;
+            for ($tentativa = 1; $tentativa <= 3; $tentativa++) {
+                try {
+                    $ocr = Process::timeout(90)->env(['OMP_THREAD_LIMIT' => '1'])
+                        ->run(['tesseract', $imagem, '-', '--psm', '11', 'tsv']);
+                    if ($ocr->successful()) {
+                        break;
+                    }
+                } catch (Throwable $e) {
+                    Log::channel(config('melhorenvio.log_channel'))->warning('etiqueta.ocr_erro', ['tentativa' => $tentativa, 'message' => $e->getMessage()]);
+                    $ocr = null;
+                }
+                if ($tentativa < 3) {
+                    usleep(500_000 * $tentativa);
+                }
+            }
+            if ($ocr === null) {
+                return null;
+            }
             if (! $ocr->successful()) {
                 Log::channel(config('melhorenvio.log_channel'))->warning('etiqueta.ocr_falhou', ['erro' => mb_substr($ocr->errorOutput(), 0, 200)]);
 

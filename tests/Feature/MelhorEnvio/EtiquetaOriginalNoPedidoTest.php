@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\LojaShippingDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
+use App\Modules\Marketplace\Support\EtiquetaOcr;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -50,8 +51,59 @@ class EtiquetaOriginalNoPedidoTest extends TestCase
         return $order;
     }
 
+    /** Conferência do logo: false = sem marca do Melhor Envio; null = não deu para conferir. */
+    private function conferencia(?bool $temMarca): void
+    {
+        $this->app->instance(EtiquetaOcr::class, new class($temMarca) extends EtiquetaOcr
+        {
+            public function __construct(private ?bool $resposta) {}
+
+            public function palavras(string $pdf): ?array
+            {
+                return null;
+            }
+
+            public function temMarcaDoMelhorEnvio(string $pdf): ?bool
+            {
+                return $this->resposta;
+            }
+        });
+    }
+
+    private function etiquetaDoMelhorEnvio(): string
+    {
+        config(['services.melhorenvio.api_base_url' => 'https://me.test/api/v2']);
+        MelhorEnvioToken::create([
+            'account_label' => 'KazaKora ME', 'access_token' => 'acesso', 'refresh_token' => 'r1',
+            'token_expires_at' => now()->addDays(20), 'scopes' => [],
+        ]);
+        $original = $this->pdf();
+        Http::fake([
+            'me.test/*' => Http::response(['url' => 'https://arquivos.test/etiqueta.pdf']),
+            'arquivos.test/*' => Http::response($original, 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        return $original;
+    }
+
+    public function test_sem_conferencia_do_logo_a_etiqueta_nao_imprime(): void
+    {
+        // #4356 (21/11/2026): o OCR travou e a etiqueta saiu com o logo do Melhor Envio.
+        $this->etiquetaDoMelhorEnvio();
+        $this->conferencia(null);
+        $this->assertFalse(app(LojaShippingDriver::class)->fetchLabel($this->pedido())['ready']);
+    }
+
+    public function test_com_a_marca_do_melhor_envio_a_etiqueta_nao_imprime(): void
+    {
+        $this->etiquetaDoMelhorEnvio();
+        $this->conferencia(true);
+        $this->assertFalse(app(LojaShippingDriver::class)->fetchLabel($this->pedido())['ready']);
+    }
+
     public function test_driver_devolve_a_etiqueta_da_loja_e_a_original_junto(): void
     {
+        $this->conferencia(false);
         config(['services.melhorenvio.api_base_url' => 'https://me.test/api/v2']);
         MelhorEnvioToken::create([
             'account_label' => 'KazaKora ME', 'access_token' => 'acesso', 'refresh_token' => 'r1',

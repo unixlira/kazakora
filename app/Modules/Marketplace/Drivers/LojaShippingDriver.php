@@ -142,15 +142,23 @@ class LojaShippingDriver implements MarketplaceChannelDriver
                 );
                 // Conferência por OCR (pedido do Lira em 15/11/2026, #4198): se
                 // a marca do Melhor Envio ainda aparece, a etiqueta não vai
-                // para a impressora e o admin é avisado. Sem OCR no servidor,
-                // não bloqueia (só fica no log).
-                if (app(EtiquetaOcr::class)->temMarcaDoMelhorEnvio($pdf) === true) {
-                    Log::warning('melhorenvio.etiqueta_com_marca_me', ['order_id' => $order->id, 'servico' => $envio->servico]);
+                // para a impressora e o admin é avisado. Desde 21/11/2026
+                // (#4356 saiu com o logo do Melhor Envio: o OCR travou e a
+                // falta de conferência deixava imprimir): sem a conferência
+                // dizer "sem marca do Melhor Envio", NÃO imprime. Fica para a
+                // próxima rodada da busca de etiquetas, que tenta de novo.
+                $temMarca = app(EtiquetaOcr::class)->temMarcaDoMelhorEnvio($pdf);
+                if ($temMarca !== false) {
+                    Log::warning('melhorenvio.etiqueta_com_marca_me', ['order_id' => $order->id, 'servico' => $envio->servico, 'ocr' => $temMarca === null ? 'sem_conferencia' : 'marca_me']);
                     app(AlertasAdmin::class)->disparar(
                         AlertasAdmin::ETIQUETA_MARCA,
                         'pedido-'.$order->id,
-                        "Etiqueta do pedido #{$order->id} ainda com o Melhor Envio",
-                        "A troca pelo logo da loja não pegou na etiqueta {$envio->servico}. Ela não foi impressa; a original está no pedido.",
+                        $temMarca === null
+                            ? "Etiqueta do pedido #{$order->id} esperando a conferência do logo"
+                            : "Etiqueta do pedido #{$order->id} ainda com o Melhor Envio",
+                        $temMarca === null
+                            ? "Não deu para conferir o logo da loja na etiqueta {$envio->servico}. Ela não foi impressa e o sistema tenta de novo sozinho."
+                            : "A troca pelo logo da loja não pegou na etiqueta {$envio->servico}. Ela não foi impressa; a original está no pedido.",
                         "/admin/pedidos/{$order->id}",
                     );
 

@@ -26,10 +26,12 @@ class PrintDaPagina
 
     /**
      * Formato dos arquivos: 2 = fatias + miniatura borrada (2026-11-20);
-     * 3 = sem as faixas vazias das animações de entrada (2026-11-20). Subir o
-     * número faz o comportamento:prints refazer todos os prints antigos.
+     * 3 = sem as faixas vazias das animações de entrada (2026-11-20);
+     * 4 = páginas de produto da KazaKora e da FerraKora com a caixa preta da
+     * oferta de volta (2026-11-20). Subir o número faz o comportamento:prints
+     * refazer todos os prints antigos.
      */
-    public const VERSAO = 3;
+    public const VERSAO = 4;
 
     /** Teto da miniatura borrada (vai junto da página, em base64). */
     public const MINIATURA_MAX = 3000;

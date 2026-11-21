@@ -21,6 +21,18 @@ class EtiquetaMelhorEnvioComMarca
     private const LOGO = 'images/marca/logo-kazakora-fiel.png';
 
     /**
+     * Desenho do favicon da KazaKora (a casa com KK), em cima da palavra
+     * KazaKora na etiqueta (pedido do Lira em 21/11/2026).
+     */
+    private const FAVICON = 'images/marca/favicon-512.png';
+
+    /** Altura do desenho do favicon em relação à altura da palavra KazaKora. */
+    private const FAVICON_ESCALA = 1.9;
+
+    /** Margem mínima entre o logo e a borda de cima da etiqueta (fração da página). */
+    private const MARGEM_BORDA = 0.05;
+
+    /**
      * Logo da FerraKora para a térmica. Desde 14/11/2026 é o da marca nova
      * (o "FerraKora" verde-limão e índigo do site), todo em preto sobre
      * branco: a térmica imprime uma cor só e o verde sairia claro demais. O
@@ -164,13 +176,22 @@ class EtiquetaMelhorEnvioComMarca
                             $altura = ($y1 - $y0) * $h * 0.9;
                             $largura = $altura * $lw / $lh;
                         }
-                        $fpdi->Image(
-                            $logo,
-                            ($x0 + $x1) / 2 * $w - $largura / 2,
-                            ($y0 + $y1) / 2 * $h - $altura / 2,
-                            $largura,
-                            $altura,
-                        );
+                        $centroX = ($x0 + $x1) / 2 * $w;
+                        if ($site === \App\Support\SiteAtual::FERRAKORA) {
+                            $fpdi->Image($logo, $centroX - $largura / 2, ($y0 + $y1) / 2 * $h - $altura / 2, $largura, $altura);
+                        } else {
+                            // KazaKora (pedido do Lira em 21/11/2026): desenho do
+                            // favicon em cima e a palavra KazaKora embaixo, no
+                            // mesmo tamanho de antes, os dois centralizados. O
+                            // bloco fica na área do logo e não encosta na borda
+                            // de cima da etiqueta.
+                            $lado = $altura * self::FAVICON_ESCALA;
+                            $vao = $altura * 0.25;
+                            $bloco = $lado + $vao + $altura;
+                            $topo = max(($y0 + $y1) / 2 * $h - $bloco / 2, self::MARGEM_BORDA * $h);
+                            $fpdi->Image(public_path(self::FAVICON), $centroX - $lado / 2, $topo, $lado, $lado);
+                            $fpdi->Image($logo, $centroX - $largura / 2, $topo + $lado + $vao, $largura, $altura);
+                        }
                     }
 
                     if ($layout['remetente'] !== null) {

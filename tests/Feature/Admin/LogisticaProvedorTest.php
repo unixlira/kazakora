@@ -16,6 +16,7 @@ use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Marketplace\Drivers\LojaShippingDriver;
 use App\Modules\Marketplace\Models\MelhorEnvioEnvio;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\EtiquetaOcr;
 use App\Modules\Marketplace\Support\MelhorEnvioAutoShipping;
 use App\Support\FreteProvedor;
 use App\Support\SiteAtual;
@@ -476,6 +477,12 @@ class LogisticaProvedorTest extends TestCase
         $driver->confirmShipping($order->fresh());
         Http::assertSentCount(collect(Http::recorded())->count());
         $this->assertSame(1, collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), '/me/shipment/checkout'))->count());
+
+        // Conferência do logo da loja (sem OCR no teste): sem marca do Melhor Envio.
+        $ocr = Mockery::mock(EtiquetaOcr::class)->makePartial();
+        $ocr->shouldReceive('palavras')->andReturnNull();
+        $ocr->shouldReceive('temMarcaDoMelhorEnvio')->andReturnFalse();
+        $this->app->instance(EtiquetaOcr::class, $ocr);
 
         $etiqueta = $driver->fetchLabel($order);
         $this->assertTrue($etiqueta['ready']);

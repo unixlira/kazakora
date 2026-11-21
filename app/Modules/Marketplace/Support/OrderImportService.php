@@ -938,7 +938,9 @@ class OrderImportService
 
     public function refreshBuyerInfo(Order $order): void
     {
-        if ($order->origin === Order::ORIGIN_STORE) {
+        // Site e pedidos fiscais técnicos (avulsa, devolução, bonificação do
+        // brinde) não têm canal de onde buscar o comprador.
+        if (in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, ...Order::ORIGENS_FISCAIS_TECNICAS], true)) {
             return;
         }
 

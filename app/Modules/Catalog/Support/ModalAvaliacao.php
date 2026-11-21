@@ -39,8 +39,12 @@ class ModalAvaliacao
     /** Sessão: produtos pulados ("Não avaliar agora") neste login. */
     private const PULADOS = 'avaliacao_modal.pulados';
 
+    /** Sessão: o modal já foi ligado uma vez nesta sessão (2026-11-21). */
+    private const LIGADO_NA_SESSAO = 'avaliacao_modal.ligado';
+
     public static function ativar(Session $session): void
     {
+        $session->put(self::LIGADO_NA_SESSAO, true);
         $session->put(self::ATIVO, true);
         $session->forget([self::MOSTRADOS, self::PULADOS]);
     }
@@ -52,6 +56,16 @@ class ModalAvaliacao
 
     public static function ativo(Session $session): bool
     {
+        // Correção 2026-11-21 (cliente recebeu o pedido, entrou e o modal não
+        // abriu): antes o modal só ligava no POST do formulário de login.
+        // Quem volta já logado (cookie "lembrar-me", sessão ainda aberta,
+        // login do checkout) nunca passava por ali. Agora toda sessão logada
+        // liga o modal uma vez; o evento Login (AppServiceProvider) religa a
+        // cada login novo.
+        if (! $session->get(self::LIGADO_NA_SESSAO, false)) {
+            self::ativar($session);
+        }
+
         return (bool) $session->get(self::ATIVO, false);
     }
 

@@ -56,6 +56,11 @@ class AppServiceProvider extends ServiceProvider
         // controller. O checkout de convidado não loga mais (2026-10-24).
         Event::listen(function (Login $event): void {
             session(['login_at' => now()->timestamp]);
+            // Modal "Avalie sua compra" (correção 2026-11-21): liga em todo
+            // login de cliente, não só no formulário (lembrar-me, cadastro, checkout).
+            if ($event->guard === 'web' && ! ($event->user instanceof \App\Models\User && $event->user->isStaff())) {
+                \App\Modules\Catalog\Support\ModalAvaliacao::ativar(session()->driver());
+            }
         });
 
         // Pedido explícito 2026-08-21 (API pública pra parceiros

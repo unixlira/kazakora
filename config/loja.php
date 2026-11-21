@@ -155,4 +155,9 @@ return [
     | rodada de 10 minutos, para não estourar a cota do WhatsApp/e-mail.
     */
     'carrinho_sequencia_limite' => (int) env('CARRINHO_SEQUENCIA_LIMITE', 50),
+    // Envio ligado só no kazakora.com (mesmo padrão do alerta_coleta em
+    // config/services.php): o homolog também roda com APP_ENV=production e o
+    // mesmo WhatsApp, e não pode mandar mensagem a cliente. Desligado, o
+    // comando importa e para normalmente, mas não manda nada.
+    'carrinho_sequencia_ativa' => (bool) env('CARRINHO_SEQUENCIA_ATIVA', in_array(parse_url((string) env('APP_URL'), PHP_URL_HOST), ['kazakora.com', 'www.kazakora.com'], true)),
 ];

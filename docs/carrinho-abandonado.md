@@ -106,6 +106,7 @@ leitura: loja, cliente, produto, disparos feitos, próximo disparo e situação.
 | `WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE` | vazio | template do 2º ao 6º, FerraKora |
 | `WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA` | `pt_BR` | idioma dele |
 | `CARRINHO_SEQUENCIA_LIMITE` | `50` | carrinhos com disparo por rodada |
+| `CARRINHO_SEQUENCIA_ATIVA` | ligada só se o host do `APP_URL` for `kazakora.com` | desligada (homolog, local, testes): importa e para, mas não manda nada; `--simular` funciona sempre |
 
 ## Templates para enviar à Meta
 

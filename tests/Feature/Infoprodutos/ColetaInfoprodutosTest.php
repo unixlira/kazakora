@@ -63,6 +63,18 @@ class ColetaInfoprodutosTest extends TestCase
         }
     }
 
+    public function test_landing_do_homer_e_gravada_e_aparece_no_comportamento(): void
+    {
+        $this->enviar($this->corpo(['p' => 'homer', 'l' => 'pt', 's' => 'HoMeR0123456789abc']))->assertNoContent();
+
+        $this->assertSame(3, InfoprodutoEvento::where('produto', 'homer')->count());
+        $paginas = (new \App\Modules\Infoprodutos\Support\Comportamento)->paginas(now()->subDay(), now()->addMinute());
+        $homer = collect($paginas)->firstWhere('produto', 'homer');
+        $this->assertNotNull($homer);
+        $this->assertSame('Homer', $homer['rotulo']);
+        $this->assertSame(1, $homer['visitas']);
+    }
+
     public function test_pais_so_vem_da_cloudflare(): void
     {
         $this->call('POST', self::URL, [], [], [], [

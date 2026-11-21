@@ -26,6 +26,9 @@ return [
         // 20/11: faltava; as visitas da campanha do Jarvis Voz eram descartadas.
         'jarvis-voz' => 'Jarvis Voz',
         'codigo-divino' => 'El Código Divino',
+        // 21/11: a landing do Homer (pt-BR) passou a mandar eventos; sem estas linhas eram descartados.
+        'homer' => 'Homer',
+        'homer-voz' => 'Homer Voz',
     ],
 
     // Eventos brutos: apagados depois deste prazo (os totais diários ficam).

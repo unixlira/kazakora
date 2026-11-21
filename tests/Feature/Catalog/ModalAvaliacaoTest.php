@@ -67,14 +67,28 @@ class ModalAvaliacaoTest extends TestCase
         $this->assertSame($novo->id, $this->modal()['produto_id']);
     }
 
-    public function test_sem_login_novo_nao_abre(): void
+    public function test_cliente_ja_logado_tambem_ve_o_modal(): void
     {
+        // Correção 2026-11-21: quem volta com a sessão aberta ou pelo "lembrar-me"
+        // (sem passar pelo formulário de login) também vê o modal.
         $user = $this->cliente();
-        $this->pedido($user, Product::factory()->create(['is_active' => true]));
+        $produto = Product::factory()->create(['is_active' => true]);
+        $this->pedido($user, $produto);
 
         $this->actingAs($user);
 
-        $this->assertNull($this->modal());
+        $this->assertSame($produto->id, $this->modal()['produto_id']);
+    }
+
+    public function test_login_pelo_lembrar_me_liga_o_modal(): void
+    {
+        $user = $this->cliente();
+        $produto = Product::factory()->create(['is_active' => true]);
+        $this->pedido($user, $produto);
+
+        \Illuminate\Support\Facades\Auth::guard('web')->login($user, true);
+
+        $this->assertSame($produto->id, $this->modal()['produto_id']);
     }
 
     public function test_ignora_nao_entregue_ja_avaliado_e_outro_site(): void

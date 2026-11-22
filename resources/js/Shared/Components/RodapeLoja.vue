@@ -47,6 +47,7 @@ const REDES = [
                     <ul class="flex flex-col gap-2 text-sm opacity-80">
                         <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
                         <li><a href="/?todos=1#produtos" class="hover:opacity-100">Produtos</a></li>
+                        <li><Link href="/blog" class="hover:opacity-100">Blog</Link></li>
                         <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                     </ul>
                 </div>

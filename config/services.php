@@ -453,6 +453,11 @@ return [
                     'pedido_entregue_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
                     'pedido_retirada' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA', 'pedido_aguardando_retirada_ferrakora'),
                     'pedido_retirada_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_RETIRADA_IDIOMA', 'pt_BR'),
+                    // Carrinho abandonado (2026-11-21), ver o bloco da KazaKora abaixo.
+                    'carrinho_lembrete' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE'),
+                    'carrinho_lembrete_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
+                    'carrinho_novidade' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE'),
+                    'carrinho_novidade_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
                 ],
             ],
         ],
@@ -495,6 +500,16 @@ return [
             // Pacote parado na agência dos Correios (loja:avisar-retirada, 2026-11-20).
             'pedido_retirada' => env('WHATSAPP_TEMPLATE_PEDIDO_RETIRADA', 'pedido_aguardando_retirada_kazakora'),
             'pedido_retirada_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_RETIRADA_IDIOMA', 'pt_BR'),
+            // Sequência de carrinho abandonado (2026-11-21, sem desconto,
+            // docs/carrinho-abandonado.md). Vazio = o WhatsApp não sai, só o
+            // e-mail. Lembrete (1º disparo): corpo {{1}} primeiro nome,
+            // {{2}} produto, botão URL dinâmico (sufixo). Novidade (2º ao 6º):
+            // cabeçalho imagem do produto, corpo {{1}} nome, {{2}} produto,
+            // {{3}} texto da notícia, botão URL dinâmico.
+            'carrinho_lembrete' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE'),
+            'carrinho_lembrete_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
+            'carrinho_novidade' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE'),
+            'carrinho_novidade_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

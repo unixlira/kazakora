@@ -292,11 +292,17 @@ o pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF.
   carrinho do servidor. Falha vira log `checkout.lead.falhou` só com a classe
   do erro, nunca com o dado da pessoa.
 - Leitura só no admin: `/admin/carrinhos-abandonados` (permissão `pedidos.view`),
-  somente consulta. Nenhuma mensagem de recuperação sai daqui: falar com o
-  cliente pede OK do Lira.
+  somente consulta.
 - Base legal: procedimentos preliminares do contrato que a pessoa começou
-  (art. 7º V). Mensagem de recuperação, quando o Lira decidir ligar, precisa
-  ser avaliada à parte (legítimo interesse com opção de sair, art. 7º IX).
+  (art. 7º V). Mensagem de recuperação: legítimo interesse com opção de sair
+  (art. 7º IX).
+- **Sequência de recuperação (decisão do Lira 21/11/2026,
+  `docs/carrinho-abandonado.md`)**: o comando `loja:carrinho-abandonado-sequencia`
+  copia nome, e-mail, celular e itens para `adm_abandoned_carts` e manda até 6
+  mensagens (WhatsApp por template e e-mail) em 30 dias, sem desconto. Opção de
+  sair em toda mensagem: responder "sair"/"parar" no WhatsApp ou o link "Não
+  quero mais receber" do e-mail; quem desmarcou `recebe_promocoes` não recebe.
+  Quem pediu para parar não volta para a sequência.
 - Prazo de guarda (decisão do Lira, 2026-10-24): **3 meses** desde a última
   interação (`updated_at`). Depois disso o lead é apagado, aberto ou
   convertido, pelo `php artisan leads:limpar` (todo dia 03:52, horário de São

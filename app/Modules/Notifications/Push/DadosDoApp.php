@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Marketplace\Support\ContributionMargin;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -30,7 +31,10 @@ class DadosDoApp
 
     public const PERIODOS_META = ['hoje' => 'today', '7d' => 'last_7d', 'mes' => 'this_month', '30d' => 'last_30d'];
 
-    public function __construct(private readonly CampanhasMetaPorLoja $metaPorLoja) {}
+    public function __construct(
+        private readonly CampanhasMetaPorLoja $metaPorLoja,
+        private readonly ContributionMargin $margem,
+    ) {}
 
     private function daLoja(string $app)
     {
@@ -134,12 +138,16 @@ class DadosDoApp
         })->sortByDesc('ativo')->values()->all()];
     }
 
-    /** Campanhas da conta Meta da loja no período (CampanhasMetaPorLoja, só leitura). */
+    /**
+     * Campanhas da conta Meta da loja no período (CampanhasMetaPorLoja, só
+     * leitura) e, no topo da aba, o "Resultado do período" (bloco resultado).
+     */
     public function campanhas(string $app, string $periodo): array
     {
         $loja = $app === AppsDeVendas::FERRAKORA ? CampanhasMetaPorLoja::FERRAKORA : CampanhasMetaPorLoja::KAZAKORA;
         if (! isset($this->metaPorLoja->lojas()[$loja])) {
-            return ['configurada' => false, 'erro' => null, 'totais' => null, 'campanhas' => []];
+            return ['configurada' => false, 'erro' => null, 'totais' => null, 'campanhas' => [],
+                'resultado' => $this->resultado($app, $periodo, 0.0, null)];
         }
 
         $dados = $this->metaPorLoja->montar($loja, self::PERIODOS_META[$periodo] ?? 'this_month')[0] ?? null;
@@ -149,11 +157,14 @@ class DadosDoApp
             'vendas' => isset($m['vendas']) ? round((float) $m['vendas'], 2) : null,
             'roas' => isset($m['roas']) ? round((float) $m['roas'], 2) : null,
         ];
+        $totais = isset($dados['totais']) ? $n($dados['totais']) : null;
+        $erro = $dados['erro'] ?? null;
 
         return [
             'configurada' => true,
-            'erro' => $dados['erro'] ?? null,
-            'totais' => isset($dados['totais']) ? $n($dados['totais']) : null,
+            'erro' => $erro,
+            'totais' => $totais,
+            'resultado' => $this->resultado($app, $periodo, $erro === null ? (float) ($totais['gasto'] ?? 0) : null, $erro),
             'campanhas' => collect($dados['campanhas'] ?? [])
                 ->reject(fn ($c) => (bool) ($c['oculta'] ?? false))
                 ->map(fn (array $c) => [
@@ -164,6 +175,81 @@ class DadosDoApp
                     'orcamento_diario' => isset($c['orcamento_diario']) ? (float) $c['orcamento_diario'] : null,
                 ] + $n($c))
                 ->values()->all(),
+        ];
+    }
+
+    /**
+     * Dias que o date_preset da Meta cobre, para a loja usar a MESMA janela
+     * que o gasto: [de, ate), ate exclusivo, dias inteiros. Atenção: na Meta,
+     * last_7d e last_30d são os 7/30 dias ANTERIORES a hoje (hoje fora);
+     * today e this_month incluem hoje.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function janelaDaMeta(string $periodo, ?Carbon $agora = null): array
+    {
+        $hoje = ($agora ?? now())->copy()->startOfDay();
+
+        return match (self::PERIODOS_META[$periodo] ?? 'this_month') {
+            'today' => [$hoje->copy(), $hoje->copy()->addDay()],
+            'last_7d' => [$hoje->copy()->subDays(7), $hoje->copy()],
+            'last_30d' => [$hoje->copy()->subDays(30), $hoje->copy()],
+            default => [$hoje->copy()->startOfMonth(), $hoje->copy()->addDay()],
+        };
+    }
+
+    /**
+     * "O anúncio está pagando?" (pedido do Lira em 2026-11-21): a loja do app
+     * (só o site, canal de MetricasDaLoja::CANAL) na mesma janela do gasto da
+     * Meta. Cada número:
+     *
+     *  - gasto_meta: o mesmo de totais.gasto (insights da conta Meta da loja,
+     *    lido ao vivo). Sem Meta configurada = 0; Meta com erro = null (e
+     *    sobra/roas também null, para não mostrar conta errada).
+     *  - faturamento_bruto: ContributionMargin::vendasBrutas() do canal: soma
+     *    de orders.total (o que o cliente pagou, com frete) dos pedidos pagos,
+     *    enviados ou entregues (REVENUE_STATUSES), só venda efetiva.
+     *  - receita, custo_produtos, taxas, frete, imposto, bonificacoes: a linha
+     *    do canal em ContributionMargin::conta() (= porCanal()), sem conta nova.
+     *    Receita é a base da conta oficial: produtos menos descontos da loja,
+     *    sem o frete pago pelo cliente (por isso é menor que o bruto).
+     *  - valor_liquido: o lucro oficial ANTES do anúncio = lucro + ads da
+     *    própria linha (= receita − custo − taxas − frete + bonificações −
+     *    imposto). O lucro oficial já desconta o anúncio gravado em
+     *    channel_ad_spends (Meta da KazaKora entra no canal loja, sincronizado
+     *    pelo ads:sync-spend); devolvemos esse valor aqui para o gasto da Meta
+     *    sair UMA vez só, logo abaixo, pelo número ao vivo.
+     *  - anuncios_na_conta: o que a conta oficial tinha descontado de anúncio
+     *    (informativo; pode ficar atrás da Meta até a próxima sincronização).
+     *  - sobra_depois_do_anuncio: valor_liquido − gasto_meta.
+     *  - roas_real: faturamento_bruto ÷ gasto_meta (null sem gasto).
+     */
+    public function resultado(string $app, string $periodo, ?float $gastoMeta, ?string $erroMeta = null): array
+    {
+        [$de, $ate] = self::janelaDaMeta($periodo);
+        $canal = MetricasDaLoja::CANAL[$app];
+        $conta = $this->margem->conta($de, $ate, $canal);
+        $bruto = ContributionMargin::vendasBrutas($de, $ate, $canal);
+        $liquido = round((float) $conta['lucro'] + (float) $conta['ads'], 2);
+        $gasto = $gastoMeta !== null ? round($gastoMeta, 2) : null;
+
+        return [
+            'de' => $de->toDateString(),
+            'ate' => $ate->copy()->subDay()->toDateString(),
+            'pedidos' => (int) $conta['pedidos'],
+            'gasto_meta' => $gasto,
+            'meta_erro' => $erroMeta,
+            'faturamento_bruto' => $bruto,
+            'receita' => round((float) $conta['receita'], 2),
+            'custo_produtos' => round((float) $conta['custo_produtos'], 2),
+            'taxas' => round((float) $conta['taxas'], 2),
+            'frete' => round((float) $conta['frete'], 2),
+            'bonificacoes' => round((float) $conta['bonificacoes'], 2),
+            'imposto' => round((float) $conta['imposto'], 2),
+            'anuncios_na_conta' => round((float) $conta['ads'], 2),
+            'valor_liquido' => $liquido,
+            'sobra_depois_do_anuncio' => $gasto !== null ? round($liquido - $gasto, 2) : null,
+            'roas_real' => $gasto !== null && $gasto > 0 ? round($bruto / $gasto, 2) : null,
         ];
     }
 

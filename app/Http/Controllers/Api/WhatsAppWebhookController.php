@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
+use App\Modules\Cart\Support\Sequencia\ParadasSequencia;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
@@ -85,6 +86,12 @@ class WhatsAppWebhookController extends Controller
                     // reagida e não chama a Manuela.
                     if ($stored->type === 'reaction') {
                         continue;
+                    }
+
+                    // "Parar"/"sair" (2026-11-21): tira a pessoa da sequência de
+                    // carrinho abandonado. A conversa segue normal (a Manuela responde).
+                    if ($stored->wasRecentlyCreated && ParadasSequencia::pedidoDeParada($message['text']['body'] ?? $message['button']['text'] ?? null)) {
+                        rescue(fn () => app(ParadasSequencia::class)->pediuParar(null, $message['from'] ?? null), report: true);
                     }
 
                     // Botão "Falar com Atendente" do aviso de pedido enviado.

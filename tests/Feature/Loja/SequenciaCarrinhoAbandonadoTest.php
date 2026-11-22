@@ -8,6 +8,7 @@ use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia as Registro;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Cart\Support\Sequencia\CalendarioSequencia;
 use App\Modules\Cart\Support\Sequencia\LinkDoCarrinho;
+use App\Modules\Cart\Support\Sequencia\PromocaoDoCarrinho;
 use App\Modules\Cart\Support\Sequencia\NoticiaDoProduto;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\LeadCheckout;
@@ -279,6 +280,35 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         foreach (Registro::sole()->historico as $linha) {
             $this->assertDoesNotMatchRegularExpression('/desconto|cupom|%/iu', (string) ($linha['texto'] ?? ''));
         }
+    }
+
+    public function test_promocao_do_livro_entra_no_lugar_da_novidade_ate_30_11(): void
+    {
+        Mail::fake();
+        $this->ligarWhatsApp();
+        $this->travelTo(Carbon::parse('2026-11-22 10:00', 'America/Sao_Paulo'));
+        $livro = $this->produto(['name' => 'Livro Falante', 'slug' => 'livro-falante-infantil-bilingue-portugues-e-ingles-com-som-11-temas-e-300-palavras']);
+        $this->lead([], 60 * 24 * 3, $livro);
+
+        $this->artisan('loja:carrinho-abandonado-sequencia'); // D+1: lembrete, sem promoção
+        $this->travel(2)->days();
+        $this->artisan('loja:carrinho-abandonado-sequencia'); // D+3: promoção
+
+        $historico = collect(Registro::sole()->historico);
+        $this->assertNull($historico->firstWhere('numero', 1)['texto'] ?? null);
+        $segundo = $historico->where('numero', 2)->first();
+        $this->assertSame('promocao', $segundo['fonte_texto']);
+        $this->assertStringContainsString('Lousa Mágica LED vai de graça', $segundo['texto']);
+        $this->assertStringContainsString('3%', $segundo['texto']);
+        Http::assertSent(fn ($request) => ($request['template']['name'] ?? null) === 'carrinho_novidade_kazakora'
+            && str_contains($request['template']['components'][1]['parameters'][2]['text'] ?? '', 'Black Friday'));
+
+        Mail::assertSent(SequenciaCarrinho::class, fn (SequenciaCarrinho $mail) => $mail->promocao
+            && str_contains($mail->build()->subject, 'Black Friday') && str_contains($mail->render(), 'Voltar ao meu carrinho'));
+
+        // Depois de 30/11 volta a novidade comum.
+        $this->assertNull(PromocaoDoCarrinho::texto($livro, Carbon::parse('2026-12-01 00:00:01', 'America/Sao_Paulo')));
+        $this->assertNull(PromocaoDoCarrinho::texto($this->produto(['slug' => 'organizador'])));
     }
 
     public function test_link_cai_no_produto_sem_blog(): void

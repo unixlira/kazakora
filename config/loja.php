@@ -170,4 +170,22 @@ return [
     // mesmo WhatsApp, e não pode mandar mensagem a cliente. Desligado, o
     // comando importa e para normalmente, mas não manda nada.
     'carrinho_sequencia_ativa' => (bool) env('CARRINHO_SEQUENCIA_ATIVA', in_array(parse_url((string) env('APP_URL'), PHP_URL_HOST), ['kazakora.com', 'www.kazakora.com'], true)),
+
+    /*
+    | Promoções na sequência de carrinho (pedido do Lira 22/11/2026). Exceção à
+    | regra "sem desconto" da sequência: enquanto vale, o texto abaixo entra no
+    | lugar da novidade do Gemini nos disparos 2 a 6 (D+3, D+5, D+7...) do
+    | carrinho cujo produto (ou produto pai) tem o slug com `slug_contem`; o
+    | calendário de dias não muda. Só afirmar o que o checkout dá de verdade:
+    | o Pix do Livro Falante foi para 5% (2% + 3%) na migração 2026_11_22_130000.
+    */
+    'carrinho_promocoes' => [
+        [
+            'slug_contem' => 'livro-falante-infantil-bilingue',
+            'ate' => '2026-11-30 23:59:59',
+            'texto' => 'É Black Friday KazaKora: até 30/11 a Lousa Mágica LED vai de graça junto com o seu Livro Falante. '
+                .'E para fechar agora, pagando no Pix você ganha mais 3% de desconto. '
+                .'A promoção vale até 30/11 ou enquanto durar o estoque, aproveite. Seu carrinho continua salvo, é só finalizar pelo link.',
+        ],
+    ],
 ];

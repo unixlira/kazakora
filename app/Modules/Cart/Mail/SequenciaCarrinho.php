@@ -23,6 +23,8 @@ class SequenciaCarrinho extends Mailable
         public readonly string $link,
         public readonly ?string $noticia = null,
         public readonly ?string $imagem = null,
+        // Texto de PromocaoDoCarrinho (22/11/2026): assunto e botão da oferta.
+        public readonly bool $promocao = false,
     ) {
     }
 
@@ -46,7 +48,7 @@ class SequenciaCarrinho extends Mailable
 
         return $this
             ->when($ferrakora, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
-            ->subject(self::assunto($this->numero, $this->produto, $nome))
+            ->subject($this->promocao ? "Black Friday: a Lousa Mágica LED vai de graça com o {$this->produto} até 30/11" : self::assunto($this->numero, $this->produto, $nome))
             ->view('emails.carrinho-sequencia', [
                 'marcaEmail' => $marca,
                 'nome' => $nome,
@@ -55,6 +57,7 @@ class SequenciaCarrinho extends Mailable
                 'imagem' => $this->imagem,
                 'link' => $this->link,
                 'lembrete' => $this->numero === 1,
+                'promocao' => $this->promocao,
                 'linkParar' => URL::signedRoute('carrinho.sequencia.parar', ['registro' => $this->registro->id]),
             ]);
     }

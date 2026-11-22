@@ -246,4 +246,23 @@ class EditorialTest extends TestCase
         $this->editorial(['title' => 'Notícia <especial>', 'excerpt' => 'Resumo seguro']);
         $this->get('/blog/teste?utm_source=evil')->assertOk()->assertSee('property="og:type" content="article"', false)->assertSee('Notícia &lt;especial&gt;', false)->assertSee('http://localhost/blog/teste', false)->assertDontSee('content="http://localhost/blog/teste?utm_source', false);
     }
+
+    public function test_feed_and_post_expose_readable_category_counts_and_related(): void
+    {
+        Category::create(['name' => 'Eletroportáteis e Casa', 'slug' => 'eletroportateis-e-casa']);
+        $old = $this->editorial(['slug' => 'antiga', 'category' => 'eletroportateis-e-casa', 'published_at' => now()->subDays(2)]);
+        $new = $this->editorial(['slug' => 'nova', 'category' => 'sem-cadastro', 'published_at' => now()->subHour()]);
+        $reader = User::factory()->create();
+        DB::table('editorial_comments')->insert([
+            ['post_id' => $old->id, 'user_id' => $reader->id, 'display_name' => 'Ana', 'body' => 'Gostei', 'status' => 'approved', 'created_at' => now(), 'updated_at' => now()],
+            ['post_id' => $old->id, 'user_id' => $reader->id, 'display_name' => 'Ana', 'body' => 'Pendente', 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $this->get('/blog')->assertInertia(fn ($p) => $p
+            ->where('posts.0.slug', 'nova')->where('posts.0.category_name', 'Sem Cadastro')
+            ->where('posts.1.slug', 'antiga')->where('posts.1.category_name', 'Eletroportáteis e Casa')->where('posts.1.comments_count', 1)
+            ->has('categories', 2)->where('categories.0.count', 1));
+        $this->get('/blog/antiga')->assertInertia(fn ($p) => $p
+            ->where('post.category_name', 'Eletroportáteis e Casa')->where('post.comments_count', 1)
+            ->has('related', 1)->where('related.0.slug', 'nova')->missing('related.0.body'));
+    }
 }

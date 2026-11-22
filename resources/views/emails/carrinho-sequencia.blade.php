@@ -1,4 +1,4 @@
-{{-- Sequência de carrinho abandonado (pedido do Lira 21/11/2026): sem desconto, cupom ou preço. --}}
+{{-- Sequência de carrinho abandonado (pedido do Lira 21/11/2026): sem desconto, cupom ou preço, exceto o texto de PromocaoDoCarrinho (22/11/2026). --}}
 @extends('emails.layout')
 
 @section('title', $lembrete ? 'Seu carrinho está te esperando' : $produto)
@@ -25,7 +25,7 @@
         </div>
     @endif
 
-    @include('emails.partials.botao', ['url' => $link, 'texto' => $lembrete ? 'Voltar ao meu carrinho' : 'Ver o produto', 'cor' => $marcaEmail['cor'] ?? '#0FB930'])
+    @include('emails.partials.botao', ['url' => $link, 'texto' => $lembrete || ($promocao ?? false) ? 'Voltar ao meu carrinho' : 'Ver o produto', 'cor' => $marcaEmail['cor'] ?? '#0FB930'])
 
     <p style="margin: 0; text-align: center; color: #9ca3af; font-size: 12px;">
         Já comprou ou não quer mais estas mensagens? <a href="{{ $linkParar }}" style="color: #9ca3af;">Não quero mais receber</a>.

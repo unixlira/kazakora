@@ -93,7 +93,12 @@ class DisparadorSequencia
 
         $produto = $this->produto($registro);
         $nomeProduto = $this->nomeProduto($registro, $produto);
-        $noticia = $numero === 1 ? null : $this->noticias->escrever($produto, $numero);
+        $promocao = $numero === 1 ? null : PromocaoDoCarrinho::texto($produto);
+        $noticia = match (true) {
+            $numero === 1 => null,
+            $promocao !== null => ['texto' => $promocao, 'fonte' => 'promocao'],
+            default => $this->noticias->escrever($produto, $numero),
+        };
         $imagem = $this->imagem($registro, $produto);
         $base = ['numero' => $numero, 'dia' => CalendarioSequencia::dia($numero), 'assunto' => $numero === 1 ? 'lembrete' : NoticiaDoProduto::assunto($numero)];
         if ($noticia) {
@@ -107,7 +112,7 @@ class DisparadorSequencia
                 if ($canal === 'whatsapp') {
                     $this->mandarWhatsApp($registro, $numero, $nomeProduto, $noticia['texto'] ?? null, $imagem, $link);
                 } else {
-                    Mail::to($registro->email)->send(new SequenciaCarrinho($registro, $numero, $nomeProduto, $link['url'], $noticia['texto'] ?? null, $imagem));
+                    Mail::to($registro->email)->send(new SequenciaCarrinho($registro, $numero, $nomeProduto, $link['url'], $noticia['texto'] ?? null, $imagem, ($noticia['fonte'] ?? null) === 'promocao'));
                 }
                 $registro->anotar($base + ['canal' => $canal, 'status' => 'enviado', 'link' => $link['url'], 'link_tipo' => $link['tipo']]);
                 $ok = true;

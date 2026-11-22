@@ -3,6 +3,7 @@
 namespace App\Modules\Editorial\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Editorial\Models\EditorialPost;
 use App\Modules\Editorial\Support\EditorialSafety;
@@ -39,9 +40,35 @@ class EditorialController extends Controller
         })->filter(fn ($p) => $p['price'] > 0)->values()->all();
     }
 
+    /** @var array<string, string> nomes de categoria já lidos nesta requisição */
+    private array $categoryNames = [];
+
+    /** Nome legível da categoria (ex.: "Eletroportáteis e Casa"), nunca o slug cru. */
+    private function categoryName(?string $slug): ?string
+    {
+        if ($slug === null || $slug === '') {
+            return null;
+        }
+
+        return $this->categoryNames[$slug] ??= (Category::where('slug', $slug)->value('name') ?: mb_convert_case(str_replace('-', ' ', $slug), MB_CASE_TITLE));
+    }
+
     private function dto(EditorialPost $p): array
     {
-        return array_merge($p->only(['id', 'slug', 'title', 'excerpt', 'body', 'type', 'category', 'video_url', 'poster_url', 'source_url', 'source_name']), ['published_at' => $p->published_at?->toIso8601String(), 'products' => $this->products($p), 'likes_count' => DB::table('editorial_likes')->where('post_id', $p->id)->count()]);
+        return array_merge($p->only(['id', 'slug', 'title', 'excerpt', 'body', 'type', 'category', 'video_url', 'poster_url', 'source_url', 'source_name']), ['category_name' => $this->categoryName($p->category), 'published_at' => $p->published_at?->toIso8601String(), 'products' => $this->products($p), 'likes_count' => DB::table('editorial_likes')->where('post_id', $p->id)->count(), 'comments_count' => DB::table('editorial_comments')->where('post_id', $p->id)->where('status', 'approved')->count()]);
+    }
+
+    /** Cartão curto para listas (outras matérias), sem corpo nem produtos. */
+    private function teaser(EditorialPost $p): array
+    {
+        return array_merge($p->only(['id', 'slug', 'title', 'excerpt', 'type', 'category', 'poster_url']), ['category_name' => $this->categoryName($p->category), 'published_at' => $p->published_at?->toIso8601String()]);
+    }
+
+    /** Editorias com matéria publicada, para o menu do feed. */
+    private function categories(): array
+    {
+        return EditorialPost::visible()->select('category', DB::raw('count(*) as total'))->groupBy('category')->orderByDesc('total')->orderBy('category')->limit(20)->get()
+            ->map(fn ($c) => ['slug' => $c->category, 'name' => $this->categoryName($c->category), 'count' => (int) $c->total])->all();
     }
 
     private function adminDto(EditorialPost $p): array
@@ -67,7 +94,7 @@ class EditorialController extends Controller
             return $post;
         })->values()->all();
         $params = array_filter(['categoria' => $filters['categoria'] ?? '', 'tipo' => $filters['tipo'] ?? ''], fn ($v) => $v !== null && $v !== '');
-        return Inertia::render('Blog/Index', ['posts' => $posts, 'filters' => $params, 'hasMore' => $hasMore, 'nextPageUrl' => $hasMore ? '/blog?'.http_build_query(array_merge($params, ['page' => $page + 1])) : null, 'previousPageUrl' => $page > 1 ? '/blog?'.http_build_query(array_merge($params, ['page' => $page - 1])) : null, 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all()]);
+        return Inertia::render('Blog/Index', ['posts' => $posts, 'filters' => $params, 'hasMore' => $hasMore, 'nextPageUrl' => $hasMore ? '/blog?'.http_build_query(array_merge($params, ['page' => $page + 1])) : null, 'previousPageUrl' => $page > 1 ? '/blog?'.http_build_query(array_merge($params, ['page' => $page - 1])) : null, 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all(), 'categories' => $this->categories()]);
     }
 
     private function catalogProducts(string $search = '', array $ids = []): array
@@ -95,7 +122,7 @@ class EditorialController extends Controller
     {
         $post = $this->dto($p);
 
-        return Inertia::render('Blog/Show', ['post' => $post, 'products' => $post['products'], 'comments' => DB::table('editorial_comments')->where('post_id', $p->id)->where('status', 'approved')->orderBy('id')->limit(100)->get(['id', 'display_name', 'body', 'created_at'])->map(fn ($c) => ['id' => $c->id, 'display_name' => $c->display_name, 'body' => $c->body, 'created_at' => Carbon::parse($c->created_at)->toIso8601String()])->all(), 'interaction' => ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')]]);
+        return Inertia::render('Blog/Show', ['post' => $post, 'products' => $post['products'], 'related' => EditorialPost::visible()->where('id', '!=', $p->id)->orderByDesc('published_at')->orderByDesc('id')->limit(3)->get()->map(fn ($r) => $this->teaser($r))->all(), 'comments' => DB::table('editorial_comments')->where('post_id', $p->id)->where('status', 'approved')->orderBy('id')->limit(100)->get(['id', 'display_name', 'body', 'created_at'])->map(fn ($c) => ['id' => $c->id, 'display_name' => $c->display_name, 'body' => $c->body, 'created_at' => Carbon::parse($c->created_at)->toIso8601String()])->all(), 'interaction' => ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')]]);
     }
 
     public function show(Request $r, string $slug)

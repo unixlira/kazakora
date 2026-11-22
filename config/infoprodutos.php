@@ -93,6 +93,12 @@ return [
             ['vencer la duda', 'codigo-divino', 'order_bump'],
             ['versiculos', 'codigo-divino', 'order_bump'],
             ['codigo divino', 'codigo-divino', 'principal'],
+            // 22/11: Homer (pt-BR). Sem estas linhas as vendas caíam como "outro" e o Homer ficava sem vendas no painel.
+            ['especialistas para o homer', 'homer', 'order_bump'],
+            ['skill de carrossel para o homer', 'homer', 'order_bump'],
+            ['skill de videos de anuncio para o homer', 'homer', 'order_bump'],
+            ['homer voz', 'homer-voz', 'principal'],
+            ['homer', 'homer', 'principal'],
         ],
     ],
 

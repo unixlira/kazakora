@@ -31,7 +31,7 @@ class RelatoriosDiariosTest extends TestCase
     {
         $produto = Product::factory()->create(['price' => 100, 'cost_price' => $custo, 'stock' => 10]);
         $pedido = Order::create([
-            'status' => Order::STATUS_PAID, 'origin' => 'site',
+            'status' => Order::STATUS_PAID, 'origin' => 'mercado_livre',
             'shipping_name' => 'Maria', 'shipping_phone' => '11999990000', 'shipping_zip' => '03187040',
             'shipping_street' => 'Rua X', 'shipping_number' => '1', 'shipping_neighborhood' => 'Mooca',
             'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',

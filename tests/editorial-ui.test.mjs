@@ -5,12 +5,43 @@ import { execFileSync } from 'node:child_process';
 globalThis.window = {location:{origin:'http://localhost'}};
 globalThis.document = {cookie:'',querySelector:()=>null};
 const read = p => process.env.BASELINE_SOURCE ? execFileSync('git',['show',`HEAD:resources/js/Modules/${p}`],{encoding:'utf8'}) : readFileSync(new URL('../resources/js/Modules/' + p, import.meta.url), 'utf8');
-test('feed renders complete body and per-post interactions after carousel', () => {
+test('feed shows magazine cards with per-post interactions; detail renders the full body as text', () => {
+  const index = read('Blog/Index.vue');
+  assert.match(index, /:interaction="post.interaction/);
+  assert.match(index, /hasMore && nextPageUrl/);
+  assert.match(index, /previousPageUrl/);
+  const card = read('Blog/Components/StoryCard.vue');
+  assert.match(card, /<SocialActions compact :post="post" :interaction="interaction"\/>/);
+  assert.match(card, /\{\{ post.excerpt \}\}/);
+  assert.match(card, /post.category_name \|\| post.category/);
   const story = read('Blog/Components/EditorialStory.vue');
-  assert.match(story, /<div class="plain-body">/);
-  assert.ok(story.indexOf('mobile-products') < story.indexOf('{{post.body}}'));
-  assert.doesNotMatch(story, /SocialActions v-if="detail"/);
-  assert.match(read('Blog/Index.vue'), /:interaction="post.interaction/);
+  assert.match(story, /class="plain-body article-body"/);
+  assert.match(story, /\{\{ para.text \}\}/);
+  assert.match(story, /<SocialActions :post="post" :interaction="interaction">/);
+  for (const file of ['Blog/Index.vue', 'Blog/Show.vue', 'Blog/BlogLayout.vue', 'Blog/Components/StoryCard.vue', 'Blog/Components/EditorialStory.vue', 'Blog/Components/SocialActions.vue', 'Blog/Components/ContextualProducts.vue']) {
+    assert.doesNotMatch(read(file), /v-html|innerHTML/, file);
+  }
+});
+test('blog uses the same footer component as the store', () => {
+  assert.match(read('Blog/BlogLayout.vue'), /<RodapeLoja \/>/);
+  const store = readFileSync(new URL('../resources/js/Shared/Layouts/AppLayout.vue', import.meta.url), 'utf8');
+  assert.match(store, /<RodapeLoja \/>/);
+});
+test('share offers WhatsApp, copy link and native share only when supported', () => {
+  const social = read('Blog/Components/SocialActions.vue');
+  assert.match(social, /https:\/\/wa.me\/\?text=/);
+  assert.match(social, /navigator.clipboard.writeText/);
+  assert.match(social, /typeof navigator.share==='function'/);
+  assert.match(social, /v-if="canNativeShare"/);
+});
+test('body paragraphs, labels and dates are formatted as plain text', async () => {
+  const f = await import('../resources/js/Modules/Blog/blogFormat.js');
+  const blocks = f.paragraphs('Ingredientes: 1 litro de água\n\nNa bancada\n\nSepare tudo. Depois <b>mexa</b>.');
+  assert.deepEqual(blocks.map(b => [b.kind, b.label]), [['p', 'Ingredientes'], ['h', ''], ['p', '']]);
+  assert.equal(blocks[2].text, 'Separe tudo. Depois <b>mexa</b>.');
+  assert.equal(f.longDate('2026-11-19T23:58:15-03:00'), '19 de novembro de 2026');
+  assert.equal(f.blogUrl({ categoria: 'casa', tipo: '' }), '/blog?categoria=casa');
+  assert.equal(f.typeLabel('recipe'), 'Receita');
 });
 test('missing and guest interaction capabilities never send mutation requests', async () => {
   let script = read('Blog/Components/SocialActions.vue').split('<script setup>')[1].split('</script>')[0].replace(/import .*?;/g, '');

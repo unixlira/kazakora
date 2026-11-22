@@ -244,7 +244,9 @@ class EditorialTest extends TestCase
     public function test_seo_uses_clean_canonical_and_escaped_title(): void
     {
         $this->editorial(['title' => 'Notícia <especial>', 'excerpt' => 'Resumo seguro']);
-        $this->get('/blog/teste?utm_source=evil')->assertOk()->assertSee('property="og:type" content="article"', false)->assertSee('Notícia &lt;especial&gt;', false)->assertSee('http://localhost/blog/teste', false)->assertDontSee('content="http://localhost/blog/teste?utm_source', false);
+        // Canonical sai de APP_URL (no CI é http://localhost:8080, vindo do .env.example).
+        $canonical = rtrim(config('app.url'), '/').'/blog/teste';
+        $this->get('/blog/teste?utm_source=evil')->assertOk()->assertSee('property="og:type" content="article"', false)->assertSee('Notícia &lt;especial&gt;', false)->assertSee('href="'.$canonical.'"', false)->assertDontSee('content="'.$canonical.'?utm_source', false);
     }
 
     public function test_feed_and_post_expose_readable_category_counts_and_related(): void

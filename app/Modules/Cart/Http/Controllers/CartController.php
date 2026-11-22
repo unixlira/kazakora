@@ -4,7 +4,11 @@ namespace App\Modules\Cart\Http\Controllers;
 
 use App\Modules\Analytics\Models\CheckoutEvento;
 use App\Http\Controllers\Controller;
+use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia;
 use App\Modules\Cart\Models\CartSnapshot;
+use App\Modules\Cart\Support\Sequencia\ParadasSequencia;
+use App\Modules\WhatsApp\Support\WhatsAppNumeros;
+use App\Support\SiteAtual;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Jobs\EnviarEventoMetaJob;
@@ -92,6 +96,28 @@ class CartController extends Controller
         CartSnapshot::query()->whereKey($carrinho)->update(['lembretes_parados' => true]);
 
         return redirect()->route('catalogo.inicio')->with('success', 'Pronto! Não vamos mais mandar lembretes desse carrinho.');
+    }
+
+    /**
+     * "Não quero mais receber" do e-mail da sequência de carrinho abandonado
+     * (2026-11-21): para a sequência dessa pessoa em todas as lojas.
+     */
+    public function pararSequencia(int $registro, ParadasSequencia $paradas): RedirectResponse
+    {
+        $carrinho = CarrinhoAbandonadoSequencia::find($registro);
+
+        if ($carrinho) {
+            $paradas->pediuParar($carrinho->email);
+            if (! $carrinho->fresh()->parado) {
+                $carrinho->parar(CarrinhoAbandonadoSequencia::PAROU_PEDIU);
+            }
+        }
+
+        if ($carrinho?->site === SiteAtual::FERRAKORA) {
+            return redirect()->away(WhatsAppNumeros::site(WhatsAppNumeros::FERRAKORA));
+        }
+
+        return redirect()->route('catalogo.inicio')->with('success', 'Pronto! Não vamos mais mandar mensagens sobre esse carrinho.');
     }
 
     /**

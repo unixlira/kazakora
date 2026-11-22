@@ -10,12 +10,16 @@
         {{-- Página de produto: título, descrição, foto e dados estruturados já no HTML inicial
              (Search Console, pedido 2026-10-12). O <Head> do Vue troca o título depois pelo mesmo texto. --}}
         @php
+            $seoEditorial = ($page['component'] ?? '') === 'Blog/Show' && !request()->is('admin*') ? ($page['props']['post'] ?? null) : null;
             $seoProduto = str_starts_with($page['component'] ?? '', 'Catalog/ProductDetail') ? ($page['props']['product'] ?? null) : null;
             $seoProduto = $seoProduto !== null ? json_decode(json_encode($seoProduto), true) : null;
             $seoProduto = is_array($seoProduto) && filled($seoProduto['name'] ?? null) ? $seoProduto : null;
         @endphp
-        {{-- Início com título próprio (2026-11-20): no Google aparecia só "KazaKora" e a descrição repetia o nome. --}}
-        <title inertia>{{ $seoProduto ? config('app.name', 'KazaKora').' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : (request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora')) }}</title>
+        {{-- Início com título próprio (2026-11-20): no Google aparecia só "KazaKora" e a descrição repetia o nome. Post do blog: título do post. --}}
+        <title inertia>{{ $seoEditorial ? $seoEditorial['title'].' | KazaKora' : ($seoProduto ? config('app.name', 'KazaKora').' - '.(filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name']) : (request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora'))) }}</title>
+        @if(request()->is('admin/editorial*'))
+            <meta name="robots" content="noindex, nofollow">
+        @endif
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
@@ -37,6 +41,7 @@
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
                 // Prévia do link no WhatsApp: foto leve (pedido 2026-10-27, ver ImagemDeCompartilhamento).
                 $imagemOg = $seoProduto ? \App\Modules\Catalog\Support\ImagemDeCompartilhamento::escolher($seoProduto['images'] ?? []) : null;
+                if ($seoEditorial) $descricao = $seoEditorial['excerpt'] ?: \Illuminate\Support\Str::limit($seoEditorial['body'], 155);
             @endphp
             <link rel="canonical" href="{{ $canonical }}">
             <meta name="description" content="{{ $descricao }}">
@@ -44,10 +49,15 @@
                 <meta name="keywords" content="{{ implode(', ', $tagsSeo) }}">
             @endif
             <meta property="og:site_name" content="KazaKora">
-            <meta property="og:type" content="{{ $seoProduto ? 'product' : 'website' }}">
+            <meta property="og:type" content="{{ $seoEditorial ? 'article' : ($seoProduto ? 'product' : 'website') }}">
             <meta property="og:url" content="{{ $canonical }}">
             <meta property="og:locale" content="pt_BR">
-            @if ($seoProduto)
+            @if ($seoEditorial)
+                <meta property="og:title" content="{{ $seoEditorial['title'] }}">
+                <meta property="og:description" content="{{ $descricao }}">
+                <meta property="og:image" content="{{ !empty($seoEditorial['poster_url']) ? (str_starts_with($seoEditorial['poster_url'], '/') ? rtrim(config('app.url'), '/').$seoEditorial['poster_url'] : $seoEditorial['poster_url']) : rtrim(config('app.url'), '/').'/images/marca/og-kazakora.png' }}">
+                <meta name="twitter:card" content="summary_large_image">
+            @elseif ($seoProduto)
                 <meta property="og:title" content="{{ filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name'] }}">
                 <meta property="og:description" content="{{ $descricao }}">
                 @if ($imagemOg)

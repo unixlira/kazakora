@@ -1,0 +1,6 @@
+<script setup>
+import { Head, useForm } from '@inertiajs/vue3';
+import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+defineProps({posts:{type:Array,default:()=>[]}});const action=useForm({});
+</script>
+<template><AdminLayout><Head title="Editorial"/><section class="p-6"><h1 class="text-2xl font-bold">Caderno editorial</h1><p class="my-3">Rascunhos e conteúdos de IA exigem revisão humana antes de publicar.</p><nav class="flex gap-5 my-5"><a href="/admin/editorial/posts/create">Nova publicação</a><a href="/admin/editorial/comments">Moderar comentários</a><a href="/blog">Ver blog</a></nav><p v-if="!posts.length">Nenhuma publicação cadastrada.</p><article v-for="post in posts" :key="post.id" class="border rounded p-4 my-3"><h2 class="font-bold"><a :href="`/admin/editorial/posts/${post.id}/edit`">{{post.title}}</a></h2><p>{{post.type}} · {{post.status}}</p><div class="flex gap-4 mt-3"><a :href="`/admin/editorial/posts/${post.id}/preview`">Prévia privada</a><button v-if="post.status==='published'" :disabled="action.processing" @click="action.post(`/admin/editorial/posts/${post.id}/unpublish`)">Despublicar</button></div></article><p v-for="(error,key) in action.errors" :key="key" role="alert">{{error}}</p></section></AdminLayout></template>

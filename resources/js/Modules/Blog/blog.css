@@ -268,3 +268,7 @@ a.kicker-cat:hover { text-decoration: underline; }
   .story-card-media img, .story-card-title a, .btn-primary, .social-btn { transition: none; }
   .story-card:hover .story-card-media img { transform: none; }
 }
+
+/* Rodapé da loja dentro do blog: mesmas variáveis de fonte do .storefront-shell (app.css),
+   sem levar o tema escuro da loja para a página clara do blog. */
+.blog-rodape { --font-display: var(--font-store); --font-store-mono: var(--font-store); font-family: var(--font-store); }

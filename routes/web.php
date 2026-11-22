@@ -1,5 +1,7 @@
 <?php
 
+require __DIR__.'/editorial.php';
+
 use App\Modules\Admin\Http\Controllers\AdsRechargeController;
 use App\Modules\Admin\Http\Controllers\ApiPartnerController;
 use App\Modules\Admin\Http\Controllers\AuditLogController;

@@ -29,6 +29,8 @@ return [
         // 21/11: a landing do Homer (pt-BR) passou a mandar eventos; sem estas linhas eram descartados.
         'homer' => 'Homer',
         'homer-voz' => 'Homer Voz',
+        // 22/11: landing do Pautamático (máquina de vídeos + WhatsApp); sem esta linha as visitas eram descartadas.
+        'pautamatico' => 'Pautamático',
     ],
 
     // Eventos brutos: apagados depois deste prazo (os totais diários ficam).
@@ -63,6 +65,9 @@ return [
             '313f2f80-e3e0-11f1-b23e-7fbd9890a458' => ['agenda-serena-2027', 'order_bump'], // planner-estudio-trabajo-pomodoro
             'e7decee0-e3e9-11f1-9fee-495c52c8b6eb' => ['agenda-serena-2027', 'upsell'], // agenda-serena-editable
             '442faa70-e3e0-11f1-99b3-d5f3c4e1bd41' => ['agenda-serena-2027', 'downsell'], // portadas-y-stickers
+            // Pautamático (22/11)
+            '636320c0-e6a1-11f1-9972-d949ca894c7b' => ['pautamatico', 'principal'],
+            '93742970-e6a2-11f1-9def-a1c78489fd32' => ['pautamatico', 'order_bump'], // respuestas en audio
             // Pídelo Bien
             '5761e950-e3e0-11f1-b479-3f89c662da05' => ['pidelo-bien', 'order_bump'], // prompts-excel-avanzado
             '6f99b5c0-e3e0-11f1-99b3-d5f3c4e1bd41' => ['pidelo-bien', 'order_bump'], // prompts-correos-y-reuniones
@@ -94,6 +99,8 @@ return [
             ['versiculos', 'codigo-divino', 'order_bump'],
             ['codigo divino', 'codigo-divino', 'principal'],
             // 22/11: Homer (pt-BR). Sem estas linhas as vendas caíam como "outro" e o Homer ficava sem vendas no painel.
+            ['respuestas en audio', 'pautamatico', 'order_bump'],
+            ['pautamatico', 'pautamatico', 'principal'],
             ['especialistas para o homer', 'homer', 'order_bump'],
             ['skill de carrossel para o homer', 'homer', 'order_bump'],
             ['skill de videos de anuncio para o homer', 'homer', 'order_bump'],

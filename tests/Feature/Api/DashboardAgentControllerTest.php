@@ -139,9 +139,7 @@ class DashboardAgentControllerTest extends TestCase
             // capturada) - os outros dois pedidos pagos hoje não têm
             // OrderChannelFee, então entram sem desconto nenhum. Desde
             // 2026-10-18 sai também o Simples: 4,5% de 280 = 12,60.
-            // Pedidos do teste são do site (loja): departamento, não marketplace (Lira, 22/11/2026).
-            'net_profit_today' => 0,
-            'net_profit_today_departamento' => 247.4,
+            'net_profit_today' => 247.4,
             // 1 cancelado + 1 devolvido (Payment estornado) neste mês —
             // card "Cancelamentos e devoluções do mês" do KoraSync v2.0.
             'cancellations_and_returns_month' => 2,

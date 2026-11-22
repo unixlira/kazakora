@@ -22,6 +22,6 @@ const page = usePage();
   </header>
   <main id="blog-content" class="blog-main"><slot /></main>
   <!-- Mesmo rodapé da loja (componente compartilhado com o AppLayout). -->
-  <div class="font-store"><RodapeLoja /></div>
+  <div class="blog-rodape"><RodapeLoja /></div>
  </div>
 </template>

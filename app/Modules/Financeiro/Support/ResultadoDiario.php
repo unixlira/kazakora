@@ -84,18 +84,19 @@ class ResultadoDiario
     {
         $inicio = $dia->copy()->startOfDay();
         $fim = $inicio->copy()->addDay();
-        $conta = $this->margem->periodo($inicio, $fim);
-
-        $pedidos = Order::query()->vendaEfetiva()
-            ->whereIn('status', ContributionMargin::REVENUE_STATUSES)
-            ->where('created_at', '>=', $inicio)->where('created_at', '<', $fim)
-            ->count();
+        // Só marketplaces (ML, Shopee, TikTok, Amazon, Shein). Site KazaKora, FerraKora e
+        // Beauty Kora são o "departamento" do Lira e ficam só no bloco de grupos (Lira, 22/11/2026:
+        // "nunca somar os dois"; antes o total do dia misturava e o marketplace parecia no vermelho).
+        $canais = GruposDeCanais::canais('marketplaces');
+        $conta = $this->margem->conta($inicio, $fim, $canais);
+        $pedidos = (int) ($conta['pedidos'] ?? 0);
 
         // Taxa ainda estimada (ex.: TikTok antes do extrato): mostrada à parte.
         $estimadas = round((float) DB::table('order_channel_fees')
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
             ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $inicio)->where('orders.created_at', '<', $fim)
+            ->whereIn('orders.origin', $canais)
             ->where('order_channel_fees.source', 'estimate')
             ->sum('order_channel_fees.fee_amount'), 2);
 

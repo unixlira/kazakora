@@ -394,8 +394,11 @@ class DashboardAgentController extends Controller
         // plataforma − frete pago pela loja − ADS − imposto do Simples
         // (imposto incluído em 2026-10-18). Até 25/09 isto era receita −
         // taxa só, sem custo de produto nenhum.
-        $margemHoje = app(ContributionMargin::class)->periodo($today, $today->copy()->addDay());
-        $netProfitToday = $margemHoje['lucro'];
+        // Lira (22/11/2026): marketplace e "meu departamento" (site KazaKora, FerraKora,
+        // Beauty Kora) nunca somados. O card principal é só marketplace; o departamento vai à parte.
+        $margem = app(ContributionMargin::class);
+        $netProfitToday = $margem->conta($today, $today->copy()->addDay(), \App\Modules\Financeiro\Support\GruposDeCanais::canais('marketplaces'))['lucro'];
+        $netProfitTodayDepartamento = $margem->conta($today, $today->copy()->addDay(), \App\Modules\Financeiro\Support\GruposDeCanais::canais('ecommerces'))['lucro'];
 
         // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
         // explícito 2026-08-29) — soma cancelamento (canal cancelou o
@@ -441,6 +444,7 @@ class DashboardAgentController extends Controller
             // Nome antigo mantido pro KoraSync desktop, que desserializa
             // este campo; o valor já é a margem de contribuição.
             'net_profit_today' => $netProfitToday,
+            'net_profit_today_departamento' => $netProfitTodayDepartamento,
             'contribution_margin_today' => $margemHoje,
             'revenue_month' => $revenueMonth,
             'revenue_month_variation_pct' => $this->variationPct($revenueMonth, $revenueMonthPrev),

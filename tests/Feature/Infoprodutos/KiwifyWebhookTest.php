@@ -123,6 +123,17 @@ class KiwifyWebhookTest extends TestCase
         $this->assertSame(['pidelo-bien', 'order_bump'], [InfoprodutoVenda::where('kiwify_order_id', 'ord-4')->value('produto'), InfoprodutoVenda::where('kiwify_order_id', 'ord-4')->value('tipo')]);
     }
 
+    public function test_homer_e_os_complementos_dele_contam_no_homer(): void
+    {
+        $this->enviar($this->aprovada(['order_id' => 'h-1', 'Product' => ['product_id' => 'x1', 'product_name' => 'Homer: seu agente de IA no Telegram']]))->assertOk();
+        $this->enviar($this->aprovada(['order_id' => 'h-2', 'Product' => ['product_id' => 'x2', 'product_name' => 'Equipe completa: 11 especialistas para o Homer']]))->assertOk();
+        $this->enviar($this->aprovada(['order_id' => 'h-3', 'Product' => ['product_id' => 'x3', 'product_name' => 'Skill de vídeos de anúncio para o Homer']]))->assertOk();
+
+        $this->assertSame(['homer', 'principal'], [InfoprodutoVenda::where('kiwify_order_id', 'h-1')->value('produto'), InfoprodutoVenda::where('kiwify_order_id', 'h-1')->value('tipo')]);
+        $this->assertSame(['homer', 'order_bump'], [InfoprodutoVenda::where('kiwify_order_id', 'h-2')->value('produto'), InfoprodutoVenda::where('kiwify_order_id', 'h-2')->value('tipo')]);
+        $this->assertSame(['homer', 'order_bump'], [InfoprodutoVenda::where('kiwify_order_id', 'h-3')->value('produto'), InfoprodutoVenda::where('kiwify_order_id', 'h-3')->value('tipo')]);
+    }
+
     public function test_carrinho_abandonado_sem_dado_pessoal(): void
     {
         $carrinho = ['id' => 'cart-9', 'name' => 'Ana', 'email' => 'ana@example.com', 'phone' => '11999999999', 'country' => 'CO',

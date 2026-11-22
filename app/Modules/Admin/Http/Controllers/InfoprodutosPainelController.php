@@ -12,6 +12,7 @@ use App\Modules\Infoprodutos\Support\Comportamento;
 use App\Modules\Infoprodutos\Support\FunilInfoprodutos;
 use App\Modules\Infoprodutos\Support\PaginasDoSite;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
+use App\Modules\Infoprodutos\Support\UtmDoAnuncio;
 use App\Modules\Notifications\Push\AppsDeVendas;
 use App\Modules\Notifications\Push\MetricasDaLoja;
 use App\Services\Meta\MetaAdsException;
@@ -96,13 +97,16 @@ class InfoprodutosPainelController extends Controller
         }
 
         $utms = InfoprodutoEvento::query()->where('tipo', 'pageview')->whereNotNull('utm_content')
-            ->where('created_at', '>=', $de)->distinct()->pluck('utm_content')
-            ->merge(InfoprodutoVenda::query()->whereNotNull('utm_content')->where('created_at', '>=', $de)->distinct()->pluck('utm_content'))
-            ->flip();
+            ->where('created_at', '>=', $de)->distinct()->get(['utm_content', 'utm_campaign'])
+            ->concat(InfoprodutoVenda::query()->whereNotNull('utm_content')->where('created_at', '>=', $de)->distinct()->get(['utm_content', 'utm_campaign']))
+            ->groupBy('utm_content')
+            ->map(fn ($g) => $g->pluck('utm_campaign')->filter()->unique()->values()->all())
+            ->all();
+        $casar = new UtmDoAnuncio($utms);
 
         $gasto = [];
         foreach ($linhas as $l) {
-            $chave = isset($utms[$l['anuncio_meta_id']]) ? $l['anuncio_meta_id'] : $l['anuncio_nome'];
+            $chave = $casar->chave($l['anuncio_meta_id'], $l['anuncio_nome'], (string) ($l['campanha_nome'] ?? ''));
             $gasto[$chave]['gasto'] = round(($gasto[$chave]['gasto'] ?? 0) + (float) $l['gasto'], 2);
             $gasto[$chave]['nome'] = $l['anuncio_nome'];
             $gasto[$chave]['cliques'] = ($gasto[$chave]['cliques'] ?? 0) + (int) $l['cliques_link'];

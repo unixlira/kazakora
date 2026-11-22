@@ -710,6 +710,11 @@ const ratingRows = computed(() => {
     });
 });
 
+// 3 melhores avaliações para o quadro "Quem comprou aprova" (antes da oferta): nota 5, com comentário, com foto primeiro.
+const avaliacoesDestaque = computed(() => props.reviews
+    .filter((review) => Number(review.rating) >= 5 && (review.comment ?? '').trim().length >= 25)
+    .sort((a, b) => (b.images?.length ? 1 : 0) - (a.images?.length ? 1 : 0))
+    .slice(0, 3));
 const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
 
 // Lista de avaliações (pedido 2026-10-11): já vem ordenada do servidor (mais
@@ -1160,6 +1165,33 @@ const submitReview = () => {
                                 </dl>
                             </div>
                             <p v-else-if="dimensoesEmbalagem" class="dimensoes-embalagem"><strong>Dimensões da embalagem:</strong> {{ dimensoesEmbalagem }}</p>
+                        </section>
+
+                        <!-- Prova antes da oferta (pedido do Lira 22/11/2026): depois de entender o produto e o
+                             "Por que escolher", o cliente vê quem já comprou, e só então os brindes e a garantia.
+                             Mostra as 3 melhores avaliações com comentário (com foto primeiro); o resto fica embaixo. -->
+                        <section v-if="avaliacoesDestaque.length" class="card prova-social" data-kzm="prova">
+                            <h2>Quem comprou aprova</h2>
+                            <div class="prova-nota">
+                                <span class="caixa-nota">{{ ratingAvg.toFixed(2) }}</span>
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <span class="base">{{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }} de clientes</span>
+                            </div>
+                            <div class="prova-lista">
+                                <div v-for="review in avaliacoesDestaque" :key="`d-${review.id}`" class="prova-item">
+                                    <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                    <p>“{{ review.comment }}”</p>
+                                    <div v-if="review.images?.length" class="fotos-avaliacao">
+                                        <button v-for="(image, indice) in review.images.slice(0, 3)" :key="image.id" type="button" class="foto-btn"
+                                            :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
+                                            <img v-if="!ehVideo(image)" :src="image.thumb_url || miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
+                                            <span v-else class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
+                                        </button>
+                                    </div>
+                                    <span class="autor">{{ review.reviewer_display_name }}<template v-if="review.outra_loja"> · comprou o mesmo modelo em outro marketplace</template></span>
+                                </div>
+                            </div>
+                            <a href="#avaliacoes" class="prova-todas">Ver todas as {{ reviewsCount }} avaliações</a>
                         </section>
 
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
@@ -1973,4 +2005,15 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     /* No celular a oferta fica colada ao preço (a caixa de compra é reordenada por `order`). */
     .pd2 .compra > .oferta-bf { order: 3; margin: 12px 0 14px; }
 }
+
+/* Quem comprou aprova (prova antes da oferta, 22/11/2026) */
+.prova-social h2 { margin-bottom: .5rem; }
+.prova-nota { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.prova-nota .base { color: #555; font-size: .95rem; }
+.prova-lista { display: grid; gap: .75rem; }
+@media (min-width: 900px) { .prova-lista { grid-template-columns: repeat(3, 1fr); } }
+.prova-item { border: 1px solid #eee; border-radius: 12px; padding: .9rem; display: flex; flex-direction: column; gap: .45rem; background: #fffdf8; }
+.prova-item p { margin: 0; font-size: .95rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.prova-item .autor { font-size: .85rem; color: #666; font-weight: 600; }
+.prova-todas { display: inline-block; margin-top: .9rem; font-weight: 700; text-decoration: underline; }
 </style>

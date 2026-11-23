@@ -9,6 +9,7 @@ use App\Modules\Infoprodutos\Jobs\GerarPrintDaPagina;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use App\Modules\Infoprodutos\Support\Comportamento;
+use App\Modules\Infoprodutos\Support\FunilDoProduto;
 use App\Modules\Infoprodutos\Support\FunilInfoprodutos;
 use App\Modules\Infoprodutos\Support\PaginasDoSite;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
@@ -179,6 +180,10 @@ class InfoprodutosPainelController extends Controller
             'print' => $escolhida ? $this->infoDoPrint($escolhida['produto'], $escolhida['pagina'], $aparelho) : null,
             'dados' => Inertia::defer(fn () => $escolhida
                 ? $comportamento->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $de, $ate)
+                : null),
+            // Funil completo da página de produto até o pedido pago, cruzando o checkout (2026-11-23). Só contagens.
+            'funilProduto' => Inertia::defer(fn () => $escolhida
+                ? app(FunilDoProduto::class)->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $de, $ate)
                 : null),
         ]);
     }

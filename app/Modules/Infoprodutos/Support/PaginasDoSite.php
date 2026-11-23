@@ -11,6 +11,7 @@ use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
+use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\IpUtils;
@@ -19,6 +20,11 @@ use Symfony\Component\HttpFoundation\IpUtils;
  * Lista de páginas da tela Comportamento (pedido do Lira em 2026-11-20):
  * TODA página acessada, com ou sem anúncio, com nome e número de visitas, e o
  * funil de cada uma (carrinho, checkout, pedido).
+ *
+ * Só páginas de produto na lista (Lira, 2026-11-23: "comportamento só tela de
+ * produto"): kz/<slug>, fk/<slug> e as páginas de venda dos infoprodutos. As
+ * outras páginas das lojas (kzp/fkp: início, checkout, entrar...) continuam
+ * contando nos totais de visitas da loja, mas saem da lista e dos prints.
  *
  * Fontes (nada de coleta nova, só o "adicionar ao carrinho" no servidor):
  *  - KazaKora e FerraKora: site_visits (TrackSiteVisit e a tag da FerraKora);
@@ -101,7 +107,7 @@ class PaginasDoSite
         $this->dosInfoprodutos($de, $ate);
         $this->nomear();
 
-        $paginas = collect($this->paginas)->map(function ($p) {
+        $paginas = collect($this->paginas)->reject(fn ($p) => ! self::paginaDeProduto($p['produto']))->map(function ($p) {
             unset($p['_quem']);
 
             return $p;
@@ -110,12 +116,13 @@ class PaginasDoSite
         return ['paginas' => $paginas, 'totais' => $this->totais];
     }
 
-    /** Chaves das páginas das lojas visitadas desde $de (para os prints). */
+    /** Chaves das páginas de PRODUTO das lojas visitadas desde $de (para os prints; kzp/fkp fora desde 2026-11-23). */
     public function visitadas(Carbon $de): Collection
     {
         return SiteVisit::query()->whereIn('site', self::LOJAS)->where('created_at', '>=', $de)
             ->selectRaw('site, path, COUNT(*) as n')->groupBy('site', 'path')->orderByDesc('n')->limit(2000)->toBase()->get()
             ->map(fn ($l) => self::chave((string) $l->site, (string) $l->path))->filter()
+            ->filter(fn ($c) => self::paginaDeProduto($c[0]))
             ->unique(fn ($c) => $c[0].'|'.$c[1])->map(fn ($c) => ['produto' => $c[0], 'pagina' => $c[1]])->values();
     }
 
@@ -173,6 +180,31 @@ class PaginasDoSite
         return in_array($produto, ['kzp', 'fkp'], true) || str_starts_with($produto, 'kzp/') || str_starts_with($produto, 'fkp/');
     }
 
+    /** Página de produto: kz/<slug>, fk/<slug> ou a página de venda de um infoproduto (tudo que não é kzp/fkp). */
+    public static function paginaDeProduto(string $produto): bool
+    {
+        return ! self::paginaDeLoja($produto);
+    }
+
+    /**
+     * Quem é da equipe (EquipeDaLoja): usuário da equipe, o navegador dela
+     * ou um IP dela. Também usado pelo FunilDoProduto.
+     *
+     * @return Closure(?string, ?string, mixed): bool
+     */
+    public static function filtroDaEquipe(): Closure
+    {
+        $usuarios = EquipeDaLoja::usuarios();
+        $visitantesEquipe = array_flip(EquipeDaLoja::visitantes());
+        $ips = EquipeDaLoja::ips();
+        $ipsExatos = array_flip(array_filter($ips, fn ($ip) => ! str_contains($ip, '/')));
+        $faixas = array_values(array_filter($ips, fn ($ip) => str_contains($ip, '/')));
+
+        return fn (?string $visitante, ?string $ip, $userId) => ($userId !== null && in_array((int) $userId, $usuarios, true))
+            || ($visitante !== null && isset($visitantesEquipe[$visitante]))
+            || ($ip !== null && (isset($ipsExatos[$ip]) || ($faixas !== [] && IpUtils::checkIp($ip, $faixas))));
+    }
+
     /** Endereço público de uma página kzp/fkp (null: busca ou caminho com código). */
     public static function url(string $produto): ?string
     {
@@ -221,14 +253,7 @@ class PaginasDoSite
 
     private function daLoja(string $loja, Carbon $de, Carbon $ate): void
     {
-        $usuarios = EquipeDaLoja::usuarios();
-        $visitantesEquipe = array_flip(EquipeDaLoja::visitantes());
-        $ips = EquipeDaLoja::ips();
-        $ipsExatos = array_flip(array_filter($ips, fn ($ip) => ! str_contains($ip, '/')));
-        $faixas = array_values(array_filter($ips, fn ($ip) => str_contains($ip, '/')));
-        $daEquipe = fn (?string $visitante, ?string $ip, $userId) => ($userId !== null && in_array((int) $userId, $usuarios, true))
-            || ($visitante !== null && isset($visitantesEquipe[$visitante]))
-            || ($ip !== null && (isset($ipsExatos[$ip]) || ($faixas !== [] && IpUtils::checkIp($ip, $faixas))));
+        $daEquipe = self::filtroDaEquipe();
 
         $linhas = SiteVisit::query()->where('site', $loja)->whereBetween('created_at', [$de, $ate])
             ->toBase()->get(['visitor_id', 'ip', 'user_id', 'path', 'created_at']);

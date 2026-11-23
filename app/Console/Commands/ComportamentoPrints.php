@@ -35,8 +35,9 @@ class ComportamentoPrints extends Command
                 ->where('created_at', '>=', now()->subDays(7))
                 ->selectRaw('produto, pagina, COUNT(*) as n')->groupBy('produto', 'pagina')
                 ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => $p->produto, 'pagina' => $p->pagina])
-                // E as páginas das lojas visitadas na semana (início, departamentos, produtos...), 2026-11-20.
+                // E as páginas de produto das lojas visitadas na semana (2026-11-20); kzp/fkp fora (2026-11-23).
                 ->concat(app(PaginasDoSite::class)->visitadas(now()->subDays(7)))
+                ->filter(fn ($p) => PaginasDoSite::paginaDeProduto($p['produto']))
                 ->unique(fn ($p) => $p['produto'].'|'.$p['pagina'])->values();
         $paginas = $paginas->when($this->option('produto'), fn ($c, $p) => $c->where('produto', $p))->take((int) $this->option('limite'));
 

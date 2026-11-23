@@ -89,10 +89,24 @@ class PaginasDoSiteTest extends TestCase
         $this->assertSame('Árvore de Natal', $paginas['kz/arvore|produto']['rotulo']);
         $this->assertSame([2, 1, 1, 1], [$paginas['kz/arvore|produto']['visitas'], $paginas['kz/arvore|produto']['carrinho'],
             $paginas['kz/arvore|produto']['checkout'], $paginas['kz/arvore|produto']['pedidos']]);
-        $this->assertSame(['Início', 1], [$paginas['kzp|pagina']['rotulo'], $paginas['kzp|pagina']['visitas']]);
-        $this->assertSame('Departamento: Natal', $paginas['kzp/departamento/natal|pagina']['rotulo']);
-        $this->assertSame(1, $paginas['kzp/carrinho|pagina']['visitas']);
+        // Só página de produto na lista (2026-11-23): início, departamento, carrinho e checkout ficam fora...
+        $this->assertSame([], $paginas->keys()->filter(fn ($k) => str_starts_with($k, 'kzp') || str_starts_with($k, 'fkp'))->values()->all());
+        $this->assertSame(['kz/arvore|produto'], $paginas->keys()->all());
+        // ...mas continuam nos totais de visitas da loja.
         $this->assertSame(['visitas' => 3, 'carrinho' => 1, 'checkout' => 1, 'pedidos' => 1], array_intersect_key($r['totais']['kazakora'], array_flip(['visitas', 'carrinho', 'checkout', 'pedidos'])));
+    }
+
+    public function test_prints_so_das_paginas_de_produto(): void
+    {
+        foreach (['/', '/pagamento', '/entrar', '/finalizacao', '/produtos/arvore'] as $i => $path) {
+            SiteVisit::create(['site' => 'kazakora', 'visitor_id' => 'v'.$i, 'path' => $path, 'ip' => '1.1.1.'.$i, 'consentiu' => true]);
+        }
+        SiteVisit::create(['site' => 'ferrakora', 'visitor_id' => 'f', 'path' => '/seguro-pagamento/', 'ip' => '1.1.2.1', 'consentiu' => true]);
+        SiteVisit::create(['site' => 'ferrakora', 'visitor_id' => 'f', 'path' => '/produto/serra/', 'ip' => '1.1.2.1', 'consentiu' => true]);
+
+        $visitadas = app(PaginasDoSite::class)->visitadas(now()->subDays(7))->pluck('produto')->sort()->values()->all();
+
+        $this->assertSame(['fk/serra', 'kz/arvore'], $visitadas);
     }
 
     public function test_vendidos_conta_so_pedido_pago_do_produto_e_das_variacoes(): void

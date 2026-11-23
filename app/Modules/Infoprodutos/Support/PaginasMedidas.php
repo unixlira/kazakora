@@ -16,8 +16,8 @@ use Throwable;
  * - FerraKora: todo produto publicado no site (fk/<slug do site>);
  * - Infoprodutos: a landing de cada produto da config e as ofertas que já
  *   tiveram visita;
- * - as outras páginas das lojas (início, departamentos, carrinho...) com
- *   visita na última semana (PaginasDoSite, 2026-11-20).
+ * - as outras páginas das lojas (kzp/fkp: início, checkout, entrar...) NÃO
+ *   entram desde 2026-11-23: o mapa de cliques só faz sentido no produto.
  *
  * assinatura() muda quando a página muda: nas lojas pelo updated_at do
  * produto (e das variações); nas landings pelo hash do HTML (as páginas da
@@ -40,11 +40,8 @@ class PaginasMedidas
             ->where('produto', 'not like', 'kz/%')->where('produto', 'not like', 'fk/%')
             ->distinct()->get(['produto', 'pagina'])->map(fn ($e) => ['produto' => $e->produto, 'pagina' => $e->pagina]);
 
-        // Outras páginas das lojas (início, departamentos, carrinho...) com visita na semana (2026-11-20).
-        $doSite = rescue(fn () => app(PaginasDoSite::class)->visitadas(now()->subDays(7))->filter(fn ($p) => PaginasDoSite::paginaDeLoja($p['produto'])), collect(), false);
-
-        return $landings->concat($vistas)->concat($kz)->concat($fk)->concat($doSite)
-            ->filter(fn ($p) => PrintDaPagina::url($p['produto'], $p['pagina']) !== null)
+        return $landings->concat($vistas)->concat($kz)->concat($fk)
+            ->filter(fn ($p) => PaginasDoSite::paginaDeProduto($p['produto']) && PrintDaPagina::url($p['produto'], $p['pagina']) !== null)
             ->unique(fn ($p) => $p['produto'].'|'.$p['pagina'])->values()->all();
     }
 

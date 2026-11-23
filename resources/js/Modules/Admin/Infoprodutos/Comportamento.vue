@@ -22,6 +22,10 @@
  * infoprodutos (PaginasDoSite), com nome, visitas, carrinho e checkout, numa
  * lista com busca na coluna da esquerda; embaixo, o funil da loja no período
  * (visitas → carrinho → checkout → pedido).
+ *
+ * Só páginas de produto na lista (2026-11-23); embaixo dos números da página,
+ * o funil COMPLETO dela até o pedido pago, cruzando o que a mesma pessoa
+ * preencheu no checkout (FunilDoProduto), com a maior queda em destaque.
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
@@ -38,6 +42,20 @@ const props = defineProps({
     pagina: { type: Object, default: null },
     print: { type: Object, default: null },
     dados: { type: Object, default: null },
+    funilProduto: { type: Object, default: null },
+});
+
+// Funil da página escolhida (FunilDoProduto): largura pela 1ª etapa.
+const ESCOPOS = {
+    pessoa: 'mesma pessoa',
+    aba: 'por aba (medição de cliques)',
+    produto: 'todas as vendas do produto',
+    loja: 'todas as páginas',
+};
+const etapasDoFunil = computed(() => {
+    const etapas = props.funilProduto?.etapas ?? [];
+    const topo = Math.max(1, etapas[0]?.pessoas || 0);
+    return etapas.map((e) => ({ ...e, largura: Math.max(2, Math.round((e.pessoas / topo) * 100)) }));
 });
 
 const LOJAS = { kazakora: 'KazaKora', ferrakora: 'FerraKora', infoprodutos: 'Infoprodutos' };
@@ -347,10 +365,10 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 </div>
                 <div>
                     <div class="mb-1 flex items-baseline justify-between text-xs text-slate-500">
-                        <span>Páginas ({{ n(paginasDaLoja.length) }})</span>
+                        <span>Páginas de produto ({{ n(paginasDaLoja.length) }})</span>
                         <span>visitas · carrinho · checkout</span>
                     </div>
-                    <input v-model="buscaPagina" type="search" placeholder="Buscar página ou produto" class="mb-1 w-full rounded border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+                    <input v-model="buscaPagina" type="search" placeholder="Buscar produto" class="mb-1 w-full rounded border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
                     <div class="max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
                         <button v-for="p in paginasFiltradas" :key="`${p.produto}|${p.pagina}`" type="button" :title="p.rotulo"
                             class="flex w-full items-center gap-2 border-b border-slate-100 px-2 py-1 text-left text-xs last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
@@ -389,7 +407,7 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <!-- Funil da loja no período (todas as páginas) -->
                 <section v-if="funil.length" class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
                     <h2 class="text-sm font-semibold">Funil · {{ LOJAS[loja] }} · {{ periodos[periodo] || periodo }}</h2>
-                    <p class="mb-2 text-xs text-slate-500">Pessoas diferentes, sem robôs e sem a equipe. {{ n(totais[loja]?.paginas) }} páginas acessadas.</p>
+                    <p class="mb-2 text-xs text-slate-500">Todas as páginas da loja (início, checkout, entrar...). Pessoas diferentes, sem robôs e sem a equipe. {{ n(totais[loja]?.paginas) }} páginas acessadas.</p>
                     <ol class="space-y-1.5">
                         <li v-for="d in funil" :key="d.nome">
                             <div class="flex items-baseline justify-between text-xs">
@@ -461,7 +479,7 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
 
             <!-- Coluna 3: dados compactos -->
             <div class="min-w-0">
-                <Deferred data="dados">
+                <Deferred :data="['dados', 'funilProduto']">
                     <template #fallback><p class="py-10 text-center text-sm text-slate-500">Lendo os cliques…</p></template>
                     <div v-if="dados" class="space-y-2.5 text-xs">
                         <div v-if="pagina" class="grid grid-cols-5 gap-2">
@@ -472,6 +490,27 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                             <!-- Vendidos (2026-11-21): só pedidos pagos; Pedidos conta até Pix não pago. -->
                             <div title="Pedidos pagos (pago, enviado ou entregue) no período"><div class="text-slate-500">Vendidos</div><div class="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{{ n(pagina.vendidos) }}</div></div>
                         </div>
+                        <!-- Funil até o pedido, cruzando o checkout (2026-11-23) -->
+                        <section v-if="funilProduto?.etapas?.length" class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                            <h2 class="text-sm font-semibold">Funil desta página até o pedido</h2>
+                            <p class="mb-1.5 text-slate-500">Pessoas diferentes, {{ celular ? 'no celular' : 'no computador' }}, sem robôs e sem a equipe. % = de quem passou da etapa anterior.</p>
+                            <ol class="space-y-1">
+                                <li v-for="e in etapasDoFunil" :key="e.chave" class="rounded px-1 py-0.5" :class="funilProduto.maior_queda === e.chave ? 'bg-rose-50 ring-1 ring-rose-300 dark:bg-rose-900/20 dark:ring-rose-700' : ''">
+                                    <div class="flex items-baseline justify-between gap-2">
+                                        <span class="min-w-0">{{ e.nome }}<span v-if="e.escopo !== 'pessoa'" class="ml-1 text-[10px] text-amber-600 dark:text-amber-400">({{ ESCOPOS[e.escopo] }})</span></span>
+                                        <span class="shrink-0"><b class="tabular-nums">{{ n(e.pessoas) }}</b><span v-if="e.taxa !== null" class="ml-1 text-slate-500">({{ pct(e.taxa) }})</span></span>
+                                    </div>
+                                    <div class="h-1.5 rounded bg-slate-100 dark:bg-slate-800"><div class="h-1.5 rounded" :class="funilProduto.maior_queda === e.chave ? 'bg-rose-500' : 'bg-indigo-500'" :style="{ width: `${e.largura}%` }"></div></div>
+                                    <p v-if="funilProduto.maior_queda === e.chave" class="mt-0.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400">Maior queda: {{ n(e.perdeu) }} pessoas pararam aqui</p>
+                                </li>
+                            </ol>
+                            <div v-if="funilProduto.erros?.length" class="mt-2">
+                                <div class="text-slate-500">Erros vistos no checkout (quem estava com o produto)</div>
+                                <ul class="space-y-0.5"><li v-for="er in funilProduto.erros" :key="er.nome" class="flex justify-between"><span>{{ er.nome }}</span><span class="tabular-nums">{{ n(er.pessoas) }}</span></li></ul>
+                            </div>
+                            <p class="mt-1.5 text-[11px] text-slate-400">{{ funilProduto.nota }}</p>
+                        </section>
+
                         <div class="flex gap-4">
                             <div><div class="text-slate-500">Medidas no mapa</div><div class="text-base font-bold tabular-nums">{{ n(dados.visitas) }}</div></div>
                             <div><div class="text-slate-500">Tempo médio</div><div class="text-base font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>

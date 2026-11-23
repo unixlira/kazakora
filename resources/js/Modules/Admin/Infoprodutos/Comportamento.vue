@@ -488,7 +488,7 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                             <div><div class="text-slate-500">Checkout</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.checkout) }}</div></div>
                             <div><div class="text-slate-500">{{ loja === 'infoprodutos' ? 'Vendas' : 'Pedidos' }}</div><div class="text-lg font-bold tabular-nums">{{ n(pagina.pedidos) }}</div></div>
                             <!-- Vendidos (2026-11-21): só pedidos pagos; Pedidos conta até Pix não pago. -->
-                            <div title="Pedidos pagos (pago, enviado ou entregue) no período"><div class="text-slate-500">Vendidos</div><div class="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{{ n(pagina.vendidos) }}</div></div>
+                            <div title="Pedidos pagos (pago, enviado ou entregue) no período"><div class="text-slate-500">Vendidos</div><div class="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{{ n(pagina.vendidos) }}</div><div v-if="pagina.vendidos_total != null" class="text-[11px] text-slate-500">{{ n(pagina.vendidos_total) }} desde o início</div></div>
                         </div>
                         <!-- Funil até o pedido, cruzando o checkout (2026-11-23) -->
                         <section v-if="funilProduto?.etapas?.length" class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">

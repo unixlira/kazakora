@@ -228,7 +228,7 @@ class PaginasDoSite
         if (! isset($this->paginas[$k])) {
             $this->paginas[$k] = [
                 'produto' => $produto, 'pagina' => $pagina, 'loja' => self::loja($produto), 'rotulo' => $produto,
-                'visitas' => 0, 'medidas' => 0, 'carrinho' => null, 'checkout' => null, 'pedidos' => null, 'vendidos' => null, '_quem' => [],
+                'visitas' => 0, 'medidas' => 0, 'carrinho' => null, 'checkout' => null, 'pedidos' => null, 'vendidos' => null, 'vendidos_total' => null, '_quem' => [],
             ];
         }
 
@@ -346,9 +346,12 @@ class PaginasDoSite
         }
 
         $vendidos = $this->vendidos($loja, $de, $ate);
+        // Total desde o início (pedido do Lira 2026-11-23): o período curto escondia vendas antigas do produto.
+        $vendidosTotal = $this->vendidos($loja, null, $ate);
         foreach ($this->paginas as $k => $p) {
             if ($p['loja'] === $loja) {
                 $this->paginas[$k]['vendidos'] = $p['pagina'] === 'produto' ? ($vendidos['por_pagina'][$p['produto']] ?? 0) : null;
+                $this->paginas[$k]['vendidos_total'] = $p['pagina'] === 'produto' ? ($vendidosTotal['por_pagina'][$p['produto']] ?? 0) : null;
             }
         }
 
@@ -372,13 +375,13 @@ class PaginasDoSite
      *
      * @return array{total: int, por_pagina: array<string, int>}
      */
-    private function vendidos(string $loja, Carbon $de, Carbon $ate): array
+    private function vendidos(string $loja, ?Carbon $de, Carbon $ate): array
     {
         $pedidos = Order::query()
             ->where('origin', Order::ORIGIN_STORE)
             ->when($loja === 'kazakora', fn ($q) => $q->whereNull('site_origem'), fn ($q) => $q->where('site_origem', $loja))
             ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
-            ->whereBetween('created_at', [$de, $ate])
+            ->when($de, fn ($q) => $q->whereBetween('created_at', [$de, $ate]), fn ($q) => $q->where('created_at', '<=', $ate))
             ->with('items:id,order_id,product_id')
             ->get(['id']);
 

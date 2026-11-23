@@ -81,7 +81,7 @@ class FerraKoraBlogController extends Controller
             'post' => [
                 ...$this->cartao($post),
                 'body' => (string) $post->body,
-                'video_url' => $post->video_url,
+                'video_url' => $this->absoluta($post->video_url),
                 'source_url' => $post->source_url,
                 'source_name' => $post->source_name,
                 'updated_at' => $post->updated_at?->toIso8601String(),
@@ -111,9 +111,19 @@ class FerraKoraBlogController extends Controller
             'type' => $post->type,
             'category' => $post->category,
             'category_name' => $this->nomeDaCategoria($post->category),
-            'poster_url' => $post->poster_url,
+            'poster_url' => $this->absoluta($post->poster_url),
             'published_at' => $post->published_at?->toIso8601String(),
         ];
+    }
+
+    /** Mídia gravada como caminho da KazaKora (/storage/...) vira endereço completo: o site é outro domínio. */
+    private function absoluta(?string $caminho): ?string
+    {
+        if ($caminho === null || $caminho === '') {
+            return null;
+        }
+
+        return str_starts_with($caminho, '/') && ! str_starts_with($caminho, '//') ? url($caminho) : $caminho;
     }
 
     /** @return array<int, array{slug: string, name: string, count: int}> categorias com matéria publicada */

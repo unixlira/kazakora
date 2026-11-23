@@ -68,7 +68,7 @@ class FerraKoraBlogTest extends TestCase
         for ($i = 0; $i < 10; $i++) {
             $this->materia(['slug' => 'materia-'.$i, 'category' => 'ferramentas-eletricas', 'published_at' => now()->subMinutes(20 - $i)]);
         }
-        $this->materia(['slug' => 'pneu', 'category' => 'automotivo']);
+        $this->materia(['slug' => 'pneu', 'category' => 'automotivo', 'poster_url' => '/storage/blog/capa.jpg']);
         $this->materia(['slug' => 'rascunho', 'status' => 'draft']);
         $this->materia(['slug' => 'futura', 'published_at' => now()->addDay()]);
 
@@ -82,6 +82,7 @@ class FerraKoraBlogTest extends TestCase
             ->assertJsonPath('categories.0.name', 'Ferramentas Elétricas')
             ->assertJsonPath('categories.0.count', 10);
         $this->assertArrayNotHasKey('body', $resposta->json('posts.0'));
+        $this->assertSame(url('/storage/blog/capa.jpg'), $resposta->json('posts.0.poster_url'));
 
         $this->getJson('/api/ferrakora/blog?page=2')->assertOk()->assertJsonCount(2, 'posts')->assertJsonPath('pagination.current', 2);
         $this->getJson('/api/ferrakora/blog?page=99')->assertOk()->assertJsonPath('pagination.current', 2);

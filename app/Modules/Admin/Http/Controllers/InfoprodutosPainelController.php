@@ -40,6 +40,9 @@ use Throwable;
  */
 class InfoprodutosPainelController extends Controller
 {
+    /** Primeiro dia com medição de comportamento no site (tela Comportamento, "Desde o início"). */
+    private const INICIO_COMPORTAMENTO = '2026-10-01';
+
     public function index(Request $request): Response
     {
         FunilInfoprodutos::$comTestes = $request->boolean('testes');
@@ -156,8 +159,10 @@ class InfoprodutosPainelController extends Controller
     {
         Comportamento::$comTestes = $request->boolean('testes');
         InfoprodutoEvento::$comRobos = $request->boolean('robos');
-        $periodo = FunilInfoprodutos::periodo($request->query('periodo'));
-        [$de, $ate] = FunilInfoprodutos::intervalo($periodo);
+        // Comportamento abre desde o início (pedido do Lira 2026-11-23), com os períodos curtos como opção.
+        $periodos = ['tudo' => 'Desde o início'] + FunilInfoprodutos::PERIODOS;
+        $periodo = array_key_exists((string) $request->query('periodo'), $periodos) ? (string) $request->query('periodo') : 'tudo';
+        [$de, $ate] = $periodo === 'tudo' ? [Carbon::parse(self::INICIO_COMPORTAMENTO), now()] : FunilInfoprodutos::intervalo($periodo);
         $aparelho = $request->query('aparelho') === Comportamento::COMPUTADOR ? Comportamento::COMPUTADOR : Comportamento::CELULAR;
         // Toda página acessada (lojas e infoprodutos), com o funil (PaginasDoSite, 2026-11-20).
         $lista = Cache::remember('comportamento:paginas:'.$periodo.':'.(int) Comportamento::$comTestes.(int) InfoprodutoEvento::$comRobos, 120,
@@ -170,7 +175,7 @@ class InfoprodutosPainelController extends Controller
 
         return Inertia::render('Admin/Infoprodutos/Comportamento', [
             'periodo' => $periodo,
-            'periodos' => FunilInfoprodutos::PERIODOS,
+            'periodos' => $periodos,
             'aparelho' => $aparelho,
             'robos' => InfoprodutoEvento::$comRobos,
             'loja' => $loja ?? ($escolhida['loja'] ?? 'kazakora'),

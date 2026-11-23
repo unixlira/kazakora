@@ -136,6 +136,7 @@ class PaginasDoSiteTest extends TestCase
 
         $this->assertSame(2, $paginas['kz/trena|produto']['vendidos']);
         $this->assertSame(0, $paginas['kz/serra|produto']['vendidos']);
+        $this->assertSame(2, $paginas['kz/trena|produto']['vendidos_total']);
         $this->assertSame(2, $r['totais']['kazakora']['vendidos']);
     }
 

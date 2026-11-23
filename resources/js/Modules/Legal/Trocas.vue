@@ -22,7 +22,7 @@ const condicoes = [
 
 const passos = [
     'Entre em contato pelo WhatsApp (11) 96572-3990 ou e-mail contato@kazakora.com informando o número do pedido, o motivo da solicitação e fotos do produto, se aplicável.',
-    'Nossa equipe de atendimento irá analisar a solicitação em até 2 dias úteis e responder com as instruções de envio.',
+    'Nossa equipe de atendimento irá analisar a solicitação em até 2 dias úteis e responder com as instruções de envio. Na desistência em até 7 dias e no produto com defeito, enviamos junto a etiqueta ou o código de postagem, sem custo para você.',
     `O produto deve ser enviado para o endereço: ${COMPANY.enderecoCompleto}.`,
     'Após recebermos o produto, faremos uma análise em até 5 dias úteis.',
     'Se aprovado, a troca será processada ou o reembolso emitido em até 7 dias úteis.',
@@ -68,6 +68,15 @@ const passos = [
                             </tbody>
                         </table>
                     </div>
+                </LegalCard>
+
+                <LegalCard title="Frete da Devolução">
+                    <p>
+                        Na <strong class="text-store-fg">desistência da compra em até 7 dias</strong> após o recebimento
+                        (arrependimento) e no <strong class="text-store-fg">produto com defeito</strong>, o frete da devolução
+                        é <strong class="text-store-fg">por conta da KazaKora</strong>: a loja envia para você a etiqueta ou o
+                        código de postagem, e você não paga nada pelo envio.
+                    </p>
                 </LegalCard>
 
                 <LegalCard title="Condições para Troca ou Devolução">

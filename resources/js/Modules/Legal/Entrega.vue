@@ -35,18 +35,29 @@ const regioes = computed(() => {
             <div class="mt-8 flex flex-col gap-6">
                 <LegalCard title="Frete grátis para todo o Brasil">
                     <p>
-                        Entrega <strong class="text-store-fg">GRÁTIS</strong>
-                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e
-                        <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span> para a sua casa!
-                        Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado:
-                        quando o produto não está no estoque que atende o seu estado, o valor da entrega pode mudar, e ele
-                        sempre aparece no checkout antes de você pagar.
+                        O frete é <strong class="text-store-fg">GRÁTIS para todo o Brasil</strong>, em todos os produtos
+                        e para qualquer CEP: você não paga nada pela entrega.
                     </p>
-                    <p>
-                        A entrega é feita pelos <strong class="text-store-fg">Correios ou por transportadora</strong> em até
-                        <strong class="text-store-fg">7 dias úteis</strong> após a aprovação do pagamento. O prazo exato para o
-                        seu CEP aparece na página do produto (campo "Consultar prazo de entrega").
-                    </p>
+                    <ul class="flex flex-col gap-2.5">
+                        <li class="flex items-start gap-2.5">
+                            <i class="fas fa-box mt-0.5 shrink-0 text-store-verde-texto"></i>
+                            <span><strong class="text-store-fg">Envio em até 1 dia útil</strong> após a aprovação do pagamento.</span>
+                        </li>
+                        <li class="flex items-start gap-2.5">
+                            <i class="fas fa-truck mt-0.5 shrink-0 text-store-verde-texto"></i>
+                            <span><strong class="text-store-fg">Entrega em até 7 dias úteis</strong> depois do envio, pelos Correios ou por transportadora.</span>
+                        </li>
+                        <li class="flex items-start gap-2.5">
+                            <i class="fas fa-bolt mt-0.5 shrink-0 text-store-verde-texto"></i>
+                            <span>
+                                Onde atendem, o
+                                <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e o
+                                <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span>
+                                chegam mais rápido, também com frete grátis.
+                            </span>
+                        </li>
+                    </ul>
+                    <p>O prazo para o seu CEP aparece na página do produto (campo "Consultar prazo de entrega") e no checkout.</p>
                 </LegalCard>
 
                 <LegalCard title="O que é o Full ⚡">
@@ -98,7 +109,8 @@ const regioes = computed(() => {
 
                 <LegalCard title="Fora da área do Full">
                     <p>
-                        Para os demais CEPs, a entrega é pelos Correios ou por transportadora em até 7 dias úteis.
+                        Para os demais CEPs, o pedido é enviado em até 1 dia útil após a aprovação do pagamento e entregue
+                        pelos Correios ou por transportadora em até 7 dias úteis, com frete grátis.
                         Quando os Correios confirmam entrega em até 3 dias úteis para o seu CEP, a página do produto mostra o selo
                         <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span>.
                     </p>

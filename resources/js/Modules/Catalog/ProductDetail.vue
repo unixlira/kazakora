@@ -491,7 +491,7 @@ const submitReview = () => {
                         <div class="mt-5 grid gap-3 text-sm text-store-fg-muted sm:grid-cols-2">
                             <Link href="/trocas-e-devolucoes" class="flex items-start gap-3 rounded-2xl border border-store-border bg-store-bg-raised p-4 hover:border-store-border-strong">
                                 <i class="fas fa-rotate-left mt-0.5 text-store-accent"></i>
-                                <span><strong class="block text-store-fg">Devolução grátis</strong> 30 dias após receber.</span>
+                                <span><strong class="block text-store-fg">Devolução grátis</strong> em até 7 dias após receber.</span>
                             </Link>
                             <Link href="/trocas-e-devolucoes" class="flex items-start gap-3 rounded-2xl border border-store-border bg-store-bg-raised p-4 hover:border-store-border-strong">
                                 <i class="fas fa-shield-halved mt-0.5 text-store-accent"></i>

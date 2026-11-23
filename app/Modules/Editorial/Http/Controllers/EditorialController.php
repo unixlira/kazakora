@@ -16,6 +16,9 @@ use Inertia\Inertia;
 
 class EditorialController extends Controller
 {
+    /** Matérias por página no feed do blog (Lira, 23/11/2026). */
+    private const POR_PAGINA = 9;
+
     private function visible(string $slug): EditorialPost
     {
         return EditorialPost::visible()->where('slug', $slug)->firstOrFail();
@@ -86,11 +89,11 @@ class EditorialController extends Controller
             }
         }
         $total = (clone $query)->count();
-        $lastPage = max(1, (int) ceil($total / 16));
+        $lastPage = max(1, (int) ceil($total / self::POR_PAGINA));
         $page = min((int) ($filters['page'] ?? 1), $lastPage);
-        $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset(($page - 1) * 16)->limit(17)->get();
-        $hasMore = $items->count() > 16;
-        $posts = $items->take(16)->map(function ($p) use ($r) {
+        $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset(($page - 1) * self::POR_PAGINA)->limit(self::POR_PAGINA + 1)->get();
+        $hasMore = $items->count() > self::POR_PAGINA;
+        $posts = $items->take(self::POR_PAGINA)->map(function ($p) use ($r) {
             $post = $this->dto($p);
             $post['interaction'] = ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')];
             return $post;

@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Editorial\Models\EditorialPost;
 use App\Modules\Editorial\Support\EditorialSafety;
+use App\Modules\FerraKora\Models\FerraKoraProduto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +20,15 @@ class EditorialController extends Controller
     /** Matérias por página no feed do blog (Lira, 23/11/2026). */
     private const POR_PAGINA = 9;
 
+    /** Matérias do blog da KazaKora; as do FerraKora saem pela API do site (FerraKoraBlogController). */
+    private function publicadas()
+    {
+        return EditorialPost::visible()->doSite(EditorialPost::KAZAKORA);
+    }
+
     private function visible(string $slug): EditorialPost
     {
-        return EditorialPost::visible()->where('slug', $slug)->firstOrFail();
+        return $this->publicadas()->where('slug', $slug)->firstOrFail();
     }
 
     private function products(?EditorialPost $post = null): array
@@ -70,19 +77,19 @@ class EditorialController extends Controller
     /** Editorias com matéria publicada, para o menu do feed. */
     private function categories(): array
     {
-        return EditorialPost::visible()->select('category', DB::raw('count(*) as total'))->groupBy('category')->orderByDesc('total')->orderBy('category')->limit(20)->get()
+        return $this->publicadas()->select('category', DB::raw('count(*) as total'))->groupBy('category')->orderByDesc('total')->orderBy('category')->limit(20)->get()
             ->map(fn ($c) => ['slug' => $c->category, 'name' => $this->categoryName($c->category), 'count' => (int) $c->total])->all();
     }
 
     private function adminDto(EditorialPost $p): array
     {
-        return array_merge($this->dto($p), $p->only(['status', 'rights_confirmed', 'editorial_checked', 'editor_id', 'reviewer_id']), ['product_ids' => $p->products()->pluck('products.id')->all()]);
+        return array_merge($this->dto($p), $p->only(['site', 'status', 'rights_confirmed', 'editorial_checked', 'editor_id', 'reviewer_id']), ['product_ids' => $p->products()->pluck('products.id')->all()]);
     }
 
     public function index(Request $r)
     {
         $filters = $r->validate(['categoria' => 'nullable|string|max:100', 'tipo' => 'nullable|in:recipe,news,video', 'page' => 'nullable|integer|min:1|max:10000']);
-        $query = EditorialPost::visible();
+        $query = $this->publicadas();
         foreach (['categoria' => 'category', 'tipo' => 'type'] as $key => $column) {
             if (! empty($filters[$key])) {
                 $query->where($column, $filters[$key]);
@@ -120,9 +127,12 @@ class EditorialController extends Controller
         return ['current' => $page, 'last' => $lastPage, 'links' => $links];
     }
 
-    private function catalogProducts(string $search = '', array $ids = []): array
+    private function catalogProducts(string $search = '', array $ids = [], string $site = EditorialPost::KAZAKORA): array
     {
-        $query = Product::query()->naKazaKora()->comEstoque();
+        // Matéria do FerraKora: só produtos que estão na vitrine do site.
+        $query = $site === EditorialPost::FERRAKORA
+            ? Product::query()->where('is_active', true)->whereIn('products.id', FerraKoraProduto::query()->where('ativo', true)->select('product_id'))->comEstoque()
+            : Product::query()->naKazaKora()->comEstoque();
         if ($search !== '') {
             $query->where('name', 'like', '%'.$search.'%');
         }
@@ -137,15 +147,15 @@ class EditorialController extends Controller
 
     public function catalog(Request $r)
     {
-        $data = $r->validate(['q' => 'nullable|string|max:150']);
-        return response()->json($this->catalogProducts(trim($data['q'] ?? '')));
+        $data = $r->validate(['q' => 'nullable|string|max:150', 'site' => ['nullable', Rule::in(EditorialPost::SITES)]]);
+        return response()->json($this->catalogProducts(trim($data['q'] ?? ''), [], $data['site'] ?? EditorialPost::KAZAKORA));
     }
 
     private function showResponse(Request $r, EditorialPost $p)
     {
         $post = $this->dto($p);
 
-        return Inertia::render('Blog/Show', ['post' => $post, 'products' => $post['products'], 'related' => EditorialPost::visible()->where('id', '!=', $p->id)->orderByDesc('published_at')->orderByDesc('id')->limit(3)->get()->map(fn ($r) => $this->teaser($r))->all(), 'comments' => DB::table('editorial_comments')->where('post_id', $p->id)->where('status', 'approved')->orderBy('id')->limit(100)->get(['id', 'display_name', 'body', 'created_at'])->map(fn ($c) => ['id' => $c->id, 'display_name' => $c->display_name, 'body' => $c->body, 'created_at' => Carbon::parse($c->created_at)->toIso8601String()])->all(), 'interaction' => ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')]]);
+        return Inertia::render('Blog/Show', ['post' => $post, 'products' => $post['products'], 'related' => EditorialPost::visible()->doSite($p->site ?? EditorialPost::KAZAKORA)->where('id', '!=', $p->id)->orderByDesc('published_at')->orderByDesc('id')->limit(3)->get()->map(fn ($r) => $this->teaser($r))->all(), 'comments' => DB::table('editorial_comments')->where('post_id', $p->id)->where('status', 'approved')->orderBy('id')->limit(100)->get(['id', 'display_name', 'body', 'created_at'])->map(fn ($c) => ['id' => $c->id, 'display_name' => $c->display_name, 'body' => $c->body, 'created_at' => Carbon::parse($c->created_at)->toIso8601String()])->all(), 'interaction' => ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')]]);
     }
 
     public function show(Request $r, string $slug)
@@ -153,6 +163,7 @@ class EditorialController extends Controller
         return $this->showResponse($r, $this->visible($slug));
     }
 
+    /** Prévia do admin: abre a matéria de qualquer site (noindex), para revisar o texto antes de publicar. */
     public function preview(Request $r, EditorialPost $post)
     {
         return $this->showResponse($r, $post)->toResponse($r)->header('X-Robots-Tag', 'noindex, nofollow');
@@ -195,17 +206,18 @@ class EditorialController extends Controller
 
     public function edit(EditorialPost $post)
     {
-        return Inertia::render('Admin/Editorial/Edit', ['post' => $this->adminDto($post), 'products' => $this->catalogProducts()['products'], 'selectedProducts' => $post->products()->get(['products.id', 'products.name'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->all()]);
+        return Inertia::render('Admin/Editorial/Edit', ['post' => $this->adminDto($post), 'products' => $this->catalogProducts('', [], $post->site ?? EditorialPost::KAZAKORA)['products'], 'selectedProducts' => $post->products()->get(['products.id', 'products.name'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->all()]);
     }
 
     private function validated(Request $r, ?EditorialPost $post = null): array
     {
-        $d = $r->validate(['slug' => ['required', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('editorial_posts')->ignore($post?->id)], 'title' => 'required|string|max:255', 'excerpt' => 'nullable|string|max:1000', 'body' => 'required|string|max:100000', 'type' => 'required|in:video,news,recipe', 'category' => 'required|string|max:100', 'status' => 'required|in:draft,review', 'published_at' => 'nullable|date', 'video_url' => 'nullable|string|max:2048', 'poster_url' => 'nullable|string|max:2048', 'source_url' => 'nullable|url:https|max:2048', 'source_name' => 'nullable|string|max:255', 'rights_confirmed' => 'required|boolean', 'editorial_checked' => 'required|boolean', 'product_ids' => 'sometimes|array|max:30', 'product_ids.*' => 'integer|distinct|exists:products,id']);
+        $d = $r->validate(['site' => ['nullable', Rule::in(EditorialPost::SITES)], 'slug' => ['required', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('editorial_posts')->ignore($post?->id)], 'title' => 'required|string|max:255', 'excerpt' => 'nullable|string|max:1000', 'body' => 'required|string|max:100000', 'type' => 'required|in:video,news,recipe', 'category' => 'required|string|max:100', 'status' => 'required|in:draft,review', 'published_at' => 'nullable|date', 'video_url' => 'nullable|string|max:2048', 'poster_url' => 'nullable|string|max:2048', 'source_url' => 'nullable|url:https|max:2048', 'source_name' => 'nullable|string|max:255', 'rights_confirmed' => 'required|boolean', 'editorial_checked' => 'required|boolean', 'product_ids' => 'sometimes|array|max:30', 'product_ids.*' => 'integer|distinct|exists:products,id']);
         foreach (['video_url' => 'video', 'poster_url' => 'image'] as $field => $kind) {
             if (! EditorialSafety::media($d[$field] ?? null, $kind)) {
                 throw ValidationException::withMessages([$field => 'Somente mídia própria HTTPS ou caminho relativo seguro.']);
             }
         }
+        $d['site'] = $d['site'] ?? EditorialPost::KAZAKORA;
         if (strip_tags($d['body']) !== $d['body']) {
             throw ValidationException::withMessages(['body' => 'O corpo deve ser texto puro, sem HTML.']);
         }

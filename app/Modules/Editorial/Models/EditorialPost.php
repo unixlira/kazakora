@@ -7,7 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class EditorialPost extends Model
 {
+    /** Sites com blog (23/11/2026): cada matéria aparece só no seu. */
+    public const KAZAKORA = 'kazakora';
+
+    public const FERRAKORA = 'ferrakora';
+
+    public const SITES = [self::KAZAKORA, self::FERRAKORA];
+
     protected $guarded = [];
+
+    protected $attributes = ['site' => self::KAZAKORA];
 
     protected function casts(): array
     {
@@ -17,6 +26,11 @@ class EditorialPost extends Model
     public function products()
     {
         return $this->belongsToMany(Product::class, 'editorial_post_product');
+    }
+
+    public function scopeDoSite($q, string $site)
+    {
+        return $q->where('site', $site);
     }
 
     public function scopeVisible($q)

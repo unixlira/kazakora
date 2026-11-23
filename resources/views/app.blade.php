@@ -55,7 +55,8 @@
             @if ($seoEditorial)
                 <meta property="og:title" content="{{ $seoEditorial['title'] }}">
                 <meta property="og:description" content="{{ $descricao }}">
-                <meta property="og:image" content="{{ !empty($seoEditorial['poster_url']) ? (str_starts_with($seoEditorial['poster_url'], '/') ? rtrim(config('app.url'), '/').$seoEditorial['poster_url'] : $seoEditorial['poster_url']) : rtrim(config('app.url'), '/').'/images/marca/og-kazakora.png' }}">
+                <meta property="og:image" content="{{ !empty($seoEditorial['poster_url']) ? (str_starts_with($seoEditorial['poster_url'], '/') ? rtrim(config('app.url'), '/').$seoEditorial['poster_url'] : $seoEditorial['poster_url']) : rtrim(config('app.url'), '/').'/images/marca/og-blog-kazakora.jpg' }}">
+                <meta property="og:image:alt" content="{{ $seoEditorial['title'] }}">
                 <meta name="twitter:card" content="summary_large_image">
             @elseif ($seoProduto)
                 <meta property="og:title" content="{{ filled($seoProduto['seo_title'] ?? null) ? $seoProduto['seo_title'] : $seoProduto['name'] }}">
@@ -99,17 +100,19 @@
             @else
                 {{-- Link da loja compartilhado no WhatsApp/Instagram/Facebook saía sem logo
                      (pedido 2026-10-23): fora da página de produto vai a logo oficial 1200x630. --}}
-                <meta property="og:title" content="{{ request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : config('app.name', 'KazaKora') }}">
+                <meta property="og:title" content="{{ request()->path() === '/' ? 'KazaKora: Loja de Casa, Cozinha e Eletrônicos' : (request()->is('blog') ? 'Blog KazaKora: dicas e ideias para a sua casa' : config('app.name', 'KazaKora')) }}">
                 <meta property="og:description" content="{{ $descricao }}">
                 @if (request()->path() === '/')
                     {{-- Nome do site no resultado do Google (em vez de "kazakora.com"). --}}
                     <script type="application/ld+json">{!! json_encode(['@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => 'KazaKora', 'alternateName' => ['Kaza Kora', 'Loja KazaKora'], 'url' => rtrim(config('app.url'), '/').'/', 'inLanguage' => 'pt-BR'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
                 @endif
-                <meta property="og:image" content="{{ url('/images/marca/og-kazakora.png') }}">
-                <meta property="og:image:type" content="image/png">
+                {{-- Lista do blog (/blog, 23/11/2026): imagem própria do blog na prévia do link. --}}
+                @php($ogBlog = request()->is('blog'))
+                <meta property="og:image" content="{{ url($ogBlog ? '/images/marca/og-blog-kazakora.jpg' : '/images/marca/og-kazakora.png') }}">
+                <meta property="og:image:type" content="{{ $ogBlog ? 'image/jpeg' : 'image/png' }}">
                 <meta property="og:image:width" content="1200">
                 <meta property="og:image:height" content="630">
-                <meta property="og:image:alt" content="Logo KazaKora">
+                <meta property="og:image:alt" content="{{ $ogBlog ? 'Blog KazaKora: dicas e ideias para a sua casa' : 'Logo KazaKora' }}">
                 <meta name="twitter:card" content="summary_large_image">
             @endif
         @endunless

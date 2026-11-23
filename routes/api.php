@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\BeautyKoraPerfilController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Controllers\Api\FerraKoraAvaliacaoController;
 use App\Http\Controllers\Api\FerraKoraBancadaController;
+use App\Http\Controllers\Api\FerraKoraBlogController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Controllers\Api\FerraKoraCheckoutController;
 use App\Http\Controllers\Api\FerraKoraContaController;
@@ -295,6 +296,11 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         // Leads (11/11/2026): cada campo preenchido, para recuperar quem desiste.
         Route::post('lead', [FerraKoraCheckoutController::class, 'lead'])->middleware('throttle:60,1,fk-checkout-lead')->name('lead');
     });
+
+    // Blog do site (23/11/2026): matérias do admin editorial com site = ferrakora.
+    Route::get('blog', [FerraKoraBlogController::class, 'index'])->middleware('throttle:120,1,fk-blog')->name('blog');
+    Route::get('blog/{slug}', [FerraKoraBlogController::class, 'show'])
+        ->where('slug', '[a-z0-9-]{1,255}')->middleware('throttle:120,1,fk-blog')->name('blog.materia');
 
     // Pixel da Meta do FerraKora (2026-10-28): o site pergunta o ID ao abrir.
     Route::get('pixel-meta', [FerraKoraCheckoutController::class, 'pixelMeta'])->middleware('throttle:120,1,fk-pixel-meta')->name('pixel-meta');

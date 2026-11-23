@@ -134,6 +134,14 @@ class EditorialTest extends TestCase
         $this->assertDatabaseCount('editorial_likes', 0);
     }
 
+    public function test_share_preview_uses_blog_image(): void
+    {
+        $this->get('/blog')->assertOk()->assertSee('/images/marca/og-blog-kazakora.jpg', false);
+        $this->editorial();
+        $this->get('/blog/teste')->assertOk()->assertSee('/images/marca/og-blog-kazakora.jpg', false);
+        $this->get('/')->assertDontSee('og-blog-kazakora', false);
+    }
+
     public function test_feed_route_exists(): void
     {
         $this->get('/blog')->assertOk()->assertInertia(fn ($p) => $p->component('Blog/Index', false)->has('posts', 0));

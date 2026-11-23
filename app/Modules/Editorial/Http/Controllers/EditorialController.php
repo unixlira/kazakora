@@ -85,7 +85,9 @@ class EditorialController extends Controller
                 $query->where($column, $filters[$key]);
             }
         }
-        $page = (int) ($filters['page'] ?? 1);
+        $total = (clone $query)->count();
+        $lastPage = max(1, (int) ceil($total / 16));
+        $page = min((int) ($filters['page'] ?? 1), $lastPage);
         $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset(($page - 1) * 16)->limit(17)->get();
         $hasMore = $items->count() > 16;
         $posts = $items->take(16)->map(function ($p) use ($r) {
@@ -94,7 +96,25 @@ class EditorialController extends Controller
             return $post;
         })->values()->all();
         $params = array_filter(['categoria' => $filters['categoria'] ?? '', 'tipo' => $filters['tipo'] ?? ''], fn ($v) => $v !== null && $v !== '');
-        return Inertia::render('Blog/Index', ['posts' => $posts, 'filters' => $params, 'hasMore' => $hasMore, 'nextPageUrl' => $hasMore ? '/blog?'.http_build_query(array_merge($params, ['page' => $page + 1])) : null, 'previousPageUrl' => $page > 1 ? '/blog?'.http_build_query(array_merge($params, ['page' => $page - 1])) : null, 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all(), 'categories' => $this->categories()]);
+        return Inertia::render('Blog/Index', ['posts' => $posts, 'filters' => $params, 'hasMore' => $hasMore, 'nextPageUrl' => $hasMore ? '/blog?'.http_build_query(array_merge($params, ['page' => $page + 1])) : null, 'previousPageUrl' => $page > 1 ? '/blog?'.http_build_query(array_merge($params, ['page' => $page - 1])) : null, 'pagination' => $this->pagination($page, $lastPage, $params), 'products' => collect($posts)->pluck('products')->flatten(1)->unique('id')->values()->all(), 'categories' => $this->categories()]);
+    }
+
+    /** Números de página para o paginador: 1, …, vizinhas da atual, …, última. */
+    private function pagination(int $page, int $lastPage, array $params): array
+    {
+        $url = fn (int $n) => '/blog'.(($q = http_build_query($n > 1 ? array_merge($params, ['page' => $n]) : $params)) !== '' ? '?'.$q : '');
+        $nums = collect([1, $lastPage, ...range(max(1, $page - 2), min($lastPage, $page + 2))])->unique()->sort()->values();
+        $links = [];
+        $prev = 0;
+        foreach ($nums as $n) {
+            if ($n - $prev > 1) {
+                $links[] = ['gap' => true];
+            }
+            $links[] = ['page' => $n, 'url' => $url($n), 'current' => $n === $page];
+            $prev = $n;
+        }
+
+        return ['current' => $page, 'last' => $lastPage, 'links' => $links];
     }
 
     private function catalogProducts(string $search = '', array $ids = []): array

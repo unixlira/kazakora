@@ -6,7 +6,7 @@ import StoryCard from './Components/StoryCard.vue';
 import ContextualProducts from './Components/ContextualProducts.vue';
 import BlogIcon from './Components/BlogIcon.vue';
 import { TYPES, todayLine, blogUrl } from './blogFormat';
-const props = defineProps({ posts: {type:Array,default:()=>[]}, filters: {type:Object,default:()=>({})}, hasMore:Boolean, nextPageUrl:String, previousPageUrl:String, products:{type:Array,default:()=>[]}, categories:{type:Array,default:()=>[]} });
+const props = defineProps({ posts: {type:Array,default:()=>[]}, filters: {type:Object,default:()=>({})}, hasMore:Boolean, nextPageUrl:String, previousPageUrl:String, pagination:{type:Object,default:()=>({current:1,last:1,links:[]})}, products:{type:Array,default:()=>[]}, categories:{type:Array,default:()=>[]} });
 const firstPage = computed(() => !props.previousPageUrl);
 // Matéria de capa só na 1ª página; o resto vira grade, sempre na ordem de publicação (mais nova primeiro).
 const lead = computed(() => firstPage.value ? props.posts[0] : null);
@@ -50,8 +50,15 @@ const today = todayLine();
             <StoryCard v-for="post in rest" :key="post.id" :post="post" :interaction="post.interaction || {}"/>
           </div>
           <nav v-if="previousPageUrl || (hasMore && nextPageUrl)" aria-label="Páginas do caderno" class="pager">
-            <a v-if="previousPageUrl" :href="previousPageUrl" class="pager-btn"><BlogIcon name="arrow-left"/> Mais novas</a>
-            <a v-if="hasMore && nextPageUrl" :href="nextPageUrl" class="pager-btn pager-next">Mais antigas <BlogIcon name="arrow"/></a>
+            <a v-if="previousPageUrl" :href="previousPageUrl" class="pager-btn" rel="prev"><BlogIcon name="arrow-left"/> <span class="pager-label">Mais novas</span></a>
+            <ol v-if="pagination.last > 1" class="pager-pages">
+              <li v-for="(l, i) in pagination.links" :key="i">
+                <span v-if="l.gap" class="pager-gap" aria-hidden="true">…</span>
+                <span v-else-if="l.current" class="pager-num is-current" aria-current="page">{{ l.page }}</span>
+                <a v-else :href="l.url" class="pager-num" :aria-label="`Página ${l.page}`">{{ l.page }}</a>
+              </li>
+            </ol>
+            <a v-if="hasMore && nextPageUrl" :href="nextPageUrl" class="pager-btn pager-next" rel="next"><span class="pager-label">Mais antigas</span> <BlogIcon name="arrow"/></a>
           </nav>
         </section>
 

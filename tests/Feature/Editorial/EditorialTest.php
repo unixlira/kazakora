@@ -57,8 +57,12 @@ class EditorialTest extends TestCase
         $this->get('/blog?categoria=casa&tipo=recipe&utm_source=x')->assertInertia(fn ($p) => $p
             ->has('posts', 16)->where('posts.0.interaction.canInteract', false)
             ->where('hasMore', true)->where('filters.categoria', 'casa')
-            ->where('nextPageUrl', '/blog?categoria=casa&tipo=recipe&page=2'));
-        $this->get('/blog?categoria=casa&tipo=recipe&page=2')->assertInertia(fn ($p) => $p->has('posts', 2)->where('hasMore', false));
+            ->where('nextPageUrl', '/blog?categoria=casa&tipo=recipe&page=2')
+            ->where('pagination.current', 1)->where('pagination.last', 2)
+            ->where('pagination.links.0.url', '/blog?categoria=casa&tipo=recipe')->where('pagination.links.0.current', true)
+            ->where('pagination.links.1.url', '/blog?categoria=casa&tipo=recipe&page=2'));
+        $this->get('/blog?categoria=casa&tipo=recipe&page=2')->assertInertia(fn ($p) => $p->has('posts', 2)->where('hasMore', false)->where('pagination.current', 2));
+        $this->get('/blog?categoria=casa&tipo=recipe&page=99')->assertInertia(fn ($p) => $p->has('posts', 2)->where('pagination.current', 2));
         $this->get('/blog?categoria=inexistente')->assertInertia(fn ($p) => $p->has('posts', 0));
         $this->get('/blog?categoria=&tipo=')->assertOk();
     }

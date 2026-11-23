@@ -40,11 +40,14 @@ class VidsController extends Controller
             })
             ->orderBy('name')
             ->limit(self::LIMITE)
-            ->get(['id', 'name', 'slug'])
+            ->get(['id', 'name', 'slug', 'so_ferrakora'])
             ->map(fn (Product $p) => [
                 'id' => $p->id,
                 'nome' => $p->name,
-                'url' => route('produtos.ver', $p->slug),
+                // Só da FerraKora (Lira 23/11: todos os produtos cadastrados): a página é a do site da FerraKora.
+                'url' => $p->so_ferrakora
+                    ? rtrim((string) config('services.meta_capi.sites.ferrakora.site_url', 'https://ferrakora.com'), '/').'/produto/'.$p->slug
+                    : route('produtos.ver', $p->slug),
                 'foto' => $p->images->first()?->thumb_url,
             ])
             ->values();
@@ -72,7 +75,6 @@ class VidsController extends Controller
         return Product::query()
             ->where('is_active', true)
             ->whereNull('parent_product_id')
-            ->where('so_ferrakora', false)
             ->whereNotNull('slug')
             ->with(['images' => fn ($q) => $q->orderBy('position')]);
     }

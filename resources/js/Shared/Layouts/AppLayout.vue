@@ -5,7 +5,6 @@ import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { atualizarFavoritos, totalFavoritos } from '@/Shared/favoritos';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
-import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import ModalAvaliacao from '@/Shared/Components/ModalAvaliacao.vue';
 import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
@@ -172,12 +171,11 @@ onUnmounted(() => {
 
 <template>
     <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
-        <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
-        <FaixaPromo />
+        <!-- A faixa Black November com "X" (FaixaPromo.vue) saiu em 2026-11-23: o comportamento
+             mostrou que as pessoas só fechavam a faixa. O componente fica no projeto para voltar se precisar. -->
         <TrocarSenhaModal />
         <ModalAvaliacao />
-        <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
-             (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
+        <!-- Marquee. -->
         <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
                  (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco.

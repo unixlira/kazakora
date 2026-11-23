@@ -108,6 +108,8 @@ Route::get('/ofertas', [CatalogController::class, 'ofertas'])->name('catalogo.of
 Route::get('/busca/sugestoes', [CatalogController::class, 'sugestoes'])->middleware('throttle:120,1')->name('catalogo.busca.sugestoes');
 // Mapa do site para o Google Search Console (pedido 2026-10-12).
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
+// Feed de produtos do Google Merchant Center (pedido 2026-11-23).
+Route::get('/feeds/google.xml', \App\Modules\Catalog\Http\Controllers\GoogleMerchantFeedController::class)->name('feeds.google');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
     ->name('produtos.ver')
     // Slug que o produto já teve (renomeado no admin, 2026-10-20) ou link

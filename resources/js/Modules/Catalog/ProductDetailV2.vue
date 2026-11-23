@@ -73,7 +73,7 @@ const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto'
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
-    ['O frete é grátis?', 'Sim. Entrega GRÁTIS FULL e FLEX para a sua casa! Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
+    ['O frete é grátis?', 'Sim. O frete é grátis para todo o Brasil, em todos os produtos. O pedido é enviado em até 1 dia útil após a aprovação do pagamento e entregue em até 7 dias úteis; onde o FULL e o FLEX atendem, chega mais rápido.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`
@@ -1013,7 +1013,7 @@ const submitReview = () => {
                                 </li>
                                 <li>
                                     <span class="selo-icone escudo"><i class="fas fa-shield-halved" aria-hidden="true"></i><i class="fas fa-check" aria-hidden="true"></i></span>
-                                    <span><b>Devoluções Gratuitas</b><br>Estorno de 100% do seu dinheiro<br>30 dias após o recebimento do produto</span>
+                                    <span><b>Devolução Grátis</b><br>Em até 7 dias após o recebimento<br>Estorno de 100% do seu dinheiro</span>
                                 </li>
                             </ul>
 
@@ -1254,7 +1254,7 @@ const submitReview = () => {
                             <div class="garantia">
                                 <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.webp" alt="Garantia de 100% de satisfação" loading="lazy">
                                 <p>
-                                    Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade, sem risco nenhum!
+                                    Você tem 7 dias após o recebimento para desistir da compra, com o frete da devolução por nossa conta e o estorno de 100% do valor pago.
                                 </p>
                             </div>
                         </section>

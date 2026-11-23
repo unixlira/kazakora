@@ -105,7 +105,8 @@ class GoogleMerchantFeedTest extends TestCase
         $soFerraKora = $this->produto(['so_ferrakora' => true]);
         $variacao = $this->produto(['parent_product_id' => $ativo->id]);
 
-        $ids = array_keys($this->itens());
+        // Chave numérica do array vira int: compara como texto.
+        $ids = array_map('strval', array_keys($this->itens()));
 
         $this->assertContains((string) $ativo->id, $ids);
         foreach ([$inativo, $semPreco, $soFerraKora, $variacao] as $fora) {

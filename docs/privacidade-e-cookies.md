@@ -271,6 +271,15 @@ rolagem máxima, e o pedido criado (servidor).
   o código tirado do IP, igual ao das visitas da FerraKora; o IP em si não é
   gravado aqui. Sem cookie novo e sem terceiros. Leitura:
   `php artisan checkout:funil --site=ferrakora`. Mesmo prazo de 6 meses.
+- **Botão do cupom (2026-11-23):** `cupom_clicou` (clicou em "Aplicar
+  cupom" ou apertou Enter no campo), `cupom_aplicado` e `cupom_erro`, com
+  `campo = cupom` e nada mais. O código do cupom digitado **não** é gravado
+  (chave a mais recusa o lote). Aparecem na janela "Ver fluxo" do admin.
+- **Confira seu WhatsApp (2026-11-23):** quando o celular tem DDD 55 e o
+  CEP é de fora da área do DDD 55 (`AlertaWhatsappDdd55`), a tela pede para
+  conferir o número e grava `whatsapp_alerta_ddd55`, depois
+  `whatsapp_confirmou` ou `whatsapp_corrigiu`, com `campo = celular` e nada
+  mais. O número **não** é gravado nesses eventos.
 - **Adicionar ao carrinho (2026-11-20):** o servidor grava
   `produto_carrinho` com o id do produto quando alguém põe um item no
   carrinho da loja ou clica em COMPRAR AGORA (`CartController`). Mesmo dado

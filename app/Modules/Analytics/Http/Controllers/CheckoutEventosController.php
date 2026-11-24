@@ -131,6 +131,10 @@ class CheckoutEventosController extends Controller
             'pagamento' => $so(['campo']) && $campoEm(CheckoutEvento::FORMAS_PAGAMENTO),
             'erro' => $so(['campo']) && $campoEm([...CheckoutEvento::CAMPOS, ...CheckoutEvento::ERROS_EXTRAS]),
             'saiu' => $so(['segundos', 'rolagem']) && $inteiro('segundos', 86400) && $inteiro('rolagem', 100),
+            // Cupom (2026-11-23): só o nome do campo, nunca o código digitado.
+            'cupom_clicou', 'cupom_aplicado', 'cupom_erro' => $so(['campo']) && $campoEm(['cupom']),
+            // Alerta do WhatsApp com DDD 55 (2026-11-23): só o nome do campo, nunca o número.
+            'whatsapp_alerta_ddd55', 'whatsapp_confirmou', 'whatsapp_corrigiu' => $so(['campo']) && $campoEm(['celular']),
             default => $so([]),
         };
     }

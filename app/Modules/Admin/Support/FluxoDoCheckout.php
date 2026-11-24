@@ -289,6 +289,14 @@ class FluxoDoCheckout
             'pagamento' => 'Escolheu pagamento: '.(self::NOME_PAGAMENTO[$e->campo] ?? (string) $e->campo),
             'finalizar' => 'Clicou em Finalizar',
             'erro' => 'Viu um erro em '.$this->nomeCampo($e->campo),
+            // Botão do cupom (2026-11-23): o código digitado nunca é gravado.
+            'cupom_clicou' => 'Clicou em Aplicar cupom',
+            'cupom_aplicado' => 'Cupom aplicado',
+            'cupom_erro' => 'Cupom deu erro',
+            // Alerta do WhatsApp com DDD 55 (2026-11-23): o número nunca é gravado.
+            'whatsapp_alerta_ddd55' => 'Viu o alerta "Confira seu WhatsApp" (DDD 55 com CEP de outra região)',
+            'whatsapp_confirmou' => 'Confirmou que o WhatsApp está correto',
+            'whatsapp_corrigiu' => 'Corrigiu o número do WhatsApp',
             'saiu' => 'Saiu do checkout',
             CheckoutEvento::PEDIDO_CRIADO => 'Pedido criado',
             default => (string) $e->evento,

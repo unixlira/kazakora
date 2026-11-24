@@ -153,4 +153,61 @@ class CheckoutEventosTest extends TestCase
             ])
             ->assertSuccessful();
     }
+
+    public function test_eventos_do_botao_do_cupom_sao_gravados_sem_o_codigo(): void
+    {
+        $this->enviar(['pagina' => 'abc123def456', 'eventos' => [
+            ['evento' => 'cupom_clicou', 'campo' => 'cupom'],
+            ['evento' => 'cupom_erro', 'campo' => 'cupom'],
+            ['evento' => 'cupom_clicou', 'campo' => 'cupom'],
+            ['evento' => 'cupom_aplicado', 'campo' => 'cupom'],
+        ]])->assertNoContent();
+
+        $this->assertSame(
+            ['cupom_clicou', 'cupom_erro', 'cupom_clicou', 'cupom_aplicado'],
+            CheckoutEvento::orderBy('id')->pluck('evento')->all(),
+        );
+        foreach (CheckoutEvento::all() as $evento) {
+            $linha = $evento->getAttributes();
+            $this->assertSame('cupom', $linha['campo']);
+            $this->assertNull($linha['valor']);
+            $this->assertNull($linha['rolagem']);
+        }
+    }
+
+    public function test_evento_do_cupom_com_o_codigo_digitado_e_recusado(): void
+    {
+        // O código no lugar do campo, numa chave a mais ou sem o campo: lote recusado inteiro.
+        foreach ([
+            ['evento' => 'cupom_clicou', 'campo' => 'BLACKFRIDAY'],
+            ['evento' => 'cupom_aplicado', 'campo' => 'cupom', 'codigo' => 'BLACKFRIDAY'],
+            ['evento' => 'cupom_erro', 'campo' => 'cupom', 'valor' => 10],
+            ['evento' => 'cupom_erro'],
+            ['evento' => 'cupom_aplicado', 'campo' => 'nome'],
+        ] as $evento) {
+            $this->enviar(['pagina' => 'abc123def456', 'eventos' => [['evento' => 'abriu'], $evento]])->assertStatus(422);
+        }
+
+        $this->assertSame(0, CheckoutEvento::count());
+    }
+
+    public function test_eventos_do_alerta_do_whatsapp_sao_gravados_sem_o_numero(): void
+    {
+        $this->enviar(['pagina' => 'abc123def456', 'eventos' => [
+            ['evento' => 'whatsapp_alerta_ddd55', 'campo' => 'celular'],
+            ['evento' => 'whatsapp_corrigiu', 'campo' => 'celular'],
+            ['evento' => 'whatsapp_confirmou', 'campo' => 'celular'],
+        ]])->assertNoContent();
+
+        $this->assertSame(3, CheckoutEvento::where('campo', 'celular')->whereNull('valor')->count());
+
+        foreach ([
+            ['evento' => 'whatsapp_corrigiu', 'campo' => '11987654321'],
+            ['evento' => 'whatsapp_corrigiu', 'campo' => 'celular', 'numero' => '11987654321'],
+            ['evento' => 'whatsapp_alerta_ddd55', 'campo' => 'cupom'],
+        ] as $evento) {
+            $this->enviar(['pagina' => 'abc123def456', 'eventos' => [$evento]])->assertStatus(422);
+        }
+        $this->assertSame(3, CheckoutEvento::count());
+    }
 }

@@ -203,4 +203,60 @@ class FluxoDoCheckoutTest extends TestCase
         $this->assertContains($doCliente->status(), [302, 401, 403]);
         $this->assertStringNotContainsString('passos', $doCliente->getContent());
     }
+
+    public function test_cliques_no_cupom_aparecem_no_fluxo_sem_o_codigo(): void
+    {
+        $lead = Lead::create([
+            'site' => 'kazakora', 'visitor_id' => 'visitante-cupom', 'nome' => 'Ana Cupom', 'ultimo_campo' => 'nome',
+            'itens' => [], 'status' => Lead::STATUS_ABERTO,
+        ]);
+        $this->datas($lead, '2026-11-23 11:00', '2026-11-23 11:05');
+        $v = 'visitante-cupom';
+        $this->evento($v, '2026-11-23 11:00:00', 'abriu');
+        $this->evento($v, '2026-11-23 11:00:20', 'foco', 'nome');
+        $this->evento($v, '2026-11-23 11:01:00', 'foco', 'cupom');
+        $this->evento($v, '2026-11-23 11:01:10', 'cupom_clicou', 'cupom');
+        $this->evento($v, '2026-11-23 11:01:11', 'cupom_erro', 'cupom');
+        $this->evento($v, '2026-11-23 11:01:30', 'cupom_clicou', 'cupom');
+        $this->evento($v, '2026-11-23 11:01:31', 'cupom_aplicado', 'cupom');
+
+        $resposta = $this->actingAs($this->admin())->getJson("/admin/leads/{$lead->id}/fluxo")->assertOk();
+
+        $this->assertSame(
+            ['abriu', 'foco', 'foco', 'cupom_clicou', 'cupom_erro', 'cupom_clicou', 'cupom_aplicado'],
+            array_column($resposta->json('passos'), 'evento'),
+        );
+        $resposta
+            ->assertJsonPath('passos.3.titulo', 'Clicou em Aplicar cupom')
+            ->assertJsonPath('passos.3.campo', 'cupom')
+            ->assertJsonPath('passos.4.titulo', 'Cupom deu erro')
+            ->assertJsonPath('passos.6.titulo', 'Cupom aplicado')
+            // O cupom não muda onde a pessoa parou.
+            ->assertJsonPath('parou.etapa', 'identificacao');
+        $this->assertStringNotContainsString('BLACKFRIDAY', $resposta->getContent());
+    }
+
+    public function test_alerta_do_whatsapp_aparece_no_fluxo(): void
+    {
+        $lead = Lead::create([
+            'site' => 'kazakora', 'visitor_id' => 'visitante-zap', 'nome' => 'Bia Zap', 'ultimo_campo' => 'cep',
+            'itens' => [], 'status' => Lead::STATUS_ABERTO,
+        ]);
+        $this->datas($lead, '2026-11-23 11:00', '2026-11-23 11:05');
+        $v = 'visitante-zap';
+        $this->evento($v, '2026-11-23 11:00:00', 'abriu');
+        $this->evento($v, '2026-11-23 11:01:00', 'preencheu', 'cep');
+        $this->evento($v, '2026-11-23 11:01:05', 'whatsapp_alerta_ddd55', 'celular');
+        $this->evento($v, '2026-11-23 11:01:30', 'whatsapp_corrigiu', 'celular');
+        $this->evento($v, '2026-11-23 11:02:00', 'whatsapp_alerta_ddd55', 'celular');
+        $this->evento($v, '2026-11-23 11:02:10', 'whatsapp_confirmou', 'celular');
+
+        $this->actingAs($this->admin())->getJson("/admin/leads/{$lead->id}/fluxo")
+            ->assertOk()
+            ->assertJsonPath('passos.2.titulo', 'Viu o alerta "Confira seu WhatsApp" (DDD 55 com CEP de outra região)')
+            ->assertJsonPath('passos.3.titulo', 'Corrigiu o número do WhatsApp')
+            ->assertJsonPath('passos.5.titulo', 'Confirmou que o WhatsApp está correto')
+            ->assertJsonPath('passos.5.campo', 'celular')
+            ->assertJsonPath('parou.etapa', 'entrega');
+    }
 }

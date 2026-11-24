@@ -13,6 +13,11 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
+    // Black Friday automática (2026-11-24): { code, valor } do cupom que já entrou no carrinho.
+    cupomBlackFriday: {
+        type: Object,
+        default: null,
+    },
 });
 
 const formatPrice = (value) =>
@@ -83,9 +88,13 @@ const removeItem = async (productId) => {
 
                 <div class="mt-8 flex justify-end">
                     <div class="w-full max-w-sm rounded-2xl border border-store-border bg-store-bg-raised p-6">
+                        <div v-if="cupomBlackFriday" class="mb-3 flex items-baseline justify-between text-sm font-semibold text-[#00843f]" data-cupom-carrinho>
+                            <span>Cupom {{ cupomBlackFriday.code }}</span>
+                            <span>-{{ formatPrice(cupomBlackFriday.valor) }}</span>
+                        </div>
                         <div class="flex items-baseline justify-between border-b border-store-border pb-4">
                             <span class="text-lg font-semibold">Total</span>
-                            <span class="text-2xl font-bold">{{ formatPrice(total) }}</span>
+                            <span class="text-2xl font-bold">{{ formatPrice(cupomBlackFriday ? Math.round((total - cupomBlackFriday.valor) * 100) / 100 : total) }}</span>
                         </div>
                         <Link href="/finalizacao"
                             class="mt-5 flex items-center justify-center gap-2 rounded-xl bg-[#0FB930] py-3.5 text-center text-lg font-bold text-white shadow-[0_4px_0_#0a8a23] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#0a8a23]">

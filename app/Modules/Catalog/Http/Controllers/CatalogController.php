@@ -413,7 +413,7 @@ class CatalogController extends Controller
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append('preco_pix')->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation))->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($variation))->setAttribute('medidas_embalagem', FichaTecnica::medidasEmbalagem($variation)));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price')->append(['preco_pix', 'precos_cupom'])->setAttribute('ficha_tecnica', FichaTecnica::linhas($variation))->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($variation))->setAttribute('medidas_embalagem', FichaTecnica::medidasEmbalagem($variation)));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -484,7 +484,8 @@ class CatalogController extends Controller
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
-            'product' => $product->makeHidden('cost_price')->append('preco_pix'),
+            // precos_cupom: Black Friday automática (2026-11-24), preço com o cupom por quantidade (kits).
+            'product' => $product->makeHidden('cost_price')->append(['preco_pix', 'precos_cupom']),
             'variations' => $variations,
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),

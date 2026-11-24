@@ -263,22 +263,29 @@ onBeforeUnmount(() => {
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 // Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).
 const preco = computed(() => props.product.preco_vitrine ?? props.product);
+// Black Friday automática (pedido do Lira 2026-11-24): o servidor manda pronto o preço com o
+// cupom ({ de, por, pix, code }, BlackFriday::precos, a mesma conta do checkout). Riscado = preço
+// sem o cupom; grande = com o cupom; embaixo, no Pix. Null fora da BF: o card de sempre.
+const cupomBf = computed(() => preco.value.preco_cupom ?? null);
+const bfNoAr = computed(() => !!inertia.props.blackfriday);
+const precoVenda = computed(() => Number(cupomBf.value ? cupomBf.value.por : preco.value.final_price));
 const precoAntes = computed(() => {
+    if (cupomBf.value) return Number(cupomBf.value.de);
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
     if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);
     return preco.value.has_discount ? Number(preco.value.preco_de ?? preco.value.price) : null;
 });
 const descontoPct = computed(() => (precoAntes.value
-    ? Math.max(1, Math.round((1 - Number(preco.value.final_price) / precoAntes.value) * 100))
+    ? Math.max(1, Math.round((1 - precoVenda.value / precoAntes.value) * 100))
     : 0));
 const precoPartes = computed(() => {
-    const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
+    const [inteiro, centavos] = precoVenda.value.toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
 // Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
 const inertia = usePage();
 const tabelaParcelas = computed(() => inertia.props.parcelamento);
-const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParcelas.value));
+const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.value));
 </script>
 
 <template>
@@ -368,6 +375,9 @@ const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParc
                     </div>
                     <s v-if="precoAntes" class="min-w-0 truncate whitespace-nowrap pb-px text-[11px] text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
                 </div>
+                <p v-if="cupomBf" class="mt-0.5 truncate whitespace-nowrap text-[11px] text-store-fg-muted" data-card-cupom>
+                    com cupom <b>{{ cupomBf.code }}</b><template v-if="cupomBf.pix !== null"> · <span class="font-semibold text-store-verde-texto">No Pix: {{ formatPrice(cupomBf.pix) }}</span></template>
+                </p>
                 <p v-if="parcela || !tabelaParcelas?.length" class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
                     <i class="far fa-credit-card" aria-hidden="true"></i>
                     <template v-if="parcela">ou {{ parcela.parcelas }}x de <span class="font-semibold text-store-verde-texto">{{ formatPrice(parcela.valor) }}</span></template>
@@ -405,6 +415,16 @@ const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParc
                         <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                     </div>
                 </div>
+                <!-- Black Friday: duas linhas de altura fixa em todo card enquanto a BF está no ar
+                     (produto sem cupom, como Oferta do Dia, fica com elas vazias: cards do mesmo tamanho). -->
+                <template v-if="bfNoAr">
+                    <p class="flex h-4 items-center truncate whitespace-nowrap text-[11px] text-store-fg-muted md:text-xs" data-card-cupom>
+                        <template v-if="cupomBf">com cupom <b class="ml-1">{{ cupomBf.code }}</b></template>
+                    </p>
+                    <p class="flex h-4 items-center truncate whitespace-nowrap text-[11px] font-semibold text-store-verde-texto md:text-xs" data-card-pix>
+                        <template v-if="cupomBf && cupomBf.pix !== null">No Pix: {{ formatPrice(cupomBf.pix) }}</template>
+                    </p>
+                </template>
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                     <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-[11px] font-semibold text-red-600 md:text-xs">Esgotado</p>

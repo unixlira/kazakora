@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
+use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -67,8 +68,14 @@ class Coupon extends Model
     /** Cupom de produto entra na conta do frete somado (FreteEmbutido): mudou, refaz já. */
     protected static function booted(): void
     {
-        static::saved(fn () => Cache::forget(FreteEmbutido::CACHE_CUPONS));
-        static::deleted(fn () => Cache::forget(FreteEmbutido::CACHE_CUPONS));
+        static::saved(function () {
+            Cache::forget(FreteEmbutido::CACHE_CUPONS);
+            BlackFriday::esquecer();
+        });
+        static::deleted(function () {
+            Cache::forget(FreteEmbutido::CACHE_CUPONS);
+            BlackFriday::esquecer();
+        });
     }
 
     /** Código sempre em maiúsculas e sem espaços. */

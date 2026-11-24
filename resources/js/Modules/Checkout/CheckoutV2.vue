@@ -412,7 +412,8 @@ const cupomEstado = computed(() => {
 // No lugar do pop-up do BEMVINDO: faixa compacta com o código e "Aplicar"
 // (antes "Copiar cupom", troca pedida pelo Lira em 2026-11-06). O clique põe
 // o código no campo do cupom e aplica pelo mesmo caminho do campo, com as
-// mesmas regras (um cupom por vez, servidor confere). Nunca aplica sozinho.
+// mesmas regras (um cupom por vez, servidor confere). Desde 2026-11-24, na Black
+// Friday automática (cupomFaixa.auto) o servidor já aplica sozinho e o botão vira "Aplicar de novo".
 const faixaTentou = ref(false);
 const faixaAplicada = computed(() => !!props.cupomFaixa && normalizarCupom(cupomAplicado.value) === normalizarCupom(props.cupomFaixa.code));
 const aplicarCupomFaixa = async () => {
@@ -1078,7 +1079,31 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
         <!-- Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06), no celular e no computador, no lugar do
              pop-up do BEMVINDO. "Aplicar" põe o código no campo do cupom e aplica. -->
         <div v-if="cupomFaixa && !order" data-faixa-cupom class="bg-[#141414] text-white">
-            <div class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5">
+            <!-- Black Friday automática (pedido do Lira 2026-11-24): o servidor já aplicou o cupom.
+                 Aplicado: só o aviso. Cliente tirou: botão para aplicar de novo com um clique.
+                 Outro cupom no lugar: regra do cupom único (não acumula), sem botão. -->
+            <div v-if="cupomFaixa.auto" class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5" data-faixa-blackfriday-auto>
+                <p v-if="faixaAplicada" class="min-w-0 text-[13px] font-bold leading-snug sm:text-sm">
+                    <span aria-hidden="true">✅</span> Cupom {{ cupomFaixa.code }} aplicado: {{ cupomFaixa.rotulo }}
+                </p>
+                <p v-else-if="cupomAplicado" class="min-w-0 text-[13px] leading-snug sm:text-sm">
+                    <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>
+                    o {{ cupomFaixa.code }} dá {{ cupomFaixa.rotulo }}. Só um cupom por compra: tire o {{ cupomAplicado }} para usar o {{ cupomFaixa.code }}.
+                </p>
+                <template v-else>
+                    <p class="min-w-0 text-[13px] leading-snug sm:text-sm">
+                        <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>
+                        {{ cupomFaixa.rotulo }} com o cupom <span class="whitespace-nowrap font-mono font-bold tracking-wider">{{ cupomFaixa.code }}</span>
+                    </p>
+                    <button type="button" data-reaplicar-blackfriday :disabled="cupomCarregando"
+                        class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-slate-900 transition hover:bg-slate-100 disabled:opacity-70"
+                        @click="aplicarCupomFaixa">
+                        <i :class="cupomCarregando && faixaTentou ? 'fa-solid fa-spinner animate-spin' : 'fa-solid fa-tag'" aria-hidden="true"></i>
+                        {{ cupomCarregando && faixaTentou ? 'Aplicando' : 'Aplicar de novo' }}
+                    </button>
+                </template>
+            </div>
+            <div v-else class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5">
                 <!-- Escrito, sem botão (pedido do Lira 2026-11-24: ninguém usava o "Aplicar"). -->
                 <p class="min-w-0 text-[13px] leading-snug sm:text-sm">
                     <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>

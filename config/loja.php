@@ -96,6 +96,15 @@ return [
     */
     'cupom_faixa' => env('LOJA_CUPOM_FAIXA', 'BLACKFRIDAY'),
 
+    /*
+    | Black Friday automática (pedido do Lira 2026-11-24, BlackFriday.php): até
+    | esta data e hora (horário de Brasília) o cupom da faixa acima entra sozinho
+    | no carrinho e no checkout, e a loja mostra "De / Por com cupom / No Pix"
+    | em todo produto e a faixa do topo da Black Friday. Passou, desliga tudo
+    | sozinho (aplicação, faixas e riscados). Vazio desliga a automática.
+    */
+    'blackfriday_ate' => env('LOJA_BLACKFRIDAY_ATE', '2026-11-30 23:59:59'),
+
     'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
     'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
 

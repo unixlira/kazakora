@@ -29,6 +29,7 @@ use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\EntregasDaLoja;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
+use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -66,7 +67,8 @@ use Stripe\Exception\ApiErrorException;
 
 class CheckoutController extends Controller
 {
-    private const SESSION_KEY = 'checkout_draft';
+    // Pública para a Black Friday automática (BlackFriday::aplicarNoRascunho) usar o mesmo rascunho.
+    public const SESSION_KEY = 'checkout_draft';
 
     /**
      * Sem login automático (pedido do Lira 2026-10-24): o convidado ganha a
@@ -472,6 +474,12 @@ class CheckoutController extends Controller
         if ($coupon = $request->session()->get(self::SESSION_KEY.'.coupon_code')) {
             $data['coupon_code'] = $coupon;
         }
+        // Black Friday automática (2026-11-24): as marcas "entrou sozinho" e "cliente tirou" também ficam.
+        foreach ([BlackFriday::AUTO, BlackFriday::REMOVIDO] as $marca) {
+            if ($request->session()->get(self::SESSION_KEY.'.'.$marca)) {
+                $data[$marca] = true;
+            }
+        }
 
         $request->session()->put(self::SESSION_KEY, $data);
         // Visitante: guarda o e-mail no carrinho para o lembrete de carrinho abandonado.
@@ -548,7 +556,12 @@ class CheckoutController extends Controller
     public function removeCouponJson(Request $request): JsonResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY, []);
-        unset($draft['coupon_code']);
+        // Black Friday automática (2026-11-24): tirou o BLACKFRIDAY, ele não volta sozinho;
+        // a faixa do checkout oferece o botão para aplicar de novo.
+        if (BlackFriday::cupom() && Coupon::normalizar($draft['coupon_code'] ?? '') === BlackFriday::cupom()->code) {
+            $draft[BlackFriday::REMOVIDO] = true;
+        }
+        unset($draft['coupon_code'], $draft[BlackFriday::AUTO]);
         $request->session()->put(self::SESSION_KEY, $draft);
 
         return response()->json(['ok' => true]);
@@ -580,7 +593,9 @@ class CheckoutController extends Controller
             return ['erro' => 'Este cupom não vale para os produtos do seu carrinho.'];
         }
 
+        // Cupom único: o digitado fica no lugar do que estava (não acumula).
         $draft['coupon_code'] = $coupon->code;
+        unset($draft[BlackFriday::AUTO], $draft[BlackFriday::REMOVIDO]);
         $request->session()->put(self::SESSION_KEY, $draft);
 
         return [
@@ -751,6 +766,11 @@ class CheckoutController extends Controller
         $shipping = $this->resolveShipping($draft, $cartItems, $this->cepDoRascunho($request, $draft));
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon, $motivoCupom] = $this->cupomDoRascunho($draft, $subtotal, $request->user());
+        // Black Friday automática acabou com o checkout aberto: o cupom que entrou sozinho sai.
+        if (BlackFriday::venceuNoRascunho($draft)) {
+            unset($draft[BlackFriday::AUTO]);
+            $motivoCupom = 'A Black Friday terminou em '.BlackFriday::ateTexto().'.';
+        }
         if ($motivoCupom) {
             // Cupom deixou de valer entre aplicar e pagar (expirou, esgotou...):
             // tira do rascunho e avisa, em vez de cobrar diferente do que a tela mostrou.
@@ -1723,6 +1743,9 @@ class CheckoutController extends Controller
         $cep = $this->cepDoRascunho(request(), $draft);
         app(FreteEmbutido::class)->usarCep($cep);
         $cartItems = $this->cart->items();
+        // Black Friday automática (2026-11-24): o BLACKFRIDAY entra sozinho ao abrir o checkout.
+        BlackFriday::aplicarNoRascunho(request()->session(), $cartItems, request()->user());
+        $draft = request()->session()->get(self::SESSION_KEY) ?? $draft;
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
@@ -2072,6 +2095,10 @@ class CheckoutController extends Controller
             app(FreteEmbutido::class)->usarCep($cepDoRascunho);
         }
         $cartItems = $this->cart->items();
+        // Black Friday automática (2026-11-24): o BLACKFRIDAY entra sozinho ao abrir o checkout
+        // (link direto e carrinho recuperado também), salvo se o cliente tirou ou usa outro cupom.
+        BlackFriday::aplicarNoRascunho($request->session(), $cartItems, $user);
+        $draft = $request->session()->get(self::SESSION_KEY) ?? [];
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
         // Visitas ao site (2026-11-12): a visita desta tela guarda o valor e os itens do checkout.
@@ -2170,7 +2197,8 @@ class CheckoutController extends Controller
     /**
      * Cupom da faixa do checkout da KazaKora (config loja.cupom_faixa,
      * BLACKFRIDAY de 5%, pedido 2026-11-06): no lugar do pop-up do BEMVINDO,
-     * a faixa mostra o código com "Aplicar" (põe no campo e aplica no clique) e nunca aplica sozinho.
+     * a faixa mostra o código com "Aplicar" (põe no campo e aplica no clique). Na Black Friday
+     * automática (BlackFriday, 2026-11-24) o cupom já entra sozinho e a faixa só confirma.
      * Null (sem faixa) quando não há código, o cupom não existe ou não vale
      * para este carrinho e cliente. Nunca cria cupom.
      *
@@ -2184,8 +2212,18 @@ class CheckoutController extends Controller
         if (! $coupon || $coupon->motivoInvalido($subtotal, $user, ...$this->identidadeDoRascunho($draft, $user))) {
             return null;
         }
+        // Black Friday automática (2026-11-24): passou a data, a faixa some junto.
+        if (BlackFriday::encerrada() && $coupon->code === Coupon::normalizar((string) config('loja.cupom_faixa'))) {
+            return null;
+        }
 
-        return ['code' => $coupon->code, 'descricao' => $coupon->descricaoDesconto()];
+        // auto: a faixa diz "Cupom BLACKFRIDAY aplicado: 5% OFF" e, se o cliente tirou, mostra "Aplicar de novo".
+        return [
+            'code' => $coupon->code,
+            'descricao' => $coupon->descricaoDesconto(),
+            'rotulo' => BlackFriday::rotulo($coupon),
+            'auto' => BlackFriday::cupom()?->code === $coupon->code,
+        ];
     }
 
     /**

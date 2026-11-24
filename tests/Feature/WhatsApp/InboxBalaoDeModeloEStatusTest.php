@@ -67,7 +67,7 @@ class InboxBalaoDeModeloEStatusTest extends TestCase
 
     private function conversa(): WhatsAppConversation
     {
-        return WhatsAppConversation::paraNumero('5511999990000', 'kazakora', ['phone' => '5511999990000', 'ai_enabled' => false]);
+        return WhatsAppConversation::paraNumero('5511999990000', 'kazakora', ['phone' => '5511999990000', 'ai_enabled' => false, 'unread_count' => 0]);
     }
 
     private function mensagem(WhatsAppConversation $conversa, array $dados): WhatsAppMessage
@@ -182,11 +182,11 @@ class InboxBalaoDeModeloEStatusTest extends TestCase
         $lida = $this->conversa();
         $this->mensagem($lida, ['status' => 'read']);
 
-        $entregue = WhatsAppConversation::paraNumero('5511988880000', 'kazakora', ['phone' => '5511988880000']);
+        $entregue = WhatsAppConversation::paraNumero('5511988880000', 'kazakora', ['phone' => '5511988880000', 'unread_count' => 0]);
         $this->mensagem($entregue, ['status' => 'read']);
         $this->mensagem($entregue, ['status' => 'delivered']);
 
-        $doCliente = WhatsAppConversation::paraNumero('5511977770000', 'kazakora', ['phone' => '5511977770000']);
+        $doCliente = WhatsAppConversation::paraNumero('5511977770000', 'kazakora', ['phone' => '5511977770000', 'unread_count' => 0]);
         $this->mensagem($doCliente, ['status' => 'read']);
         $this->mensagem($doCliente, ['direction' => 'inbound', 'status' => 'received', 'received_at' => now()]);
 

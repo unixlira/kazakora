@@ -235,4 +235,28 @@ class FluxoDoCheckoutTest extends TestCase
             ->assertJsonPath('parou.etapa', 'identificacao');
         $this->assertStringNotContainsString('BLACKFRIDAY', $resposta->getContent());
     }
+
+    public function test_alerta_do_whatsapp_aparece_no_fluxo(): void
+    {
+        $lead = Lead::create([
+            'site' => 'kazakora', 'visitor_id' => 'visitante-zap', 'nome' => 'Bia Zap', 'ultimo_campo' => 'cep',
+            'itens' => [], 'status' => Lead::STATUS_ABERTO,
+        ]);
+        $this->datas($lead, '2026-11-23 11:00', '2026-11-23 11:05');
+        $v = 'visitante-zap';
+        $this->evento($v, '2026-11-23 11:00:00', 'abriu');
+        $this->evento($v, '2026-11-23 11:01:00', 'preencheu', 'cep');
+        $this->evento($v, '2026-11-23 11:01:05', 'whatsapp_alerta_ddd55', 'celular');
+        $this->evento($v, '2026-11-23 11:01:30', 'whatsapp_corrigiu', 'celular');
+        $this->evento($v, '2026-11-23 11:02:00', 'whatsapp_alerta_ddd55', 'celular');
+        $this->evento($v, '2026-11-23 11:02:10', 'whatsapp_confirmou', 'celular');
+
+        $this->actingAs($this->admin())->getJson("/admin/leads/{$lead->id}/fluxo")
+            ->assertOk()
+            ->assertJsonPath('passos.2.titulo', 'Viu o alerta "Confira seu WhatsApp" (DDD 55 com CEP de outra região)')
+            ->assertJsonPath('passos.3.titulo', 'Corrigiu o número do WhatsApp')
+            ->assertJsonPath('passos.5.titulo', 'Confirmou que o WhatsApp está correto')
+            ->assertJsonPath('passos.5.campo', 'celular')
+            ->assertJsonPath('parou.etapa', 'entrega');
+    }
 }

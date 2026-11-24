@@ -10,6 +10,8 @@ import { rastrearCompraGoogle } from '@/Shared/tagGoogle';
 // confirmação do cartão chegam nas props desta mesma página.
 import CheckoutLayout from '@/Shared/Layouts/CheckoutLayout.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
+import ConfirmarWhatsappModal from '@/Shared/Components/ConfirmarWhatsappModal.vue';
+import { deveAlertarDdd55, sugestaoSem55 } from './alertaWhatsapp';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
@@ -124,6 +126,42 @@ const onCep = async (event) => {
     }
     await nextTick();
     (result?.street ? numeroInput : ruaInput).value?.focus();
+    conferirWhatsapp();
+};
+
+// ---------- Alerta do WhatsApp com DDD 55 (pedido do Lira 2026-11-23) ----------
+// Depois que o CEP responde: celular com DDD 55 e CEP fora da área do DDD 55
+// (alertaWhatsapp.js) abre o "Confira seu WhatsApp". Confirmado ou corrigido,
+// não volta mais para aquele número. Medição só com campo = celular, nunca o número.
+// celularDigitado guarda os dígitos como a pessoa digitou (até 13), antes da
+// máscara cortar em 11, para sugerir o número sem o 55 do país.
+const celularDigitado = ref(String(pessoa.phone ?? '').replace(/\D/g, ''));
+const aoDigitarCelular = (valor) => {
+    celularDigitado.value = String(valor ?? '').replace(/\D/g, '').slice(0, 13);
+    pessoa.phone = maskPhone(valor);
+};
+const whatsappConferidos = new Set();
+const alertaWhatsapp = reactive({ aberto: false, atual: '', sugestao: '' });
+const conferirWhatsapp = () => {
+    const numero = String(pessoa.phone ?? '').replace(/\D/g, '');
+    if (props.order || alertaWhatsapp.aberto || whatsappConferidos.has(numero)) return;
+    if (!deveAlertarDdd55(pessoa.phone, endereco.zip)) return;
+    const sugestao = sugestaoSem55(celularDigitado.value);
+    Object.assign(alertaWhatsapp, { aberto: true, atual: pessoa.phone, sugestao: sugestao ? maskPhone(sugestao) : '' });
+    medicao.registrar('whatsapp_alerta_ddd55', { campo: 'celular' }, null, true);
+};
+const fecharAlertaWhatsapp = (numero) => {
+    const antes = String(alertaWhatsapp.atual ?? '').replace(/\D/g, '');
+    const depois = String(numero ?? '').replace(/\D/g, '');
+    whatsappConferidos.add(antes);
+    whatsappConferidos.add(depois);
+    const corrigiu = depois.length >= 10 && depois !== antes;
+    if (corrigiu) {
+        pessoa.phone = maskPhone(depois);
+        celularDigitado.value = depois;
+    }
+    medicao.registrar(corrigiu ? 'whatsapp_corrigiu' : 'whatsapp_confirmou', { campo: 'celular' }, null, true);
+    alertaWhatsapp.aberto = false;
 };
 
 const enderecoSelecionado = computed(() => props.addresses.find((address) => address.id === addressId.value) ?? null);
@@ -514,7 +552,15 @@ const SELOS_VERIFICADOS = [
     ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
     ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
 ];
-const CHECKS_LOJA = ['Frete grátis para todo o Brasil', 'Nota fiscal em todo pedido', 'Devolução grátis em até 7 dias após o recebimento'];
+// Nota fiscal (pedido do Lira 2026-11-23): diz que vai por e-mail assim que o pagamento é
+// confirmado, com os livros digitais quando o pedido ganha o brinde.
+const CHECKS_LOJA = computed(() => [
+    'Frete grátis para todo o Brasil',
+    props.livrosBrinde
+        ? 'Nota fiscal e livros digitais no seu e-mail assim que o pagamento é confirmado'
+        : 'Nota fiscal no seu e-mail assim que o pagamento é confirmado',
+    'Devolução grátis em até 7 dias após o recebimento',
+]);
 
 // ---------- Finalizar ----------
 const erros = ref({});
@@ -1174,7 +1220,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     </label>
                                     <label class="block" :data-erro="erro('new_address.phone') ? 1 : 0">
                                         <span class="sr-only">WhatsApp ou celular com DDD</span>
-                                        <input :value="pessoa.phone" data-medir="celular" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="WhatsApp/Celular" @input="pessoa.phone = maskPhone($event.target.value)">
+                                        <input :value="pessoa.phone" data-medir="celular" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="WhatsApp/Celular" @input="aoDigitarCelular($event.target.value)">
                                         <small v-if="erro('new_address.phone')" class="ml-4 text-xs text-red-600">{{ erro('new_address.phone') }}</small>
                                     </label>
                                 </div>
@@ -1591,6 +1637,10 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                 -->
             </aside>
         </div>
+
+        <!-- Confira seu WhatsApp: DDD 55 com CEP de fora da área do DDD 55 (pedido do Lira 2026-11-23). -->
+        <ConfirmarWhatsappModal :open="alertaWhatsapp.aberto && estado === 'idle'" :atual="alertaWhatsapp.atual" :sugestao="alertaWhatsapp.sugestao"
+            @confirmar="fecharAlertaWhatsapp" @corrigir="fecharAlertaWhatsapp" />
 
         <PaymentProcessingModal
             :open="estado !== 'idle'"

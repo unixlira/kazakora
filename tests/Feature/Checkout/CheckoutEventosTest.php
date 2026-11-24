@@ -190,4 +190,24 @@ class CheckoutEventosTest extends TestCase
 
         $this->assertSame(0, CheckoutEvento::count());
     }
+
+    public function test_eventos_do_alerta_do_whatsapp_sao_gravados_sem_o_numero(): void
+    {
+        $this->enviar(['pagina' => 'abc123def456', 'eventos' => [
+            ['evento' => 'whatsapp_alerta_ddd55', 'campo' => 'celular'],
+            ['evento' => 'whatsapp_corrigiu', 'campo' => 'celular'],
+            ['evento' => 'whatsapp_confirmou', 'campo' => 'celular'],
+        ]])->assertNoContent();
+
+        $this->assertSame(3, CheckoutEvento::where('campo', 'celular')->whereNull('valor')->count());
+
+        foreach ([
+            ['evento' => 'whatsapp_corrigiu', 'campo' => '11987654321'],
+            ['evento' => 'whatsapp_corrigiu', 'campo' => 'celular', 'numero' => '11987654321'],
+            ['evento' => 'whatsapp_alerta_ddd55', 'campo' => 'cupom'],
+        ] as $evento) {
+            $this->enviar(['pagina' => 'abc123def456', 'eventos' => [$evento]])->assertStatus(422);
+        }
+        $this->assertSame(3, CheckoutEvento::count());
+    }
 }

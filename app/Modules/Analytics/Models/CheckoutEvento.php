@@ -37,6 +37,7 @@ class CheckoutEvento extends Model
         'abriu', 'viu_formulario', 'rolagem', 'foco', 'preencheu', 'cep_respondido',
         'pagamento', 'finalizar', 'erro', 'saiu',
         ...self::EVENTOS_CUPOM,
+        ...self::EVENTOS_WHATSAPP,
     ];
 
     /**
@@ -45,6 +46,13 @@ class CheckoutEvento extends Model
      * código digitado nunca vem.
      */
     public const EVENTOS_CUPOM = ['cupom_clicou', 'cupom_aplicado', 'cupom_erro'];
+
+    /**
+     * "Confira seu WhatsApp" (pedido do Lira 2026-11-23): celular com DDD 55 e
+     * CEP fora da área do DDD 55 (AlertaWhatsappDdd55). `campo` = "celular" e
+     * só isso: o número nunca vem.
+     */
+    public const EVENTOS_WHATSAPP = ['whatsapp_alerta_ddd55', 'whatsapp_confirmou', 'whatsapp_corrigiu'];
 
     /** Adicionar ao carrinho ou COMPRAR AGORA na loja (servidor, 2026-11-20): `campo` = id do produto. Tela Comportamento. */
     public const PRODUTO_CARRINHO = 'produto_carrinho';

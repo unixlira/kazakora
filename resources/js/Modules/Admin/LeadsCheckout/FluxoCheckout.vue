@@ -55,11 +55,23 @@ const COR_ETAPA = {
     finalizar: 'bg-rose-500',
     comprou: 'bg-emerald-500',
 };
-// Botão do cupom (2026-11-23): sem etapa, cor própria para achar na linha do tempo.
+// Botão do cupom e alerta do WhatsApp com DDD 55 (2026-11-23): sem etapa, cor
+// própria e selo para achar na linha do tempo.
 const COR_EVENTO = {
     cupom_clicou: 'bg-orange-500',
     cupom_aplicado: 'bg-emerald-500',
     cupom_erro: 'bg-red-500',
+    whatsapp_alerta_ddd55: 'bg-amber-500',
+    whatsapp_confirmou: 'bg-emerald-500',
+    whatsapp_corrigiu: 'bg-sky-500',
+};
+const SELO_EVENTO = {
+    cupom_clicou: 'Cupom',
+    cupom_aplicado: 'Cupom',
+    cupom_erro: 'Cupom',
+    whatsapp_alerta_ddd55: 'WhatsApp',
+    whatsapp_confirmou: 'WhatsApp',
+    whatsapp_corrigiu: 'WhatsApp',
 };
 const NOME_ETAPA = {
     carrinho: 'Carrinho',
@@ -97,7 +109,7 @@ const NOME_ETAPA = {
                         <span class="font-mono text-xs tabular-nums text-slate-500">{{ hora(passo.hora) }}</span>
                         <span class="text-sm font-medium">{{ passo.titulo }}</span>
                         <span v-if="passo.vezes > 1" class="text-xs text-slate-400">({{ passo.vezes }}x)</span>
-                        <span v-if="COR_EVENTO[passo.evento]" class="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-700">Cupom</span>
+                        <span v-if="SELO_EVENTO[passo.evento]" class="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-700">{{ SELO_EVENTO[passo.evento] }}</span>
                         <span v-if="passo.etapa" class="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">{{ NOME_ETAPA[passo.etapa] }}</span>
                     </div>
                     <div v-if="passo.detalhe" class="text-xs text-slate-500">{{ passo.detalhe }}</div>

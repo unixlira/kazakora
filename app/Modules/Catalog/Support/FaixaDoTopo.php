@@ -141,7 +141,7 @@ class FaixaDoTopo
 
     private static function limpar(string $texto): string
     {
-        $sem = preg_replace('/[\p{Extended_Pictographic}\x{FE0F}\x{200D}\x{20E3}]/u', '', $texto) ?? $texto;
+        $sem = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2190}-\x{21FF}\x{FE0F}\x{200D}\x{20E3}]/u', '', $texto) ?? $texto;
         $sem = preg_replace('/\s+/u', ' ', $sem) ?? $sem;
 
         return trim($sem, " \t\n\r\0\x0B.!;:,-–—|");

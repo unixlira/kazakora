@@ -47,6 +47,7 @@ class LeadCheckout extends Model
         'ip',
         'user_agent',
         'convertido_em',
+        'whatsapp_enviado_em',
     ];
 
     protected $hidden = ['session_id', 'ip', 'user_agent'];
@@ -55,6 +56,7 @@ class LeadCheckout extends Model
     {
         return [
             'itens' => 'array',
+            'whatsapp_enviado_em' => 'datetime',
             'quantidade_itens' => 'integer',
             'subtotal' => 'decimal:2',
             'convertido_em' => 'datetime',

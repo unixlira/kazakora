@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia as Registro;
+use App\Modules\Cart\Support\Sequencia\CalendarioSequencia;
 use App\Modules\Cart\Support\Sequencia\DisparadorSequencia;
 use App\Modules\Cart\Support\Sequencia\ImportadorSequencia;
 use App\Modules\Cart\Support\Sequencia\ParadasSequencia;
@@ -57,6 +58,9 @@ class SequenciaCarrinhoAbandonado extends Command
             } elseif (! config('loja.carrinho_sequencia_ativa')) {
                 // Homolog/local: importa e para, mas nunca fala com o cliente.
                 $this->warn("Envio desligado (CARRINHO_SEQUENCIA_ATIVA; só liga no kazakora.com): {$vez->count()} disparo(s) na hora, nada foi enviado.");
+            } elseif (! CalendarioSequencia::dentroDaJanela(now())) {
+                // Carrinho que entrou na fila com horário já vencido não sai fora das 9h–20h (achado 2026-11-23: saiu às 21h30).
+                $this->info("Fora do horário de envio (9h às 20h): {$vez->count()} disparo(s) esperam a próxima janela.");
             } else {
                 $this->mandar($vez, $paradas, $disparador);
             }

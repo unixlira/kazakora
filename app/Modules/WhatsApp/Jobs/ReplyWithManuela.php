@@ -98,6 +98,17 @@ class ReplyWithManuela
             return;
         }
 
+        // Resposta automática do outro lado (WhatsApp Business do cliente com
+        // "seja bem-vindo, deixe seu recado"): a Manuela não responde, senão vira
+        // robô conversando com robô (achado do Lira 2026-11-23). Sinais: texto de
+        // mensagem de ausência/saudação automática, ou o mesmo texto que o cliente
+        // já mandou antes nesta conversa.
+        if ($inbound->type === 'text' && self::pareceRespostaAutomatica((string) $inbound->body, $conversation, $inbound)) {
+            Log::info('whatsapp.manuela_ignorou_resposta_automatica', ['conversation_id' => $conversation->id, 'message_id' => $inbound->id]);
+
+            return;
+        }
+
         // Cliente mandou várias mensagens seguidas: só a última dispara
         // resposta (ela já leva o histórico inteiro pra Manuela). E se alguém
         // (Manuela ou pessoa) já respondeu depois dela, não responde de novo.
@@ -335,5 +346,37 @@ class ReplyWithManuela
         } catch (Throwable $exception) {
             Log::warning('whatsapp.audio_transcription_failed', ['message_id' => $inbound->id, 'error' => $exception->getMessage()]);
         }
+    }
+
+    /** Mensagem automática de outro WhatsApp Business (ausência, boas-vindas) ou repetida. */
+    public static function pareceRespostaAutomatica(string $texto, WhatsAppConversation $conversa, WhatsAppMessage $mensagem): bool
+    {
+        $t = mb_strtolower(trim($texto));
+        if ($t === '') {
+            return false;
+        }
+
+        $padroes = [
+            '/deixe (o )?seu recado|deixe se recado|deixe sua mensagem|deixe uma mensagem/u',
+            '/(responderemos|atenderemos|retornaremos|entraremos em contato).{0,40}(breve|logo|poss[ií]vel|retorno)/u',
+            '/(mensagem|resposta) autom[aá]tica/u',
+            '/no momento (n[aã]o (estamos|podemos)|estamos (ausentes|fora))/u',
+            '/(nosso|o) hor[aá]rio de atendimento [eé]/u',
+            '/(obrigad[oa] por (entrar em )?contat(o|ar)).{0,60}(em breve|logo|retornar)/u',
+            '/seja bem[- ]vind[oa] (a|à) (minha|nossa) (loja|empresa)/u',
+        ];
+        foreach ($padroes as $padrao) {
+            if (preg_match($padrao, $t)) {
+                return true;
+            }
+        }
+
+        // O mesmo texto (com mais de 20 letras) já veio do cliente antes: é robô repetindo.
+        return mb_strlen($t) > 20 && $conversa->messages()
+            ->where('direction', 'inbound')
+            ->where('id', '<', $mensagem->id)
+            ->where('created_at', '>=', now()->subDays(2))
+            ->pluck('body')
+            ->contains(fn ($b) => mb_strtolower(trim((string) $b)) === $t);
     }
 }

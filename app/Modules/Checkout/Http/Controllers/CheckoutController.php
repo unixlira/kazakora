@@ -183,7 +183,13 @@ class CheckoutController extends Controller
             'desconto_plataforma' => $entrega['desconto_plataforma'],
             // Na área FULL o TURBO também aparece (pedido 2026-10-23), sem o
             // "dias antes", que compara com o PAC.
-            'turbo' => $turbo = $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'],
+            // Com o preço fixo da navegação, o SEDEX cobra só o que passa do embutido.
+            'turbo' => $turbo = FreteEmbutido::expressaPeloEmbutido($entrega, $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo']),
+            // Frete do CEP acima do que já está no preço (pedido do Lira 2026-11-24):
+            // vira a linha "Frete" do resumo; 0 = grátis, sem aviso.
+            'diferenca_frete' => $entrega['diferenca'] ?? 0.0,
+            'embutido_fixo' => $entrega['embutido'] ?? 0.0,
+            'pac_real' => $entrega['pac_real'] ?? 0.0,
             // Entrega Rápida / Entrega Expressa com "Chega ..." (pedido do Lira
             // 2026-11-24): os nomes que o cliente vê, sem Full, Flex ou Turbo.
             // Motoboy pelo excedente: valor menos o frete que já está no preço.
@@ -2023,7 +2029,7 @@ class CheckoutController extends Controller
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
         if (! empty($draft['turbo']) && $cartItems && $cep) {
-            $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
+            $turbo = FreteEmbutido::expressaPeloEmbutido(app(FreteEmbutido::class)->entregaDoCarrinho($cartItems));
             if ($turbo) {
                 return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];
             }
@@ -2040,11 +2046,19 @@ class CheckoutController extends Controller
         }
 
         $shippingMethod = ShippingMethod::findOrFail($draft['shipping_method_id']);
+        $cost = (float) $shippingMethod->price;
+
+        // Frete grátis com o preço fixo da navegação (pedido do Lira 2026-11-24):
+        // se o CEP de entrega pede mais frete que o já embutido no preço, a
+        // diferença é cobrada aqui, a mesma que a tela mostrou na linha "Frete".
+        if ($cost <= 0 && $cartItems && $cep) {
+            $cost = app(FreteEmbutido::class)->diferencaDoCarrinho($cartItems)['diferenca'];
+        }
 
         return [
             'method_id' => $shippingMethod->id,
             'carrier_name' => $shippingMethod->name,
-            'cost' => (float) $shippingMethod->price,
+            'cost' => $cost,
         ];
     }
 

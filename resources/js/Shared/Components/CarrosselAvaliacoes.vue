@@ -91,7 +91,7 @@ const aoTeclar = (evento) => {
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-x-2">
                         <p class="truncate text-xs font-bold text-slate-900">
-                            {{ avaliacao.nome }}<span v-if="avaliacao.uf" class="font-semibold text-slate-500"> · {{ avaliacao.uf }}</span>
+                            {{ avaliacao.nome }}<span v-if="avaliacao.uf" class="font-semibold text-slate-500"> - {{ avaliacao.uf }}</span>
                         </p>
                         <p class="shrink-0 text-slate-900" role="img" :aria-label="`Nota ${avaliacao.nota} de 5`">
                             <i v-for="estrela in 5" :key="estrela" class="text-[11px]" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>

@@ -5,6 +5,7 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Catalog\Models\ReviewImage;
 use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -79,5 +80,18 @@ class AvaliacoesDoCheckoutTest extends TestCase
         $avaliacao = app(AvaliacoesDoCheckout::class)->paraProdutos([$produto->id])[0];
 
         $this->assertSame('https://cdn.exemplo.test/minis/foto.jpg', $avaliacao['foto']);
+    }
+
+    public function test_estado_do_pedido_aparece_quando_a_avaliacao_nao_tem_uf(): void
+    {
+        $produto = Product::factory()->create(['is_active' => true]);
+        $pedido = Order::create(['status' => Order::STATUS_COMPLETED, 'origin' => Order::ORIGIN_STORE, 'shipping_name' => 'X', 'shipping_phone' => '1',
+            'shipping_zip' => '20000000', 'shipping_street' => 'R', 'shipping_number' => '1', 'shipping_neighborhood' => 'B', 'shipping_city' => 'Rio de Janeiro',
+            'shipping_state' => 'rj', 'subtotal' => 10, 'shipping_cost' => 0, 'total' => 10]);
+        $this->avaliar($produto, 'Carla Souza')->forceFill(['order_id' => $pedido->id])->save();
+
+        $avaliacao = app(AvaliacoesDoCheckout::class)->paraProdutos([$produto->id])[0];
+
+        $this->assertSame('RJ', $avaliacao['uf']);
     }
 }

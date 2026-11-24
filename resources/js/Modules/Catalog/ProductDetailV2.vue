@@ -1574,8 +1574,8 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .dark .pd2 .prazo-cep input { background: #1f2736; border-color: #3f3f46; color: #f3f4f6; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
 /* Endereço do CEP no mesmo azul do botão "calcular", também no tema escuro. */
-.pd2 .prazo-cep .rua { color: #13bce6; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
-.pd2 .prazo-cep .rua i { margin-right: 4px; }
+.pd2 .prazo-cep .rua { color: #111827; font-weight: 600; font-size: 16px; margin: 10px 0 0; }
+.pd2 .prazo-cep .rua i { margin-right: 4px; color: #F27A2A; }
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
@@ -1882,7 +1882,7 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .compra .prazo-cep input { height: 40px; border: 1px solid #e3e3e3; border-radius: 50px; background: #fff; padding: 0 16px; font-size: 15px; }
 .pd2 .compra .prazo-cep button { height: 40px; padding: 0 20px; border-radius: 50px; background: #111; font: 600 17px Manrope, 'DM Sans', sans-serif; }
 /* Endereço do CEP no azul do botão "calcular" desta caixa (#00c3ee, pedido do Lira 2026-10-24). */
-.pd2 .compra .prazo-cep .rua { color: #00c3ee; }
+.pd2 .compra .prazo-cep .rua { color: #111827; }
 /* Selo de desconto ao lado do preço (pedido 2026-10-26): seta para baixo + "9%" quando o preço caiu. */
 .pd2 .selo-desconto { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 50px; background: #e11d2a; color: #fff; font: 700 15px/1 Manrope, 'DM Sans', sans-serif; letter-spacing: .2px; box-shadow: 0 2px 6px rgba(225, 29, 42, .3); }
 .pd2 .selo-desconto i { font-size: 12px; }

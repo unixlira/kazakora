@@ -28,40 +28,24 @@ class AvatarDeAvaliacaoTest extends TestCase
         }
     }
 
-    public function test_avatar_fixo_por_avaliacao_e_sem_repetir_no_carrossel(): void
+    public function test_iniciais_da_primeira_e_da_ultima_palavra(): void
     {
-        $this->assertSame(AvaliacoesDoCheckout::avatar(42, 'Ana'), AvaliacoesDoCheckout::avatar(42, 'Ana'));
-        $this->assertStringStartsWith('m', AvaliacoesDoCheckout::avatar(42, 'Carlos'));
-
-        $usados = [];
-        $arquivos = [];
-        foreach (range(1, AvaliacoesDoCheckout::AVATARES_FEMININOS) as $id) {
-            $arquivos[] = AvaliacoesDoCheckout::avatar($id, 'Maria', $usados);
-        }
-        $this->assertCount(AvaliacoesDoCheckout::AVATARES_FEMININOS, array_unique($arquivos));
-        foreach ($arquivos as $arquivo) {
-            $this->assertFileExists(__DIR__.'/../../../public/images/avaliacoes/avatares/'.$arquivo);
-        }
+        $this->assertSame('CS', AvaliacoesDoCheckout::iniciais('Carla Souza'));
+        $this->assertSame('CS', AvaliacoesDoCheckout::iniciais('Carla S.'));
+        $this->assertSame('ÍA', AvaliacoesDoCheckout::iniciais('ísis de andrade'));
+        $this->assertSame('A', AvaliacoesDoCheckout::iniciais('Ana'));
+        $this->assertSame('?', AvaliacoesDoCheckout::iniciais(' '));
     }
 
-    public function test_com_mais_homens_que_rostos_os_rostos_revezam(): void
+    public function test_cor_fixa_por_nome_e_circulo_sem_rosto(): void
     {
-        $usados = [];
-        $arquivos = [];
-        foreach (range(1, 6) as $id) {
-            $arquivos[] = AvaliacoesDoCheckout::avatar($id, 'Carlos', $usados);
-        }
+        $this->assertSame(AvaliacoesDoCheckout::cor('Carla Souza'), AvaliacoesDoCheckout::cor('Carla Souza'));
+        $this->assertContains(AvaliacoesDoCheckout::cor('Bruno Dias'), AvaliacoesDoCheckout::CORES);
 
-        $this->assertSame([2, 2, 2], array_values(array_count_values($arquivos)));
-    }
-
-    public function test_sem_repetir_devolve_null_quando_os_rostos_acabam(): void
-    {
-        $usados = [];
-        foreach (range(1, AvaliacoesDoCheckout::AVATARES_MASCULINOS) as $id) {
-            $this->assertNotNull(AvaliacoesDoCheckout::avatar($id, 'Carlos', $usados, repetir: false));
-        }
-
-        $this->assertNull(AvaliacoesDoCheckout::avatar(99, 'Carlos', $usados, repetir: false));
+        $avatar = AvaliacoesDoCheckout::avatarDeIniciais('CS', AvaliacoesDoCheckout::cor('Carla Souza'));
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $avatar);
+        $svg = base64_decode(substr($avatar, strlen('data:image/svg+xml;base64,')));
+        $this->assertStringContainsString('>CS</text>', $svg);
+        $this->assertStringNotContainsString('avatares', $svg);
     }
 }

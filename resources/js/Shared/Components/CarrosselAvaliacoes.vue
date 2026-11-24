@@ -1,32 +1,28 @@
 <script setup>
 // Carrossel de avaliações reais do checkout (modelo Yampi, 2026-10-23).
-// Modelo Mavo (2026-10-24): foto redonda, estrelas pretas, texto em até 4 linhas.
-// Deslize (2026-10-24): trilho horizontal com scroll-snap; no celular o dedo
-// desliza nativamente e no desktop o mouse arrasta (pointer events). Sem setas;
-// as bolinhas só mostram a posição. Todas as avaliações ficam lado a lado, então
-// a altura é a da maior e nada abaixo pula quando a avaliação troca.
-// Card mais baixo (2026-10-24): foto de 40px, nome e estrelas na mesma linha,
-// texto em até 3 linhas e menos respiro; UF real do cliente ao lado do nome
-// (só quando a avaliação veio de um pedido nosso, ver reviews.uf).
-// Loop contínuo (2026-10-25): uma cópia da 1ª avaliação fica depois da última.
-// Da última o trilho anda para a cópia, como mais um passo para a frente, e ao
-// chegar nela pula sem animação para a 1ª de verdade (iguais, ninguém vê). Antes
-// voltava rolando por todas ("rebobinando"), o que o Lira achou feio.
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+// Modelo Mavo (2026-10-24): estrelas pretas, nome e estrelas na mesma linha,
+// texto em até 3 linhas; UF real do cliente ao lado do nome (só quando a
+// avaliação veio de um pedido nosso, ver reviews.uf).
+// Trilho horizontal com scroll-snap: todas as avaliações lado a lado, então a
+// altura é a da maior e nada abaixo pula quando a avaliação troca.
+//
+// Parado (pedido do Lira 2026-11-23): não roda sozinho e não tem mais o loop
+// com a cópia da 1ª. Troca pelos bullets embaixo (clicáveis), pelo dedo no
+// celular (o scroll-snap leva para a próxima), pelo arrasto do mouse e pelas
+// setas discretas no computador. No máximo 4 (AvaliacoesDoCheckout::LIMITE).
+//
+// Sem rosto de banco de imagens (2026-11-23): círculo com as iniciais na cor
+// do nome, a foto que o cliente mandou do produto em miniatura e o selo
+// "Compra verificada" quando a avaliação veio do link do pedido.
+import { ref } from 'vue';
 
 const props = defineProps({
     avaliacoes: { type: Array, default: () => [] },
 });
 
-// Com 2 ou mais, a cópia da 1ª vai no fim.
-const cartoes = computed(() => (props.avaliacoes.length > 1
-    ? [...props.avaliacoes.map((avaliacao) => ({ avaliacao, copia: false })), { avaliacao: props.avaliacoes[0], copia: true }]
-    : props.avaliacoes.map((avaliacao) => ({ avaliacao, copia: false }))));
-
 const trilho = ref(null);
 const atual = ref(0);
 const arrastando = ref(false);
-let timer = null;
 let pressionado = false;
 let moveu = false;
 let xInicial = 0;
@@ -34,32 +30,17 @@ let scrollInicial = 0;
 
 const largura = () => trilho.value?.clientWidth || 1;
 const irPara = (indice) => {
-    const total = props.avaliacoes.length;
-    if (!trilho.value || !total) return;
-    // Até `total`, que é a cópia da 1ª; aoRolar faz o pulo de volta.
-    const alvo = Math.max(0, Math.min(total, indice));
+    if (!trilho.value || !props.avaliacoes.length) return;
+    const alvo = Math.max(0, Math.min(props.avaliacoes.length - 1, indice));
     trilho.value.scrollTo({ left: alvo * largura(), behavior: 'smooth' });
 };
 const aoRolar = () => {
     if (!trilho.value) return;
-    const total = props.avaliacoes.length;
-    // Chegou na cópia, que é o fim do trilho (pelo automático ou pelo dedo): vai à 1ª
-    // sem animação. Pelo fim real e não por largura × total, que erra com zoom.
-    const fim = trilho.value.scrollWidth - trilho.value.clientWidth;
-    if (total > 1 && !pressionado && trilho.value.scrollLeft >= fim - 2) {
-        trilho.value.scrollTo({ left: 0, behavior: 'instant' });
-    }
-    atual.value = Math.round(trilho.value.scrollLeft / largura()) % Math.max(1, total);
+    atual.value = Math.max(0, Math.min(props.avaliacoes.length - 1, Math.round(trilho.value.scrollLeft / largura())));
 };
 
-const parar = () => { clearInterval(timer); timer = null; };
-const iniciar = () => {
-    parar();
-    if (props.avaliacoes.length > 1) timer = setInterval(() => irPara(atual.value + 1), 6000);
-};
-
+// Arrasto com o mouse no computador; o dedo usa a rolagem nativa do celular.
 const aoPressionar = (evento) => {
-    parar();
     if (evento.pointerType !== 'mouse' || evento.button !== 0) return;
     pressionado = true;
     moveu = false;
@@ -82,30 +63,31 @@ const aoSoltar = () => {
     pressionado = false;
     if (!moveu) return;
     const passou = trilho.value.scrollLeft - scrollInicial;
-    const total = props.avaliacoes.length > 1 ? props.avaliacoes.length : 0;
     // Arrasto de mais de 1/6 da largura vira o cartão do lado; senão volta ao atual.
     const indice = Math.round(scrollInicial / largura()) + (Math.abs(passou) > largura() / 6 ? Math.sign(passou) : 0);
     arrastando.value = false;
-    trilho.value.scrollTo({ left: Math.max(0, Math.min(total - 1, indice)) * largura(), behavior: 'smooth' });
+    irPara(indice);
 };
 // O arrasto não pode virar clique em link/imagem por baixo.
 const aoClicar = (evento) => {
     if (moveu) { evento.preventDefault(); evento.stopPropagation(); moveu = false; }
 };
-
-onMounted(iniciar);
-onUnmounted(parar);
+const aoTeclar = (evento) => {
+    if (evento.key === 'ArrowRight') { evento.preventDefault(); irPara(atual.value + 1); }
+    if (evento.key === 'ArrowLeft') { evento.preventDefault(); irPara(atual.value - 1); }
+};
 </script>
 
 <template>
-    <section v-if="avaliacoes.length" class="rounded-[24px] bg-white px-4 py-3.5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
-        aria-roledescription="carrossel" aria-label="Avaliações de clientes" @mouseenter="parar" @mouseleave="iniciar" @focusin="parar" @focusout="iniciar" @touchend="iniciar">
+    <section v-if="avaliacoes.length" class="group relative rounded-[24px] bg-white px-4 py-3.5 shadow-[0_4px_24px_rgba(15,23,42,0.07)]"
+        aria-roledescription="carrossel" aria-label="Avaliações de clientes" @keydown="aoTeclar">
         <div ref="trilho" class="flex select-none overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             :class="arrastando ? 'cursor-grabbing' : 'cursor-grab snap-x snap-mandatory'"
             @scroll.passive="aoRolar" @pointerdown="aoPressionar" @pointermove="aoMover" @pointerup="aoSoltar" @pointercancel="aoSoltar" @click.capture="aoClicar" @dragstart.prevent>
-            <article v-for="({ avaliacao, copia }, indice) in cartoes" :key="copia ? 'copia' : avaliacao.id" class="flex w-full shrink-0 snap-start gap-3"
-                :aria-hidden="copia ? 'true' : undefined" :aria-label="copia ? undefined : `Avaliação ${indice + 1} de ${avaliacoes.length}`">
-                <img :src="avaliacao.avatar" alt="" width="40" height="40" loading="lazy" decoding="async" draggable="false" class="h-10 w-10 shrink-0 rounded-full bg-slate-100 object-cover">
+            <article v-for="(avaliacao, indice) in avaliacoes" :key="avaliacao.id" class="flex w-full shrink-0 snap-start gap-3"
+                aria-roledescription="slide" :aria-label="`Avaliação ${indice + 1} de ${avaliacoes.length}`">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+                    :style="{ backgroundColor: avaliacao.cor?.fundo || '#e2e8f0', color: avaliacao.cor?.texto || '#334155' }" aria-hidden="true">{{ avaliacao.iniciais }}</span>
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-x-2">
                         <p class="truncate text-xs font-bold text-slate-900">
@@ -115,13 +97,36 @@ onUnmounted(parar);
                             <i v-for="estrela in 5" :key="estrela" class="text-[11px]" :class="estrela <= avaliacao.nota ? 'fa-solid fa-star' : 'fa-regular fa-star text-slate-300'" aria-hidden="true"></i>
                         </p>
                     </div>
-                    <p class="mt-1 line-clamp-3 text-[13px] leading-snug text-slate-700">{{ avaliacao.texto }}</p>
+                    <p v-if="avaliacao.verificada" class="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[#00a650]">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>Compra verificada
+                    </p>
+                    <div class="mt-1 flex gap-2.5">
+                        <p class="line-clamp-3 min-w-0 flex-1 text-[13px] leading-snug text-slate-700">{{ avaliacao.texto }}</p>
+                        <img v-if="avaliacao.foto" :src="avaliacao.foto" :alt="`Foto enviada por ${avaliacao.nome}`" width="56" height="56" loading="lazy" decoding="async" draggable="false"
+                            class="h-14 w-14 shrink-0 rounded-lg bg-slate-100 object-cover">
+                    </div>
                 </div>
             </article>
         </div>
-        <div v-if="avaliacoes.length > 1" class="mt-2.5 flex items-center justify-center gap-1.5" aria-hidden="true">
-            <span v-for="(avaliacao, indice) in avaliacoes" :key="`ponto-${avaliacao.id}`"
-                class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-5 bg-slate-800' : 'w-2 bg-slate-300'"></span>
-        </div>
+
+        <!-- Setas discretas, só no computador e só ao passar o mouse. -->
+        <template v-if="avaliacoes.length > 1">
+            <button type="button" class="absolute left-1 top-1/2 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-500 opacity-0 shadow transition hover:text-slate-900 focus-visible:opacity-100 disabled:invisible group-hover:opacity-100 lg:flex"
+                :disabled="atual === 0" aria-label="Avaliação anterior" @click="irPara(atual - 1)">
+                <i class="fa-solid fa-chevron-left text-[11px]" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="absolute right-1 top-1/2 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-500 opacity-0 shadow transition hover:text-slate-900 focus-visible:opacity-100 disabled:invisible group-hover:opacity-100 lg:flex"
+                :disabled="atual === avaliacoes.length - 1" aria-label="Próxima avaliação" @click="irPara(atual + 1)">
+                <i class="fa-solid fa-chevron-right text-[11px]" aria-hidden="true"></i>
+            </button>
+
+            <div class="mt-2.5 flex items-center justify-center gap-1">
+                <button v-for="(avaliacao, indice) in avaliacoes" :key="`ponto-${avaliacao.id}`" type="button"
+                    class="flex h-6 items-center px-0.5" :aria-label="`Ver avaliação ${indice + 1} de ${avaliacoes.length}`" :aria-current="indice === atual ? 'true' : undefined"
+                    @click="irPara(indice)">
+                    <span class="block h-2 rounded-full transition-all" :class="indice === atual ? 'w-5 bg-slate-800' : 'w-2 bg-slate-300 hover:bg-slate-400'"></span>
+                </button>
+            </div>
+        </template>
     </section>
 </template>

@@ -141,15 +141,17 @@ class EtiquetaMelhorEnvioComMarca
      * de baixo]. Com uma linha só (primeira = limite), os itens vão lado a
      * lado nela. MELHORENVIO_ETIQUETA_SKU=desligado não escreve nada.
      *
-     * @var array<string, array{0: float, 1: ?float, 2: float, 3: float, 4: float}>
+     * @var array<string, array{0: float, 1: ?float, 2: float, 3: float, 4: float, 5?: array{0: float, 1: float}}>
      */
     public const ITENS = [
         // Jadlog: o código de barras principal vai até 5 px antes da linha
         // do quadro (px 937 x 942), sem espaço. O livre de verdade é embaixo
         // do código do rodapé: px 1030-1071 (barras acabam em 1029, a linha
         // do quadro está em 1072). Uma linha de 14 pt (7 pt na folha 4x6),
-        // base em 0,973 (px 1055): ~12 px de folga em cima e embaixo.
-        'jadlog' => [0.0365, null, 0.9635, 0.973, 0.973],
+        // base em 0,973 (px 1055): ~12 px de folga em cima e embaixo. Se não
+        // couber, duas linhas de 12 pt (6 pt) com base em 0,9647 e 0,9825
+        // (px 1046 e 1065): ~4 px das barras, entre as linhas e da linha do quadro.
+        'jadlog' => [0.0365, null, 0.9635, 0.973, 0.973, [0.9647, 0.9825]],
         'correios' => [0.0365, 0.80, 0.9635, 0.826, 0.965],
         // J&T: rodapé livre abaixo do logo, medido na etiqueta do #4162 (14/11):
         // nada impresso entre 0,90 e 0,989. Cabem duas linhas.
@@ -298,9 +300,10 @@ class EtiquetaMelhorEnvioComMarca
                         $fpdi->SetTextColor(0, 0, 0);
                         $passo = 0.0235;
                         $cabem = max(1, (int) floor(($limite - $primeira) / $passo) + 1);
-                        if ($cabem === 1 && count($itens) > 1) {
-                            // Uma linha só (Jadlog): os itens lado a lado.
-                            $this->itensNumaLinha($fpdi, array_values($itens), $ix0 * $w, $ix1 * $w, $primeira * $h);
+                        if (isset($layout['itens'][5])) {
+                            // Rodapé apertado (Jadlog): uma ou duas linhas, nunca fora do quadro.
+                            [$b1, $b2] = $layout['itens'][5];
+                            $this->itensNoRodape($fpdi, array_values($itens), $ix0 * $w, $ix1 * $w, $primeira * $h, [$b1 * $h, $b2 * $h]);
                             $itens = [];
                         }
                         $linhas = array_values($itens);
@@ -352,7 +355,7 @@ class EtiquetaMelhorEnvioComMarca
      * pequeno, por cima do Melhor Envio. quadro_pequeno: o logo da Jadlog
      * fica e a KazaKora cobre o Melhor Envio.
      *
-     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: array{0: float, 1: float, 2: float, 3: float}, contido: bool, transportadora: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: null, itens: array{0: float, 1: ?float, 2: float, 3: float, 4: float}}
+     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: array{0: float, 1: float, 2: float, 3: float}, contido: bool, transportadora: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: null, itens: array{0: float, 1: ?float, 2: float, 3: float, 4: float, 5?: array{0: float, 1: float}}}
      */
     public static function layoutJadlog(): array
     {
@@ -390,30 +393,90 @@ class EtiquetaMelhorEnvioComMarca
     }
 
     /**
-     * Vários itens numa linha só: "SKU: A  Qtd: 1  |  SKU: B  Qtd: 2". O que
-     * não cabe na largura vira "+ N itens (ver pedido)".
+     * SKU e quantidade num rodapé apertado (Jadlog, pedido do Lira 24/11):
+     * nada passa da largura [x0, x1]. Tudo numa linha de 14 pt (7 pt na
+     * folha 4x6) se couber; senão duas linhas de 12 pt (6 pt), e o que não
+     * couber termina em "+ N itens (ver pedido)", como nos Correios.
      *
      * @param  list<array{sku: ?string, quantidade: int}>  $itens
+     * @param  array{0: float, 1: float}  $duasLinhas  linhas de base (pt) quando são duas
      */
-    private function itensNumaLinha(Fpdi $fpdi, array $itens, float $x0, float $x1, float $base): void
+    private function itensNoRodape(Fpdi $fpdi, array $itens, float $x0, float $x1, float $base, array $duasLinhas): void
     {
-        $fpdi->SetFont('Helvetica', '', 14);
-        $partes = array_map(function (array $item): string {
-            $sku = trim((string) ($item['sku'] ?? '')) ?: 'sem SKU';
-            $sku = (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $sku) ?: $sku);
+        $largura = $x1 - $x0;
+        $sep = '  |  ';
+        $mais = fn (int $n) => '+ '.$n.' itens (ver pedido)';
 
-            return 'SKU: '.$sku.'  Qtd: '.(int) ($item['quantidade'] ?? 1);
-        }, $itens);
-        $total = count($partes);
-        $texto = '+ '.$total.' itens (ver pedido)';
-        for ($n = $total; $n >= 1; $n--) {
-            $tentativa = implode('  |  ', array_slice($partes, 0, $n)).($n < $total ? '  |  + '.($total - $n).' itens (ver pedido)' : '');
-            if ($fpdi->GetStringWidth($tentativa) <= $x1 - $x0) {
-                $texto = $tentativa;
-                break;
+        // Um item: "SKU: X" à esquerda e "Qtd: N" à direita, como nos outros modelos.
+        if (count($itens) === 1) {
+            $qtd = 'Qtd: '.(int) ($itens[0]['quantidade'] ?? 1);
+            $fpdi->SetFont('Helvetica', 'B', 14);
+            $larguraFixa = $fpdi->GetStringWidth('SKU: ') + $fpdi->GetStringWidth($qtd) + 14;
+            $fpdi->SetFont('Helvetica', '', 14);
+            $sku = $this->cortar($fpdi, self::textoSku($itens[0]), $largura - $larguraFixa);
+            $fpdi->SetFont('Helvetica', 'B', 14);
+            $fpdi->Text($x0, $base, 'SKU: ');
+            $recuo = $fpdi->GetStringWidth('SKU: ');
+            $fpdi->Text($x1 - $fpdi->GetStringWidth($qtd), $base, $qtd);
+            $fpdi->SetFont('Helvetica', '', 14);
+            $fpdi->Text($x0 + $recuo, $base, $sku);
+
+            return;
+        }
+
+        $partes = fn () => array_map(fn (array $item) => 'SKU: '.$this->cortar($fpdi, self::textoSku($item), $largura * 0.6).'  Qtd: '.(int) ($item['quantidade'] ?? 1), $itens);
+
+        $fpdi->SetFont('Helvetica', '', 14);
+        $uma = implode($sep, $partes());
+        if ($fpdi->GetStringWidth($uma) <= $largura) {
+            $fpdi->Text($x0, $base, $uma);
+
+            return;
+        }
+
+        $fpdi->SetFont('Helvetica', '', 12);
+        $resto = $partes();
+        $linhas = [];
+        foreach ([0, 1] as $l) {
+            $linha = [];
+            while ($resto !== [] && $fpdi->GetStringWidth(implode($sep, [...$linha, $resto[0]])) <= $largura) {
+                $linha[] = array_shift($resto);
+            }
+            $linhas[$l] = $linha;
+        }
+        // Sobrou item: a última linha termina com "+ N itens", tirando item até caber.
+        if ($resto !== []) {
+            while ($linhas[1] !== [] && $fpdi->GetStringWidth(implode($sep, [...$linhas[1], $mais(count($resto))])) > $largura) {
+                array_unshift($resto, array_pop($linhas[1]));
+            }
+            $linhas[1][] = $mais(count($resto));
+        }
+        foreach ($linhas as $l => $linha) {
+            if ($linha !== []) {
+                $fpdi->Text($x0, $duasLinhas[$l], implode($sep, $linha));
             }
         }
-        $fpdi->Text($x0, $base, $texto);
+    }
+
+    /** SKU do item em windows-1252 (fonte do FPDF). */
+    private static function textoSku(array $item): string
+    {
+        $sku = trim((string) ($item['sku'] ?? '')) ?: 'sem SKU';
+
+        return (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $sku) ?: $sku);
+    }
+
+    /** Corta o texto com "..." até caber na largura, na fonte atual. */
+    private function cortar(Fpdi $fpdi, string $texto, float $max): string
+    {
+        if ($fpdi->GetStringWidth($texto) <= $max) {
+            return $texto;
+        }
+        while ($texto !== '' && $fpdi->GetStringWidth($texto.'...') > $max) {
+            $texto = substr($texto, 0, -1);
+        }
+
+        return $texto.'...';
     }
 
     /**
@@ -421,7 +484,7 @@ class EtiquetaMelhorEnvioComMarca
      * usa as posições medidas; qualquer outra transportadora (Loggi no
      * #4198, LATAM...) é lida por OCR (EtiquetaOcr). null = sai como veio.
      *
-     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: ?array{0: float, 1: float, 2: float, 3: float}, contido?: bool, transportadora?: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: ?array{0: float, 1: float, 2: float, 3: float, 4: float, 5: bool}, itens: ?array{0: float, 1: ?float, 2: float, 3: float, 4: float}}|null
+     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: ?array{0: float, 1: float, 2: float, 3: float}, contido?: bool, transportadora?: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: ?array{0: float, 1: float, 2: float, 3: float, 4: float, 5: bool}, itens: ?array{0: float, 1: ?float, 2: float, 3: float, 4: float, 5?: array{0: float, 1: float}}}|null
      */
     private function layout(string $pdf, ?string $servico, ?int $orderId): ?array
     {

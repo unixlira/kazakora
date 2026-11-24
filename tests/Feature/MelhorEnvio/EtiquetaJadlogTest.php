@@ -113,6 +113,73 @@ class EtiquetaJadlogTest extends TestCase
         $this->assertSame($base, $limite, 'uma linha só');
         $this->assertGreaterThan($fy(1029 + 13 + 4), $base);
         $this->assertLessThan($fy(1072 - 4 - 4), $base);
+
+        // Duas linhas de 12 pt quando não cabe numa: a 1ª com a letra (~11 px)
+        // abaixo das barras, a 2ª com a perna (~3 px) acima da linha do quadro.
+        [$b1, $b2] = EtiquetaMelhorEnvioComMarca::ITENS['jadlog'][5];
+        $this->assertGreaterThan($fy(1029 + 11 + 2), $b1);
+        $this->assertGreaterThan($b1 + $fy(11 + 3 + 2), $b2, 'linhas encavaladas');
+        $this->assertLessThan($fy(1072 - 3 - 2), $b2);
+    }
+
+    /** O texto do SKU nunca passa da largura do quadro: quebra em 2 linhas e termina em "+ N itens". */
+    public function test_sku_nunca_sai_do_quadro(): void
+    {
+        $fpdi = new class('P', 'pt', [577.5, 813]) extends Fpdi
+        {
+            /** @var list<array{0: float, 1: float, 2: string, 3: float}> */
+            public array $textos = [];
+
+            public function Text($x, $y, $txt)
+            {
+                $this->textos[] = [(float) $x, (float) $y, (string) $txt, $this->GetStringWidth((string) $txt)];
+            }
+        };
+        $fpdi->AddPage();
+        [$ix0, , $ix1, $base, , [$b1, $b2]] = EtiquetaMelhorEnvioComMarca::ITENS['jadlog'];
+        [$x0, $x1] = [$ix0 * 577.5, $ix1 * 577.5];
+        $metodo = new \ReflectionMethod(EtiquetaMelhorEnvioComMarca::class, 'itensNoRodape');
+        $escrever = function (array $itens) use ($fpdi, $metodo, $x0, $x1, $base, $b1, $b2) {
+            $fpdi->textos = [];
+            $metodo->invoke(new EtiquetaMelhorEnvioComMarca, $fpdi, $itens, $x0, $x1, $base * 813, [$b1 * 813, $b2 * 813]);
+
+            return $fpdi->textos;
+        };
+        $dentro = function (array $textos) use ($x0, $x1) {
+            foreach ($textos as [$x, , $txt, $largura]) {
+                $this->assertGreaterThanOrEqual($x0 - 0.01, $x, $txt);
+                $this->assertLessThanOrEqual($x1 + 0.01, $x + $largura, "passou da borda: {$txt}");
+            }
+        };
+
+        // 1 item: SKU à esquerda e Qtd à direita, na linha única.
+        $um = $escrever([['sku' => 'KZ-TRAV-CERV-01', 'quantidade' => 1]]);
+        $dentro($um);
+        $this->assertSame([$base * 813], array_values(array_unique(array_map(fn ($t) => $t[1], $um))));
+
+        // 1 item com SKU enorme: cortado com "...".
+        $enorme = $escrever([['sku' => str_repeat('MUITO-LONGO-', 20), 'quantidade' => 3]]);
+        $dentro($enorme);
+        $this->assertStringEndsWith('...', collect($enorme)->first(fn ($t) => str_starts_with($t[2], 'MUITO'))[2]);
+
+        // 3 itens: duas linhas.
+        $tres = $escrever([
+            ['sku' => 'KZ-TRAV-CERV-01', 'quantidade' => 1],
+            ['sku' => 'KZ-ARVORE-NATAL-120', 'quantidade' => 1],
+            ['sku' => 'FK-COMP-PF36V-2B', 'quantidade' => 1],
+        ]);
+        $dentro($tres);
+        $this->assertCount(2, $tres);
+
+        // Muitos itens: duas linhas e a última termina em "+ N itens (ver pedido)".
+        $itens = array_map(fn ($i) => ['sku' => 'KZ-PRODUTO-'.$i, 'quantidade' => $i], range(1, 12));
+        $muitos = $escrever($itens);
+        $dentro($muitos);
+        $this->assertCount(2, $muitos);
+        $this->assertMatchesRegularExpression('/\+ \d+ itens \(ver pedido\)$/', $muitos[1][2]);
+        preg_match('/\+ (\d+) itens/', $muitos[1][2], $m);
+        $mostrados = substr_count($muitos[0][2].$muitos[1][2], 'SKU: ');
+        $this->assertSame(12, $mostrados + (int) $m[1], 'conta dos itens que ficaram de fora');
     }
 
     public function test_sku_embaixo_do_codigo_e_desligavel(): void

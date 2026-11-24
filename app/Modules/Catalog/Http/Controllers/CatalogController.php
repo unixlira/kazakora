@@ -382,6 +382,8 @@ class CatalogController extends Controller
         $product->setAttribute('dimensoes_embalagem', FichaTecnica::dimensoesEmbalagem($product));
         $product->setAttribute('medidas_embalagem', FichaTecnica::medidasEmbalagem($product));
         $product->setAttribute('reviews_avg_rating', $publico['resumo']['media']);
+        // Botão de compra com a chamada do produto (2026-11-24); nulo = "Comprar agora".
+        $product->setAttribute('texto_botao_compra', $product->textoBotaoCompra());
 
         $user = $request->user();
 

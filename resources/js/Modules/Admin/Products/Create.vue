@@ -22,6 +22,7 @@ const props = defineProps({
 const form = useForm({
     name: '',
     nome_interno: '',
+    cta_compra: '',
     sku: '',
     category_id: props.parent?.category_id ?? null,
     brand: props.parent?.brand ?? '',

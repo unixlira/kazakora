@@ -201,6 +201,24 @@ const resumo = computed(() => {
                 <InputError :message="form.errors.nome_interno" />
             </div>
 
+            <div v-if="form.cta_compra !== undefined">
+                <label for="cta_compra" class="block text-sm font-medium">Texto do botão de compra</label>
+                <input
+                    id="cta_compra"
+                    v-model="form.cta_compra"
+                    type="text"
+                    maxlength="28"
+                    placeholder="Quero meu Livro Falante"
+                    aria-describedby="cta_compra-hint"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <p id="cta_compra-hint" class="mt-1 text-xs text-gray-400">
+                    Substitui o "Comprar agora" na página do produto. Ex.: "Quero meu Livro Falante", "Quero minha Luminária agora".
+                    Até 28 caracteres, sem preço nem prazo. Vazio = a IA escreve ao salvar.
+                </p>
+                <InputError :message="form.errors.cta_compra" />
+            </div>
+
             <div>
                 <label for="category_id" class="block text-sm font-medium">Categoria</label>
                 <select

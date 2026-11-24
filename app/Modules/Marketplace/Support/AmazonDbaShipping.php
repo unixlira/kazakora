@@ -3,11 +3,16 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Exceptions\AgendamentoDbaManualException;
+use App\Modules\Marketplace\Jobs\AguardarAgendamentoDbaJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Operacional\Mail\AgendarDbaNoSellerCentral;
 use App\Notifications\LabelUnavailableNotification;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
@@ -15,6 +20,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -43,6 +49,19 @@ use ZipArchive;
  *
  * Idempotente: pacote que já existe na Amazon (agendado aqui antes ou à mão
  * no Seller Central) é reaproveitado, nunca agendado de novo.
+ *
+ * Etiqueta (24/11/2026, pedido #4474): quando o pacote existe mas o PDF não
+ * veio no agendamento (Seller Central, ou createScheduledPackage simples), a
+ * etiqueta é pedida pelo feed POST_EASYSHIP_DOCUMENTS → relatório →
+ * documento (buscarEtiqueta(), chamado pelo CheckShipmentLabelJob via
+ * AmazonDriver::fetchLabel()). Cada chamada avança um passo e volta; nada
+ * de esperar parado dentro do worker.
+ *
+ * Pedido em que a Amazon responde "The operation is not supported for the
+ * given order" no listHandoverSlots: tenta o createScheduledPackageBulk sem
+ * horário (a Amazon escolhe o primeiro horário possível). Se nem isso,
+ * alerta no sino + e-mail para agendar no Seller Central e
+ * AguardarAgendamentoDbaJob confere a cada 30 min até o prazo de envio.
  */
 class AmazonDbaShipping
 {
@@ -50,6 +69,17 @@ class AmazonDbaShipping
     public const METODO = 'Amazon DBA (Ponto de Envio)';
 
     private const API = '/easyShip/2022-03-23';
+
+    private const FEED_TIPO = 'POST_EASYSHIP_DOCUMENTS';
+
+    /** Intervalo mínimo entre dois passos do feed da etiqueta para o mesmo pedido. */
+    public const FEED_INTERVALO_SEGUNDOS = 30;
+
+    /** Feeds de etiqueta pedidos por pedido, por dia, antes de desistir e avisar. */
+    private const FEED_MAX_TENTATIVAS = 3;
+
+    /** Feed ou relatório parado em processamento por mais que isso é pedido de novo. */
+    private const FEED_PRAZO_MINUTOS = 30;
 
     public function __construct(
         private readonly AmazonClient $client,
@@ -84,6 +114,38 @@ class AmazonDbaShipping
         return Storage::disk('local')->exists($caminho) ? Storage::disk('local')->get($caminho) : null;
     }
 
+    /** O pedido já tem pacote agendado na Amazon (por nós ou no Seller Central)? */
+    public function pacoteAgendado(Order $order): bool
+    {
+        return $this->pacoteNaAmazon((string) $order->external_order_id) !== null;
+    }
+
+    /**
+     * Etiqueta pronta, ou um passo a mais no feed POST_EASYSHIP_DOCUMENTS
+     * (null enquanto a Amazon processa). Feita para ser chamada de novo e de
+     * novo pelo CheckShipmentLabelJob: no máximo um passo a cada
+     * FEED_INTERVALO_SEGUNDOS por pedido, e nunca lança.
+     */
+    public function buscarEtiqueta(Order $order): ?string
+    {
+        if (($pdf = $this->etiqueta($order)) !== null) {
+            return $pdf;
+        }
+
+        if (! $order->external_order_id || ! Cache::add("amazon:dba:feed-etiqueta:passo:{$order->id}", true, self::FEED_INTERVALO_SEGUNDOS)) {
+            return null;
+        }
+
+        try {
+            return Cache::lock("amazon:dba:feed-etiqueta:trava:{$order->id}", 120)
+                ->get(fn () => $this->avancarFeedDaEtiqueta($order));
+        } catch (Throwable $exception) {
+            Log::channel('amazon')->warning('amazon.dba.feed_etiqueta_falhou', ['order_id' => $order->id, 'erro' => $exception->getMessage()]);
+
+            return null;
+        }
+    }
+
     private function agendarSemConcorrencia(Order $order): array
     {
         $amazonOrderId = (string) $order->external_order_id;
@@ -110,7 +172,9 @@ class AmazonDbaShipping
 
         $slot = $this->horarioDePontoDeEnvio($order, $amazonOrderId, $medidas);
 
-        [$pacote, $urlDocumentos] = $this->criarPacote($order, $amazonOrderId, $slot);
+        [$pacote, $urlDocumentos] = $slot === null
+            ? $this->agendarSemHorario($order, $amazonOrderId)
+            : $this->criarPacote($order, $amazonOrderId, $slot);
 
         $etiqueta = null;
 
@@ -146,6 +210,9 @@ class AmazonDbaShipping
 
         $temEtiqueta = $etiqueta !== null || Storage::disk('local')->exists(self::caminhoEtiqueta($order));
 
+        // Agendado (aqui ou no Seller Central): o pedido de agendamento manual, se houve, acabou.
+        rescue(fn () => app(AlertasAdmin::class)->resolver(AlertasAdmin::AMAZON_DBA_AGENDAMENTO, "pedido:{$order->id}"), report: false);
+
         $this->timeline->record(
             $order,
             OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED,
@@ -153,11 +220,16 @@ class AmazonDbaShipping
             trim("Agendado no DBA da Amazon (Ponto de Envio): rastreio {$rastreio}".($janela ? ", levar {$janela}" : '').'.'),
         );
 
+        // Sem PDF no agendamento: o CheckShipmentLabelJob pede a etiqueta
+        // pelo feed POST_EASYSHIP_DOCUMENTS (buscarEtiqueta()). O aviso para
+        // imprimir no Seller Central só sai se o feed também falhar.
         if (! $temEtiqueta) {
-            $motivo = "pacote DBA {$rastreio} agendado, mas a Amazon não entregou a etiqueta pela API. Imprima a etiqueta no Seller Central (pedido {$order->external_order_id}).";
-
-            $this->timeline->record($order, OrderFulfillmentEvent::STEP_LABEL_GENERATED, OrderFulfillmentEvent::STATUS_FAILED, ucfirst($motivo));
-            $this->avisarUmaVez($order, $motivo);
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_LABEL_GENERATED,
+                OrderFulfillmentEvent::STATUS_PENDING,
+                "Pacote DBA {$rastreio} agendado sem a etiqueta em PDF: pedindo à Amazon pelo feed de documentos do Easy Ship.",
+            );
         }
 
         return [
@@ -207,22 +279,28 @@ class AmazonDbaShipping
      * pedido 701-9739703-8713050, 03/11: "AMZL_BR_MFN_PICKUP_3PDO") e às
      * vezes sem handoverMethod. Coleta em casa nunca.
      *
+     * Escolhe o drop-off MAIS CEDO (ordenado por startTime).
+     *
+     * null = a Amazon não lista horários para este pedido pela API ("The
+     * operation is not supported for the given order", pedido #4474,
+     * 24/11/2026, "Std EZ Regional"); quem chama tenta agendar sem horário.
+     *
      * @param  array{weight_grams: int, height: ?float, width: ?float, length: ?float}  $medidas
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    private function horarioDePontoDeEnvio(Order $order, string $amazonOrderId, array $medidas): array
+    private function horarioDePontoDeEnvio(Order $order, string $amazonOrderId, array $medidas): ?array
     {
-        $resposta = $this->client->post(self::API.'/timeSlot', [
-            'marketplaceId' => config('services.amazon.marketplace_id'),
-            'amazonOrderId' => $amazonOrderId,
-            'packageDimensions' => [
-                'length' => (float) $medidas['length'],
-                'width' => (float) $medidas['width'],
-                'height' => (float) $medidas['height'],
-                'unit' => 'cm',
-            ],
-            'packageWeight' => ['value' => (float) $medidas['weight_grams'], 'unit' => 'grams'],
-        ]);
+        try {
+            $resposta = $this->pedirHorarios($amazonOrderId, $medidas);
+        } catch (AmazonException $exception) {
+            if (self::naoSuportado($exception)) {
+                Log::channel('amazon')->warning('amazon.dba.horarios_nao_suportados', ['order_id' => $order->id, 'erro' => $exception->getMessage()]);
+
+                return null;
+            }
+
+            throw $exception;
+        }
 
         $slot = collect($resposta['timeSlots'] ?? [])
             ->filter(fn ($slot) => is_array($slot) && ! empty($slot['slotId']) && self::ehPontoDeEnvio($slot))
@@ -234,6 +312,167 @@ class AmazonDbaShipping
         }
 
         return $slot;
+    }
+
+    public static function naoSuportado(Throwable $exception): bool
+    {
+        return str_contains(strtolower($exception->getMessage()), 'not supported');
+    }
+
+    /**
+     * @param  array{weight_grams: int, height: ?float, width: ?float, length: ?float}  $medidas
+     * @return array<string, mixed>
+     */
+    private function pedirHorarios(string $amazonOrderId, array $medidas): array
+    {
+        return $this->client->post(self::API.'/timeSlot', [
+            'marketplaceId' => config('services.amazon.marketplace_id'),
+            'amazonOrderId' => $amazonOrderId,
+            'packageDimensions' => [
+                'length' => (float) $medidas['length'],
+                'width' => (float) $medidas['width'],
+                'height' => (float) $medidas['height'],
+                'unit' => 'cm',
+            ],
+            'packageWeight' => ['value' => (float) $medidas['weight_grams'], 'unit' => 'grams'],
+        ]);
+    }
+
+    /**
+     * Sem lista de horários pela API: o createScheduledPackageBulk sem
+     * packageDetails agenda no primeiro horário possível (doc do Easy Ship
+     * 2022-03-23: "if the time slot is not provided, Amazon will then pick
+     * the earliest time slot possible"). A conta é DBA postagem (só Ponto
+     * de Envio); se mesmo assim a Amazon marcar coleta, avisa para trocar.
+     * Se a Amazon recusar também, pede o agendamento no Seller Central.
+     *
+     * @return array{0: array<string, mixed>, 1: ?string}
+     */
+    private function agendarSemHorario(Order $order, string $amazonOrderId): array
+    {
+        $motivo = 'a Amazon não lista horários de Ponto de Envio deste pedido pela API (operation is not supported)';
+        $lote = [];
+
+        try {
+            $lote = $this->client->post(self::API.'/packages/bulk', [
+                'marketplaceId' => config('services.amazon.marketplace_id'),
+                'orderScheduleDetailsList' => [['amazonOrderId' => $amazonOrderId]],
+                'labelFormat' => 'PDF',
+            ]);
+        } catch (AmazonException $exception) {
+            Log::channel('amazon')->warning('amazon.dba.lote_sem_horario_recusado', ['order_id' => $order->id, 'erro' => $exception->getMessage()]);
+
+            if ($pacote = $this->pacoteNaAmazon($amazonOrderId)) {
+                return [$pacote, null];
+            }
+
+            $this->pedirAgendamentoManual($order, "{$motivo}, e o agendamento automático também foi recusado ({$exception->getMessage()})");
+        }
+
+        $recusado = collect($lote['rejectedOrders'] ?? [])->firstWhere('amazonOrderId', $amazonOrderId);
+        $pacote = collect($lote['scheduledPackages'] ?? [])
+            ->first(fn ($p) => ($p['scheduledPackageId']['amazonOrderId'] ?? null) === $amazonOrderId)
+            ?? $this->pacoteNaAmazon($amazonOrderId);
+
+        if (! $pacote) {
+            $erro = $recusado['error']['message'] ?? 'a Amazon não devolveu o pacote';
+
+            $this->pedirAgendamentoManual($order, "{$motivo}, e o agendamento automático também foi recusado ({$erro})");
+        }
+
+        $horario = $pacote['packageTimeSlot'] ?? [];
+
+        if (strtoupper((string) ($horario['handoverMethod'] ?? '')) === 'PICKUP' && ! self::ehPontoDeEnvio($horario)) {
+            rescue(fn () => app(AlertasAdmin::class)->disparar(
+                AlertasAdmin::AMAZON_DBA_AGENDAMENTO,
+                "coleta:{$order->id}",
+                "Amazon agendou COLETA no pedido #{$order->id}",
+                "Sem horários pela API, a Amazon agendou o pedido {$amazonOrderId} sozinha e escolheu coleta em casa. Troque para Ponto de Envio no Seller Central.",
+                $this->linkDoPedido($order),
+            ), report: false);
+        }
+
+        return [$pacote, $lote['printableDocumentsUrl'] ?? null];
+    }
+
+    /**
+     * Nada agendou pela API: sino + e-mail ("agende no Seller Central") e
+     * AguardarAgendamentoDbaJob conferindo a cada 30 min até o prazo. Lança
+     * AgendamentoDbaManualException, que o ConfirmChannelShippingJob não
+     * repete (quem segue é o AguardarAgendamentoDbaJob).
+     */
+    private function pedirAgendamentoManual(Order $order, string $motivo): never
+    {
+        $prazo = $this->prazoDeEnvio((string) $order->external_order_id);
+        $prazoTexto = $prazo->clone()->setTimezone(config('app.timezone'))->format('d/m/Y H:i');
+        $mensagem = "Agende no Seller Central: pedido {$order->external_order_id} (#{$order->id}), Ponto de Envio na data mais próxima, prazo {$prazoTexto}. Motivo: {$motivo}. O sistema confere a cada 30 min e baixa a etiqueta sozinho quando o pacote aparecer.";
+
+        $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_PENDING, $mensagem);
+
+        rescue(fn () => app(AlertasAdmin::class)->disparar(
+            AlertasAdmin::AMAZON_DBA_AGENDAMENTO,
+            "pedido:{$order->id}",
+            "Agende no Seller Central: pedido Amazon #{$order->id}",
+            $mensagem,
+            $this->linkDoPedido($order),
+        ), report: false);
+
+        $this->mandarEmailUmaVez($order, $prazoTexto, $motivo);
+
+        AguardarAgendamentoDbaJob::dispatch($order->id, $prazo->toImmutable())
+            ->delay(now()->addMinutes(AguardarAgendamentoDbaJob::INTERVALO_MINUTOS));
+
+        throw new AgendamentoDbaManualException("Pedido #{$order->id}: agende no Seller Central (Ponto de Envio, prazo {$prazoTexto}). Motivo: {$motivo}.");
+    }
+
+    /** LatestShipDate do pedido na Amazon; sem ele, 24h a partir de agora. */
+    private function prazoDeEnvio(string $amazonOrderId): Carbon
+    {
+        try {
+            $pedido = $this->client->get('/orders/v0/orders/'.$amazonOrderId);
+            $data = $pedido['payload']['LatestShipDate'] ?? null;
+
+            if ($data) {
+                return Carbon::parse($data);
+            }
+        } catch (Throwable $exception) {
+            Log::channel('amazon')->warning('amazon.dba.prazo_sem_resposta', ['amazon_order_id' => $amazonOrderId, 'erro' => $exception->getMessage()]);
+        }
+
+        return now()->addDay();
+    }
+
+    private function mandarEmailUmaVez(Order $order, string $prazo, string $motivo): void
+    {
+        $cfg = config('services.alerta_coleta_email');
+
+        if (! ($cfg['ativo'] ?? false) || ! ($cfg['para'] ?? null)) {
+            return;
+        }
+
+        $chave = "amazon:dba:email-agendar:{$order->id}";
+
+        if (! Cache::add($chave, true, now()->addDays(3))) {
+            return;
+        }
+
+        try {
+            Mail::to($cfg['para'])->send(new AgendarDbaNoSellerCentral(
+                (string) $order->external_order_id,
+                $order->id,
+                $prazo,
+                $motivo,
+                $this->linkDoPedido($order),
+            ));
+        } catch (Throwable $exception) {
+            Cache::forget($chave);
+            report($exception);
+        }
+    }
+
+    private function linkDoPedido(Order $order): ?string
+    {
+        return rescue(fn () => route('admin.pedidos.exibir', $order), null, false);
     }
 
     /** @param  array<string, mixed>  $slot */
@@ -326,8 +565,12 @@ class AmazonDbaShipping
             throw new RuntimeException("Falha ao baixar os documentos do DBA (HTTP {$resposta->status()}).");
         }
 
-        $conteudo = $resposta->body();
+        return $this->extrairPdf($resposta->body());
+    }
 
+    /** PDF direto ou ZIP com PDF(s) dentro (etiqueta primeiro). */
+    private function extrairPdf(string $conteudo): ?string
+    {
         if (str_starts_with($conteudo, '%PDF-')) {
             return $conteudo;
         }
@@ -373,6 +616,169 @@ class AmazonDbaShipping
         }
 
         return reset($pdfs);
+    }
+
+    /**
+     * Um passo do feed da etiqueta (porte do script que tirou a etiqueta do
+     * pedido #4104 à mão, 12/11/2026): envia o feed → lê o resultado do feed
+     * (DocumentReportReferenceID) → lê o relatório → baixa o documento com
+     * Restricted Data Token. O estado fica no cache entre as chamadas.
+     */
+    private function avancarFeedDaEtiqueta(Order $order): ?string
+    {
+        $chave = "amazon:dba:feed-etiqueta:{$order->id}";
+        $estado = (array) Cache::get($chave, []);
+        $amazonOrderId = (string) $order->external_order_id;
+
+        if (! empty($estado['desde']) && now()->timestamp - (int) $estado['desde'] > self::FEED_PRAZO_MINUTOS * 60) {
+            Log::channel('amazon')->warning('amazon.dba.feed_etiqueta_parado', ['order_id' => $order->id, 'estado' => $estado]);
+            $estado = [];
+            Cache::forget($chave);
+        }
+
+        if (empty($estado['feedId'])) {
+            $tentativas = (int) Cache::get("{$chave}:tentativas", 0);
+
+            if ($tentativas >= self::FEED_MAX_TENTATIVAS) {
+                $this->avisarUmaVez($order, "a Amazon não entregou a etiqueta do pacote DBA nem pelo feed de documentos ({$tentativas} tentativas). Imprima a etiqueta no Seller Central (pedido {$amazonOrderId}).");
+
+                return null;
+            }
+
+            Cache::put("{$chave}:tentativas", $tentativas + 1, now()->addDay());
+            Cache::put($chave, ['feedId' => $this->enviarFeedDaEtiqueta($amazonOrderId), 'desde' => now()->timestamp], now()->addDay());
+
+            return null;
+        }
+
+        if (empty($estado['reportId'])) {
+            $feed = $this->client->get('/feeds/2021-06-30/feeds/'.$estado['feedId']);
+            $situacao = (string) ($feed['processingStatus'] ?? '');
+
+            if (in_array($situacao, ['IN_QUEUE', 'IN_PROGRESS'], true)) {
+                return null;
+            }
+
+            $relatorio = null;
+
+            if ($situacao === 'DONE' && ! empty($feed['resultFeedDocumentId'])) {
+                $resultado = $this->baixarDocumentoDaAmazon('/feeds/2021-06-30/documents/'.$feed['resultFeedDocumentId'], restrito: false);
+
+                if (preg_match('/<DocumentReportReferenceID>\s*(\d+)\s*</', $resultado, $m)) {
+                    $relatorio = $m[1];
+                } else {
+                    Log::channel('amazon')->warning('amazon.dba.feed_etiqueta_sem_relatorio', ['order_id' => $order->id, 'resultado' => mb_substr((string) preg_replace('/\s+/', ' ', $resultado), 0, 600)]);
+                }
+            }
+
+            if ($relatorio === null) {
+                Log::channel('amazon')->warning('amazon.dba.feed_etiqueta_recusado', ['order_id' => $order->id, 'situacao' => $situacao]);
+                Cache::forget($chave);
+
+                return null;
+            }
+
+            $estado['reportId'] = $relatorio;
+            Cache::put($chave, $estado, now()->addDay());
+        }
+
+        $relatorio = $this->client->get('/reports/2021-06-30/reports/'.$estado['reportId']);
+        $situacao = (string) ($relatorio['processingStatus'] ?? '');
+
+        if (in_array($situacao, ['IN_QUEUE', 'IN_PROGRESS'], true)) {
+            return null;
+        }
+
+        if ($situacao !== 'DONE' || empty($relatorio['reportDocumentId'])) {
+            Log::channel('amazon')->warning('amazon.dba.relatorio_etiqueta_recusado', ['order_id' => $order->id, 'situacao' => $situacao]);
+            Cache::forget($chave);
+
+            return null;
+        }
+
+        $pdf = $this->extrairPdf($this->baixarDocumentoDaAmazon('/reports/2021-06-30/documents/'.$relatorio['reportDocumentId'], restrito: true));
+        Cache::forget($chave);
+
+        if ($pdf === null) {
+            Log::channel('amazon')->warning('amazon.dba.documento_sem_pdf', ['order_id' => $order->id]);
+
+            return null;
+        }
+
+        Storage::disk('local')->put(self::caminhoEtiqueta($order), $pdf);
+        Cache::forget("{$chave}:tentativas");
+
+        $this->timeline->record($order, OrderFulfillmentEvent::STEP_LABEL_GENERATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Etiqueta do DBA baixada da Amazon pelo feed de documentos do Easy Ship.');
+
+        return $pdf;
+    }
+
+    private function enviarFeedDaEtiqueta(string $amazonOrderId): string
+    {
+        $vendedor = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_AMAZON)->value('seller_id')
+            ?: config('services.amazon.bootstrap_seller_id');
+
+        if (! $vendedor) {
+            throw new RuntimeException('Conta da Amazon sem seller_id: o feed da etiqueta precisa do MerchantIdentifier.');
+        }
+
+        $e = fn (string $valor) => htmlspecialchars($valor, ENT_XML1);
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<AmazonEnvelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="amzn-envelope.xsd">'
+            .'<Header><DocumentVersion>1.01</DocumentVersion><MerchantIdentifier>'.$e((string) $vendedor).'</MerchantIdentifier></Header>'
+            .'<MessageType>EasyShipDocument</MessageType>'
+            .'<Message><MessageID>1</MessageID><EasyShipDocument><AmazonOrderID>'.$e($amazonOrderId).'</AmazonOrderID><DocumentType>ShippingLabel</DocumentType></EasyShipDocument></Message>'
+            .'</AmazonEnvelope>';
+        $tipo = 'text/xml; charset=UTF-8';
+
+        $documento = $this->client->createFeedDocument($tipo);
+        $this->client->uploadFeedDocument($documento['url'], $xml, $tipo);
+
+        $feed = $this->client->post('/feeds/2021-06-30/feeds', [
+            'feedType' => self::FEED_TIPO,
+            'marketplaceIds' => [config('services.amazon.marketplace_id')],
+            'inputFeedDocumentId' => $documento['feedDocumentId'],
+        ]);
+
+        if (empty($feed['feedId'])) {
+            throw new RuntimeException('A Amazon não devolveu o feedId do pedido da etiqueta.');
+        }
+
+        return (string) $feed['feedId'];
+    }
+
+    /** Documento de feed/relatório (URL pré-assinada; GZIP quando a Amazon diz). */
+    private function baixarDocumentoDaAmazon(string $caminho, bool $restrito): string
+    {
+        $documento = null;
+
+        if ($restrito) {
+            try {
+                $documento = $this->client->restrictedGet($caminho, []);
+            } catch (AmazonException $exception) {
+                Log::channel('amazon')->info('amazon.dba.documento_sem_rdt', ['erro' => $exception->getMessage()]);
+            }
+        }
+
+        $documento ??= $this->client->get($caminho);
+
+        if (empty($documento['url'])) {
+            throw new RuntimeException('A Amazon não devolveu a URL do documento.');
+        }
+
+        $resposta = Http::timeout(60)->get($documento['url']);
+
+        if ($resposta->failed()) {
+            throw new RuntimeException("Falha ao baixar o documento da Amazon (HTTP {$resposta->status()}).");
+        }
+
+        $conteudo = $resposta->body();
+
+        if (strtoupper((string) ($documento['compressionAlgorithm'] ?? '')) === 'GZIP') {
+            $conteudo = (string) gzdecode($conteudo);
+        }
+
+        return $conteudo;
     }
 
     /** @param  array<string, mixed>  $slot */

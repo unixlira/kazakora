@@ -143,7 +143,9 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
         // deadline de verdade desta instância.
         $message = $shipment->scheduled_for
             ? "Venda agendada pro canal liberar em {$shipment->scheduled_for->format('d/m/Y')}, mas passaram-se 24h depois disso sem a etiqueta aparecer — vale checar direto no canal."
-            : 'Etiqueta não ficou disponível no Mercado Livre após '.self::RETRY_WINDOW_HOURS.'h de tentativas.';
+            : ($shipment->channel === 'amazon'
+                ? 'Etiqueta do DBA não veio da Amazon (nem pelo feed de documentos do Easy Ship) no prazo das tentativas. Imprima no Seller Central (pedido '.($shipment->order?->external_order_id ?? '?').').'
+                : 'Etiqueta não ficou disponível no Mercado Livre após '.self::RETRY_WINDOW_HOURS.'h de tentativas.');
 
         $shipment->update(['status' => ChannelShipment::STATUS_ERROR, 'error_message' => $message]);
 

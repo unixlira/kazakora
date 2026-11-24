@@ -107,8 +107,10 @@ class AmazonClient
         $tokenResponse = Http::baseUrl($this->baseUrl())
             ->withHeaders(['x-amz-access-token' => $account->access_token])
             ->post('/tokens/2021-03-01/restrictedDataToken', [
+                // Documento de relatório (etiqueta do DBA) pede RDT sem
+                // dataElements: lista vazia não vai no corpo.
                 'restrictedResources' => [
-                    ['method' => 'GET', 'path' => $path, 'dataElements' => $dataElements],
+                    array_filter(['method' => 'GET', 'path' => $path, 'dataElements' => $dataElements]),
                 ],
             ]);
 

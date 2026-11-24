@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Jobs;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Exceptions\AgendamentoDbaManualException;
 use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Modules\Marketplace\Exceptions\MarketplaceNotConfiguredException;
 use App\Modules\Marketplace\Exceptions\PagamentoAmazonPendenteException;
@@ -57,6 +58,11 @@ class ConfirmChannelShippingJob implements ShouldQueue
             // de venda de verdade. Foi assim que 110 pedidos do TikTok de
             // agosto geraram 7.794 falhas em 24h (incidente 2026-09-10).
             $this->fail($exception);
+        } catch (AgendamentoDbaManualException) {
+            // Amazon não deixa agendar este pedido pela API: o Lira já foi
+            // avisado (sino + e-mail) e AguardarAgendamentoDbaJob confere a
+            // cada 30 min até o pacote aparecer no Seller Central.
+            return;
         } catch (PagamentoAmazonPendenteException) {
             // Já registrado no envio e na linha do tempo. Tentar de novo não
             // adianta: o envio volta a ser disparado quando o pedido virar

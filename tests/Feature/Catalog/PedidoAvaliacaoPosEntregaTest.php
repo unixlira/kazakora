@@ -64,7 +64,7 @@ class PedidoAvaliacaoPosEntregaTest extends TestCase
     public function test_entrega_preenche_entregue_em(): void
     {
         $order = Order::create([
-            'origin' => Order::ORIGIN_STORE, 'status' => Order::STATUS_SHIPPED, 'shipping_name' => 'Ana', 'shipping_zip' => '1',
+            'origin' => Order::ORIGIN_STORE, 'status' => Order::STATUS_SHIPPED, 'shipping_name' => 'Ana', 'shipping_phone' => '1', 'shipping_zip' => '1',
             'shipping_street' => 'R', 'shipping_number' => '1', 'shipping_neighborhood' => 'B', 'shipping_city' => 'C', 'shipping_state' => 'SP',
             'subtotal' => 10, 'shipping_cost' => 0, 'total' => 10,
         ]);

@@ -360,7 +360,7 @@ class AnuncioConteudoService
         - O nome curto é o substantivo principal do produto (com no máximo uma palavra a mais), em Português do Brasil, com a primeira letra de cada palavra maiúscula. Nada de marca, modelo, medida, cor, voltagem ou quantidade.
         - Concordância certa: meu (masculino), minha (feminino), meus/minhas (plural), pelo substantivo escolhido.
         - Até {$max} caracteres contando os espaços.
-        - Sem emoji, sem número, sem pontuação, sem falar de preço, desconto, frete, prazo ou entrega.
+        - Sem emoji, sem número, sem pontuação (o hífen de palavra composta fica: "Quebra-Cabeça"), com acentos certos, sem falar de preço, desconto, frete, prazo ou entrega.
 
         Responda direto com o JSON, sem explicar nem contar caracteres na resposta.
         Formato (JSON): {"botoes": {"<id>": "texto do botão"}}

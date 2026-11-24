@@ -196,6 +196,16 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // API de Conversões da Meta (2026-11-24): sempre em info, mesmo com
+        // LOG_LEVEL=warning, para ver cada evento aceito (events_received).
+        'meta_capi' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/meta-capi.log'),
+            'level' => 'info',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
         'reviews' => [
             'driver' => 'daily',
             'path' => storage_path('logs/reviews.log'),

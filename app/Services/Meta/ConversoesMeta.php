@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -88,7 +89,7 @@ class ConversoesMeta
         $destino = self::destino($site);
 
         if (! $this->ativo($site)) {
-            Log::info('meta_capi.pulado', [
+            self::log()->info('meta_capi.pulado', [
                 'motivo' => ! $destino['enabled'] ? 'desligado' : (blank($destino['access_token']) ? 'sem_token' : 'sem_pixel'),
                 'site' => $site,
                 'event_name' => $evento['event_name'] ?? null,
@@ -110,17 +111,19 @@ class ConversoesMeta
             ->post($url, $corpo);
 
         if ($resposta->failed()) {
-            Log::warning('meta_capi.erro', [
+            $erro = [
                 'site' => $site,
                 'event_name' => $evento['event_name'] ?? null,
                 'event_id' => $evento['event_id'] ?? null,
                 'status' => $resposta->status(),
                 'erro' => $resposta->json('error.message') ?? Str::limit($resposta->body(), 300),
-            ]);
+            ];
+            Log::warning('meta_capi.erro', $erro);
+            self::log()->warning('meta_capi.erro', $erro);
             $resposta->throw();
         }
 
-        Log::info('meta_capi.enviado', [
+        self::log()->info('meta_capi.enviado', [
             'site' => $site,
             'event_name' => $evento['event_name'] ?? null,
             'event_id' => $evento['event_id'] ?? null,
@@ -130,6 +133,20 @@ class ConversoesMeta
         ]);
 
         return true;
+    }
+
+    /**
+     * Log próprio (storage/logs/meta-capi-AAAA-MM-DD.log, nível info): em
+     * produção o LOG_LEVEL é warning e o "enviado" com events_received
+     * sumia; aqui dá para conferir cada evento aceito pela Meta (2026-11-24).
+     */
+    public static function log(): LoggerInterface
+    {
+        try {
+            return Log::channel('meta_capi');
+        } catch (Throwable) {
+            return Log::driver();
+        }
     }
 
     /**
@@ -179,6 +196,39 @@ class ConversoesMeta
             'content_type' => 'product',
             'content_ids' => [(string) $product->id],
             'contents' => [['id' => (string) $product->id, 'quantity' => $quantidade, 'item_price' => $preco]],
+        ]);
+    }
+
+    /**
+     * InitiateCheckout do servidor (2026-11-24), com o event_id que a tela do
+     * checkout entrega ao Pixel (metaInitiateCheckout). Mesmos dados do
+     * fbq('track', 'InitiateCheckout') do pixelMeta.js: itens e subtotal.
+     *
+     * @param  iterable<mixed>  $itensDoCarrinho  itens do CartManager (product, quantity, subtotal)
+     */
+    public function eventoInitiateCheckout(Request $request, iterable $itensDoCarrinho, float $valor, string $eventId): array
+    {
+        $contents = [];
+        foreach ($itensDoCarrinho as $item) {
+            $id = data_get($item, 'product.id') ?? data_get($item, 'product_id');
+            if ($id === null) {
+                continue;
+            }
+            $qtd = max(1, (int) data_get($item, 'quantity', 1));
+            $contents[] = [
+                'id' => (string) $id,
+                'quantity' => $qtd,
+                'item_price' => round((float) data_get($item, 'subtotal', 0) / $qtd, 2),
+            ];
+        }
+
+        return $this->evento('InitiateCheckout', $eventId, now()->getTimestamp(), $this->contextoDaRequisicao($request), $this->dadosDoCliente($request->user()), [
+            'value' => round($valor, 2),
+            'currency' => 'BRL',
+            'content_type' => 'product',
+            'content_ids' => array_values(array_unique(array_column($contents, 'id'))),
+            'contents' => $contents,
+            'num_items' => array_sum(array_column($contents, 'quantity')),
         ]);
     }
 

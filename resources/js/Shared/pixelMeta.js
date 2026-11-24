@@ -20,12 +20,23 @@ let ultimaUrl = null;
 const INTERACOES = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
 const ESPERA_MS = 3000;
 
+// fbevents.js falhou (503 do CDN da Meta, 24/11/2026): sem o script a fila
+// do fbq nunca sai. Tenta de novo até 2 vezes (5 s e 20 s); a fila continua
+// guardada e é enviada inteira quando o script finalmente carrega.
+const NOVAS_TENTATIVAS_MS = [5000, 20000];
+let tentativa = 0;
+
 function baixarScript() {
     if (document.querySelector('script[src*="connect.facebook.net/en_US/fbevents.js"]')) return;
     INTERACOES.forEach((ev) => window.removeEventListener(ev, baixarScript));
     const t = document.createElement('script');
     t.async = true;
     t.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    t.onerror = () => {
+        t.remove();
+        const espera = NOVAS_TENTATIVAS_MS[tentativa++];
+        if (espera) setTimeout(baixarScript, espera);
+    };
     document.head.appendChild(t);
 }
 
@@ -90,7 +101,7 @@ export function rastrearPagina(page, { imediato = false } = {}) {
             num_items: props.items.reduce((t, i) => t + Number(i.quantity ?? 1), 0),
             value: numero(props.subtotal),
             currency: 'BRL',
-        });
+        }, props.metaInitiateCheckout?.event_id ? { eventID: props.metaInitiateCheckout.event_id } : undefined);
     } else if (component === 'Checkout/Confirmation' && props.metaPurchase) {
         rastrearPurchase(props.metaPurchase);
     }

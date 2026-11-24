@@ -22,10 +22,12 @@ class GerarMiniaturasAvaliacoes extends Command
     public function handle(): int
     {
         $pendentes = ReviewImage::query()
-            ->whereNull('thumb_url')
+            ->where(fn ($q) => $q->whereNull('thumb_url')
+                // Vídeos que ficaram sem capa antes de 24/11 entram de novo.
+                ->orWhere(fn ($v) => $v->where('thumb_url', '')->where('media_type', 'video')))
             ->orderBy('id')
             ->limit(max(1, (int) $this->option('limite')))
-            ->get(['id', 'image_url', 'thumb_url']);
+            ->get(['id', 'image_url', 'thumb_url', 'media_type']);
 
         $geradas = 0;
         $semMiniatura = 0;

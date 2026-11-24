@@ -45,8 +45,11 @@ class ReviewImage extends Model
      */
     public static function gerarMiniatura(?string $url): ?string
     {
-        if (! $url || preg_match('/\.(mp4|mov|webm|m4v)(\?|$)/i', $url)) {
+        if (! $url) {
             return null;
+        }
+        if (preg_match('/\.(mp4|mov|webm|m4v)(\?|$)/i', $url)) {
+            return self::gerarCapaDoVideo($url);
         }
 
         $posicao = strpos($url, '/storage/');
@@ -62,5 +65,38 @@ class ReviewImage extends Model
         $miniatura = ProductImageThumbnailer::generateMini($caminho);
 
         return $miniatura ? substr($url, 0, $posicao).'/storage/'.$miniatura : null;
+    }
+
+    /**
+     * Capa do vídeo da avaliação (um quadro em JPG, 512px). Sem ela o vídeo
+     * aparecia como um quadrado preto e parecia avaliação sem foto (Lira, 24/11).
+     */
+    public static function gerarCapaDoVideo(string $url): ?string
+    {
+        $posicao = strpos($url, '/storage/');
+        if ($posicao === false) {
+            return null;
+        }
+        $caminho = rawurldecode(strtok(substr($url, $posicao + strlen('/storage/')), '?'));
+        if ($caminho === '' || str_contains($caminho, '..')) {
+            return null;
+        }
+
+        $disco = \Illuminate\Support\Facades\Storage::disk('public');
+        if (! $disco->exists($caminho)) {
+            return null;
+        }
+        $capa = preg_replace('/\.[a-z0-9]+$/i', '', $caminho).'-capa.jpg';
+        if (! $disco->exists($capa)) {
+            $processo = \Illuminate\Support\Facades\Process::timeout(60)->run([
+                'ffmpeg', '-y', '-v', 'error', '-ss', '0.5', '-i', $disco->path($caminho),
+                '-frames:v', '1', '-vf', 'scale=512:-2', '-q:v', '4', $disco->path($capa),
+            ]);
+            if (! $processo->successful() || ! $disco->exists($capa)) {
+                return null;
+            }
+        }
+
+        return substr($url, 0, $posicao).'/storage/'.$capa;
     }
 }

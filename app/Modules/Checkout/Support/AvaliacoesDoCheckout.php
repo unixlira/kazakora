@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Support;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Checkout\Models\Order;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -151,7 +152,9 @@ class AvaliacoesDoCheckout
                 'id' => $review->id,
                 'nota' => (int) $review->rating,
                 'nome' => $nome,
-                'uf' => $review->uf ? strtoupper($review->uf) : null,
+                // UF real (pedido do Lira 2026-11-24): a da avaliação ou, se faltar, a do pedido que ela avaliou.
+                'uf' => ($uf = $review->uf ?: ($review->order_id ? Order::query()->whereKey($review->order_id)->value('shipping_state') : null))
+                    && preg_match('/^[A-Za-z]{2}$/', (string) $uf) ? strtoupper((string) $uf) : null,
                 'texto' => trim((string) $review->comment),
                 'iniciais' => $iniciais,
                 'cor' => $cor,

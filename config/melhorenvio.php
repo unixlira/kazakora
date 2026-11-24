@@ -50,7 +50,14 @@ return [
     // transportadoras, a 200 m da loja (Pegaki DISTRIBUE, Rua Florianópolis,
     // 198A). Transportadora que ele não aceita vai na agência mais próxima
     // dela; distância medida a partir da loja (lat/lon abaixo).
-    'ponto_padrao' => (int) env('MELHORENVIO_PONTO_PADRAO', 41970),
+    // 24/11/2026: o Pegaki DISTRIBUE da Rua Florianópolis, 198A (41970)
+    // FECHOU. Sem ponto padrão: cada transportadora vai na agência aberta
+    // mais próxima da loja que a aceita. 0 = sem ponto padrão.
+    'ponto_padrao' => (int) env('MELHORENVIO_PONTO_PADRAO', 0),
+
+    // Pontos que fecharam ou não devem mais receber pacote (ids da lista de
+    // agências do Melhor Envio, separados por vírgula). Nunca são escolhidos.
+    'pontos_fechados' => array_values(array_filter(array_map('intval', explode(',', (string) env('MELHORENVIO_PONTOS_FECHADOS', '41970'))))),
     'loja_lat' => (float) env('MELHORENVIO_LOJA_LAT', -23.5606),
     'loja_lon' => (float) env('MELHORENVIO_LOJA_LON', -46.5826),
 

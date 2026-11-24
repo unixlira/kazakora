@@ -13,7 +13,8 @@ import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.v
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
-import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
+// Depoimentos oculto a pedido do Lira em 2026-11-23: o carrossel está comentado no template.
+// import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -253,6 +254,9 @@ const cupomDescricao = ref(null);
 const cupom = ref('');
 const cupomCarregando = ref(false);
 const cupomErro = ref(page.props.errors?.code ?? null);
+// Motivo do servidor (mínimo, limite de usos...) embaixo do "Cupom inválido ou vencido" (2026-11-23).
+const cupomErroDetalhe = ref(null);
+const CUPOM_INVALIDO = 'Cupom inválido ou vencido';
 
 // Se o servidor tirar o cupom (expirou entre aplicar e pagar), a tela acompanha.
 watch(() => [props.couponCode, props.discountAmount], ([codigo, valor]) => {
@@ -278,15 +282,25 @@ const chamarCupom = (method, body) => fetch('/finalizacao/cupom', {
 // some até tirar no X; dois cliques seguidos não mandam dois pedidos. O
 // servidor confere de novo e troca o do rascunho, nunca soma.
 const normalizarCupom = (codigo) => String(codigo ?? '').replace(/\s+/g, '').toUpperCase();
+// Medição do cupom (pedido do Lira 2026-11-23): clique no "Aplicar cupom" (ou
+// Enter no campo), deu certo ou deu erro. Só o nome do campo ("cupom"), NUNCA
+// o código digitado.
+const medirCupom = (evento) => medicao.registrar(evento, { campo: 'cupom' }, null, true);
 const aplicarCupom = async () => {
     if (cupomCarregando.value) return;
+    medirCupom('cupom_clicou');
     const codigo = normalizarCupom(cupom.value);
+    cupomErroDetalhe.value = null;
     if (cupomAplicado.value) {
-        if (codigo && codigo !== normalizarCupom(cupomAplicado.value)) cupomErro.value = `Só um cupom por compra. Tire o ${cupomAplicado.value} no X para usar outro.`;
+        if (codigo && codigo !== normalizarCupom(cupomAplicado.value)) {
+            cupomErro.value = `Só um cupom por compra. Tire o ${cupomAplicado.value} no X para usar outro.`;
+            medirCupom('cupom_erro');
+        }
         return;
     }
     if (!codigo) {
         cupomErro.value = 'Digite o código do cupom.';
+        medirCupom('cupom_erro');
         return;
     }
     cupomCarregando.value = true;
@@ -295,15 +309,24 @@ const aplicarCupom = async () => {
         const response = await chamarCupom('POST', { code: codigo });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            cupomErro.value = data.errors?.code?.[0] ?? data.message ?? 'Não foi possível aplicar o cupom agora.';
+            const motivo = data.errors?.code?.[0] ?? data.message ?? null;
+            if (response.status === 422) {
+                cupomErro.value = CUPOM_INVALIDO;
+                cupomErroDetalhe.value = motivo;
+            } else {
+                cupomErro.value = motivo ?? 'Não foi possível aplicar o cupom agora.';
+            }
+            medirCupom('cupom_erro');
             return;
         }
         cupomAplicado.value = data.code;
         descontoCupom.value = Number(data.discount_amount) || 0;
         cupomDescricao.value = data.descricao;
         cupom.value = '';
+        medirCupom('cupom_aplicado');
     } catch {
         cupomErro.value = 'Sem conexão. Tente de novo.';
+        medirCupom('cupom_erro');
     } finally {
         cupomCarregando.value = false;
     }
@@ -316,6 +339,7 @@ const limparCupom = async () => {
     await removerCupom();
     cupom.value = '';
     cupomErro.value = null;
+    cupomErroDetalhe.value = null;
     await nextTick();
     campoCupom.value?.focus();
 };
@@ -1045,26 +1069,36 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                 <label class="relative min-w-0 flex-1">
                     <span class="sr-only">Cupom de desconto</span>
                     <input :value="cupomAplicado || cupom" data-medir="cupom" type="text" placeholder="Cupom de desconto" autocapitalize="characters" enterkeyhint="go"
-                        :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado" :aria-invalid="cupomEstado === 'erro'" aria-describedby="cupom-status"
+                        :readonly="!!cupomAplicado" :disabled="cupomCarregando && !cupomAplicado" :aria-invalid="cupomEstado === 'erro'" aria-describedby="cupom-dica cupom-status"
                         ref="campoCupom"
                         class="w-full rounded-full border px-5 py-2.5 text-sm uppercase outline-none placeholder:normal-case"
                         :class="cupomAplicado ? 'border-2 border-[#00843f] bg-white pr-11 font-semibold text-slate-900' : [cupomErro ? 'border-red-400' : 'border-transparent', 'bg-[#F1F2F4] focus:border-slate-300 focus:bg-white']"
-                        @input="cupom = $event.target.value; cupomErro = null">
+                        @input="cupom = $event.target.value; cupomErro = null; cupomErroDetalhe = null">
                     <button v-if="cupomAplicado" type="button" data-limpar-cupom :disabled="cupomCarregando || !!order" aria-label="Tirar o cupom"
                         class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50"
                         @click="limparCupom">
                         <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i>
                     </button>
                 </label>
-                <button v-if="!cupomAplicado" type="submit" :disabled="cupomCarregando || !!order"
-                    class="inline-flex min-w-[100px] items-center justify-center gap-1.5 rounded-full bg-[#00843f] px-4 py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50">
-                    <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
-                    {{ cupomCarregando ? 'Aplicando' : 'Aplicar' }}
+                <!-- Botão com cara de botão (pedido do Lira 2026-11-23): as pessoas focavam no campo e não
+                     viam o "Aplicar". Laranja de destaque, texto "Aplicar cupom", mão no hover, foco visível
+                     e "Aplicando…" enquanto confere. Enter no campo aplica também (submit do form). -->
+                <button v-if="!cupomAplicado" type="submit" data-aplicar-cupom :disabled="cupomCarregando || !!order" :aria-busy="cupomCarregando"
+                    class="inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#C2410C] px-4 py-2.5 text-sm font-bold text-white shadow-[0_3px_10px_rgba(194,65,12,0.30)] transition hover:bg-[#9A3412] active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C2410C] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+                    <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-tag'" aria-hidden="true"></i>
+                    {{ cupomCarregando ? 'Aplicando…' : 'Aplicar cupom' }}
                 </button>
             </form>
+            <!-- Dica enquanto digita (2026-11-23). -->
+            <p id="cupom-dica" class="ml-4 mt-1 text-[11px] text-slate-600" :class="{ 'sr-only': !(cupom.trim() && !cupomAplicado && !cupomCarregando && !cupomErro) }">
+                <template v-if="cupom.trim() && !cupomAplicado && !cupomCarregando && !cupomErro"><i class="fa-solid fa-hand-pointer mr-1 text-[#C2410C]" aria-hidden="true"></i>Toque em <strong>Aplicar cupom</strong> para usar o desconto</template>
+            </p>
             <p id="cupom-status" aria-live="polite" class="text-xs" :class="cupomEstado === 'erro' ? 'mt-1 text-red-600' : 'text-[#00843f]'">
-                <template v-if="cupomEstado === 'erro'"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</template>
-                <template v-else-if="cupomEstado === 'aplicado' && descontoCupom > 0"><span class="mt-1 block font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Cupom {{ cupomAplicado }} aplicado: -{{ formatPrice(descontoCupom) }}</span></template>
+                <template v-if="cupomEstado === 'erro'">
+                    <span class="block font-semibold"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</span>
+                    <span v-if="cupomErroDetalhe && cupomErroDetalhe !== cupomErro" class="block text-[11px] text-red-500">{{ cupomErroDetalhe }}</span>
+                </template>
+                <template v-else-if="cupomEstado === 'aplicado'"><span class="mt-1 block font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Cupom {{ cupomAplicado }} aplicado!<template v-if="descontoCupom > 0"> Desconto de {{ formatPrice(descontoCupom) }}</template></span></template>
                 <template v-else-if="cupomEstado === 'removendo'"><span class="mt-1 block text-slate-500">Tirando o cupom…</span></template>
             </p>
         </Teleport>
@@ -1426,8 +1460,10 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                         </div>
                     </section>
 
-                    <!-- Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24). -->
+                    <!-- Depoimentos oculto a pedido do Lira em 2026-11-23 (não apagar; para voltar, tirar o comentário).
+                    Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24).
                     <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" />
+                    -->
                     </div>
                 </div>
             </main>
@@ -1515,6 +1551,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                         <!-- Estrelas da média ao lado do "Alterar itens" (pedido 2026-10-21). -->
                         <div class="flex items-center justify-between gap-2">
                             <Link href="/carrinho" class="inline-block shrink-0 text-xs font-medium text-sky-700 hover:underline">Alterar itens do carrinho</Link>
+                            <!-- Nota com estrelas e total de avaliações oculto a pedido do Lira em 2026-11-23 (não apagar; o
+                                 avaliacaoItens continua vindo do servidor, só não aparece na tela).
                             <span v-if="avaliacaoItens" class="ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-slate-600">
                                 <span class="inline-flex items-center gap-0.5" role="img" :aria-label="`Nota ${notaItens.toFixed(1).replace('.', ',')} de 5`">
                                     <span v-for="estrela in 5" :key="estrela" class="relative inline-block" aria-hidden="true">
@@ -1527,6 +1565,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <strong class="text-slate-800">{{ notaItens.toFixed(1).replace('.', ',') }}</strong>
                                 <span>({{ avaliacaoItens.total.toLocaleString('pt-BR') }}<span class="max-sm:sr-only">{{ avaliacaoItens.total === 1 ? ' avaliação' : ' avaliações' }}</span>)</span>
                             </span>
+                            -->
                         </div>
 
                         <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974). -->
@@ -1546,8 +1585,10 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                     </div>
                 </div>
 
-                <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24). -->
+                <!-- Depoimentos oculto a pedido do Lira em 2026-11-23 (não apagar; para voltar, tirar o comentário).
+                Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24).
                 <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
+                -->
             </aside>
         </div>
 

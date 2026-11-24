@@ -7,6 +7,7 @@ use App\Modules\Cart\Mail\SequenciaCarrinho;
 use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia as Registro;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\LeadCheckout;
+use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -96,5 +97,27 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
 
         $this->post("/admin/carrinhos-abandonados/{$lead->id}/whatsapp")->assertRedirect();
         Http::assertNothingSent();
+    }
+
+    public function test_sequencia_nao_manda_fora_do_horario(): void
+    {
+        $this->lead();
+        $this->travelTo(Carbon::parse('2026-11-18 21:30', 'America/Sao_Paulo'));
+        $this->artisan('loja:carrinho-abandonado-sequencia')->assertSuccessful();
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+    }
+
+    public function test_manuela_reconhece_resposta_automatica_do_cliente(): void
+    {
+        $conversa = WhatsAppConversation::create(['wa_id' => '5511988887777', 'phone' => '5511988887777', 'loja' => 'kazakora', 'status' => 'open']);
+        $msg = fn (string $t) => $conversa->messages()->create(['direction' => 'inbound', 'type' => 'text', 'body' => $t, 'status' => 'received']);
+        $auto = 'Olá caro Cliente ,seja bem vindo a minha loja, Deixe se recado atenderemos logo🤗';
+
+        $this->assertTrue(ReplyWithManuela::pareceRespostaAutomatica($auto, $conversa, $msg($auto)));
+        $this->assertFalse(ReplyWithManuela::pareceRespostaAutomatica('Quanto custa o livro?', $conversa, $msg('Quanto custa o livro?')));
+        $msg('Vocês entregam em Natal no Rio Grande do Norte?');
+        $repetida = $msg('Vocês entregam em Natal no Rio Grande do Norte?');
+        $this->assertTrue(ReplyWithManuela::pareceRespostaAutomatica('Vocês entregam em Natal no Rio Grande do Norte?', $conversa, $repetida));
     }
 }

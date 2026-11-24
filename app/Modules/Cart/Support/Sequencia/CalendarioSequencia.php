@@ -55,6 +55,14 @@ class CalendarioSequencia
     }
 
     /** O mesmo instante, se estiver entre 9h e 20h em São Paulo; senão, as 9h da próxima janela. */
+    /** Agora está entre 9h e 20h em São Paulo? */
+    public static function dentroDaJanela(Carbon $quando): bool
+    {
+        $hora = $quando->copy()->setTimezone(self::FUSO)->hour;
+
+        return $hora >= self::HORA_INICIO && $hora < self::HORA_FIM;
+    }
+
     public static function janela(Carbon $quando): Carbon
     {
         $local = $quando->copy()->setTimezone(self::FUSO);

@@ -1113,6 +1113,19 @@ const totalNoPix = computed(() => (props.pixDiscountPercentage > 0
     ? round2(totalCartao.value - descontoPixCalculado.value)
     : totalCartao.value));
 
+// Cards da etapa Pagamento (2026-11-24): nome, uma linha curta e o selo do desconto, que é o
+// "Desconto Checkout" dos produtos (DescontoPix no servidor), nunca um número fixo aqui.
+const opcoesPagamento = computed(() => [
+    {
+        id: 'pix', nome: 'Pix', icone: 'fa-brands fa-pix text-[#32BCAD]',
+        linha: props.pixDiscountPercentage > 0 ? formatPrice(totalNoPix.value) : 'aprovação imediata',
+        destaque: props.pixDiscountPercentage > 0,
+        selo: props.pixDiscountPercentage > 0 ? `-${pixPercentualTexto.value}%` : null,
+    },
+    { id: 'card', nome: 'Cartão de Crédito', icone: 'fa-solid fa-credit-card text-slate-700', linha: 'até 12x', destaque: false, selo: null },
+    { id: 'boleto', nome: 'Boleto Bancário', icone: 'fa-solid fa-barcode text-slate-700', linha: `vence em ${props.boletoDiasVencimento} dias`, destaque: false, selo: null },
+]);
+
 // Campos em pílula com fundo cinza claro (modelo Yampi).
 const inputClass = 'mt-1 w-full rounded-full border border-transparent bg-[#F1F2F4] px-5 py-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-100';
 const inputErroClass = 'border-red-500 bg-red-50 ring-1 ring-red-200';
@@ -1505,40 +1518,20 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                         <div v-show="etapa === 3" id="pagamento-v2">
                             <p class="mt-1 text-sm text-slate-500">Escolha a melhor forma de pagamento para você</p>
 
-                            <div class="mt-4 space-y-2.5">
-                                <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário. -->
-                                <button type="button" class="relative flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
-                                    :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                    :aria-pressed="metodo === 'pix'" @click="metodo = 'pix'">
-                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'pix' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'pix'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
-                                    <i class="fa-brands fa-pix text-xl text-[#32BCAD]"></i>
-                                    <span class="flex-1">
-                                        <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Pix <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
-                                        <span v-if="pixDiscountPercentage > 0" class="block text-sm font-extrabold text-[#00843f]">{{ formatPrice(totalNoPix) }} no Pix</span>
-                                    </span>
-                                    <span v-if="pixDiscountPercentage > 0" class="rounded-full bg-[#00843f] px-2.5 py-1 text-xs font-bold text-white">-{{ pixPercentualTexto }}%</span>
-                                </button>
-                                <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
-                                    :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                    :aria-pressed="metodo === 'card'" @click="metodo = 'card'">
-                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'card' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'card'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
-                                    <i class="fa-solid fa-credit-card text-xl text-slate-700"></i>
-                                    <span class="flex-1">
-                                        <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-slate-900">Cartão de Crédito <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800"><i class="fa-solid fa-bolt text-[10px]"></i>Aprovação Imediata</span></span>
-                                        <!-- Sem valor da parcela: o Mercado Pago cobra juros a partir de 2x e o valor real só sai com o cartão digitado.
-                                             Desde 2026-11-06 diz que os juros são do cliente. -->
-                                        <span class="block text-xs text-slate-500">À vista sem juros ou até 12x com juros do cartão</span>
-                                    </span>
-                                </button>
-                                <button type="button" class="flex w-full items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition"
-                                    :class="metodo === 'boleto' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                    :aria-pressed="metodo === 'boleto'" @click="metodo = 'boleto'">
-                                    <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2" :class="metodo === 'boleto' ? 'border-emerald-600' : 'border-slate-300'"><span v-if="metodo === 'boleto'" class="h-2.5 w-2.5 rounded-full bg-emerald-600"></span></span>
-                                    <i class="fa-solid fa-barcode text-xl text-slate-700"></i>
-                                    <span class="flex-1">
-                                        <span class="block text-sm font-bold text-slate-900">Boleto Bancário</span>
-                                        <span class="block text-xs text-slate-500">Vence em {{ boletoDiasVencimento }} dias</span>
-                                    </span>
+                            <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário.
+                                 Desde 2026-11-24 são 3 cards lado a lado (também no celular), para o botão de finalizar aparecer
+                                 sem rolar. O texto longo de cada forma foi para o quadro de detalhe abaixo. O selo do desconto
+                                 segue o da FerraKora (verde #00843f, letra branca), agora redondo no canto do card. -->
+                            <div class="mt-4 grid grid-cols-3 gap-2" role="group" aria-label="Forma de pagamento">
+                                <button v-for="opcao in opcoesPagamento" :key="opcao.id" type="button"
+                                    class="relative flex min-w-0 flex-col items-center justify-start rounded-2xl border-2 px-1.5 pb-2.5 pt-3 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                                    :class="metodo === opcao.id ? 'border-emerald-500 bg-emerald-50 shadow-[0_2px_8px_rgba(16,185,129,0.25)]' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                    :aria-pressed="metodo === opcao.id" @click="metodo = opcao.id">
+                                    <span class="absolute left-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2" :class="metodo === opcao.id ? 'border-emerald-600' : 'border-slate-300'" aria-hidden="true"><span v-if="metodo === opcao.id" class="h-2 w-2 rounded-full bg-emerald-600"></span></span>
+                                    <span v-if="opcao.selo" class="absolute -right-2 -top-2 z-10 flex h-9 min-w-9 items-center justify-center rounded-full bg-[#00843f] px-1 text-[11px] shadow-sm ring-2 ring-white font-extrabold leading-none tracking-tight text-white">{{ opcao.selo }}<span class="sr-only"> de desconto</span></span>
+                                    <i :class="[opcao.icone, 'mt-1 text-2xl']" aria-hidden="true"></i>
+                                    <span class="mt-1.5 flex min-h-[2.25rem] items-center text-[13px] font-bold leading-tight text-slate-900">{{ opcao.nome }}</span>
+                                    <span class="mt-0.5 block w-full text-balance break-words text-[11px] font-semibold leading-tight" :class="opcao.destaque ? 'font-extrabold text-[#00843f]' : 'text-slate-500'">{{ opcao.linha }}</span>
                                 </button>
                             </div>
 
@@ -1546,6 +1539,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <p v-if="descontoPix > 0" class="flex items-center gap-2 font-bold text-emerald-700">
                                     <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixPercentualTexto }}% ativado: você economiza {{ formatPrice(descontoPix) }}
                                 </p>
+                                <p v-if="pixDiscountPercentage > 0" class="mt-1 font-semibold text-emerald-800">Total no Pix: {{ formatPrice(totalNoPix) }}</p>
                                 <ul class="mt-2 space-y-1 text-emerald-800">
                                     <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
                                     <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
@@ -1563,6 +1557,9 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             </div>
 
                             <div v-else class="mt-4">
+                                <!-- Texto que saiu do card do cartão (2026-11-24). Sem valor da parcela: o Mercado Pago cobra juros
+                                     a partir de 2x e o valor real só sai com o cartão digitado. Desde 2026-11-06 os juros são do cliente. -->
+                                <p class="mb-3 text-center text-xs text-slate-600"><i class="fa-solid fa-bolt mr-1 text-emerald-700" aria-hidden="true"></i>Aprovação imediata · à vista sem juros ou até 12x com juros do cartão</p>
                                 <!-- Prévia do cartão (modelo Yampi, cartão black): bandeira e 6 primeiros dígitos, que é o que o Mercado Pago libera. -->
                                 <CartaoPrevia :bin="cartaoBin" />
                                 <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->

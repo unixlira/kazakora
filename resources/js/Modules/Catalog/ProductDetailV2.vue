@@ -1037,7 +1037,7 @@ const submitReview = () => {
                                          grátis em verde, Entrega Expressa em laranja da logo; marcar uma desmarca as outras. -->
                                     <label v-for="opcao in opcoesEntrega" :key="opcao.id" class="opcao-frete" :class="[opcao.preco > 0 ? 'expressa' : 'verde', { marcado: escolhaFrete === opcao.id }]">
                                         <input v-model="escolhaFrete" type="radio" name="frete-produto" :value="opcao.id">
-                                        <i class="fas" :class="opcao.tipo === 'normal' ? 'fa-truck' : 'fa-bolt'" aria-hidden="true"></i><b class="nome">{{ opcao.nome }}</b><span>{{ opcao.chega }}</span>
+                                        <i class="fas" :class="opcao.tipo === 'normal' ? 'fa-truck' : 'fa-truck-fast'" aria-hidden="true"></i><b class="nome">{{ opcao.nome }}</b><span>{{ opcao.chega }}</span>
                                         <span v-if="opcao.preco > 0 && opcao.excedente" class="valor">por <b>+ {{ formatPrice(opcao.preco) }}</b></span>
                                         <span v-else-if="opcao.preco > 0" class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcao.preco) }}</b></span>
                                         <span v-else-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>

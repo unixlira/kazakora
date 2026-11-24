@@ -1472,7 +1472,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     :class="expressaEscolhida ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
                                     <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="expressaEscolhida" @change="expressaEscolhida = $event.target.checked">
                                     <span class="flex-1 text-sm text-slate-700">
-                                        <strong :class="expressaEscolhida ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid text-[#F44D00]" :class="expressa.tipo === 'motoboy' ? 'fa-motorcycle' : 'fa-bolt'"></i> {{ expressa.nome }}</strong>
+                                        <strong :class="expressaEscolhida ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid text-[#F44D00]" :class="expressa.tipo === 'motoboy' ? 'fa-motorcycle' : 'fa-truck-fast'"></i> {{ expressa.nome }}</strong>
                                         <span class="ml-1 text-slate-500">· {{ expressa.chega }}</span>
                                     </span>
                                     <span class="text-sm font-bold" :class="expressaEscolhida ? 'text-[#c2450c]' : 'text-slate-900'">{{ precoExpressa }}</span>
@@ -1543,7 +1543,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <ul class="mt-2 space-y-1 text-emerald-800">
                                     <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
                                     <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
-                                    <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
+                                    <li><i class="fa-solid fa-check mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
                                 </ul>
                             </div>
 
@@ -1559,7 +1559,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <div v-else class="mt-4">
                                 <!-- Texto que saiu do card do cartão (2026-11-24). Sem valor da parcela: o Mercado Pago cobra juros
                                      a partir de 2x e o valor real só sai com o cartão digitado. Desde 2026-11-06 os juros são do cliente. -->
-                                <p class="mb-3 text-center text-xs text-slate-600"><i class="fa-solid fa-bolt mr-1 text-emerald-700" aria-hidden="true"></i>Aprovação imediata · à vista sem juros ou até 12x com juros do cartão</p>
+                                <p class="mb-3 text-center text-xs text-slate-600">Aprovação imediata · à vista sem juros ou até 12x com juros do cartão</p>
                                 <!-- Prévia do cartão (modelo Yampi, cartão black): bandeira e 6 primeiros dígitos, que é o que o Mercado Pago libera. -->
                                 <CartaoPrevia :bin="cartaoBin" />
                                 <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->
@@ -1612,7 +1612,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                             <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                             <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                            <div class="flex justify-between" data-testid="linha-frete"><dt>{{ valorFrete > 0 ? 'Frete' : 'Entrega' }}<span v-if="expressaEscolhida && expressa" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Expressa</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}</dd></div>
+                            <div class="flex justify-between" data-testid="linha-frete"><dt>{{ valorFrete > 0 ? 'Frete' : 'Entrega' }}<span v-if="expressaEscolhida && expressa" class="ml-1 text-xs font-semibold text-[#c2450c]">Expressa</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}</dd></div>
                             <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
                                 <dt class="text-base font-extrabold">Total</dt>
                                 <dd class="text-right">

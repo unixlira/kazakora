@@ -710,8 +710,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:pedidos.view');
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
-    // Carrinho abandonado (pedido 2026-10-24): só leitura, nada é enviado ao cliente daqui.
+    // Carrinho abandonado (pedido 2026-10-24); botões de WhatsApp desde 2026-11-23.
     Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
+    // Recuperação de carrinho por WhatsApp pelo painel (pedido do Lira 2026-11-23).
+    Route::post('carrinhos-abandonados/whatsapp-todos', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'whatsappTodos'])->middleware(['permission:pedidos.edit', 'throttle:6,1'])->name('carrinhos-abandonados.whatsapp-todos');
+    Route::post('carrinhos-abandonados/{lead}/whatsapp', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'whatsapp'])->middleware(['permission:pedidos.edit', 'throttle:30,1'])->whereNumber('lead')->name('carrinhos-abandonados.whatsapp');
     // Sequência de carrinho abandonado (pedido 2026-11-21): só leitura, quem manda é o comando.
     Route::get('carrinhos-abandonados/sequencia', [\App\Modules\Admin\Http\Controllers\CarrinhoSequenciaController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.sequencia');
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.

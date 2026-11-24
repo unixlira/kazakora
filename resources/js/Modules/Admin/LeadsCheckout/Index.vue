@@ -1,17 +1,18 @@
 <script setup>
 // Carrinhos abandonados (pedido 2026-10-24): quem clicou "Ir para Entrega" no
-// checkout, com os itens e se virou pedido. Só leitura: nenhuma mensagem para
-// o cliente sai daqui (falar com cliente pede OK do Lira).
+// checkout, com os itens e se virou pedido. Coluna Ações (pedido do Lira
+// 2026-11-23): manda a mensagem de recuperação pelo WhatsApp, um por vez ou
+// para todos os abertos que ainda não receberam.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import { maskCpfCnpj, maskPhone } from '@/Shared/useMasks';
 import { useServerTable } from '@/Shared/useServerTable';
-import { Head, Link } from '@inertiajs/vue3';
-import { computed, h } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, h, ref } from 'vue';
 
 const props = defineProps({
     leads: { type: Object, default: () => ({ data: [] }) },
-    resumo: { type: Object, default: () => ({ abertos: 0, convertidos: 0, valor_aberto: 0 }) },
+    resumo: { type: Object, default: () => ({ abertos: 0, convertidos: 0, valor_aberto: 0, para_disparar: 0 }) },
     sites: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
 });
@@ -28,6 +29,20 @@ const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency
 const formatDate = (value) => (value
     ? new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '—');
+
+const enviando = ref(null);
+const confirmarTodos = ref(false);
+const enviar = (lead) => {
+    enviando.value = lead.id;
+    router.post(`/admin/carrinhos-abandonados/${lead.id}/whatsapp`, {}, { preserveScroll: true, onFinish: () => { enviando.value = null; } });
+};
+const enviarTodos = () => {
+    enviando.value = 'todos';
+    router.post('/admin/carrinhos-abandonados/whatsapp-todos', { site: props.filters.site ?? null }, {
+        preserveScroll: true,
+        onFinish: () => { enviando.value = null; confirmarTodos.value = false; },
+    });
+};
 
 const abas = [
     { label: 'Todos', value: 'all' },
@@ -99,6 +114,27 @@ const columns = [
             h('div', { class: 'text-slate-400' }, `criado ${formatDate(row.original.criado_em)}`),
         ]),
     },
+    {
+        id: 'acoes',
+        header: 'Ações',
+        enableSorting: false,
+        meta: { cellClass: 'whitespace-nowrap' },
+        cell: ({ row }) => {
+            const lead = row.original;
+            if (lead.whatsapp_enviado_em) {
+                return h('span', { class: 'text-xs font-medium text-emerald-700' }, `WhatsApp enviado ${formatDate(lead.whatsapp_enviado_em)}`);
+            }
+            if (lead.whatsapp_bloqueio) {
+                return h('span', { class: 'text-xs text-slate-400', title: lead.whatsapp_bloqueio }, '—');
+            }
+            return h('button', {
+                type: 'button',
+                class: 'rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50',
+                disabled: enviando.value !== null,
+                onClick: () => enviar(lead),
+            }, enviando.value === lead.id ? 'Enviando…' : 'Enviar WhatsApp');
+        },
+    },
 ];
 </script>
 
@@ -109,7 +145,8 @@ const columns = [
         <h1 class="mb-2 text-2xl font-bold">Carrinhos abandonados</h1>
         <p class="mb-4 text-sm text-slate-500">
             Quem preencheu a Identificação do checkout e clicou em "Ir para Entrega". Vira "Convertido" quando o
-            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. Só consulta: nada é enviado ao cliente daqui.
+            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. Em Ações, "Enviar WhatsApp" manda a mensagem de
+            recuperação de carrinho (modelo aprovado na Meta); cada carrinho recebe uma vez só.
         </p>
 
         <div class="mb-4 grid gap-3 sm:grid-cols-3">
@@ -128,6 +165,16 @@ const columns = [
         </div>
 
         <div class="mb-3 flex flex-wrap items-center gap-2">
+            <template v-if="resumo.para_disparar > 0">
+                <button v-if="!confirmarTodos" type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" @click="confirmarTodos = true">
+                    Disparar WhatsApp para todos ({{ resumo.para_disparar }})
+                </button>
+                <span v-else class="flex flex-wrap items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm">
+                    Enviar a mensagem de recuperação para {{ resumo.para_disparar }} {{ resumo.para_disparar === 1 ? 'carrinho aberto' : 'carrinhos abertos' }}<template v-if="filters.site"> da {{ nomeDoSite(filters.site) }}</template>?
+                    <button type="button" class="rounded bg-emerald-600 px-2 py-1 font-semibold text-white disabled:opacity-50" :disabled="enviando !== null" @click="enviarTodos">{{ enviando === 'todos' ? 'Enviando…' : 'Sim, enviar' }}</button>
+                    <button type="button" class="rounded px-2 py-1 text-slate-600 hover:underline" @click="confirmarTodos = false">Cancelar</button>
+                </span>
+            </template>
             <label class="text-sm text-slate-600" for="filtro-site">Loja</label>
             <select id="filtro-site" class="rounded-md border border-slate-300 px-2 py-1 text-sm" :value="filters.site ?? ''" @change="visit({ site: $event.target.value || null })">
                 <option value="">Todas</option>

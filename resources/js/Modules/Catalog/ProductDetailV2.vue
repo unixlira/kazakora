@@ -137,6 +137,12 @@ const variacaoInicial = (produto, variacoes) => {
 const escolhida = ref(variacaoInicial(props.product, props.variations));
 const selecionada = computed(() => escolhida.value ?? props.product);
 const faltaVariacao = computed(() => props.variations.length > 0 && !escolhida.value);
+
+// Texto do botão de compra de cada produto (pedido do Lira 2026-11-24: "Quero meu Livro Falante"
+// no lugar do "Comprar agora"). Vem do cadastro; vazio = o texto de sempre.
+const textoBotaoCompra = computed(() => props.product.texto_botao_compra || 'Comprar agora');
+// Texto comprido não cabe numa linha da barra fixa do celular: letra menor.
+const botaoCompraLongo = computed(() => textoBotaoCompra.value.length > 18);
 const alertaVariacao = ref(0); // conta os avisos: cada clique sem variação treme o alerta de novo
 const variacoesEl = ref(null);
 // Quantidade ou COMPRAR sem variação: alerta vermelho ao lado de "Escolha a variação".
@@ -1049,7 +1055,7 @@ const submitReview = () => {
                                  no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
                                  Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
                             <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
+                                <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">{{ textoBotaoCompra }}</button>
                             </div>
                         </aside>
 
@@ -1356,7 +1362,7 @@ const submitReview = () => {
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
                 </div>
-                <button type="button" class="btn" data-kzm="comprar:barra" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
+                <button type="button" class="btn" :class="{ 'texto-longo': inStock && botaoCompraLongo }" data-kzm="comprar:barra" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? textoBotaoCompra : 'ESGOTADO' }}</button>
             </div>
         </div>
 
@@ -1808,6 +1814,7 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
     .dark .pd2 .barra-preco span { color: var(--text); }
     /* Pílula como no computador (pedido do Lira 2026-10-23). */
     .pd2 .barra .btn { flex: 0 0 60%; width: 60%; font-size: 17px; min-height: 46px; padding: 0 12px; border-radius: 999px; }
+    .pd2 .barra .btn.texto-longo { font-size: 13.5px; line-height: 1.15; }
     .pd2 { padding-bottom: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {

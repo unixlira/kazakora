@@ -413,6 +413,8 @@ class ProductController extends Controller
             // SEO só do site (kazakora.com); marketplaces seguem usando name.
             'seo_title' => ['nullable', 'string', 'max:255'],
             'seo_description' => ['nullable', 'string', 'max:320'],
+            // Texto do botão de compra da página (2026-11-24); vazio = gerado pela IA.
+            'cta_compra' => ['nullable', 'string', 'max:28'],
             'tags' => ['nullable', 'string', 'max:1000'],
         ];
 
@@ -427,7 +429,7 @@ class ProductController extends Controller
             $lista = collect(explode(',', (string) $dados['tags']))->map(fn ($t) => trim($t))->filter()->unique()->values()->all();
             $dados['tags'] = $lista ?: null;
         }
-        foreach (['nome_interno', 'seo_title', 'seo_description'] as $campo) {
+        foreach (['nome_interno', 'seo_title', 'seo_description', 'cta_compra'] as $campo) {
             if (array_key_exists($campo, $dados)) {
                 $dados[$campo] = filled($dados[$campo]) ? trim($dados[$campo]) : null;
             }
@@ -467,6 +469,11 @@ class ProductController extends Controller
 
             if ($product && $servico->precisaGerar($product)) {
                 $servico->gerar($product);
+            }
+
+            // Texto do botão de compra (2026-11-24): só quando ninguém escreveu um.
+            if ($product) {
+                $servico->preencherBotaoCompra($product);
             }
         })->afterResponse();
     }

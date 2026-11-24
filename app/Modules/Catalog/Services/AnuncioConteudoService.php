@@ -267,6 +267,225 @@ class AnuncioConteudoService
         ];
     }
 
+    /** Produtos por chamada do Gemini no texto do botão de compra (25 cortava a resposta). */
+    private const BOTOES_POR_CHAMADA = 10;
+
+    /** Limite do texto do botão de compra (cabe na barra fixa do celular). */
+    public const BOTAO_COMPRA_MAX = 28;
+
+    /**
+     * Texto do botão principal de compra (pedido do Lira 2026-11-24): grava
+     * só quando o produto ainda não tem um (quem cadastra pode escrever o
+     * dele). Chamado junto com o conteúdo do anúncio, depois de salvar.
+     */
+    public function preencherBotaoCompra(Product $product): ?string
+    {
+        if (filled($product->cta_compra)) {
+            return $product->cta_compra;
+        }
+
+        $texto = $this->textosBotaoCompra([$product])[$product->id]['texto'];
+
+        try {
+            // Direto no banco: não dispara auditoria nem os eventos de renomear.
+            Product::query()->whereKey($product->id)->whereNull('cta_compra')->update(['cta_compra' => $texto]);
+            $product->setAttribute('cta_compra', $texto);
+        } catch (Throwable $exception) {
+            Log::warning('anuncio.botao_compra_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        return $texto;
+    }
+
+    /**
+     * Sugere o texto do botão de compra de vários produtos ("Quero meu Livro
+     * Falante", "Quero minha Luminária agora"): o Gemini em lotes de 25 e,
+     * quando ele falha ou devolve algo fora da regra, a regra própria
+     * (botaoCompraPorRegra). Nada é gravado aqui.
+     *
+     * @param  iterable<Product>  $produtos
+     * @return array<int, array{texto: string, fonte: string}>
+     */
+    public function textosBotaoCompra(iterable $produtos): array
+    {
+        $resultado = [];
+
+        foreach (collect($produtos)->chunk(self::BOTOES_POR_CHAMADA) as $lote) {
+            $daIa = [];
+
+            if ($this->gemini->isConfigured()) {
+                try {
+                    $daIa = $this->botoesViaGemini($lote->values()->all());
+                } catch (Throwable $exception) {
+                    Log::warning('anuncio.botao_compra_gemini_falhou', ['erro' => $exception->getMessage()]);
+                }
+            }
+
+            foreach ($lote as $product) {
+                $texto = $this->limparBotaoCompra($daIa[$product->id] ?? null);
+                $resultado[$product->id] = $texto !== null
+                    ? ['texto' => $texto, 'fonte' => ProductAdContent::FONTE_GEMINI]
+                    : ['texto' => self::botaoCompraPorRegra($product->name), 'fonte' => ProductAdContent::FONTE_AUTOMATICO];
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * @param  array<int, Product>  $produtos
+     * @return array<int, string>
+     */
+    private function botoesViaGemini(array $produtos): array
+    {
+        $lista = collect($produtos)->map(function (Product $product) {
+            $product->loadMissing('category');
+            $categoria = $product->category?->name ? " (categoria: {$product->category->name})" : '';
+
+            return "{$product->id} | {$product->name}{$categoria}";
+        })->implode("\n");
+        $max = self::BOTAO_COMPRA_MAX;
+
+        $prompt = <<<TXT
+        Escreva o texto do botão principal de compra da página de cada produto da loja KazaKora (casa, cozinha, ferramentas, eletrônicos e brinquedos). Ele substitui o "Comprar agora".
+
+        Produtos (id | nome):
+        {$lista}
+
+        Regras:
+        - Muitos nomes começam com uma frase de efeito antes de ":" e terminam com "+ PDF Grátis": ignore as duas partes, o produto é o que vem depois do ":".
+        - Formato "Quero meu/minha/meus/minhas <nome curto do produto>", com "agora" no fim quando couber. Exemplos: "Quero meu Livro Falante", "Quero minha Luminária agora", "Quero meus Cestos agora".
+        - O nome curto é o substantivo principal do produto (com no máximo uma palavra a mais), em Português do Brasil, com a primeira letra de cada palavra maiúscula. Nada de marca, modelo, medida, cor, voltagem ou quantidade.
+        - Concordância certa: meu (masculino), minha (feminino), meus/minhas (plural), pelo substantivo escolhido.
+        - Até {$max} caracteres contando os espaços.
+        - Sem emoji, sem número, sem pontuação, sem falar de preço, desconto, frete, prazo ou entrega.
+
+        Responda direto com o JSON, sem explicar nem contar caracteres na resposta.
+        Formato (JSON): {"botoes": {"<id>": "texto do botão"}}
+        TXT;
+
+        $resposta = $this->gemini->generate(
+            (string) config('services.gemini.chat_model'),
+            [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+            self::SISTEMA,
+            // Folga para o raciocínio do modelo: com 4000 a resposta de 25 produtos vinha cortada.
+            8000,
+            GeminiUsageLog::PURPOSE_AD_CONTENT,
+        );
+
+        // Pares "id": "texto" em vez do JSON inteiro: às vezes o modelo escreve
+        // o raciocínio antes do JSON, ou a resposta vem cortada no fim. Vale a
+        // última ocorrência de cada id (a do JSON final), só dos ids do lote.
+        $ids = collect($produtos)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        preg_match_all('/"(\d+)"\s*:\s*"([^"\n]{1,80})"/u', $resposta, $pares, PREG_SET_ORDER);
+
+        return collect($pares)
+            ->filter(fn ($par) => in_array((int) $par[1], $ids, true))
+            // O texto pode vir com escapes de JSON (\u00e1): decodifica como string JSON.
+            ->mapWithKeys(fn ($par) => [(int) $par[1] => json_decode('"'.$par[2].'"') ?? $par[2]])
+            ->all();
+    }
+
+    /** Texto do botão dentro da regra, ou null para cair na regra própria. */
+    public function limparBotaoCompra(mixed $texto): ?string
+    {
+        if (! is_string($texto)) {
+            return null;
+        }
+
+        // Sem emoji nem pontuação: só letras, números, espaço, hífen e apóstrofo.
+        $limpo = preg_replace('/[^\p{L}\p{N}\s\'\-]/u', '', strip_tags($texto));
+        $limpo = trim((string) preg_replace('/\s+/u', ' ', (string) $limpo));
+
+        if ($limpo === '' || mb_strlen($limpo) > self::BOTAO_COMPRA_MAX || preg_match('/\d/', $limpo)) {
+            return null;
+        }
+
+        // Nada de preço, desconto, frete ou prazo no botão.
+        if (preg_match('/\b(fretes?|gr[aá]tis|hoje|prazos?|entregas?|descontos?|promo\w*|ofertas?|pre[cç]os?|baratos?|reais|parcel\w*|pix)\b/iu', $limpo)) {
+            return null;
+        }
+
+        return $limpo;
+    }
+
+    /** Masculinos terminados em "a" e femininos fora das terminações comuns. */
+    private const BOTAO_MASCULINOS = ['dia', 'mapa', 'sofá', 'tema', 'sistema', 'problema', 'programa', 'pijama', 'clima', 'planeta', 'cinema', 'idioma', 'aroma', 'diploma', 'esquema', 'poema', 'puma', 'panda', 'koala'];
+
+    private const BOTAO_FEMININOS = ['luz', 'mão', 'cruz', 'voz', 'pele', 'ponte', 'rede', 'lente', 'parede', 'noite', 'chave', 'base', 'frase', 'tv', 'fritadeira', 'mochila', 'nécessaire', 'necessaire', 'cafeteira', 'chaleira', 'sanduicheira', 'pipoqueira', 'iogurteira', 'torradeira', 'boneca', 'árvore', 'webcam', 'air', 'lâmpada'];
+
+    private const BOTAO_VERBOS_COMPOSTOS = ['porta', 'guarda', 'quebra', 'lava', 'para', 'saca', 'abre', 'tira', 'corta', 'espanta', 'limpa', 'cata'];
+
+    /** Palavras que não servem de nome curto (vêm antes do substantivo). */
+    private const BOTAO_PULAR = ['novo', 'nova', 'novos', 'novas', 'mini', 'super', 'mega', 'lindo', 'linda', 'original', 'premium', 'top', 'o', 'a', 'os', 'as'];
+
+    private const BOTAO_LIGACOES = ['de', 'da', 'do', 'das', 'dos', 'com', 'para', 'pra', 'em', 'e', 'p', 'c', 'sem', 'por', 'no', 'na', 'ao', 'à', 'tipo'];
+
+    /**
+     * Regra própria (sem IA): "Quero meu/minha <1 ou 2 palavras do nome>",
+     * com "agora" quando cabe. O gênero sai da terminação da palavra.
+     */
+    public static function botaoCompraPorRegra(string $nome): string
+    {
+        // Nomes da loja vêm como "Frase de efeito: Produto + PDF Grátis": o produto é o que vem depois do ":".
+        // Idem "Pescoço Tenso? Massageador ...": o produto vem depois do "?".
+        $corte = max((int) mb_strrpos($nome, ':'), (int) mb_strrpos($nome, '?'));
+        $base = $corte > 0 ? mb_substr($nome, $corte + 1) : $nome;
+        $base = preg_split('/\s[-–|]\s|[,(\/+]/u', $base)[0] ?? $base;
+        $palavras = collect(preg_split('/\s+/u', trim($base)) ?: [])
+            ->map(fn ($p) => trim((string) preg_replace('/[^\p{L}\p{N}\'\-]/u', '', $p), "-'"))
+            ->filter(fn ($p) => $p !== '')
+            ->values();
+
+        while ($palavras->isNotEmpty() && in_array(mb_strtolower($palavras->first()), self::BOTAO_PULAR, true)) {
+            $palavras->shift();
+        }
+
+        // Medida, modelo ou quantidade ("5000mAh", "XL830L", "3") não entra no nome curto.
+        $palavras = $palavras->takeWhile(fn ($p) => ! preg_match('/\d/', $p))->values();
+
+        if ($palavras->isEmpty()) {
+            return 'Comprar agora';
+        }
+
+        $formatar = fn (string $p) => mb_strlen($p) <= 3 && mb_strtoupper($p) === $p ? $p : mb_convert_case(mb_strtolower($p), MB_CASE_TITLE);
+        $nucleo = $palavras->first();
+        $segunda = $palavras->get(1);
+        $minusculo = mb_strtolower($nucleo);
+
+        $plural = mb_strlen($minusculo) > 3 && str_ends_with($minusculo, 's')
+            && ! preg_match('/(ês|is|ís|us|ás|ós|x)$/u', $minusculo);
+        $singular = $plural ? mb_substr($minusculo, 0, -1) : $minusculo;
+        // Verbo + substantivo ("Porta-Esponja", "Quebra-Cabeça", "Guarda-Roupa") é masculino.
+        $composto = preg_match('/^('.implode('|', self::BOTAO_VERBOS_COMPOSTOS).')(-|$)/u', $minusculo)
+            && (str_contains($minusculo, '-') || ($segunda !== null && ! in_array(mb_strtolower($segunda), self::BOTAO_LIGACOES, true)));
+        $feminino = ! $composto && (in_array($singular, self::BOTAO_FEMININOS, true)
+            || (! in_array($singular, self::BOTAO_MASCULINOS, true) && preg_match('/(a|ã|ção|são|dade|gem|tude)$/u', $singular)));
+        $pronome = match (true) {
+            $feminino && $plural => 'minhas',
+            $feminino => 'minha',
+            $plural => 'meus',
+            default => 'meu',
+        };
+
+        $curtos = [$formatar($nucleo)];
+        if ($segunda !== null && ! in_array(mb_strtolower($segunda), self::BOTAO_LIGACOES, true)) {
+            array_unshift($curtos, $formatar($nucleo).' '.$formatar($segunda));
+        }
+
+        foreach ($curtos as $curto) {
+            foreach (["Quero {$pronome} {$curto} agora", "Quero {$pronome} {$curto}"] as $texto) {
+                if (mb_strlen($texto) <= self::BOTAO_COMPRA_MAX) {
+                    return $texto;
+                }
+            }
+        }
+
+        return $feminino ? 'Quero a minha agora' : 'Quero o meu agora';
+    }
+
     /**
      * $lancarSeIndisponivel (lote do comando): quando o Gemini responde
      * 429/5xx, lança GeminiUnavailableException em vez de gravar a regra

@@ -54,6 +54,7 @@ class Product extends Model
         'is_new_release',
         'seo_title',
         'seo_description',
+        'cta_compra',
         'tags',
         'brinde_fisico',
     ];
@@ -402,6 +403,20 @@ class Product extends Model
     public function naKazaKora(): bool
     {
         return $this->is_active && ! $this->so_ferrakora;
+    }
+
+    /**
+     * Texto do botão principal de compra da página (pedido 2026-11-24): o do
+     * produto, senão o do produto pai (variação sem texto próprio). Nulo =
+     * a página usa "Comprar agora".
+     */
+    public function textoBotaoCompra(): ?string
+    {
+        if (filled($this->cta_compra)) {
+            return $this->cta_compra;
+        }
+
+        return $this->parent_product_id ? $this->parent()->value('cta_compra') ?: null : null;
     }
 
     /**

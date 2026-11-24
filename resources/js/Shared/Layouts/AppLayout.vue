@@ -185,8 +185,13 @@ onUnmounted(() => {
                 <span v-for="n in 6" :key="n" class="contents">
                     <!-- Só "Frete grátis | Compra 100% segura" (pedido do Lira 2026-11-24): sem os
                          termos internos de logística (Full/Flex) na vista do cliente. -->
+                    <!-- Black Friday automática (pedido do Lira 2026-11-24): durante a BF a faixa troca;
+                         passou a data (loja.blackfriday_ate) o servidor manda null e volta a de sempre. -->
+                    <span v-if="$page.props.blackfriday" class="font-store-mono px-5 text-[0.68rem] font-bold uppercase tracking-wider after:ml-5 after:content-['|']" data-faixa-blackfriday><i class="fa-solid fa-tag mr-1"></i>Black Friday: {{ $page.props.blackfriday.rotulo }} em todo o site, já aplicado no carrinho</span>
+                    <template v-else>
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-truck-fast mr-1"></i>Frete grátis</span>
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-lock mr-1"></i>Compra 100% segura</span>
+                    </template>
                 </span>
             </div>
         </div>

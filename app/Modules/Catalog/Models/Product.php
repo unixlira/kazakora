@@ -58,7 +58,7 @@ class Product extends Model
         'brinde_fisico',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine', 'preco_cupom'];
 
     /** Só serve para calcular o preco_vitrine; não vai no JSON. */
     protected $hidden = ['variacoesAtivas'];
@@ -164,6 +164,25 @@ class Product extends Model
     public function getPrecoPixAttribute(): ?float
     {
         return \App\Support\DescontoPix::precoPix($this);
+    }
+
+    /**
+     * Black Friday automática (2026-11-24): 1 unidade com o cupom, a conta do
+     * checkout pronta para o card e a página ({de, por, pix, code, ...}).
+     * Null fora da BF e fora da loja KazaKora.
+     */
+    public function getPrecoCupomAttribute(): ?array
+    {
+        return $this->id ? \App\Modules\Checkout\Support\BlackFriday::precos($this, 1, false) : null;
+    }
+
+    /**
+     * Página do produto (com append): o preço com o cupom para cada quantidade
+     * até o maior kit, com o desconto do kit e o da caixa única do checkout.
+     */
+    public function getPrecosCupomAttribute(): ?array
+    {
+        return $this->id ? \App\Modules\Checkout\Support\BlackFriday::porQuantidade($this) : null;
     }
 
     /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
@@ -327,6 +346,7 @@ class Product extends Model
             'preco_sem_oferta' => $maisBarata->preco_sem_oferta,
             'oferta_do_dia' => $maisBarata->oferta_do_dia,
             'oferta_relampago' => $maisBarata->oferta_relampago,
+            'preco_cupom' => $maisBarata->preco_cupom,
             'a_partir_de' => $precos->min() < $precos->max(),
         ];
     }

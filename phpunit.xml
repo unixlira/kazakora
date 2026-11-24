@@ -21,6 +21,8 @@
         <env name="APP_ENV" value="testing"/>
         <env name="OFERTAS_FIXAS" value=""/>
         <env name="LOJA_CUPOM_AUTOMATICO" value=""/>
+        <!-- Black Friday automática (2026-11-24): desligada nos testes antigos; BlackFridayAutomaticaTest liga. -->
+        <env name="LOJA_BLACKFRIDAY_ATE" value=""/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

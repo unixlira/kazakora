@@ -4,6 +4,7 @@ namespace App\Modules\Catalog\Support;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Coupon;
+use App\Modules\Checkout\Support\BlackFriday;
 use App\Support\DescontoPix;
 
 /**
@@ -72,6 +73,17 @@ class OfertaBlackFriday
     {
         $cupom = self::cupom($produto, $outroSite);
 
+        // Black Friday automática (2026-11-24): o cupom já entra sozinho no pedido da KazaKora.
+        if ($cupom && ! $outroSite && BlackFriday::cupom()?->code === $cupom->code) {
+            return [
+                'tipo' => 'cupom',
+                'selo' => self::SELO,
+                'titulo' => $cupom->descricaoDesconto().' extra',
+                'texto' => 'Cupom '.$cupom->code.' já aplicado no seu pedido. Válido até '.BlackFriday::ateTexto().'.',
+                'ate' => BlackFriday::ate()?->format('Y-m-d'),
+            ];
+        }
+
         if ($cupom) {
             $ate = $cupom->expires_at;
 
@@ -117,6 +129,10 @@ class OfertaBlackFriday
         $cupom = $codigo !== '' ? Coupon::buscar($codigo) : null;
 
         if (! $cupom || ($outroSite && $cupom->so_kazakora) || $cupom->user_id || $cupom->min_order_value) {
+            return null;
+        }
+        // Passou a data da Black Friday automática (loja.blackfriday_ate): o card some junto.
+        if (BlackFriday::encerrada()) {
             return null;
         }
         // Subtotal alto de propósito: o pedido mínimo já foi barrado acima; aqui valem ativo, prazo e limite de usos.

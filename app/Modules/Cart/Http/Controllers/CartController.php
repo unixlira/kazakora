@@ -12,6 +12,9 @@ use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Support\SiteAtual;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Http\Controllers\CheckoutController;
+use App\Modules\Checkout\Models\Coupon;
+use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Jobs\EnviarEventoMetaJob;
 use App\Services\Meta\ConversoesMeta;
 use Illuminate\Http\RedirectResponse;
@@ -26,16 +29,40 @@ class CartController extends Controller
     {
     }
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         // Abriu o carrinho no meio de uma compra direta ("Alterar itens do
         // carrinho"): o item dela vai para o carrinho normal, não some.
         $this->cart->levarCompraDiretaParaCarrinho();
 
+        $items = $this->cart->items();
+        // Black Friday automática (2026-11-24): carrinho recuperado ou aberto já leva o BLACKFRIDAY.
+        BlackFriday::aplicarNoRascunho($request->session(), $items, $request->user());
+
         return Inertia::render('Cart/Index', [
-            'items' => $this->cart->items(),
+            'items' => $items,
             'total' => $this->cart->total(),
+            'cupomBlackFriday' => $this->cupomBlackFriday($request, $items),
         ]);
+    }
+
+    /**
+     * Linha "Cupom BLACKFRIDAY -R$ X" do carrinho, com a conta do checkout
+     * (base sem Oferta do Dia/Relâmpago). Null quando o cupom do rascunho não
+     * é o da Black Friday automática.
+     *
+     * @return array{code: string, valor: float}|null
+     */
+    private function cupomBlackFriday(Request $request, $items): ?array
+    {
+        $cupom = BlackFriday::cupom();
+        $codigo = Coupon::normalizar($request->session()->get(CheckoutController::SESSION_KEY.'.coupon_code') ?? '');
+        if (! $cupom || $codigo !== $cupom->code) {
+            return null;
+        }
+        $valor = $cupom->discountFor(Coupon::baseDosItens($items, $cupom));
+
+        return $valor > 0 ? ['code' => $cupom->code, 'valor' => $valor] : null;
     }
 
     public function store(Request $request): RedirectResponse
@@ -53,6 +80,8 @@ class CartController extends Controller
 
         $quantidade = min($data['quantity'], $product->stock);
         $this->cart->add($product->id, $quantidade);
+        // Black Friday automática (2026-11-24): o BLACKFRIDAY entra junto com o produto.
+        BlackFriday::aplicarNoRascunho($request->session(), $this->cart->items(), $request->user());
         $this->addToCartNaMeta($request, $product, $quantidade);
         $this->registrarNoFunil($request, $product->id);
 

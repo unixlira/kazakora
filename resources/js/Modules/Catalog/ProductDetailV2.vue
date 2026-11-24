@@ -123,10 +123,18 @@ const mediaItems = computed(() => {
 // Variação escolhida (pedido 2026-10-15): trocar de modelo é na própria
 // página, sem recarregar e sem mudar a URL. Preço, estoque, SKU e a compra
 // seguem a escolhida; cada uma mantém o próprio SKU.
-// Com variações, a página abre sem nenhuma escolhida (pedido 2026-10-15): o
-// cliente precisa escolher antes de mudar a quantidade ou comprar. Até lá,
-// preço e ficha mostram o produto da página.
-const escolhida = ref(props.variations.length ? null : props.product);
+// Desde 2026-11-24 (pedido do Lira) a página já abre com uma variação escolhida e
+// o COMPRAR AGORA sempre verde: a da URL quando o link aponta para uma variação
+// (anúncio de um SKU) com estoque; senão a primeira com estoque, na ordem em que
+// aparecem os botões ("1 unidade" antes de "Kit 2 unidades"). Tudo esgotado: nenhuma.
+const variacaoInicial = (produto, variacoes) => {
+    if (!variacoes.length) return produto;
+    if (produto.parent_product_id && produto.stock > 0) return produto;
+    return [produto, ...variacoes]
+        .sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
+        .find((variant) => variant.stock > 0) ?? null;
+};
+const escolhida = ref(variacaoInicial(props.product, props.variations));
 const selecionada = computed(() => escolhida.value ?? props.product);
 const faltaVariacao = computed(() => props.variations.length > 0 && !escolhida.value);
 const alertaVariacao = ref(0); // conta os avisos: cada clique sem variação treme o alerta de novo
@@ -262,7 +270,7 @@ watch(() => [props.product, props.variations], ([novo], [antigo]) => {
         if (escolhida.value) escolhida.value = [novo, ...props.variations].find((item) => item.id === escolhida.value.id) ?? novo;
         return;
     }
-    escolhida.value = props.variations.length ? null : props.product;
+    escolhida.value = variacaoInicial(novo, props.variations);
     alertaVariacao.value = 0;
     activeIndex.value = 0;
     isLightboxOpen.value = false;

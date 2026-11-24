@@ -1037,9 +1037,10 @@ const fotoDoItem = (item) => {
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
 };
 const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item.quantity, 0));
-// Contador do resumo (pedido do Lira 2026-10-24): o combo de livros digitais
-// conta como um item a mais. O aviso de "itens na mesma caixa" segue só com os físicos.
-const totalProdutosResumo = computed(() => totalItens.value + (props.livrosBrinde ? 1 : 0));
+// Contador do resumo: só os itens pagos (pedido do Lira 2026-11-24; antes, desde 2026-10-24,
+// o brinde digital contava como um a mais e 1 travesseiro virava "Produtos (2)"). O brinde
+// continua listado como GRÁTIS, fora da contagem.
+const totalProdutosResumo = computed(() => totalItens.value);
 const precoUnitario = (item) => (item.quantity > 0 ? item.subtotal / item.quantity : item.subtotal);
 // Selo do item só com oferta de verdade: Oferta Relâmpago
 // (fim vindo do servidor) ou Oferta do Dia (vale até 23:59:59 de hoje em SP).

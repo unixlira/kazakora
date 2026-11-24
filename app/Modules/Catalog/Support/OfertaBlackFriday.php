@@ -91,8 +91,8 @@ class OfertaBlackFriday
                 'tipo' => 'cupom',
                 'selo' => self::SELO,
                 'titulo' => $cupom->descricaoDesconto().' extra',
-                'texto' => 'No checkout, toque em Aplicar na faixa da Black Friday e o desconto entra na hora.'
-                    .($ate ? ' Vale até '.$ate->format('d/m').'.' : ''),
+                'texto' => 'Cupom '.$cupom->code.' já aplicado no seu pedido.'
+                    .($ate ? ' Válido até '.$ate->format('d/m').'.' : ''),
                 'ate' => $ate?->format('Y-m-d'),
             ];
         }

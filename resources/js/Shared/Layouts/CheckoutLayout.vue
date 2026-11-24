@@ -1,8 +1,9 @@
 <script setup>
 // Layout do checkout no modelo Yampi (pedido 2026-10-23, referência
 // seguro.mavoloja.com.br). Desde 2026-10-24 o topo segue o print da Mavo:
-// uma faixa escura só, com a logo, o CNPJ e o endereço (sem nome nem razão
-// social, ajuste de 2026-10-24). A barra roxa "Oferta termina em" (relógio de
+// uma faixa só, com a logo, o CNPJ e o endereço. Em 2026-11-23 (pedido do
+// Lira) o topo ficou branco com o logo de letra preta e a razão social voltou
+// ao lado do CNPJ, no topo e no rodapé. A barra roxa "Oferta termina em" (relógio de
 // 30 minutos que recomeçava para cada visitante) saiu em 2026-11-10, pedido do
 // Lira: não era uma oferta de verdade e passava cara de truque (urgência
 // enganosa, art. 37 do CDC).
@@ -30,11 +31,18 @@ const ano = new Date().getFullYear();
             <i class="fa-solid fa-flask mr-1"></i>Modo teste do Mercado Pago: nenhum valor é cobrado
         </div>
 
-        <header class="bg-[#141414] px-4 py-3 text-center text-white">
-            <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
-            <!-- Só logo, CNPJ e endereço (os mesmos dos Termos de Uso). -->
-            <p class="mt-2 text-[11px] font-semibold leading-snug sm:text-[13px]">CNPJ: {{ COMPANY.cnpj }}</p>
-            <p class="text-[11px] leading-snug text-white/75 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
+        <!-- Topo branco com o logo de letra preta (pedido do Lira 2026-11-23): o mesmo logo do
+             menu da loja (logoNav, feito para fundo branco), sem filtro, então o ícone laranja
+             não muda. Textos em cinza-escuro para o contraste sobre o branco. -->
+        <header class="border-b border-slate-200 bg-white px-4 py-3 text-center text-slate-900" data-topo-checkout>
+            <img :src="$page.props.marca?.logoNav || '/images/marca/logo-nav.webp'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
+            <!-- Logo, razão social com CNPJ (a mesma fonte do rodapé da loja, COMPANY, 2026-11-23) e endereço. -->
+            <p class="mt-2 text-[11px] font-semibold leading-snug text-slate-800 sm:text-[13px]" data-razao-cnpj>
+                <i class="fa-solid fa-lock mr-1 text-[#00843f]" aria-hidden="true"></i>
+                <span>{{ COMPANY.razaoSocial }}</span> ·
+                <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span>
+            </p>
+            <p class="text-[11px] leading-snug text-slate-600 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
         <div class="checkout-oferta h-[3px]" aria-hidden="true"></div>
 
@@ -66,7 +74,7 @@ const ano = new Date().getFullYear();
                 <div class="mt-6 space-y-1 text-xs text-slate-600">
                     <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
                     <p>{{ COMPANY.enderecoCompleto }}</p>
-                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
+                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · {{ COMPANY.razaoSocial }} · CNPJ: {{ COMPANY.cnpj }}</p>
                     <p>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
                 </div>
             </div>

@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 
 /**
  * Pedido de avaliação depois da entrega (pedido do Lira 2026-11-23), de hora
- * em hora das 9h às 20h: pedido do site (KazaKora e FerraKora) entregue há 5
+ * em hora das 9h às 21h (Lira 23/11): pedido do site (KazaKora e FerraKora) entregue há 5
  * dias ou mais, sem cancelamento, devolução ou "não recebi", recebe uma vez o
  * link assinado para avaliar os produtos, por e-mail e, com modelo aprovado no
  * .env, por WhatsApp. Desligado fora do kazakora.com (PEDIDO_AVALIACAO_ATIVO).

@@ -31,7 +31,7 @@ Schedule::command('loja:carrinho-abandonado-sequencia')->everyTenMinutes()->with
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Pedido de avaliação 5 dias depois da entrega (pedido do Lira 2026-11-23):
 // e-mail + WhatsApp (com modelo aprovado), uma vez por pedido. Conferir com --simular.
-Schedule::command('loja:pedir-avaliacao')->hourly()->between('9:00', '20:00')->timezone('America/Sao_Paulo')->withoutOverlapping(55);
+Schedule::command('loja:pedir-avaliacao')->hourly()->between('9:00', '21:00')->timezone('America/Sao_Paulo')->withoutOverlapping(55);
 // Pré-postagens dos Correios (2026-11-16, AP623701379BR expirou sem ninguém
 // ver): grava postada/entregue/expirada de cada etiqueta gerada nos últimos
 // 60 dias, até 150 consultas por rodada (AcompanharPrePostagensCorreios).

@@ -44,6 +44,18 @@ class RelatoriosTikTok
         $existente = DB::table('tiktok_report_uploads')->where('sha256', $sha)->first();
 
         if ($existente) {
+            // 21/11/2026: o agente baixava o relatório do mês anterior (pronto
+            // há segundos no painel) no lugar do mês atual; a API respondia
+            // "igual ao último" e o demonstrativo de novembro parou sem ninguém
+            // saber. Mesmo conteúdo com outro mês no nome é arquivo errado.
+            $mesNovo = $this->mesDoPeriodo($nome);
+            $mesGuardado = $this->mesDoPeriodo($existente->nome_original);
+            if ($mesNovo !== null && $mesGuardado !== null && $mesNovo !== $mesGuardado) {
+                throw new RuntimeException("{$nome} chegou com o mesmo conteúdo de {$existente->nome_original} (outro mês): o agente baixou o relatório errado.");
+            }
+
+            DB::table('tiktok_report_uploads')->where('id', $existente->id)->update(['ultimo_envio_em' => now()]);
+
             return ['id' => $existente->id, 'nome' => $existente->nome_original, 'sha256' => $sha, 'duplicado' => true];
         }
 
@@ -53,7 +65,7 @@ class RelatoriosTikTok
         $id = DB::table('tiktok_report_uploads')->insertGetId([
             'nome_original' => $nome, 'caminho' => $caminho, 'sha256' => $sha, 'tamanho' => strlen($conteudo),
             'mime' => $mime ? Str::limit($mime, 120, '') : null, 'tipo' => $this->tipo($nome), 'ip' => $ip,
-            'status' => 'recebido', 'created_at' => now(), 'updated_at' => now(),
+            'status' => 'recebido', 'ultimo_envio_em' => now(), 'created_at' => now(), 'updated_at' => now(),
         ]);
 
         return ['id' => $id, 'nome' => $nome, 'sha256' => $sha, 'duplicado' => false] + $this->processar($id);
@@ -130,6 +142,15 @@ class RelatoriosTikTok
         $falhas = $sucesso ? (int) Cache::get($chave('falhas'), 0) : (int) Cache::increment($chave('falhas'));
 
         return ['falhas' => $falhas, 'total' => $total];
+    }
+
+    /**
+     * Mês de início do período no nome que o agente dá ao demonstrativo
+     * (tiktok_demonstrativo_01-11-2026-24-11-2026.xlsx -> "2026-11").
+     */
+    public function mesDoPeriodo(string $nome): ?string
+    {
+        return preg_match('/(\d{2})-(\d{2})-(\d{4})-\d{2}-\d{2}-\d{4}/', $nome, $m) ? "{$m[3]}-{$m[2]}" : null;
     }
 
     public function tipo(string $nome): ?string

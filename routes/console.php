@@ -394,6 +394,12 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
 Schedule::command('financeiro:vigiar-coletas')->hourlyAt(43)->withoutOverlapping(10);
 
+// Coleta parada (demonstrativo TikTok, pedidos TikTok/Shopee/ML, taxas da
+// Amazon): e-mail para ALERTA_COLETA_EMAIL quando cai e quando volta
+// (24/11/2026; o aviso pelo WhatsApp estava desligado e o demonstrativo
+// ficou 3 dias parado sem ninguém saber).
+Schedule::command('loja:vigiar-coletas')->hourlyAt(47)->withoutOverlapping(10);
+
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.
 Schedule::command('beautykora:conciliar-pagamentos')->everyFiveMinutes()->withoutOverlapping(10);

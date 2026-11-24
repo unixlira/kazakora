@@ -62,6 +62,11 @@ class Order extends Model
     {
         static::saving(function (Order $order) {
             $order->projeto_origem = self::projetoDoSite($order->site_origem);
+
+            // Data da entrega (2026-11-23): base do pedido de avaliação, 5 dias depois (loja:pedir-avaliacao).
+            if ($order->status === self::STATUS_COMPLETED && $order->entregue_em === null && $order->isDirty('status')) {
+                $order->entregue_em = now();
+            }
         });
     }
 
@@ -393,6 +398,8 @@ class Order extends Model
             'whatsapp_entregue_em' => 'datetime',
             'whatsapp_retirada_em' => 'datetime',
             'whatsapp_nao_recebi_em' => 'datetime',
+            'entregue_em' => 'datetime',
+            'pedido_avaliacao_enviado_em' => 'datetime',
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',

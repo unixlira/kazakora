@@ -458,6 +458,9 @@ return [
                     'carrinho_lembrete_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
                     'carrinho_novidade' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE'),
                     'carrinho_novidade_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
+                    // Pedido de avaliação pós-entrega (2026-11-23), ver o bloco da KazaKora abaixo.
+                    'pedido_avaliacao' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_AVALIACAO'),
+                    'pedido_avaliacao_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_PEDIDO_AVALIACAO_IDIOMA', 'pt_BR'),
                 ],
             ],
         ],
@@ -510,6 +513,11 @@ return [
             'carrinho_lembrete_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
             'carrinho_novidade' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE'),
             'carrinho_novidade_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
+            // Pedido de avaliação 5 dias depois da entrega (loja:pedir-avaliacao,
+            // 2026-11-23). Vazio = só o e-mail. Corpo {{1}} primeiro nome,
+            // {{2}} produto; botão URL dinâmico https://kazakora.com/avaliar-pedido/{{1}}.
+            'pedido_avaliacao' => env('WHATSAPP_TEMPLATE_PEDIDO_AVALIACAO'),
+            'pedido_avaliacao_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_AVALIACAO_IDIOMA', 'pt_BR'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

@@ -172,6 +172,22 @@ return [
     'carrinho_sequencia_ativa' => (bool) env('CARRINHO_SEQUENCIA_ATIVA', in_array(parse_url((string) env('APP_URL'), PHP_URL_HOST), ['kazakora.com', 'www.kazakora.com'], true)),
 
     /*
+    | Pedido de avaliação depois da entrega (pedido do Lira 23/11/2026, comando
+    | loja:pedir-avaliacao, de hora em hora das 9h às 20h): pedido do site
+    | (KazaKora e FerraKora) entregue há `dias` ou mais (e no máximo há
+    | `max_dias`) recebe por e-mail, e por WhatsApp se houver modelo aprovado,
+    | o link assinado para avaliar cada produto. O link vale `validade_dias`.
+    | Ligado só no kazakora.com, como a sequência do carrinho.
+    */
+    'pedido_avaliacao' => [
+        'ativo' => (bool) env('PEDIDO_AVALIACAO_ATIVO', in_array(parse_url((string) env('APP_URL'), PHP_URL_HOST), ['kazakora.com', 'www.kazakora.com'], true)),
+        'dias' => (int) env('PEDIDO_AVALIACAO_DIAS', 5),
+        'max_dias' => (int) env('PEDIDO_AVALIACAO_MAX_DIAS', 60),
+        'validade_dias' => 30,
+        'limite' => (int) env('PEDIDO_AVALIACAO_LIMITE', 50),
+    ],
+
+    /*
     | Promoções na sequência de carrinho (pedido do Lira 22/11/2026). Exceção à
     | regra "sem desconto" da sequência: enquanto vale, o texto abaixo entra no
     | lugar da novidade do Gemini nos disparos 2 a 6 (D+3, D+5, D+7...) do

@@ -30,7 +30,7 @@ const props = defineProps({
     // Livros de brinde dos produtos do carrinho: { imagem, quantidade, titulos } ou null.
     livrosBrinde: { type: Object, default: null },
     subtotal: { type: Number, default: 0 },
-    // UF da região em que o cliente navegou (CEP ou IP); base do aviso de entrega em outra região.
+    // UF da região em que o cliente navegou (CEP ou IP). O aviso de outra região agora sai pela diferença de frete (2026-11-24).
     ufReferencia: { type: String, default: null },
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
@@ -169,9 +169,9 @@ const fecharAlertaWhatsapp = (numero) => {
 const enderecoSelecionado = computed(() => props.addresses.find((address) => address.id === addressId.value) ?? null);
 const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (enderecoSelecionado.value?.zip ?? '')));
 
-// Aviso (pedido 2026-10-25): entrega em outro estado que não o da região do cliente.
-const ufEntrega = computed(() => (usarNovoEndereco.value ? endereco.state : (enderecoSelecionado.value?.state ?? '')).toUpperCase().trim());
-const entregaOutraRegiao = computed(() => !!props.ufReferencia && ufEntrega.value.length === 2 && ufEntrega.value !== props.ufReferencia.toUpperCase());
+// Aviso de outra região (pedido do Lira 2026-11-24): só quando o frete do CEP
+// passa do que já está no preço (diferencaFrete, conta do servidor). Antes o
+// aviso saía só por trocar de estado, mesmo sem nada a pagar a mais.
 
 // ---------- 3. Entrega ----------
 // Frete grátis com o frete embutido (pedido 2026-10-12): o preço dos produtos
@@ -203,6 +203,9 @@ const subtotalAtual = ref(Number(props.subtotal) || 0);
 // Vários itens numa caixa só (2026-10-12): o frete real sai menor que o
 // somado no preço de cada item; a diferença entra como "Desconto da plataforma".
 const descontoPlataforma = ref(0);
+// Frete do CEP acima do embutido no preço (pedido do Lira 2026-11-24): o preço
+// dos produtos não muda; a diferença entra como linha "Frete" e no total.
+const diferencaFrete = ref(0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
@@ -234,6 +237,7 @@ const atualizarFrete = async (zip) => {
         const data = await response.json();
         entregas.value = Array.isArray(data.entregas) ? data.entregas : [];
         descontoPlataforma.value = Number(data.desconto_plataforma) || 0;
+        diferencaFrete.value = round2(Number(data.diferenca_frete) || 0);
         medicao.registrar('cep_respondido', {}, 'cep_respondido');
         if (!expressa.value) expressaEscolhida.value = false;
         itens.value = data.items ?? itens.value;
@@ -246,6 +250,7 @@ const atualizarFrete = async (zip) => {
     } catch {
         entregas.value = [];
         descontoPlataforma.value = 0;
+        diferencaFrete.value = 0;
     } finally {
         freteCarregando.value = false;
     }
@@ -285,7 +290,9 @@ const alterarQuantidade = async (item, delta) => {
 };
 
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
-const valorFrete = computed(() => (expressaEscolhida.value && expressa.value ? Number(expressa.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
+const valorFrete = computed(() => (expressaEscolhida.value && expressa.value
+    ? Number(expressa.value.preco)
+    : round2(Number(entregaEscolhida.value?.price ?? 0) + diferencaFrete.value)));
 
 // ---------- Cupom (pedido 2026-10-10) ----------
 // Aplica por JSON: busca o cupom na base, confere as regras e o desconto
@@ -1378,9 +1385,9 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
                                 </div>
 
-                                <div v-if="entregaOutraRegiao" role="alert" data-testid="aviso-frete-outra-regiao" class="mb-3 flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <div v-if="diferencaFrete > 0 && !freteCarregando" role="alert" data-testid="aviso-frete-outra-regiao" class="mb-3 flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                                     <i class="fa-solid fa-triangle-exclamation mt-0.5 text-lg text-amber-600"></i>
-                                    <span>A disponibilidade do frete grátis atende somente a sua região. Tem certeza que você vai enviar para outra? Nesse caso, você terá que pagar uma taxa.</span>
+                                    <span>O frete grátis cobre a região em que você navegou. Para este CEP há <strong>{{ formatPrice(diferencaFrete) }}</strong> de diferença no frete, já somada no total.</span>
                                 </div>
 
                                 <!-- Grátis (já no preço) ou Entrega Expressa (2026-10-12; nomes de 2026-11-24): uma exclui a outra; a tela nasce no grátis. -->
@@ -1391,7 +1398,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                         <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> {{ opcaoGratis?.nome ?? 'Frete Grátis' }}</strong>
                                         <span v-if="opcaoGratis?.chega" class="ml-1 text-slate-500">· {{ opcaoGratis.chega }}</span>
                                     </span>
-                                    <span class="text-sm font-bold text-emerald-700">Grátis</span>
+                                    <span class="text-sm font-bold" :class="diferencaFrete > 0 ? 'text-slate-900' : 'text-emerald-700'">{{ diferencaFrete > 0 ? `+ ${formatPrice(diferencaFrete)}` : 'Grátis' }}</span>
                                 </label>
 
                                 <!-- Entrega Expressa (o antigo Envio Prioritário): motoboy na Grande SP pelo preço fixo ou SEDEX pagando só a diferença. Escolhida = laranja do tema. -->
@@ -1427,7 +1434,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <p v-if="enderecoResumo" class="lg:truncate" :title="enderecoResumo.cidade">{{ enderecoResumo.cidade }}</p>
                                     <p class="mt-1 font-semibold text-slate-700 lg:mt-0">
                                         <template v-if="expressaEscolhida && expressa">{{ expressa.nome }}: {{ precoExpressa }} · {{ expressa.chega }}</template>
-                                        <template v-else>Frete GRÁTIS<template v-if="opcaoGratis"> · {{ opcaoGratis.nome }} · {{ opcaoGratis.chega }}</template></template>
+                                        <template v-else>{{ diferencaFrete > 0 ? `Frete ${formatPrice(diferencaFrete)}` : 'Frete GRÁTIS' }}<template v-if="opcaoGratis"> · {{ opcaoGratis.nome }} · {{ opcaoGratis.chega }}</template></template>
                                     </p>
                                 </div>
                             </div>
@@ -1573,7 +1580,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                             <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                             <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                            <div class="flex justify-between"><dt>Entrega<span v-if="expressaEscolhida && expressa" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Expressa</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}</dd></div>
+                            <div class="flex justify-between" data-testid="linha-frete"><dt>{{ valorFrete > 0 ? 'Frete' : 'Entrega' }}<span v-if="expressaEscolhida && expressa" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Expressa</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}</dd></div>
                             <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
                                 <dt class="text-base font-extrabold">Total</dt>
                                 <dd class="text-right">

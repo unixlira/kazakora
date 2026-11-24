@@ -63,6 +63,9 @@ class FreteEmbutido
 
     private ?string $cepForcado = null;
 
+    /** paraProdutoNoDestino(): frete do CEP atual, sem o preço fixo da navegação. */
+    private bool $ignorarFixo = false;
+
     /** @var array<string, ?array> tabela por CEP, nesta requisição */
     private array $tabelas = [];
 
@@ -191,7 +194,93 @@ class FreteEmbutido
     {
         $frete = $this->freteDoProduto($product);
 
-        return $this->semFreteEmbutido($product) ? [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0] : $this->comPiso($product, $this->comTeto($product, $this->fixoNaNavegacao($product, $frete)));
+        if ($this->semFreteEmbutido($product)) {
+            return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => 0.0];
+        }
+
+        $fixo = $this->fixoNaNavegacao($product, $frete);
+        if (empty($fixo['fixo'])) {
+            $final = $this->comPiso($product, $this->comTeto($product, $frete));
+            $this->lembrarVisto($product, $final['embutido']);
+
+            return $final;
+        }
+
+        // Preço que o cliente viu (pedido do Lira 2026-11-24): com o CEP de outra
+        // região o frete no preço fica o da 1ª tela, já com teto e piso, nunca
+        // recalculado pelo frete do CEP novo. O que faltar vira a linha "Frete"
+        // do checkout (diferenca em entregaDoCarrinho()).
+        $visto = $this->request->session()->get('frete_embutido.visto.'.$product->id);
+        if ($visto !== null) {
+            return [...$fixo, 'embutido' => (float) $visto];
+        }
+
+        // Sessão de antes do "visto": teto e piso pela conta da região da 1ª tela.
+        $conta = $this->comPiso($product, $this->comTeto($product, [...$fixo, 'correios' => $fixo['embutido']]));
+
+        return [...$conta, 'correios' => $fixo['correios'], 'fixo' => true];
+    }
+
+    /**
+     * Frete de 1 unidade como se o cliente tivesse navegado do destino atual
+     * (mesmas regras, teto e piso), sem o preço fixo da navegação: é o frete
+     * que o CEP de entrega pede (base da diferença cobrada no checkout).
+     */
+    public function paraProdutoNoDestino(Product $product): array
+    {
+        $antes = $this->ignorarFixo;
+        $this->ignorarFixo = true;
+        try {
+            return $this->paraProduto($product);
+        } finally {
+            $this->ignorarFixo = $antes;
+        }
+    }
+
+    /**
+     * Frete do carrinho no CEP de entrega (pedido do Lira 2026-11-24), conta
+     * única da cotação do checkout e do fechamento do pedido:
+     * - embutido_fixo: frete que o cliente já paga no preço dos itens (o da
+     *   região em que navegou, menos o desconto da caixa única);
+     * - pac_real: frete que o CEP de entrega pede pelo mesmo carrinho;
+     * - diferenca: o que passa do embutido (0 = frete grátis, sem aviso).
+     *
+     * @return array{embutido_fixo: float, pac_real: float, diferenca: float}
+     */
+    public function diferencaDoCarrinho(Collection $itens): array
+    {
+        if (! $this->ligado || $itens->isEmpty()) {
+            return ['embutido_fixo' => 0.0, 'pac_real' => 0.0, 'diferenca' => 0.0];
+        }
+
+        $entrega = $this->entregaDoCarrinho($itens);
+
+        return [
+            'embutido_fixo' => (float) ($entrega['embutido'] ?? 0),
+            'pac_real' => (float) ($entrega['pac_real'] ?? $entrega['embutido'] ?? 0),
+            'diferenca' => (float) ($entrega['diferenca'] ?? 0),
+        ];
+    }
+
+    /**
+     * Entrega Expressa por SEDEX (o antigo TURBO) com o preço fixo da
+     * navegação: cobra o SEDEX menos o frete que já está no preço. O TURBO de
+     * entregaDoCarrinho() é o SEDEX menos o frete do destino; somando a
+     * diferença (destino − embutido, negativa quando o embutido passa) fica
+     * SEDEX − embutido. Sem preço fixo, o mesmo TURBO de sempre.
+     *
+     * @param  array{embutido?: float, pac_real?: float, turbo: ?array}  $entrega  entregaDoCarrinho()
+     */
+    public static function expressaPeloEmbutido(array $entrega, ?array $turbo = null): ?array
+    {
+        $turbo ??= $entrega['turbo'] ?? null;
+        if (! $turbo) {
+            return null;
+        }
+
+        $ajuste = (float) ($entrega['pac_real'] ?? $entrega['embutido'] ?? 0) - (float) ($entrega['embutido'] ?? 0);
+
+        return [...$turbo, 'preco' => round(max(0.0, (float) $turbo['preco'] + $ajuste), 2)];
     }
 
     /**
@@ -349,8 +438,7 @@ class FreteEmbutido
      */
     private function fixoNaNavegacao(Product $product, array $frete): array
     {
-        if (! $this->ligado || ! config('frete_embutido.fixo_na_navegacao', true)
-            || $this->site() !== SiteAtual::KAZAKORA || ! $this->request->hasSession()) {
+        if (! $this->guardaPrecoFixo()) {
             return $frete;
         }
 
@@ -367,6 +455,20 @@ class FreteEmbutido
         }
 
         return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => (float) $fixo, 'fixo' => true];
+    }
+
+    private function guardaPrecoFixo(): bool
+    {
+        return $this->ligado && ! $this->ignorarFixo && config('frete_embutido.fixo_na_navegacao', true)
+            && $this->site() === SiteAtual::KAZAKORA && $this->request->hasSession();
+    }
+
+    /** Frete no preço que o cliente está vendo na região dele (com teto e piso). */
+    private function lembrarVisto(Product $product, float $embutido): void
+    {
+        if ($this->guardaPrecoFixo()) {
+            $this->request->session()->put('frete_embutido.visto.'.$product->id, round($embutido, 2));
+        }
     }
 
     /**
@@ -569,12 +671,17 @@ class FreteEmbutido
      * @param  Collection<int, array{product: Product, quantity: int}>  $itens
      * - embutido: frete que o cliente já paga no preço dos itens (base do
      *   excedente da Entrega Expressa por motoboy, pedido 2026-11-24).
+     * - pac_real e diferenca: frete que o CEP de entrega pede pelos mesmos
+     *   itens e o quanto ele passa do embutido (preço fixo da navegação,
+     *   pedido do Lira 2026-11-24; ver diferencaDoCarrinho()).
      *
-     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int, embutido?: float}
+     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int, embutido?: float, pac_real: float, diferenca: float}
      */
     public function entregaDoCarrinho(Collection $itens): array
     {
         $embutido = 0.0;
+        // Frete que o CEP de entrega pede pelos mesmos itens (sem o preço fixo da navegação).
+        $noDestino = 0.0;
         $extraItemAItem = 0.0;
         $peso = 0;
         $lado = 0.0;
@@ -587,9 +694,11 @@ class FreteEmbutido
         foreach ($itens as $item) {
             $qtd = (int) $item['quantity'];
             $f = $this->paraProduto($item['product']);
+            $destino = empty($f['fixo']) ? $f : $this->paraProdutoNoDestino($item['product']);
             $fretes[] = [$f, $qtd];
             $estimado = $estimado || $f['estimado'];
             $embutido += $f['embutido'] * $qtd;
+            $noDestino += $destino['embutido'] * $qtd;
             $extraItemAItem += max(0, $f['sedex'] - ($f['correios'] ?? $f['embutido'])) * $qtd;
             $peso += $this->pesoTarifavel($item['product']) * $qtd;
             $lado = max($lado, $this->maiorLado($item['product']));
@@ -597,18 +706,20 @@ class FreteEmbutido
             if (! empty($f['travado'])) {
                 $prazosTravados[] = $f['prazo'];
             }
-            // Frete calculado pelo CEP do visitante: fica travado para ele.
+            // Frete calculado pelo CEP do visitante: fica travado para ele. É o
+            // frete do CEP (sem o preço fixo da navegação): travar o fixo zeraria
+            // a diferença cobrada na próxima cotação.
             if ($cepDigitado) {
-                app(TravaDeFrete::class)->registrar($this->site(), $cepDigitado, (int) $item['product']->id, $f);
+                app(TravaDeFrete::class)->registrar($this->site(), $cepDigitado, (int) $item['product']->id, $destino);
             }
         }
 
         if ($itens->isEmpty()) {
-            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0, 'embutido' => 0.0];
+            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0, 'embutido' => 0.0, 'pac_real' => 0.0, 'diferenca' => 0.0];
         }
 
         if (collect($fretes)->every(fn ($par) => isset($par[0]['tabela']))) {
-            return $this->entregaPelaTabela($fretes, $peso);
+            return self::comDiferenca($this->entregaPelaTabela($fretes, $peso), $noDestino);
         }
 
         // A caixa inteira (peso somado) na tabela do destino.
@@ -617,7 +728,7 @@ class FreteEmbutido
         if (! $caixa) {
             // Sem cotação (ou acima de 30 kg): fica o frete item a item, sem
             // desconto. O TURBO continua aparecendo, pelo valor de segurança.
-            return [
+            return self::comDiferenca([
                 'prazo' => null,
                 'turbo' => self::turboAteOTeto($extraItemAItem > 0 ? ['preco' => round($extraItemAItem, 2), 'prazo' => null, 'dias_a_menos' => null] : null),
                 'estimado' => true,
@@ -626,7 +737,7 @@ class FreteEmbutido
                 'custo' => round($embutido, 2),
                 'peso_g' => $peso,
                 'embutido' => round($embutido, 2),
-            ];
+            ], $noDestino);
         }
 
         $sedexMaisBarato = $caixa['sedex'] <= $caixa['pac'];
@@ -652,7 +763,7 @@ class FreteEmbutido
             ];
         }
 
-        return [
+        return self::comDiferenca([
             'prazo' => $prazo,
             'turbo' => self::turboAteOTeto($turbo),
             'estimado' => false,
@@ -664,7 +775,19 @@ class FreteEmbutido
             'regra' => $regra['nome'] ?? null,
             // Frete que o cliente já paga no preço dos itens (menos o desconto da caixa única).
             'embutido' => round($unidades > 1 ? min($embutido, $doCliente) : $embutido, 2),
-        ];
+        ], $unidades > 1 ? min($noDestino, $doCliente) : $noDestino);
+    }
+
+    /**
+     * pac_real e diferenca da entrega (pedido do Lira 2026-11-24): o frete que
+     * o CEP pede (mesma conta do embutido: item a item × quantidade, caixa
+     * única quando cabe) e o quanto ele passa do frete já no preço.
+     */
+    private static function comDiferenca(array $entrega, float $noDestino): array
+    {
+        $pacReal = round($noDestino, 2);
+
+        return [...$entrega, 'pac_real' => $pacReal, 'diferenca' => round(max(0.0, $pacReal - (float) $entrega['embutido']), 2)];
     }
 
     /**

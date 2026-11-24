@@ -861,6 +861,18 @@ const salvarEntrega = async () => {
 // A frase do aceite fica debaixo do "Ir para Pagamento" (modelo Mavo,
 // 2026-10-24); quem caiu direto no pagamento sem passar por ele a vê no
 // Finalizar pedido.
+// Device ID do Mercado Pago (2026-11-24): o security.js gera window.MP_DEVICE_SESSION_ID, que vai junto
+// do pagamento; sem ele o antifraude recusava cartão bom como "high_risk".
+onMounted(() => {
+    if (typeof window === 'undefined' || window.MP_DEVICE_SESSION_ID || document.getElementById('mp-security-js')) return;
+    const script = document.createElement('script');
+    script.id = 'mp-security-js';
+    script.src = 'https://www.mercadopago.com/v2/security.js';
+    script.setAttribute('view', 'checkout');
+    script.async = true;
+    document.head.appendChild(script);
+});
+
 const aceiteMostrado = ref(false);
 const irParaPagamento = async () => {
     if (freteCarregando.value || salvandoEntrega.value) return;
@@ -916,7 +928,7 @@ const finalizar = async () => {
         return;
     }
 
-    const pagamento = { payment_method: metodo.value, split: false, terms_accepted: true };
+    const pagamento = { payment_method: metodo.value, split: false, terms_accepted: true, mp_device_id: window.MP_DEVICE_SESSION_ID ?? null };
 
     if (metodo.value === 'card') {
         // Motivo específico na tela e na medição (2026-11-24): antes era só
@@ -1577,7 +1589,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->
                                 <p v-if="brickPronto && cartaoBin.length < 6" class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-600"><i class="fa-solid fa-credit-card mr-1"></i>Digite o número do cartão para escolher em quantas parcelas pagar (até 12x).</p>
                                 <!-- Juros pelo cliente (pedido 2026-11-06): o valor de cada parcela e o total com juros aparecem no seletor do Mercado Pago. -->
-                                <p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-900"><i class="fa-solid fa-circle-info mr-1"></i>1x no cartão sai pelo total sem juros. De 2x a 12x os juros do cartão são pagos por você e já aparecem no valor de cada parcela antes de finalizar.</p>
+                                <!-- Aviso laranja dos juros retirado a pedido do Lira (2026-11-24); os juros aparecem no seletor de parcelas do Mercado Pago. -->
                                 <div id="cartao-brick-v2"></div>
                                 <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
                                 <div v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">

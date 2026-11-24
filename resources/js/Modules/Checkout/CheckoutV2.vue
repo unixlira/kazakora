@@ -1077,20 +1077,24 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
              pop-up do BEMVINDO. "Aplicar" põe o código no campo do cupom e aplica. -->
         <div v-if="cupomFaixa && !order" data-faixa-cupom class="bg-[#141414] text-white">
             <div class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5">
+                <!-- Escrito, sem botão (pedido do Lira 2026-11-24: ninguém usava o "Aplicar"). -->
                 <p class="min-w-0 text-[13px] leading-snug sm:text-sm">
                     <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>
-                    {{ cupomFaixa.descricao }} com o cupom
+                    digite o cupom
                     <span class="select-all whitespace-nowrap rounded-md border border-dashed border-white/60 px-1.5 py-px font-mono font-bold tracking-wider">{{ cupomFaixa.code }}</span>
+                    no campo <strong>Cupom de desconto</strong> para ganhar {{ cupomFaixa.descricao }}
                 </p>
                 <span v-if="faixaAplicada" class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#00843f] px-3 py-1.5 text-xs font-bold">
                     <i class="fa-solid fa-circle-check" aria-hidden="true"></i>Aplicado
                 </span>
+                <!-- Botão "Aplicar" da faixa oculto a pedido do Lira em 2026-11-24 (não apagar).
                 <button v-else type="button" data-aplicar-cupom-faixa :disabled="cupomCarregando"
                     class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-slate-900 transition hover:bg-slate-100 disabled:opacity-70"
                     @click="aplicarCupomFaixa">
                     <i :class="cupomCarregando && faixaTentou ? 'fa-solid fa-spinner animate-spin' : 'fa-solid fa-tag'" aria-hidden="true"></i>
                     {{ cupomCarregando && faixaTentou ? 'Aplicando' : 'Aplicar' }}
                 </button>
+                -->
             </div>
             <p v-if="faixaTentou && cupomErro && !faixaAplicada" class="pb-2 text-center text-[11px] text-white/80" aria-live="polite">
                 {{ cupomErro }}

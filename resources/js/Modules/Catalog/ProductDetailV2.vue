@@ -1159,7 +1159,10 @@ const submitReview = () => {
                                         <button v-for="(image, indice) in review.images.slice(0, 3)" :key="image.id" type="button" class="foto-btn"
                                             :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
                                             <img v-if="!ehVideo(image)" :src="image.thumb_url || miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
-                                            <span v-else class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
+                                            <template v-else>
+                                                <img v-if="image.thumb_url" :src="image.thumb_url" alt="" width="60" height="60" loading="lazy" decoding="async">
+                                                <span class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>
+                                            </template>
                                         </button>
                                     </div>
                                     <span class="autor">{{ review.reviewer_display_name }}<template v-if="review.outra_loja"> · comprou o mesmo modelo em outro marketplace</template></span>
@@ -1286,7 +1289,8 @@ const submitReview = () => {
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`${ehVideo(image) ? 'Assistir vídeo' : 'Ver foto'} ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <span v-if="ehVideo(image) && ehCelular" class="video-sem-capa"></span>
+                                    <img v-if="ehVideo(image) && image.thumb_url" :src="image.thumb_url" alt="" width="60" height="60" loading="lazy" decoding="async">
+                                    <span v-else-if="ehVideo(image) && ehCelular" class="video-sem-capa"></span>
                                     <video v-else-if="ehVideo(image)" v-video-preguicoso :src="image.image_url + '#t=0.1'" muted playsinline preload="none"></video>
                                     <img v-else :src="image.thumb_url || miniaturaAvaliacao(image.image_url)" alt="" width="60" height="60" loading="lazy" decoding="async">
                                     <span v-if="ehVideo(image)" class="play-video" aria-hidden="true"><i class="fas fa-play"></i></span>

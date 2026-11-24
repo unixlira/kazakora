@@ -151,6 +151,25 @@ return [
         'email' => env('ALERT_EMAIL'),
     ],
 
+    /*
+     * Vigia das coletas (loja:vigiar-coletas, 24/11/2026): e-mail quando uma
+     * fonte para de chegar e outro quando volta. Ligado só na produção (a
+     * homologação tem dados velhos e mandaria alarme falso).
+     *
+     * Limites em horas. Pedidos: as maiores lacunas normais em 30 dias foram
+     * 17 h (TikTok), 19 h (Shopee) e 22 h (Mercado Livre), madrugada; com
+     * 12 h o e-mail chegaria toda noite.
+     */
+    'alerta_coleta_email' => [
+        'ativo' => (bool) env('ALERTA_COLETA_EMAIL_ATIVO', parse_url((string) env('APP_URL'), PHP_URL_HOST) === 'kazakora.com'),
+        'para' => env('ALERTA_COLETA_EMAIL', 'korashopecom@gmail.com'),
+        'horas' => [
+            'tiktok_demonstrativo' => (int) env('ALERTA_COLETA_HORAS_TIKTOK_DEMONSTRATIVO', 6),
+            'pedidos' => (int) env('ALERTA_COLETA_HORAS_PEDIDOS', 24),
+            'amazon_taxas' => (int) env('ALERTA_COLETA_HORAS_AMAZON_TAXAS', 4),
+        ],
+    ],
+
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
 

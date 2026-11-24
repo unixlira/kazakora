@@ -48,7 +48,7 @@ const enviarTodos = () => {
 // "Parou em" + botão "Ver fluxo" (pedido do Lira 2026-11-23): a janela carrega o passo a passo sob demanda.
 const fluxoLead = ref(null);
 const COR_PAROU = { comprou: 'text-emerald-700', pagamento: 'text-violet-700', finalizar: 'text-rose-700', entrega: 'text-amber-700', identificacao: 'text-indigo-700' };
-const celulaParou = (lead) => h('div', { class: 'min-w-[11rem] space-y-1 text-xs' }, [
+const celulaParou = (lead) => h('div', { class: 'space-y-1 text-xs' }, [
     h('div', { class: ['font-medium', COR_PAROU[lead.parou?.etapa] ?? 'text-slate-600'] }, lead.parou?.texto ?? '-'),
     h('button', {
         type: 'button',
@@ -64,38 +64,35 @@ const abas = [
 ];
 
 const columns = [
+    // Tela compacta (pedido do Lira 2026-11-23): dados juntos em 5 colunas, tudo na mesma tela.
     {
         id: 'cliente',
         header: 'Cliente',
         enableSorting: false,
-        cell: ({ row }) => h('div', {}, [
-            h('div', { class: 'font-medium' }, row.original.nome ?? 'Sem nome'),
-            h('div', { class: 'text-xs text-slate-400' }, row.original.cpf ? maskCpfCnpj(row.original.cpf) : 'Sem CPF'),
-        ]),
-    },
-    {
-        id: 'contato',
-        header: 'Contato',
-        enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'text-sm' }, [
-            h('div', {}, row.original.email ?? '—'),
-            h('div', { class: 'text-xs text-slate-400' }, row.original.telefone ? maskPhone(row.original.telefone) : '—'),
+        cell: ({ row }) => h('div', { class: 'min-w-0 text-xs' }, [
+            h('div', { class: 'text-sm font-medium' }, row.original.nome ?? 'Sem nome'),
+            h('div', { class: 'text-slate-400' }, row.original.cpf ? maskCpfCnpj(row.original.cpf) : 'Sem CPF'),
+            h('div', { class: 'break-all' }, row.original.email ?? '—'),
+            h('div', { class: 'text-slate-500' }, row.original.telefone ? maskPhone(row.original.telefone) : '—'),
         ]),
     },
     {
         id: 'itens',
         header: 'Produtos',
         enableSorting: false,
-        cell: ({ row }) => h('ul', { class: 'space-y-0.5 text-xs' }, (row.original.itens ?? []).map((item) => h('li', { key: item.product_id }, [
-            h('span', { class: 'font-semibold' }, `${item.quantidade}x `),
-            `${item.nome}${item.variacao ? ` (${item.variacao})` : ''}`,
-            h('span', { class: 'text-slate-400' }, ` · ${formatPrice(item.preco_unitario)}`),
-        ]))),
+        cell: ({ row }) => h('div', { class: 'text-xs' }, [
+            h('ul', { class: 'space-y-0.5' }, (row.original.itens ?? []).map((item) => h('li', { key: item.product_id }, [
+                h('span', { class: 'font-semibold' }, `${item.quantidade}x `),
+                `${item.nome}${item.variacao ? ` (${item.variacao})` : ''}`,
+                h('span', { class: 'text-slate-400' }, ` · ${formatPrice(item.preco_unitario)}`),
+            ]))),
+            h('div', { class: 'mt-1 font-semibold' }, `Subtotal ${formatPrice(row.original.subtotal)}`),
+        ]),
     },
-    { id: 'subtotal', header: 'Subtotal', enableSorting: false, cell: ({ row }) => formatPrice(row.original.subtotal) },
     {
+        // Situação + etapa onde a pessoa parou e o passo a passo (pedido do Lira 2026-11-23).
         id: 'status',
-        header: 'Situação',
+        header: 'Situação / parou em',
         enableSorting: false,
         cell: ({ row }) => h('div', { class: 'space-y-1' }, [
             h(StatusBadge, {
@@ -106,40 +103,25 @@ const columns = [
             row.original.pedido
                 ? h(Link, { href: `/admin/pedidos/${row.original.pedido.id}`, class: 'block text-xs text-sky-700 hover:underline' }, () => `Pedido ${row.original.pedido.numero ?? `#${row.original.pedido.id}`}`)
                 : null,
+            celulaParou(row.original),
         ]),
     },
     {
-        // Etapa onde a pessoa parou + janela com o passo a passo (pedido do Lira 2026-11-23).
-        id: 'parou',
-        header: 'Parou em',
-        enableSorting: false,
-        cell: ({ row }) => celulaParou(row.original),
-    },
-    {
         id: 'origem',
-        header: 'Loja / origem',
+        header: 'Loja / quando',
         enableSorting: false,
         cell: ({ row }) => h('div', { class: 'text-xs' }, [
             h('div', { class: 'font-medium' }, nomeDoSite(row.original.site)),
             h('div', { class: 'text-slate-400' }, [row.original.origem, row.original.utm_source].filter(Boolean).join(' · ') || '—'),
-        ]),
-    },
-    {
-        id: 'quando',
-        header: 'Última atividade',
-        enableSorting: false,
-        meta: { cellClass: 'whitespace-nowrap' },
-        cell: ({ row }) => h('div', { class: 'text-xs' }, [
-            h('div', {}, formatDate(row.original.atualizado_em)),
-            h('div', { class: 'text-slate-400' }, `criado ${formatDate(row.original.criado_em)}`),
+            h('div', { class: 'mt-1 whitespace-nowrap' }, formatDate(row.original.atualizado_em)),
+            h('div', { class: 'whitespace-nowrap text-slate-400' }, `criado ${formatDate(row.original.criado_em)}`),
         ]),
     },
     {
         id: 'acoes',
         header: 'Ações',
         enableSorting: false,
-        meta: { cellClass: 'whitespace-nowrap' },
-        cell: ({ row }) => {
+                cell: ({ row }) => {
             const lead = row.original;
             if (lead.whatsapp_enviado_em) {
                 return h('span', { class: 'text-xs font-medium text-emerald-700' }, `Enviado ${formatDate(lead.whatsapp_enviado_em)}`);
@@ -152,10 +134,9 @@ const columns = [
                 class: 'rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50',
                 disabled: enviando.value !== null,
                 onClick: () => enviar(lead),
-            }, enviando.value === lead.id ? 'Enviando…' : 'Enviar WhatsApp + e-mail');
+            }, enviando.value === lead.id ? 'Enviando…' : 'WhatsApp + e-mail');
         },
-    },
-];
+    },];
 </script>
 
 <template>

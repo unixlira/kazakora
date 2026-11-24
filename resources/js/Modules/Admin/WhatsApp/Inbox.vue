@@ -277,6 +277,8 @@ onMounted(() => {
     if (fromUrl && conversations.value.some((c) => c.id === fromUrl)) openConversation(fromUrl);
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('keydown', onGlobalKey);
+    document.addEventListener('pointerdown', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
     schedulePoll(POLL_VISIBLE_MS);
 });
 
@@ -285,6 +287,10 @@ onBeforeUnmount(() => {
     stopRecording(false);
     document.removeEventListener('visibilitychange', onVisibility);
     document.removeEventListener('keydown', onGlobalKey);
+    document.removeEventListener('pointerdown', unlockAudio);
+    document.removeEventListener('keydown', unlockAudio);
+    audioContext?.close().catch(() => {});
+    audioContext = null;
     document.title = originalTitle;
 });
 
@@ -292,6 +298,8 @@ function onVisibility() {
     if (document.visibilityState === 'visible') {
         clearTimeout(pollTimer);
         poll();
+        // Voltou para a aba com a conversa aberta: o que chegou enquanto estava atrás foi visto.
+        if (active.value?.unread) markRead(active.value.id);
     }
 }
 
@@ -331,9 +339,11 @@ async function poll() {
         if (data.messages.length && activeId.value) {
             const nearBottom = isNearBottom();
             const added = mergeMessages(data.messages);
+            // Só mensagem do cliente toca (a nossa, da Manuela ou do time, não).
             if (added.some((m) => m.direction === 'inbound')) {
-                if (document.visibilityState !== 'visible') newInbound = true;
-                markRead(activeId.value);
+                newInbound = true;
+                // Aba atrás: fica como não lida (conta no título) até a pessoa voltar.
+                if (document.visibilityState === 'visible') markRead(activeId.value);
             }
             if (added.length) {
                 if (nearBottom) scrollToBottom();
@@ -844,26 +854,65 @@ function toggleSound() {
     } catch {
         // navegador sem storage
     }
+    // O clique já destrava o áudio: ao ligar, toca o som para a pessoa ouvir como é.
+    if (soundOn.value) beep();
 }
 
+// Som de mensagem nova (pedido do Lira 23/11/2026): um "plim" duplo curto e
+// suave, parecido com o do WhatsApp, gerado aqui pela Web Audio API (nada do
+// arquivo de som do WhatsApp, que tem direito autoral).
 let audioContext = null;
+function audio() {
+    try {
+        audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
+    } catch {
+        audioContext = null;
+    }
+    return audioContext;
+}
+
+// O navegador só deixa tocar depois de um clique ou tecla na página: o
+// primeiro gesto destrava o áudio, e daí em diante toca até com a aba atrás.
+function unlockAudio() {
+    const context = audio();
+    if (context?.state === 'suspended') context.resume().catch(() => {});
+    if (!context || context.state === 'running') {
+        document.removeEventListener('pointerdown', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+    }
+}
+
+function plim(context, start, frequency) {
+    // Nota com um harmônico leve, ataque rápido e queda suave (soa como sino curto).
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.18, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+    gain.connect(context.destination);
+
+    [[frequency, 1], [frequency * 2, 0.25]].forEach(([hz, volume]) => {
+        const oscillator = context.createOscillator();
+        const level = context.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(hz, start);
+        level.gain.value = volume;
+        oscillator.connect(level).connect(gain);
+        oscillator.start(start);
+        oscillator.stop(start + 0.24);
+    });
+}
+
 function beep() {
     if (!soundOn.value) return;
     try {
-        audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-        oscillator.frequency.setValueAtTime(1320, audioContext.currentTime + 0.09);
-        gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.15, audioContext.currentTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.25);
-        oscillator.connect(gain).connect(audioContext.destination);
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.26);
+        const context = audio();
+        if (!context) return;
+        if (context.state === 'suspended') context.resume().catch(() => {});
+        const now = context.currentTime + 0.01;
+        plim(context, now, 1046.5); // dó
+        plim(context, now + 0.13, 1318.5); // mi, logo depois
     } catch {
-        // navegador bloqueou áudio antes de interação
+        // navegador bloqueou o áudio: sem som, a tela segue normal
     }
 }
 
@@ -1130,7 +1179,13 @@ function linkify(text) {
                         </span>
                         <span class="mt-0.5 flex items-center justify-between gap-2">
                             <span class="wa-row-preview flex min-w-0 items-center gap-1">
-                                <svg v-if="conversation.previewDirection === 'outbound'" viewBox="0 0 18 11" width="16" height="11" class="shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.8l3.3 3.4L11.2 1.6" /><path d="M7.4 8.6l.7.6L15.2 1.6" /></svg>
+                                <!-- Tique da última mensagem nossa, igual ao WhatsApp: ✓ enviada, ✓✓ cinza entregue, ✓✓ azul lida -->
+                                <span v-if="conversation.previewDirection === 'outbound'" class="inline-flex shrink-0" :title="tickTitle({ status: conversation.previewStatus })">
+                                    <svg v-if="['read', 'played', 'delivered'].includes(conversation.previewStatus)" viewBox="0 0 18 11" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" :class="conversation.previewStatus === 'delivered' ? 'wa-tick' : 'text-[#53bdeb]'"><path d="M1 5.8l3.3 3.4L11.2 1.6" /><path d="M7.4 8.6l.7.6L15.2 1.6" /></svg>
+                                    <svg v-else-if="conversation.previewStatus === 'sent'" viewBox="0 0 13 11" width="12" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="wa-tick"><path d="M1 5.8l3.3 3.4L11.2 1.6" /></svg>
+                                    <svg v-else-if="conversation.previewStatus === 'failed'" viewBox="0 0 16 16" width="14" height="14" class="text-red-500"><circle cx="8" cy="8" r="7" fill="currentColor" /><path d="M8 4.2v4.6M8 11.2v.4" stroke="#fff" stroke-width="1.7" stroke-linecap="round" /></svg>
+                                    <svg v-else viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" :class="conversation.previewStatus === 'draft_no_token' ? 'text-amber-500' : 'wa-tick'"><circle cx="8" cy="8" r="6.3" /><path d="M8 4.6V8l2.3 1.5" /></svg>
+                                </span>
                                 <span class="truncate">{{ conversation.preview }}</span>
                             </span>
                             <span class="flex shrink-0 items-center gap-2">
@@ -1256,8 +1311,10 @@ function linkify(text) {
                                 class="flex"
                                 :class="[item.message.direction === 'outbound' ? 'justify-end' : 'justify-start', item.first ? 'mt-3' : 'mt-[2px]']"
                             >
+                                <!-- Balão + botões do modelo logo abaixo, da mesma largura (igual ao WhatsApp) -->
+                                <div class="flex min-w-0 max-w-[85%] flex-col sm:max-w-[65%]">
                                 <div
-                                    class="wa-bubble relative max-w-[85%] sm:max-w-[65%]"
+                                    class="wa-bubble relative"
                                     :class="[
                                         item.message.direction === 'outbound' ? 'wa-bubble-out' : 'wa-bubble-in',
                                         item.first && (item.message.direction === 'outbound' ? 'rounded-tr-none' : 'rounded-tl-none'),
@@ -1275,6 +1332,19 @@ function linkify(text) {
                                         <i v-if="item.message.sentBy === 'manuela'" class="fas fa-robot mr-1"></i>{{ item.message.sentBy === 'manuela' ? attendant : item.message.sentBy }}
                                     </p>
 
+                                    <!-- Modelo aprovado desenhado igual ao WhatsApp: imagem, corpo formatado e rodapé -->
+                                    <template v-if="item.message.template_render">
+                                        <a v-if="item.message.template_render.cabecalho_imagem" :href="item.message.template_render.cabecalho_imagem" target="_blank" rel="noopener noreferrer" class="-mx-1 -mt-0.5 mb-1 block">
+                                            <img :src="item.message.template_render.cabecalho_imagem" loading="lazy" alt="Imagem do modelo" class="max-h-[330px] w-[330px] max-w-full rounded-md object-cover">
+                                        </a>
+                                        <span v-else-if="['image', 'video', 'document'].includes(item.message.template_render.cabecalho_tipo)" class="wa-tpl-media -mx-1 -mt-0.5 mb-1 flex h-[120px] w-[330px] max-w-full items-center justify-center rounded-md">
+                                            <i :class="{ image: 'fas fa-image', video: 'fas fa-video', document: 'fas fa-file-lines' }[item.message.template_render.cabecalho_tipo]" class="text-3xl"></i>
+                                        </span>
+                                        <span v-if="item.message.template_render.cabecalho_texto" class="mb-1 block font-semibold">{{ item.message.template_render.cabecalho_texto }}</span>
+                                        <span class="wa-text whitespace-pre-wrap break-words" v-html="item.message.template_render.corpo_formatado"></span>
+                                        <span v-if="item.message.template_render.rodape" class="wa-tpl-footer mt-1 block">{{ item.message.template_render.rodape }}<span class="inline-block" :class="item.message.direction === 'outbound' ? 'w-[74px]' : 'w-[52px]'"></span></span>
+                                    </template>
+
                                     <template v-if="item.message.hasMedia">
                                         <a v-if="item.message.type === 'image' || item.message.type === 'sticker'" :href="mediaUrl(item.message)" target="_blank" rel="noopener" class="-mx-1 -mt-0.5 mb-1 block">
                                             <img :src="mediaUrl(item.message)" loading="lazy" :alt="item.message.direction === 'outbound' ? 'Imagem enviada' : 'Imagem recebida'" class="max-h-[330px] rounded-md object-cover" :class="item.message.type === 'sticker' ? 'w-36' : 'w-[330px] max-w-full'">
@@ -1291,9 +1361,9 @@ function linkify(text) {
                                     </p>
 
                                     <span v-if="item.message.type === 'audio' && item.message.transcription" class="wa-muted block text-[12px]"><i class="fas fa-closed-captioning mr-1"></i>Transcrição do áudio</span>
-                                    <span v-if="item.message.body && !(item.message.hasMedia && item.message.type === 'document')" class="wa-text whitespace-pre-wrap break-words" v-html="linkify(item.message.body)"></span>
+                                    <span v-if="item.message.body && !item.message.template_render && !(item.message.hasMedia && item.message.type === 'document')" class="wa-text whitespace-pre-wrap break-words" v-html="linkify(item.message.body)"></span>
                                     <!-- Espaço reservado pro horário não encostar no texto (técnica do WhatsApp) -->
-                                    <span class="inline-block" :class="item.message.direction === 'outbound' ? 'w-[74px]' : 'w-[52px]'"></span>
+                                    <span v-if="!item.message.template_render?.rodape" class="inline-block" :class="item.message.direction === 'outbound' ? 'w-[74px]' : 'w-[52px]'"></span>
 
                                     <span class="wa-meta absolute bottom-[3px] right-[7px] flex items-center gap-[3px]">
                                         {{ hourMinute(item.message.at) }}
@@ -1312,6 +1382,23 @@ function linkify(text) {
                                         :class="item.message.direction === 'outbound' ? 'right-2' : 'left-2'"
                                         :title="'Reação do cliente: ' + item.message.reactions.join(' ')"
                                     >{{ item.message.reactions.join('') }}</span>
+                                </div>
+                                <div v-if="item.message.template_render?.botoes?.length" class="mt-[2px] flex flex-col gap-[2px]">
+                                    <component
+                                        :is="botao.url ? 'a' : 'span'"
+                                        v-for="(botao, indice) in item.message.template_render.botoes"
+                                        :key="indice"
+                                        :href="botao.url || undefined"
+                                        :target="botao.tipo === 'URL' ? '_blank' : undefined"
+                                        :rel="botao.tipo === 'URL' ? 'noopener noreferrer' : undefined"
+                                        class="wa-tpl-btn"
+                                        :class="item.message.direction === 'outbound' ? 'wa-bubble-out' : 'wa-bubble-in'"
+                                        :title="botao.url || botao.texto"
+                                    >
+                                        <i :class="{ URL: 'fas fa-arrow-up-right-from-square', PHONE_NUMBER: 'fas fa-phone' }[botao.tipo] ?? 'fas fa-reply'" class="text-[13px]"></i>
+                                        <span class="truncate">{{ botao.texto }}</span>
+                                    </component>
+                                </div>
                                 </div>
                             </div>
                         </template>
@@ -1789,6 +1876,12 @@ function linkify(text) {
 .wa-doc { background: rgba(11, 20, 26, 0.05); }
 .wa-text :deep(.wa-link) { color: #027eb5; text-decoration: none; }
 .wa-text :deep(.wa-link:hover) { text-decoration: underline; }
+.wa-text :deep(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+/* Modelo aprovado: rodapé cinza e botões abaixo do balão, como no WhatsApp */
+.wa-tpl-footer { font-size: 13px; line-height: 17px; color: var(--wa-muted); }
+.wa-tpl-media { background: rgba(11, 20, 26, 0.06); color: var(--wa-muted); }
+.wa-tpl-btn { display: flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border-radius: 7.5px; padding: 0 12px; font-size: 14px; line-height: 19px; color: #027eb5; box-shadow: var(--wa-shadow); text-decoration: none; }
+a.wa-tpl-btn:hover { filter: brightness(0.97); }
 
 .wa-scroll-down { background: var(--wa-panel); color: var(--wa-icon); box-shadow: 0 1px 1px rgba(11, 20, 26, 0.06), 0 2px 5px rgba(11, 20, 26, 0.2); }
 
@@ -1864,6 +1957,8 @@ function linkify(text) {
 .dark .wa-app .wa-sender-bot { color: #25d366; }
 .dark .wa-app .wa-sender-human { color: #a78bfa; }
 .dark .wa-app .wa-text .wa-link { color: #53bdeb; }
+.dark .wa-app .wa-tpl-btn { color: #53bdeb; }
+.dark .wa-app .wa-tpl-media { background: rgba(255, 255, 255, 0.06); }
 .dark .wa-app .wa-doc { background: rgba(255, 255, 255, 0.06); }
 .dark .wa-app .wa-switch:not(.wa-switch-on) { background: #54656f; }
 .dark .wa-app .wa-banner-warn { background: rgba(245, 158, 11, 0.12); color: #fcd34d; }

@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Catalog\Models\LivroDigital;
+use App\Modules\Catalog\Support\AvisoLivroDigital;
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
@@ -18,13 +19,20 @@ use Illuminate\Support\Facades\Storage;
  */
 class OrderConfirmation extends Mailable
 {
-    /** Anexo acima disso some (provedor recusa ou joga no spam); fica só o link. */
-    private const LIMITE_ANEXOS_BYTES = 15 * 1024 * 1024;
+    /** Soma dos PDFs anexados acima disso some (provedor recusa ou joga no spam). */
+    public const LIMITE_ANEXOS_BYTES = 15 * 1024 * 1024;
 
-    /** Livros digitais ganhos no pedido (Promoção PDFs): link de download sempre. */
+    /**
+     * Todos os livros digitais ganhos no pedido (Promoção PDFs), cada um com
+     * link de download no corpo. Desde 24/11/2026 o livro sem PDF no disco
+     * não some mais calado: fica com o link e o Lira é avisado.
+     */
     public readonly Collection $brindes;
 
-    /** Com a chave de Entregáveis › Livros Digitais ligada, os PDFs vão também anexados. */
+    /** Os que vão também anexados (chave ligada e até o limite, do menor para o maior). */
+    public readonly Collection $anexados;
+
+    /** Algum livro vai anexado (o texto do quadro do presente muda). */
     public readonly bool $livrosAnexados;
 
     public function __construct(public readonly Order $order)
@@ -38,13 +46,50 @@ class OrderConfirmation extends Mailable
             $livros = LivroDigital::garantirParaPedido($this->order);
         }
 
-        $this->brindes = $livros
-            ->filter(fn (LivroDigital $livro) => Storage::disk('local')->exists($livro->arquivo))
-            ->values();
+        $this->brindes = $livros->values();
 
-        $this->livrosAnexados = $this->brindes->isNotEmpty()
-            && LivroDigital::emailPedidoLigado()
-            && $this->brindes->sum(fn (LivroDigital $livro) => Storage::disk('local')->size($livro->arquivo)) <= self::LIMITE_ANEXOS_BYTES;
+        foreach ($this->brindes as $livro) {
+            if (! $livro->arquivoExiste()) {
+                AvisoLivroDigital::arquivoAusente($livro, $this->order);
+            }
+        }
+
+        $this->anexados = LivroDigital::emailPedidoLigado() ? self::separarAnexos($this->brindes)['anexos'] : new Collection;
+        $this->livrosAnexados = $this->anexados->isNotEmpty();
+    }
+
+    /**
+     * Quais livros cabem anexados (pedido 2026-11-24): do menor para o maior
+     * até LIMITE_ANEXOS_BYTES somados; os que não cabem e os sem PDF no
+     * disco ficam só com o link. Antes era tudo ou nada: passou do limite,
+     * nenhum ia anexado.
+     *
+     * @return array{anexos: Collection<int, LivroDigital>, links: Collection<int, LivroDigital>, tamanhos: array<int, int>}
+     */
+    public static function separarAnexos(Collection $livros): array
+    {
+        $tamanhos = [];
+        foreach ($livros as $livro) {
+            $tamanhos[$livro->id] = $livro->arquivoExiste() ? $livro->tamanhoNoDisco() : -1;
+        }
+
+        $soma = 0;
+        $idsAnexos = [];
+        foreach ($livros->sortBy(fn (LivroDigital $livro) => [$tamanhos[$livro->id], $livro->id]) as $livro) {
+            $tamanho = $tamanhos[$livro->id];
+            if ($tamanho < 0 || $soma + $tamanho > self::LIMITE_ANEXOS_BYTES) {
+                continue;
+            }
+            $soma += $tamanho;
+            $idsAnexos[] = $livro->id;
+        }
+
+        // Mantém a ordem do pedido (a mesma da lista no corpo).
+        return [
+            'anexos' => $livros->filter(fn (LivroDigital $livro) => in_array($livro->id, $idsAnexos, true))->values(),
+            'links' => $livros->reject(fn (LivroDigital $livro) => in_array($livro->id, $idsAnexos, true))->values(),
+            'tamanhos' => $tamanhos,
+        ];
     }
 
     public function build(): self
@@ -61,6 +106,7 @@ class OrderConfirmation extends Mailable
                 'notaAnexada' => $this->notaAnexada(),
                 'brindes' => $this->brindes,
                 'livrosAnexados' => $this->livrosAnexados,
+                'idsAnexados' => $this->anexados->pluck('id')->all(),
             ]);
     }
 
@@ -90,8 +136,9 @@ class OrderConfirmation extends Mailable
 
         // Pedido 2026-10-22: só o PDF da nota; o XML não vai mais ao cliente.
 
-        // Pedido 2026-10-21: com a chave da promoção ligada, os livros de brinde.
-        foreach ($this->livrosAnexados ? $this->brindes : [] as $livro) {
+        // Pedido 2026-10-21: com a chave da promoção ligada, os livros de
+        // brinde que cabem no limite (os outros vão só com o link).
+        foreach ($this->anexados as $livro) {
             $anexos[] = Attachment::fromStorageDisk('local', $livro->arquivo)
                 ->as($livro->nome_arquivo)
                 ->withMime('application/pdf');

@@ -1512,7 +1512,13 @@ class CheckoutController extends Controller
             return response('O livro fica disponível para baixar assim que o pagamento do pedido for confirmado.', 403);
         }
 
-        abort_unless(Storage::disk('local')->exists($livro->arquivo), 404);
+        // PDF sumido (24/11/2026): avisa o Lira e não gasta o link; ele volta
+        // a baixar assim que o PDF for reposto no admin.
+        if (! $livro->arquivoExiste()) {
+            \App\Modules\Catalog\Support\AvisoLivroDigital::arquivoAusente($livro, $order, 'link de download do cliente');
+
+            return response('O arquivo deste livro está sendo atualizado. Seu link continua valendo: tente de novo mais tarde ou fale com a gente pelo atendimento do pedido.', 503);
+        }
 
         return null;
     }

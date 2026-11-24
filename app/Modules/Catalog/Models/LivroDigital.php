@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Entregáveis › Livros Digitais (pedido 2026-10-20): PDF de brinde que
@@ -144,15 +145,7 @@ class LivroDigital extends Model
             return new Collection;
         }
 
-        $order->loadMissing('items.product');
-
-        $ids = $order->items
-            ->toBase()
-            ->map(fn ($item) => $item->product)
-            ->filter()
-            ->flatMap(fn (Product $produto) => array_column(PromocoesDoProduto::paraPagina($produto)['livrosDigitais'], 'id'))
-            ->unique()
-            ->values();
+        $ids = self::idsDaRegra($order);
 
         DB::table(self::TABELA_PEDIDO)->insertOrIgnore($ids->map(fn (int $id) => [
             'order_id' => $order->id,
@@ -162,6 +155,43 @@ class LivroDigital extends Model
         ])->all());
 
         return self::doPedido($order);
+    }
+
+    /**
+     * Ids dos livros que a página de cada produto do pedido mostra agora
+     * (mesma regra e cache da página e do checkout), somados sem repetir.
+     * Não grava nada: o `pedido:reenviar-confirmacao --dry-run` usa para
+     * mostrar o que faltaria.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public static function idsDaRegra(Order $order): \Illuminate\Support\Collection
+    {
+        if (! self::pedidoDaLoja($order)) {
+            return collect();
+        }
+
+        $order->loadMissing('items.product');
+
+        return $order->items
+            ->toBase()
+            ->map(fn ($item) => $item->product)
+            ->filter()
+            ->flatMap(fn (Product $produto) => array_column(PromocoesDoProduto::paraPagina($produto)['livrosDigitais'], 'id'))
+            ->unique()
+            ->values();
+    }
+
+    /** O PDF está no disco privado (o e-mail, o download e o livros:conferir dependem dele). */
+    public function arquivoExiste(): bool
+    {
+        return $this->arquivo !== null && $this->arquivo !== '' && Storage::disk('local')->exists($this->arquivo);
+    }
+
+    /** Tamanho real do PDF no disco (0 se não existe). */
+    public function tamanhoNoDisco(): int
+    {
+        return $this->arquivoExiste() ? (int) Storage::disk('local')->size($this->arquivo) : 0;
     }
 
     /**

@@ -37,6 +37,9 @@ class AlertasAdmin
     /** Pedido do Lira em 12/11/2026: conciliação fiscal autônoma (fiscal:conciliar). */
     public const FISCAL_CONCILIACAO = 'fiscal_conciliacao';
 
+    /** Pedido do Lira em 24/11/2026: livro de brinde (Promoção PDFs) sem o PDF no disco. */
+    public const LIVROS_DIGITAIS = 'livros_digitais';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -58,6 +61,10 @@ class AlertasAdmin
         self::ETIQUETA_MARCA => [
             'nome' => 'Etiqueta com a marca do Melhor Envio',
             'descricao' => 'A conferência por OCR ainda achou "melhor envio" na etiqueta depois da troca pelo logo da loja, então ela não foi para a impressora. A etiqueta original fica no pedido para imprimir à mão. Some sozinho quando a etiqueta sai com o logo da loja.',
+        ],
+        self::LIVROS_DIGITAIS => [
+            'nome' => 'Livro digital sem PDF',
+            'descricao' => 'Um livro de brinde da Promoção PDFs está ativo (ou foi ganho num pedido) mas o PDF não está no servidor: o e-mail do pedido sai só com o link, que não baixa. Suba o PDF de novo em Entregáveis › Livros Digitais. Some sozinho quando o livros:conferir achar o arquivo.',
         ],
         self::MELHOR_ENVIO_CONEXAO => [
             'nome' => 'Conexão do Melhor Envio caiu',

@@ -20,7 +20,7 @@ class PontoDePostagemTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.melhorenvio.api_base_url' => 'https://me.test/api/v2', 'melhorenvio.ponto_padrao' => 41970]);
+        config(['services.melhorenvio.api_base_url' => 'https://me.test/api/v2', 'melhorenvio.ponto_padrao' => 41970, 'melhorenvio.pontos_fechados' => []]);
         MelhorEnvioToken::create(['account_label' => 'KazaKora ME', 'access_token' => 'a', 'refresh_token' => 'r', 'token_expires_at' => now()->addDays(20), 'scopes' => []]);
         Company::create(['razao_social' => 'Kazakora', 'cnpj' => '65604590000107', 'regime_tributario' => Company::REGIME_SIMPLES_NACIONAL, 'zip' => '03187-040', 'city' => 'São Paulo', 'state' => 'SP']);
         $agencia = fn ($id, $nome, $lat, $cias) => ['id' => $id, 'name' => $nome, 'address' => ['address' => 'Rua '.$id, 'number' => '1', 'district' => 'Mooca', 'latitude' => $lat, 'longitude' => -46.5826], 'companies' => array_map(fn ($c) => ['id' => $c], $cias)];
@@ -33,6 +33,7 @@ class PontoDePostagemTest extends TestCase
                 $agencia(41970, '[PEGAKI] - DISTRIBUE - Ponto Parceiro', -23.5620, [1, 2, 14, 15]),
                 $agencia(500, 'Total longe', -23.6000, [8]),
                 $agencia(501, 'Total perto', -23.5650, [8]),
+                $agencia(502, 'JeT aberto', -23.5700, [15]),
             ]),
         ]);
     }
@@ -62,6 +63,17 @@ class PontoDePostagemTest extends TestCase
         app(PontoDePostagemMelhorEnvio::class)->gravar($envio);
 
         $this->assertSame('Total perto', $envio->fresh()->postagem['nome']);
+        $this->assertFalse($envio->fresh()->postagem['padrao']);
+    }
+
+    public function test_ponto_fechado_nunca_e_escolhido_nem_como_padrao(): void
+    {
+        // 24/11/2026: o Pegaki da Rua Florianópolis (41970) fechou.
+        config(['melhorenvio.ponto_padrao' => 0, 'melhorenvio.pontos_fechados' => [41970]]);
+        $envio = $this->envio(33);
+        app(PontoDePostagemMelhorEnvio::class)->gravar($envio);
+
+        $this->assertSame('JeT aberto', $envio->fresh()->postagem['nome']);
         $this->assertFalse($envio->fresh()->postagem['padrao']);
     }
 }

@@ -36,10 +36,12 @@ class PontoDePostagemMelhorEnvio
                 return null;
             }
 
-            $agencias = $this->agencias();
+            // Ponto fechado (24/11/2026: Pegaki da Rua Florianópolis) nunca é escolhido.
+            $fechados = array_map('intval', (array) config('melhorenvio.pontos_fechados', []));
+            $agencias = array_values(array_filter($this->agencias(), fn (array $a) => ! in_array((int) ($a['id'] ?? 0), $fechados, true)));
             $aceita = fn (array $a) => collect($a['companies'] ?? [])->contains(fn ($c) => (int) ($c['id'] ?? 0) === (int) $companhia);
 
-            $padrao = collect($agencias)->firstWhere('id', (int) config('melhorenvio.ponto_padrao'));
+            $padrao = (int) config('melhorenvio.ponto_padrao') > 0 ? collect($agencias)->firstWhere('id', (int) config('melhorenvio.ponto_padrao')) : null;
             $escolhida = $padrao && $aceita($padrao)
                 ? $padrao
                 : collect($agencias)->filter($aceita)->sortBy(fn ($a) => $this->distancia($a))->first();

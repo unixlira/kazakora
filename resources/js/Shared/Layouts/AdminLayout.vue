@@ -266,6 +266,38 @@ onMounted(() => {
 });
 onBeforeUnmount(() => clearInterval(timerPerguntas));
 
+// Pedido do Lira 2026-11-24: cada tela do admin monta o layout de novo e o
+// menu lateral voltava ao topo a cada clique. A rolagem dos dois contêineres
+// do menu fica guardada na aba (sessionStorage) e volta quando a tela abre.
+const menuNavRef = ref(null);
+const menuListaRef = ref(null);
+const CHAVE_ROLAGEM_MENU = 'admin.menu.rolagem';
+const guardarRolagemMenu = () => {
+    try {
+        sessionStorage.setItem(CHAVE_ROLAGEM_MENU, JSON.stringify({
+            nav: menuNavRef.value?.scrollTop ?? 0,
+            lista: menuListaRef.value?.scrollTop ?? 0,
+        }));
+    } catch { /* sem storage: o menu só começa do topo */ }
+};
+onMounted(() => {
+    let salvo = null;
+    try { salvo = JSON.parse(sessionStorage.getItem(CHAVE_ROLAGEM_MENU) || 'null'); } catch { salvo = null; }
+    const aplicar = () => {
+        if (salvo && menuNavRef.value) menuNavRef.value.scrollTop = salvo.nav || 0;
+        if (salvo && menuListaRef.value) menuListaRef.value.scrollTop = salvo.lista || 0;
+    };
+    aplicar();
+    requestAnimationFrame(aplicar);
+    menuNavRef.value?.addEventListener('scroll', guardarRolagemMenu, { passive: true });
+    menuListaRef.value?.addEventListener('scroll', guardarRolagemMenu, { passive: true });
+    removerOuvintes.push(router.on('before', guardarRolagemMenu));
+});
+onBeforeUnmount(() => {
+    menuNavRef.value?.removeEventListener('scroll', guardarRolagemMenu);
+    menuListaRef.value?.removeEventListener('scroll', guardarRolagemMenu);
+});
+
 // Pedido do Lira 2026-10-12: com a página rolada, o topo fixo fica
 // translúcido e fumê (o conteúdo aparece borrado por baixo). No alto da
 // página volta ao normal. Estilo em .admin-topo-fume (app.css).
@@ -304,7 +336,7 @@ watch(
         <!-- Celular (2026-10-11): o cabeçalho é uma faixa só (a do topo, com
         hambúrguer e logo). Este menu vira uma gaveta aberta por cima da
         tela, logo abaixo do topo, e some quando está fechado. -->
-        <nav id="menu-admin" class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
+        <nav id="menu-admin" ref="menuNavRef" class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
             :class="[sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64', collapseShow === 'hidden' ? 'max-md:hidden' : 'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-[69px] max-md:z-30 max-md:overflow-y-auto']">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
                 <!-- Menu recolhido (Lira, 2026-10-19): sem a seta; clicar no logo abre o menu. -->
@@ -329,7 +361,7 @@ watch(
                 dele. w-full/basis-full força quebra de linha garantida no
                 mobile (flex-wrap só quebra linha quando o item não cabe; um
                 item de 100% de largura nunca cabe ao lado de outro). -->
-                <div class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
+                <div ref="menuListaRef" class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
                     <div v-for="section in visibleSections" :key="section.heading" class="mb-1">
                         <button v-if="!sidebarCollapsed && !section.direto" type="button"

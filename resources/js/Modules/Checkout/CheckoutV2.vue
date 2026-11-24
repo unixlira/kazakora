@@ -17,7 +17,8 @@ import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 // Depoimentos de volta (pedido do Lira 2026-11-23, à noite): carrossel parado, com bullets e
 // no máximo 4. A nota com estrelas e o total de avaliações continuam ocultos.
-import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
+// Depoimentos comentados no template (2026-11-24).
+// import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -1524,7 +1525,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
                     <!-- Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24).
                          Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
-                    <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" />
+                    <!-- Depoimentos comentados a pedido do Lira (2026-11-24), KazaKora e FerraKora.
+                    <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" /> -->
                     </div>
                 </div>
             </main>
@@ -1650,7 +1652,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
                 <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24).
                      Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
-                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
+                <!-- Depoimentos comentados a pedido do Lira (2026-11-24), KazaKora e FerraKora.
+                <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" /> -->
             </aside>
         </div>
 

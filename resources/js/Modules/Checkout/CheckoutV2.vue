@@ -1084,7 +1084,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                  Outro cupom no lugar: regra do cupom único (não acumula), sem botão. -->
             <div v-if="cupomFaixa.auto" class="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:justify-center lg:gap-5" data-faixa-blackfriday-auto>
                 <p v-if="faixaAplicada" class="min-w-0 text-[13px] font-bold leading-snug sm:text-sm">
-                    <span aria-hidden="true">✅</span> Cupom {{ cupomFaixa.code }} aplicado: {{ cupomFaixa.rotulo }}
+                    <span class="mr-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#00a650] align-[-3px] text-[10px] text-white" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                    Cupom <span class="mx-0.5 rounded-[4px] border border-dashed border-[#FFD400] px-1.5 py-px font-extrabold tracking-wide text-[#FFD400]">{{ cupomFaixa.code }}</span> aplicado: {{ cupomFaixa.rotulo }}
                 </p>
                 <p v-else-if="cupomAplicado" class="min-w-0 text-[13px] leading-snug sm:text-sm">
                     <strong class="font-extrabold uppercase tracking-wide text-[#FF7A33]">Black Friday:</strong>

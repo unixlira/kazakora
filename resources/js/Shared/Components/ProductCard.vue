@@ -376,7 +376,7 @@ const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParc
                 <p v-if="product.stock <= 0" class="mt-1 text-[11px] font-semibold text-red-600">Esgotado</p>
                 <p v-else class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto">
                     Frete grátis
-                    <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                    <i class="fa-solid fa-bolt" aria-hidden="true"></i>
                 </p>
             </div>
             <div v-else class="mt-auto pt-1">
@@ -412,7 +412,7 @@ const parcela = computed(() => parcelaMaxima(preco.value.final_price, tabelaParc
                          Menor (pedido 2026-10-22): no card estreito o FULL ficava embaixo do "Detalhes". -->
                     <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-store-verde-texto md:text-xs">
                         Frete grátis
-                        <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                        <i class="fa-solid fa-bolt" aria-hidden="true"></i>
                     </p>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL

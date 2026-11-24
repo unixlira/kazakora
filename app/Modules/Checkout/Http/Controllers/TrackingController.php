@@ -128,7 +128,7 @@ class TrackingController extends Controller
                         'itens' => $order->items->map(fn ($item) => ['nome' => $item->product_name, 'quantidade' => $item->quantity])->values(),
                         'cidade' => null,
                         'codigo_rastreio' => $codigoPublico,
-                        'transportadora' => $order->shipping_carrier_name,
+                        'transportadora' => Order::nomeDaEntregaParaCliente($order->shipping_carrier_name),
                         'etapas' => [],
                         'eventos' => [],
                         'retirada' => $retiradaPublica,
@@ -162,7 +162,7 @@ class TrackingController extends Controller
                 'codigo_rastreio' => $codigo,
                 'rastreio_url' => LinkRastreio::url($codigo),
                 'rastreio_correios' => LinkRastreio::correios($codigo),
-                'transportadora' => $order->transportadoraDoEnvio(),
+                'transportadora' => $order->transportadoraParaCliente(),
                 'etapas' => $order->etapas(),
                 // Etapas da transportadora abaixo de "Pedido enviado" e a previsão (pedido do Lira em 2026-11-09).
                 'eventos_transportadora' => $order->melhorEnvioEnvio ? app(MelhorRastreio::class)->eventosDoEnvio($order->melhorEnvioEnvio) : [],

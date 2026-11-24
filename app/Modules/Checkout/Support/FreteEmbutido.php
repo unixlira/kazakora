@@ -567,7 +567,10 @@ class FreteEmbutido
      *   e o peso tarifável somado (base das outras transportadoras).
      *
      * @param  Collection<int, array{product: Product, quantity: int}>  $itens
-     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int}
+     * - embutido: frete que o cliente já paga no preço dos itens (base do
+     *   excedente da Entrega Expressa por motoboy, pedido 2026-11-24).
+     *
+     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int, embutido?: float}
      */
     public function entregaDoCarrinho(Collection $itens): array
     {
@@ -601,7 +604,7 @@ class FreteEmbutido
         }
 
         if ($itens->isEmpty()) {
-            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0];
+            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0, 'embutido' => 0.0];
         }
 
         if (collect($fretes)->every(fn ($par) => isset($par[0]['tabela']))) {
@@ -622,6 +625,7 @@ class FreteEmbutido
                 'servico' => 'pac',
                 'custo' => round($embutido, 2),
                 'peso_g' => $peso,
+                'embutido' => round($embutido, 2),
             ];
         }
 
@@ -658,6 +662,8 @@ class FreteEmbutido
             'custo' => round($real, 2),
             'peso_g' => $peso,
             'regra' => $regra['nome'] ?? null,
+            // Frete que o cliente já paga no preço dos itens (menos o desconto da caixa única).
+            'embutido' => round($unidades > 1 ? min($embutido, $doCliente) : $embutido, 2),
         ];
     }
 
@@ -673,6 +679,7 @@ class FreteEmbutido
     private function entregaPelaTabela(array $fretes, int $peso): array
     {
         $custo = 0.0;
+        $noPreco = 0.0;
         $extra = 0.0;
         $prazo = null;
         $prazoBase = null;
@@ -682,6 +689,7 @@ class FreteEmbutido
         foreach ($fretes as [$f, $qtd]) {
             $base = $f['correios'] ?? $f['embutido'];
             $custo += $base * $qtd;
+            $noPreco += (float) $f['embutido'] * $qtd;
             $extra += max(0, $f['sedex'] - $base) * $qtd;
             $prazo = max($prazo, $f['prazo']);
             $prazoBase = max($prazoBase, $f['servico'] === 'sedex' ? $f['prazo_sedex'] : $f['prazo_pac']);
@@ -701,6 +709,7 @@ class FreteEmbutido
             'servico' => $todosSedex ? 'sedex' : 'pac',
             'custo' => round($custo, 2),
             'peso_g' => $peso,
+            'embutido' => round($noPreco, 2),
             'regra' => collect($fretes)->map(fn ($par) => $par[0]['regra'] ?? null)->filter()->first(),
         ];
     }

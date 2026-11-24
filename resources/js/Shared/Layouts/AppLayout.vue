@@ -183,11 +183,10 @@ onUnmounted(() => {
                  essa opção liga sozinha com a economia de bateria e a faixa ficava parada. -->
             <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2">
                 <span v-for="n in 6" :key="n" class="contents">
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis em todos os produtos</span>
-                    <!-- Full na faixa do topo (pedido 2026-10-10). -->
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']"><span class="font-extrabold italic text-[#22c55e]"><i class="fa-solid fa-bolt"></i>Full</span> Receba no mesmo dia</span>
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Pague no PIX e economize</span>
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Suporte via WhatsApp</span>
+                    <!-- Só "Frete grátis | Compra 100% segura" (pedido do Lira 2026-11-24): sem os
+                         termos internos de logística (Full/Flex) na vista do cliente. -->
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-truck-fast mr-1"></i>Frete grátis</span>
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-lock mr-1"></i>Compra 100% segura</span>
                 </span>
             </div>
         </div>
@@ -246,9 +245,9 @@ onUnmounted(() => {
                                         <span aria-hidden="true" class="absolute -right-10 -top-10 -z-10 h-36 w-36 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
                                         <span aria-hidden="true" class="absolute -bottom-12 -left-8 -z-10 h-32 w-32 rounded-full bg-[#0FB930] opacity-40 blur-2xl"></span>
                                         <div>
-                                            <p class="text-xs font-bold uppercase tracking-widest text-[#f6c343]"><i class="fa-solid fa-bolt mr-1"></i>Full</p>
+                                            <p class="text-xs font-bold uppercase tracking-widest text-[#f6c343]"><i class="fa-solid fa-bolt mr-1"></i>Entrega Rápida</p>
                                             <p class="mt-2 text-xl font-bold leading-tight">Frete grátis em todos os produtos</p>
-                                            <p class="mt-2 text-sm opacity-80">E com o Full você recebe no mesmo dia.</p>
+                                            <p class="mt-2 text-sm opacity-80">Em boa parte da Grande São Paulo, chega no mesmo dia.</p>
                                         </div>
                                         <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-store-laranja hover:text-white">
                                             Ver todos os produtos <i class="fa-solid fa-arrow-right text-xs"></i>

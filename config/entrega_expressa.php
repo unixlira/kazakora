@@ -53,6 +53,18 @@ return [
         'faixas_extra' => [
             ['inicio' => '09300000', 'fim' => '09399999', 'local' => 'Mauá'],
         ],
+        /*
+        | Entrega Expressa da loja KazaKora (pedido do Lira 2026-11-24): motoboy
+        | para toda a Grande São Paulo (CEP 01000-000 a 09999-999), "Chega em até
+        | 4 horas", no mesmo horário comercial acima. Valor do motoboy: R$ 39,00
+        | (ENTREGA_EXPRESSA_MOTOBOY_SP_VALOR). O cliente paga só o EXCEDENTE,
+        | como no SEDEX fora de SP: valor menos o frete que já está no preço
+        | (frete embutido); com o embutido maior ou igual, sai grátis. Valor
+        | vazio ou zero desliga a opção.
+        */
+        'valor_sp' => (float) env('ENTREGA_EXPRESSA_MOTOBOY_SP_VALOR', 39.00),
+        'grande_sp' => ['inicio' => '01000000', 'fim' => '09999999', 'local' => 'Grande São Paulo'],
+        'mensagem_loja' => 'Chega em até 4 horas',
     ],
 
     'faixas' => [

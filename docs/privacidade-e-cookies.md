@@ -132,9 +132,13 @@ no "Aceito" da primeira página.
   `COOKIES_REGISTRAVEIS` do log de visitas).
 
 ### API de Conversões da Meta (pedido 2026-10-18)
-O servidor manda à Meta os mesmos **AddToCart** e **Purchase** do Pixel, com o
-mesmo `event_id` (a Meta desduplica). Código: `App\Services\Meta\ConversoesMeta`,
-jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento aprovado).
+O servidor manda à Meta os mesmos **AddToCart**, **InitiateCheckout** (desde
+24/11/2026) e **Purchase** do Pixel, com o mesmo `event_id` (a Meta desduplica).
+Código: `App\Services\Meta\ConversoesMeta`, jobs `EnviarEventoMetaJob`
+(AddToCart e InitiateCheckout) e `EnviarPurchaseMetaJob` (pagamento aprovado).
+InitiateCheckout: a tela do checkout entrega ao Pixel o `event_id`
+(`metaInitiateCheckout`, guardado na sessão enquanto o carrinho for o mesmo) e o
+servidor manda uma vez por carrinho, só com OK.
 
 - **Consentimento:** é o mesmo OK do Pixel (`Cookies::aceitou`, versão atual).
   Sem OK, nada sai do servidor. AddToCart: OK na hora do clique. Purchase: OK
@@ -157,6 +161,9 @@ jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento apro
   `META_CAPI_ACCESS_TOKEN` (vazio = usa `META_ADS_ACCESS_TOKEN`),
   `META_CAPI_TEST_EVENT_CODE` (manda só para "Eventos de teste" do Gerenciador).
   Desligado ou sem token: não manda nada, só registra `meta_capi.pulado` no log.
+- **Log próprio:** `storage/logs/meta-capi-AAAA-MM-DD.log` (30 dias, sempre em
+  info): `meta_capi.enviado` com `recebidos` (events_received) e `fbtrace_id`,
+  `meta_capi.erro` e `meta_capi.desistiu` (3 tentativas esgotadas).
 
 ### O que é registrado das visitas (`site_visits`, middleware `TrackSiteVisit`)
 

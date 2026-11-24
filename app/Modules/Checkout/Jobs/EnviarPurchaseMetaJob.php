@@ -55,7 +55,7 @@ class EnviarPurchaseMetaJob implements ShouldQueue
         }
 
         if (empty($order->meta_rastreio)) {
-            Log::info('meta_capi.pulado', ['motivo' => 'sem_consentimento', 'event_name' => 'Purchase', 'order_id' => $order->id]);
+            ConversoesMeta::log()->info('meta_capi.pulado', ['motivo' => 'sem_consentimento', 'event_name' => 'Purchase', 'order_id' => $order->id]);
 
             return;
         }
@@ -84,5 +84,13 @@ class EnviarPurchaseMetaJob implements ShouldQueue
 
         // Saiu: o rastreio (IP, navegador, _fbp/_fbc) não serve mais para nada.
         Order::query()->whereKey($order->id)->update(['meta_rastreio' => null]);
+    }
+
+    /** Esgotou as 3 tentativas: fica no log da Meta e no geral. */
+    public function failed(Throwable $e): void
+    {
+        $dados = ['event_name' => 'Purchase', 'order_id' => $this->orderId, 'erro' => $e->getMessage()];
+        ConversoesMeta::log()->error('meta_capi.desistiu', $dados);
+        Log::error('meta_capi.desistiu', $dados);
     }
 }

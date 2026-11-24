@@ -34,6 +34,7 @@ use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\LeadsDoCheckout;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Checkout\Jobs\EnviarEventoMetaJob;
 use App\Services\Meta\ConversoesMeta;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -79,6 +80,9 @@ class CheckoutController extends Controller
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
+
+    /** event_id do InitiateCheckout da Meta para o carrinho atual (2026-11-24). */
+    private const SESSION_META_IC = 'meta_initiate_checkout';
 
     private const MSG_EMAIL_EM_USO = 'Este e-mail já está em uso. Entre na sua conta para continuar.';
 
@@ -2101,7 +2105,47 @@ class CheckoutController extends Controller
             'avaliacoesCarrossel' => fn () => app(AvaliacoesDoCheckout::class)->paraProdutos($cartItems->map(fn ($item) => data_get($item, 'product.id'))),
             // Faixa do cupom (BLACKFRIDAY, pedido 2026-11-06) no lugar do pop-up do BEMVINDO.
             'cupomFaixa' => fn () => $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomFaixa($subtotal, $user, $draft),
+            // InitiateCheckout (2026-11-24): o event_id que o Pixel usa, o mesmo do servidor.
+            'metaInitiateCheckout' => $this->initiateCheckoutNaMeta($request, $cartItems, $subtotal),
         ];
+    }
+
+    /**
+     * InitiateCheckout na API de Conversões da Meta (pedido 2026-11-24).
+     * O event_id fica na sessão enquanto o carrinho for o mesmo: recarregar a
+     * tela (ou voltar do CEP) devolve o mesmo id ao Pixel e o servidor manda
+     * uma vez só; a Meta junta os dois. Carrinho mudou = evento novo.
+     * Servidor só com o OK de cookies (docs/privacidade-e-cookies.md); o
+     * Pixel do navegador dispara para todos, como os outros eventos.
+     *
+     * @return array{event_id: string}|null
+     */
+    private function initiateCheckoutNaMeta(Request $request, $cartItems, float $subtotal): ?array
+    {
+        if ($cartItems->isEmpty()) {
+            return null;
+        }
+
+        $assinatura = md5($cartItems->map(fn ($item) => data_get($item, 'product.id').'x'.data_get($item, 'quantity'))->sort()->implode(','));
+        $guardado = (array) $request->session()->get(self::SESSION_META_IC, []);
+        if (($guardado['assinatura'] ?? null) !== $assinatura || blank($guardado['event_id'] ?? null)) {
+            $guardado = ['assinatura' => $assinatura, 'event_id' => 'ic-'.Str::uuid(), 'enviado' => false];
+        }
+
+        if ($request->isMethod('get') && ! $guardado['enviado']) {
+            ConversoesMeta::semQuebrar(function () use ($request, $cartItems, $subtotal, &$guardado) {
+                $conversoes = app(ConversoesMeta::class);
+                if (! $conversoes->consentiu($request)) {
+                    return;
+                }
+                EnviarEventoMetaJob::dispatch($conversoes->eventoInitiateCheckout($request, $cartItems, $subtotal, $guardado['event_id']));
+                $guardado['enviado'] = true;
+            });
+        }
+
+        $request->session()->put(self::SESSION_META_IC, $guardado);
+
+        return ['event_id' => $guardado['event_id']];
     }
 
     /**

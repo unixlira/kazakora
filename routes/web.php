@@ -132,11 +132,18 @@ Route::get('/produtos/{product:slug}/avaliacoes', [CatalogController::class, 'av
 Route::inertia('/trocas-e-devolucoes', 'Legal/Trocas')->name('legal.trocas');
 // Política de Entrega com o Full e as regiões atendidas (pedido 2026-10-10).
 Route::get('/politica-de-entrega', fn () => \Inertia\Inertia::render('Legal/Entrega', [
-    'full' => [
+    // Entrega Rápida no mesmo dia (faixas da Grande SP) e Entrega Expressa paga
+    // (pedido do Lira 2026-11-24: sem Full/Flex/Turbo na vista do cliente).
+    'rapida' => [
         'horario_corte' => str_replace(':00', 'h', (string) config('entrega_expressa.horario_corte', '13:00')),
         'horario_entrega' => (string) config('entrega_expressa.horario_entrega', '21h'),
         'faixas' => config('entrega_expressa.faixas', []),
     ],
+    'motoboy' => (float) config('entrega_expressa.motoboy.valor_sp', 0) > 0 ? [
+        'preco' => (float) config('entrega_expressa.motoboy.valor_sp'),
+        'semana' => config('entrega_expressa.motoboy.semana'),
+        'sabado' => config('entrega_expressa.motoboy.sabado'),
+    ] : null,
 ]))->name('legal.entrega');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
 // Exclusão de dados (pedido 2026-10-10, URL exigida pela Meta para o WhatsApp).

@@ -92,9 +92,41 @@ class EntregaExpressa
             'mensagem' => (string) config('entrega_expressa.motoboy.mensagem', 'Receba em até 3 horas'),
         ];
 
+        return $this->noHorarioDoMotoboy($agora) ? $oferta : null;
+    }
+
+    /**
+     * Entrega Expressa por motoboy da loja KazaKora (pedido do Lira
+     * 2026-11-24): toda a Grande São Paulo (CEP 01000-000 a 09999-999),
+     * "Chega em até 4 horas", no horário comercial do motoboy. O cliente paga
+     * só o excedente: o valor do motoboy (R$ 39,00, config valor_sp) menos o
+     * frete que já está no preço ($freteNoPreco); com o embutido maior ou
+     * igual ao valor, sai grátis. Valor vazio ou zero desliga a opção.
+     *
+     * @return array{preco: float, valor: float, mensagem: string}|null
+     */
+    public function motoboyGrandeSp(?string $cep, float $freteNoPreco = 0.0, ?CarbonInterface $agora = null): ?array
+    {
+        $faixa = config('entrega_expressa.motoboy.grande_sp', ['inicio' => '01000000', 'fim' => '09999999', 'local' => 'Grande São Paulo']);
+        $valor = round((float) config('entrega_expressa.motoboy.valor_sp', 0), 2);
+
+        if ($valor <= 0 || ! $this->faixa($cep, [$faixa]) || ! $this->noHorarioDoMotoboy($agora)) {
+            return null;
+        }
+
+        return [
+            'preco' => round(max(0.0, $valor - max(0.0, $freteNoPreco)), 2),
+            'valor' => $valor,
+            'mensagem' => (string) config('entrega_expressa.motoboy.mensagem_loja', 'Chega em até 4 horas'),
+        ];
+    }
+
+    /** Seg a sex e sábado de manhã (horários em config), ou sempre com ignorar_horario. */
+    private function noHorarioDoMotoboy(?CarbonInterface $agora): bool
+    {
         // Teste do fim de semana (Lira, 2026-10-24): sem a regra do horário comercial.
         if (config('entrega_expressa.motoboy.ignorar_horario', false)) {
-            return $oferta;
+            return true;
         }
 
         $agora = Carbon::instance($agora ?? now())->setTimezone('America/Sao_Paulo');
@@ -105,7 +137,7 @@ class EntregaExpressa
         };
 
         if (! $janela) {
-            return null;
+            return false;
         }
 
         [$inicio, $fim] = array_map(function (string $horario) use ($agora) {
@@ -114,11 +146,7 @@ class EntregaExpressa
             return $agora->copy()->setTime($hora, $minuto);
         }, $janela);
 
-        if ($agora->lt($inicio) || $agora->gte($fim)) {
-            return null;
-        }
-
-        return $oferta;
+        return $agora->gte($inicio) && $agora->lt($fim);
     }
 
     /** Sábado a partir do fim do expediente (13h) ou domingo, no horário de Brasília. */

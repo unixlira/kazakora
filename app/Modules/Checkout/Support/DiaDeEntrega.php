@@ -101,6 +101,44 @@ class DiaDeEntrega
             : $this->frase($dia, $agora);
     }
 
+    /**
+     * Quando chega, com as palavras que o cliente vê (pedido do Lira
+     * 2026-11-24): "Chega hoje até as 21h", "Chega amanhã" ou "Chega até
+     * qui., 27/11". $horario só entra no "hoje".
+     */
+    public function chega(CarbonInterface $dia, ?CarbonInterface $agora = null, ?string $horario = null): string
+    {
+        $hoje = $this->agora($agora)->startOfDay();
+        $diferenca = (int) $hoje->diffInDays(Carbon::instance($dia)->startOfDay());
+
+        return match (true) {
+            $diferenca <= 0 => 'Chega hoje'.($horario ? " até as {$horario}" : ''),
+            $diferenca === 1 => 'Chega amanhã',
+            default => 'Chega até '.$this->diaCurto($dia),
+        };
+    }
+
+    /**
+     * Correios em N dias úteis: "Chega até qui., 27/11" até uma semana; mais
+     * longe, "Chega em até 10 dias úteis".
+     */
+    public function chegaCorreios(int $dias, ?CarbonInterface $agora = null): string
+    {
+        $dias = max(1, $dias);
+
+        return $dias <= 5
+            ? $this->chega($this->correios($dias, $agora), $agora)
+            : "Chega em até {$dias} dias úteis";
+    }
+
+    /** "qui., 27/11" */
+    public function diaCurto(CarbonInterface $dia): string
+    {
+        $abreviado = [0 => 'dom.', 1 => 'seg.', 2 => 'ter.', 3 => 'qua.', 4 => 'qui.', 5 => 'sex.', 6 => 'sáb.'];
+
+        return $abreviado[$dia->dayOfWeek].', '.$dia->format('d/m');
+    }
+
     private function entregaFull(CarbonInterface $dia): bool
     {
         return ! $dia->isSunday() && ! $this->feriado($dia);

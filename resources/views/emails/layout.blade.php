@@ -59,7 +59,7 @@
                     <tr>
                         {{-- Selos: uma linha no computador; no celular, 2 de cada lado (2 linhas). --}}
                         <td style="background-color: #0FB930; padding: 9px 12px; text-align: center; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; font-weight: 700; letter-spacing: 0.02em; color: #ffffff; text-transform: uppercase;">
-                            <span class="selos-par" style="white-space: nowrap;">&#128274; Compra Segura&nbsp;&nbsp;&middot;&nbsp;&nbsp;&#128737;&#65039; Dados Protegidos</span><span class="selo-ponto" style="opacity: 0.7;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span><span class="selos-par" style="white-space: nowrap;">&#128230; Entrega Garantida&nbsp;&nbsp;&middot;&nbsp;&nbsp;<em>&#9889;Full</em></span>
+                            <span class="selos-par" style="white-space: nowrap;">&#128274; Compra Segura&nbsp;&nbsp;&middot;&nbsp;&nbsp;&#128737;&#65039; Dados Protegidos</span><span class="selo-ponto" style="opacity: 0.7;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span><span class="selos-par" style="white-space: nowrap;">&#128230; Entrega Garantida&nbsp;&nbsp;&middot;&nbsp;&nbsp;<em>&#9889;Entrega Rápida</em></span>
                         </td>
                     </tr>
                     <tr>

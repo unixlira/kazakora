@@ -31,7 +31,7 @@
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 16px 0 0;">
         <tr>
             <td width="33%" style="padding: 8px; text-align: center; font-size: 12px; color: #374151;"><div style="font-size: 24px;">&#128666;</div><strong>Frete grátis</strong><br>em todos os produtos</td>
-            <td width="34%" style="padding: 8px; text-align: center; font-size: 12px; color: #374151;"><div style="font-size: 24px;">&#9889;</div><strong>Full</strong><br>receba no mesmo dia</td>
+            <td width="34%" style="padding: 8px; text-align: center; font-size: 12px; color: #374151;"><div style="font-size: 24px;">&#9889;</div><strong>Entrega Rápida</strong><br>chega no mesmo dia na Grande SP</td>
             <td width="33%" style="padding: 8px; text-align: center; font-size: 12px; color: #374151;"><div style="font-size: 24px;">&#128184;</div><strong>Desconto no Pix</strong><br>pague e economize</td>
         </tr>
     </table>

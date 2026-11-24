@@ -227,9 +227,9 @@ TXT;
             "Itens:\n{$itens}",
             $pagamento ? 'Pagamento: '.($pagamento->method_type === 'pix' ? 'Pix' : 'cartão').' ('.$pagamento->status.')' : null,
             $order->invoice ? "Nota fiscal: nº {$order->invoice->numero} ({$order->invoice->status})" : 'Nota fiscal: ainda não emitida',
-            $rastreio ? "Código de rastreio: {$rastreio}".($order->shipping_carrier_name ? " ({$order->shipping_carrier_name})" : '') : 'Código de rastreio: ainda não gerado',
+            $rastreio ? "Código de rastreio: {$rastreio}".(($transportadora = $order->transportadoraParaCliente()) ? " ({$transportadora})" : '') : 'Código de rastreio: ainda não gerado',
             'Entrega para: '.trim(($order->shipping_city ?? '').'/'.($order->shipping_state ?? ''), '/'),
-            'Frete grátis para todo o Brasil, em todos os produtos. Prazo de envio: até 1 dia útil após a aprovação do pagamento; entrega em até 7 dias úteis (FULL e FLEX chegam mais rápido onde atendem).',
+            'Frete grátis para todo o Brasil, em todos os produtos. Prazo de envio: até 1 dia útil após a aprovação do pagamento; entrega em até 7 dias úteis (a Entrega Rápida chega antes onde atende; a Entrega Expressa é paga: motoboy em até 4 horas na Grande São Paulo, em horário comercial, ou SEDEX no resto do Brasil, cobrando só a diferença).',
         ]));
     }
 }

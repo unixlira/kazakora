@@ -175,14 +175,22 @@ const entregaOutraRegiao = computed(() => !!props.ufReferencia && ufEntrega.valu
 // ---------- 3. Entrega ----------
 // Frete grátis com o frete embutido (pedido 2026-10-12): o preço dos produtos
 // já tem o frete da região. Quando o CEP muda, o servidor devolve itens e
-// subtotal com o frete exato desse CEP, a entrega FULL (Grande SP) ou a opção
-// TURBO (SEDEX pagando só a diferença).
+// subtotal com o frete exato desse CEP e as opções de entrega com os nomes que o
+// cliente vê (pedido do Lira 2026-11-24, EntregasDaLoja): "Entrega Rápida" ou
+// "Entrega Normal" grátis e "Entrega Expressa" paga (motoboy em até 4 horas na
+// Grande SP ou SEDEX pagando só a diferença), cada uma com o "Chega ...".
 const freteCarregando = ref(false);
-const entregaExpressa = ref(null);
-const prazoGratis = ref(null);
-const turbo = ref(null);
+const entregas = ref([]);
+const opcaoGratis = computed(() => entregas.value.find((opcao) => opcao.id === 'gratis') ?? null);
+const expressa = computed(() => entregas.value.find((opcao) => opcao.id === 'expressa') ?? null);
+// Só o excedente (o que passa do frete que já está no preço); zero = grátis.
+const precoExpressa = computed(() => {
+    const preco = Number(expressa.value?.preco ?? 0);
+    if (preco <= 0) return 'Grátis';
+    return `${expressa.value?.excedente ? '+ ' : ''}${formatPrice(preco)}`;
+});
 // A tela nasce sempre no frete grátis (pedido 2026-10-12).
-const turboEscolhido = ref(false);
+const expressaEscolhida = ref(false);
 const itens = ref(props.items);
 // Estrelas do resumo (pedido 2026-10-21): cada estrela preenche a fração da
 // média que cabe nela (4,8 = 4 cheias e 80% da 5ª), como no StarRating.
@@ -215,9 +223,7 @@ const mostrarOpcoesFrete = async () => {
 const atualizarFrete = async (zip) => {
     const cep = (zip ?? '').replace(/\D/g, '');
     if (cep.length !== 8) {
-        entregaExpressa.value = null;
-        turbo.value = null;
-        prazoGratis.value = null;
+        entregas.value = [];
         return;
     }
     freteCarregando.value = true;
@@ -225,12 +231,10 @@ const atualizarFrete = async (zip) => {
         const response = await fetch(`/finalizacao/entrega-gratis?cep=${cep}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        entregaExpressa.value = data.entrega_expressa ?? null;
-        prazoGratis.value = data.prazo ?? null;
-        turbo.value = data.turbo ?? null;
+        entregas.value = Array.isArray(data.entregas) ? data.entregas : [];
         descontoPlataforma.value = Number(data.desconto_plataforma) || 0;
         medicao.registrar('cep_respondido', {}, 'cep_respondido');
-        if (!turbo.value) turboEscolhido.value = false;
+        if (!expressa.value) expressaEscolhida.value = false;
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
         if (cupomAplicado.value) descontoCupom.value = Number(data.discount_amount) || 0;
@@ -239,8 +243,7 @@ const atualizarFrete = async (zip) => {
             mostrarOpcoesFrete();
         }
     } catch {
-        entregaExpressa.value = null;
-        turbo.value = null;
+        entregas.value = [];
         descontoPlataforma.value = 0;
     } finally {
         freteCarregando.value = false;
@@ -281,8 +284,7 @@ const alterarQuantidade = async (item, delta) => {
 };
 
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
-const valorFrete = computed(() => (turboEscolhido.value && turbo.value ? Number(turbo.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
-const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
+const valorFrete = computed(() => (expressaEscolhida.value && expressa.value ? Number(expressa.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
 
 // ---------- Cupom (pedido 2026-10-10) ----------
 // Aplica por JSON: busca o cupom na base, confere as regras e o desconto
@@ -579,7 +581,9 @@ const errosEndereco = computed(() => [...new Set(CAMPOS_ENDERECO.map((campo) => 
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
 const payloadEntrega = () => {
-    const data = { shipping_method_id: shippingMethodId.value, turbo: Boolean(turboEscolhido.value && turbo.value) };
+    // Entrega Expressa: motoboy (Grande SP) ou SEDEX pela diferença (o antigo turbo).
+    const escolheuExpressa = Boolean(expressaEscolhida.value && expressa.value);
+    const data = { shipping_method_id: shippingMethodId.value, turbo: escolheuExpressa && expressa.value.tipo === 'sedex', motoboy: escolheuExpressa && expressa.value.tipo === 'motoboy' };
 
     if (!usarNovoEndereco.value && addressId.value) {
         data.address_id = addressId.value;
@@ -1331,9 +1335,6 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <!-- Endereço novo: as opções aparecem depois da consulta do CEP (modelo Mavo, 2026-10-24). -->
                             <div v-if="!usarNovoEndereco || cepConsultado || erro('shipping_method_id')" ref="opcoesFreteEl" class="mt-5 scroll-mb-4">
                                 <p class="mb-2 text-sm font-bold text-slate-900"><i class="fa-solid fa-house mr-1 text-slate-500"></i>Receba em casa</p>
-                                <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                                    <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
-                                </p>
 
                                 <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
                                 <div v-if="freteCarregando && totalItens > 1" role="status" class="mb-3 flex items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
@@ -1350,30 +1351,27 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <span>A disponibilidade do frete grátis atende somente a sua região. Tem certeza que você vai enviar para outra? Nesse caso, você terá que pagar uma taxa.</span>
                                 </div>
 
-                                <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): uma exclui a outra; a tela nasce no grátis. -->
+                                <!-- Grátis (já no preço) ou Entrega Expressa (2026-10-12; nomes de 2026-11-24): uma exclui a outra; a tela nasce no grátis. -->
                                 <label class="flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
-                                    :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
-                                    <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
+                                    :class="!expressaEscolhida || !expressa ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
+                                    <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!expressaEscolhida || !expressa" @change="$event.target.checked = true; expressaEscolhida = false">
                                     <span class="flex-1 text-sm text-slate-700">
-                                        <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> Frete Grátis</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
-                                        <span v-if="!entregaExpressa" class="ml-1 text-slate-500">· PAC ({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
+                                        <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-700"></i> {{ opcaoGratis?.nome ?? 'Frete Grátis' }}</strong>
+                                        <span v-if="opcaoGratis?.chega" class="ml-1 text-slate-500">· {{ opcaoGratis.chega }}</span>
                                     </span>
                                     <span class="text-sm font-bold text-emerald-700">Grátis</span>
                                 </label>
 
-                                <!-- Envio Prioritário (o TURBO de 2026-10-23, nome da Mavo desde 2026-10-24): SEDEX pagando só a diferença, também na área FULL. Escolhido = laranja do tema. -->
-                                <label v-if="turbo"
+                                <!-- Entrega Expressa (o antigo Envio Prioritário): motoboy na Grande SP pelo preço fixo ou SEDEX pagando só a diferença. Escolhida = laranja do tema. -->
+                                <label v-if="expressa"
                                     class="mt-2 flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition"
-                                    :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
-                                    <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
+                                    :class="expressaEscolhida ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
+                                    <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="expressaEscolhida" @change="expressaEscolhida = $event.target.checked">
                                     <span class="flex-1 text-sm text-slate-700">
-                                        <strong :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> Envio Prioritário</strong>
-                                        <span class="ml-1 text-slate-500">· SEDEX 
-                                            <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
-                                            <template v-else>entrega mais rápida pelo SEDEX</template>
-                                        </span>
+                                        <strong :class="expressaEscolhida ? 'text-[#c2450c]' : 'text-slate-900'"><i class="fa-solid text-[#F44D00]" :class="expressa.tipo === 'motoboy' ? 'fa-motorcycle' : 'fa-bolt'"></i> {{ expressa.nome }}</strong>
+                                        <span class="ml-1 text-slate-500">· {{ expressa.chega }}</span>
                                     </span>
-                                    <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#c2450c]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
+                                    <span class="text-sm font-bold" :class="expressaEscolhida ? 'text-[#c2450c]' : 'text-slate-900'">{{ precoExpressa }}</span>
                                 </label>
                                 <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                             </div>
@@ -1396,8 +1394,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                     <p v-if="enderecoResumo" class="font-semibold text-slate-900 lg:truncate" :title="enderecoResumo.rua">{{ enderecoResumo.rua }}</p>
                                     <p v-if="enderecoResumo" class="lg:truncate" :title="enderecoResumo.cidade">{{ enderecoResumo.cidade }}</p>
                                     <p class="mt-1 font-semibold text-slate-700 lg:mt-0">
-                                        <template v-if="turboEscolhido && turbo">Envio Prioritário: + {{ formatPrice(turbo.preco) }}</template>
-                                        <template v-else>Frete GRÁTIS<template v-if="entregaExpressa"> · FULL</template><template v-else-if="prazoGratis"> · até {{ diasUteis(prazoGratis) }}</template></template>
+                                        <template v-if="expressaEscolhida && expressa">{{ expressa.nome }}: {{ precoExpressa }} · {{ expressa.chega }}</template>
+                                        <template v-else>Frete GRÁTIS<template v-if="opcaoGratis"> · {{ opcaoGratis.nome }} · {{ opcaoGratis.chega }}</template></template>
                                     </p>
                                 </div>
                             </div>
@@ -1542,8 +1540,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                             <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                             <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                            <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Prioritário</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}<!-- Sempre Grátis; FULL só quando o CEP está na área da entrega expressa. -->
-                                <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
+                            <div class="flex justify-between"><dt>Entrega<span v-if="expressaEscolhida && expressa" class="ml-1 text-xs font-semibold text-[#c2450c]"><i class="fa-solid fa-bolt"></i> Expressa</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#00843f]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '-' }}</dd></div>
                             <div class="flex items-start justify-between border-t border-slate-100 pt-3 text-slate-900">
                                 <dt class="text-base font-extrabold">Total</dt>
                                 <dd class="text-right">

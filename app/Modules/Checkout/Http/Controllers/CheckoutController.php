@@ -27,6 +27,7 @@ use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\DiaDeEntrega;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use App\Modules\Checkout\Support\EntregasDaLoja;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
@@ -82,6 +83,9 @@ class CheckoutController extends Controller
     private const MSG_EMAIL_EM_USO = 'Este e-mail já está em uso. Entre na sua conta para continuar.';
 
     private const MSG_CPF_EM_USO = 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.';
+
+    /** shipping_carrier_name do pedido com a Entrega Expressa por motoboy (Grande SP). */
+    public const MOTOBOY = 'Motoboy (Entrega Expressa)';
 
     public function __construct(
         private readonly CartManager $cart,
@@ -173,7 +177,12 @@ class CheckoutController extends Controller
             'desconto_plataforma' => $entrega['desconto_plataforma'],
             // Na área FULL o TURBO também aparece (pedido 2026-10-23), sem o
             // "dias antes", que compara com o PAC.
-            'turbo' => $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'],
+            'turbo' => $turbo = $expressa ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'],
+            // Entrega Rápida / Entrega Expressa com "Chega ..." (pedido do Lira
+            // 2026-11-24): os nomes que o cliente vê, sem Full, Flex ou Turbo.
+            // Motoboy pelo excedente: valor menos o frete que já está no preço.
+            'motoboy' => $motoboy = $entregaExpressa->motoboyGrandeSp($cep, (float) ($entrega['embutido'] ?? 0)),
+            'entregas' => app(EntregasDaLoja::class)->opcoes($cep, $expressa, ['prazo' => $entrega['prazo'], 'turbo' => $turbo], $motoboy),
         ]);
     }
 
@@ -260,11 +269,11 @@ class CheckoutController extends Controller
             'pac' => $pac,
             'turbo' => $turbo,
             'opcoes' => $opcoes,
-            // Página do produto (pedido 2026-10-24): Turbo de motoboy na Grande SP em
-            // horário comercial (Full + motoboy, sem Flex); fora dele, Flex + Turbo SEDEX.
-            // Motoboy só junto do Full: em Mauá (fora do Full) fica o Flex grátis e o
-            // motoboy não aparece com ele (pedido do Lira 2026-10-24).
-            'motoboy' => $prazo['entrega_expressa'] ? app(EntregaExpressa::class)->motoboy($cep) : null,
+            // Entrega Expressa por motoboy (pedido do Lira 2026-11-24): toda a Grande
+            // SP em horário comercial, com preço configurado; fora dela, SEDEX
+            // pela diferença. "entregas" traz as opções com os nomes do cliente.
+            'motoboy' => $motoboy = app(EntregaExpressa::class)->motoboyGrandeSp($cep, (float) ($entrega['embutido'] ?? 0)),
+            'entregas' => app(EntregasDaLoja::class)->opcoes($cep, $prazo['entrega_expressa'], $entrega ? ['prazo' => $entrega['prazo'] ?? null, 'turbo' => $turbo] : null, $motoboy),
             'fim_de_semana' => app(EntregaExpressa::class)->fimDeSemana(),
         ]);
     }
@@ -320,6 +329,7 @@ class CheckoutController extends Controller
             ],
             'shipping_quote' => ['nullable', 'array'],
             'turbo' => ['nullable', 'boolean'],
+            'motoboy' => ['nullable', 'boolean'],
             'shipping_quote.name' => ['required_with:shipping_quote', 'string', 'max:255'],
             'shipping_quote.carrier_name' => ['nullable', 'string', 'max:255'],
             'shipping_quote.price' => ['required_with:shipping_quote', 'numeric', 'min:0'],
@@ -451,6 +461,7 @@ class CheckoutController extends Controller
             $this->guardarCep($request, preg_replace('/\D/', '', (string) $cepEntrega));
         }
         $data['turbo'] = (bool) ($data['turbo'] ?? false);
+        $data['motoboy'] = (bool) ($data['motoboy'] ?? false);
 
         // Cupom aplicado antes de preencher a entrega (checkout v2) não pode
         // se perder quando o rascunho é regravado.
@@ -1320,7 +1331,7 @@ class CheckoutController extends Controller
                     'endereco' => trim($order->shipping_street.', '.$order->shipping_number.($order->shipping_complement ? ' - '.$order->shipping_complement : '')),
                     'bairro_cidade' => trim($order->shipping_neighborhood.' - '.$order->shipping_city.'/'.$order->shipping_state, ' -/'),
                     'cep' => $order->shipping_zip,
-                    'transportadora' => $order->transportadoraDoEnvio(),
+                    'transportadora' => $order->transportadoraParaCliente(),
                     'codigo_rastreio' => \App\Support\LinkRastreio::codigo($order->trackingCode()),
                     'rastreio_url' => route('rastreio.ver', $order->trackingRef()),
                 ],
@@ -1973,6 +1984,15 @@ class CheckoutController extends Controller
      */
     private function resolveShipping(array $draft, $cartItems = null, ?string $cep = null): array
     {
+        // Entrega Expressa por motoboy na Grande SP (pedido do Lira 2026-11-24):
+        // área, horário e excedente (valor menos o frete já no preço) conferidos
+        // aqui de novo, nunca o valor do navegador; fora da área, do horário ou
+        // sem valor configurado, segue no grátis.
+        if (! empty($draft['motoboy']) && $cartItems && $cep
+            && ($motoboy = app(EntregaExpressa::class)->motoboyGrandeSp($cep, (float) (app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['embutido'] ?? 0)))) {
+            return ['method_id' => null, 'carrier_name' => self::MOTOBOY, 'cost' => (float) $motoboy['preco']];
+        }
+
         // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
         // recalculada aqui (nunca o valor que veio do navegador).
         if (! empty($draft['turbo']) && $cartItems && $cep) {

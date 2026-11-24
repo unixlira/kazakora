@@ -503,6 +503,31 @@ class Order extends Model
         return $this->melhorEnvioEnvio?->servico ?: $this->shipping_carrier_name;
     }
 
+    /**
+     * Transportadora com o nome que o cliente vê (pedido do Lira 2026-11-24):
+     * sem os termos internos de logística. "SEDEX (TURBO)" e o motoboy viram
+     * "Entrega Expressa"; Full e Flex, "Entrega Rápida". O admin continua com
+     * transportadoraDoEnvio(), que traz o nome técnico.
+     */
+    public function transportadoraParaCliente(): ?string
+    {
+        return self::nomeDaEntregaParaCliente($this->transportadoraDoEnvio());
+    }
+
+    public static function nomeDaEntregaParaCliente(?string $nome): ?string
+    {
+        if ($nome === null || trim($nome) === '') {
+            return $nome;
+        }
+
+        return match (true) {
+            $nome === \App\Modules\Checkout\Support\FreteEmbutido::TURBO => 'Entrega Expressa (SEDEX)',
+            (bool) preg_match('/turbo|motoboy/i', $nome) => 'Entrega Expressa',
+            (bool) preg_match('/\b(full|flex)\b/i', $nome) => 'Entrega Rápida',
+            default => $nome,
+        };
+    }
+
     /** Comprovante da entrega ao entregador do Flex (KoraFlex), quando houve. */
     public function pickupReceipt(): BelongsTo
     {

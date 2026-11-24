@@ -73,7 +73,7 @@ const BANDEIRAS_FORMAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto'
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
-    ['O frete é grátis?', 'Sim. O frete é grátis para todo o Brasil, em todos os produtos. O pedido é enviado em até 1 dia útil após a aprovação do pagamento e entregue em até 7 dias úteis; onde o FULL e o FLEX atendem, chega mais rápido.'],
+    ['O frete é grátis?', 'Sim. O frete é grátis para todo o Brasil, em todos os produtos. O pedido é enviado em até 1 dia útil após a aprovação do pagamento e entregue em até 7 dias úteis; onde a Entrega Rápida atende, chega mais rápido. Quem tem pressa pode escolher a Entrega Expressa, paga, na hora de calcular o frete.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`
@@ -550,12 +550,11 @@ const dimensoesEmbalagem = computed(() => selecionada.value.dimensoes_embalagem 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
 // Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
-// SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
-// dela, o prazo normal de envio. Sábado à noite, domingo e feriado (pedido do
-// Lira 2026-10-24): o servidor manda o dia certo, "Receba SEGUNDA" no Full e
-// "Receba a partir de SEGUNDA" no Flex (flex_mensagem) e no Turbo (turbo.mensagem).
+// SP mostra "Chega hoje até as 21h" (até 13h) ou "Chega amanhã"; fora dela,
+// a data pelo prazo dos Correios. O servidor já manda o dia certo (sábado à
+// noite, domingo e feriado não contam) em entregas[].chega.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade, turbo, endereco } depois da consulta
+const prazo = ref(null); // null = não consultado; { entregas, endereco } depois da consulta
 // "Rua - Cidade - UF" do CEP, abaixo do campo e do botão (pedido do Lira 2026-10-24).
 const enderecoPrazo = computed(() => {
     const endereco = prazo.value?.endereco;
@@ -565,29 +564,13 @@ const enderecoPrazo = computed(() => {
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
 const resultadoPrazoEl = ref(null);
-// Opções de frete da página do produto (pedido do Lira 2026-10-24), em caixas de rádio:
-// - Grande SP em horário comercial (servidor manda `motoboy`: seg a sex 8h-18h, sáb
-//   8h-13h): Full e Turbo do motoboy "Receba em até 3 horas" pelo preço fixo, SEM o Flex.
-// - Fora da área ou do horário do motoboy: Flex "Receba de 1 a 7 dias" (texto fixo) e
-//   Turbo dos Correios "Receba em X dias por + R$ Y", com o prazo do SEDEX e só a
-//   diferença SEDEX − PAC (turbo.preco já é só o que passa do grátis; pedido do Lira
-//   2026-10-24, CEP do Maranhão).
-// - CEP com motoboy fora do Full (Mauá): Flex no lugar do Full, para sempre haver o grátis.
-// Nasce no grátis; a finalização continua nascendo no grátis (pedido 2026-10-12).
-const mostrarFull = computed(() => Boolean(prazo.value?.expressa && prazo.value.motoboy));
-// Fora da Grande SP o grátis é o PAC com o prazo real do CEP (servidor manda `pac`,
-// pedido do Lira 2026-10-24): "Receba em até 10 dias úteis" no Maranhão, não o Flex.
-const mostrarPac = computed(() => Boolean(prazo.value?.pac) && !mostrarFull.value);
-const mostrarFlex = computed(() => Boolean(prazo.value) && !mostrarFull.value && !mostrarPac.value);
-const prazoTurbo = (dias) => (dias ? `Receba em ${dias} ${dias === 1 ? 'dia' : 'dias'}` : 'Receba mais rápido');
-const opcaoTurbo = computed(() => {
-    if (prazo.value?.motoboy) return { texto: prazo.value.motoboy.mensagem, preco: prazo.value.motoboy.preco, excedente: false };
-    if (isFreeShipping.value && prazo.value?.turbo) return { texto: prazo.value.turbo.mensagem || prazoTurbo(prazo.value.turbo.prazo), preco: prazo.value.turbo.preco, excedente: true };
-    return null;
-});
-const escolhaFrete = ref('flex');
-const freteGratisPadrao = () => (mostrarFull.value ? 'full' : (mostrarPac.value ? 'pac' : 'flex'));
-
+// Opções de frete da página do produto, em caixas de rádio. Nomes que o cliente vê
+// (pedido do Lira 2026-11-24): "Entrega Rápida" (ou "Entrega Normal") grátis e
+// "Entrega Expressa" paga, sempre com o "Chega ..."; o servidor manda a lista pronta
+// em `entregas` (EntregasDaLoja): motoboy em até 4 horas na Grande SP ou SEDEX pela
+// diferença no resto. Nasce no grátis; a finalização continua nascendo no grátis.
+const opcoesEntrega = computed(() => (prazo.value?.entregas ?? []).filter((opcao) => !opcao.excedente || isFreeShipping.value));
+const escolhaFrete = ref('gratis');
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
     prazo.value = null;
@@ -654,8 +637,8 @@ const consultarPrazo = async () => {
         const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null, turbo: data.turbo ?? null, pac: data.pac ?? null, motoboy: data.motoboy ?? null, flexMensagem: data.flex_mensagem ?? null, endereco: data.endereco ?? null };
-        escolhaFrete.value = freteGratisPadrao();
+        prazo.value = { entregas: data.entregas ?? [], endereco: data.endereco ?? null };
+        escolhaFrete.value = 'gratis';
         mostrarResultadoPrazo();
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado. Sem aviso de
@@ -840,7 +823,7 @@ const submitReview = () => {
         <div class="pd2">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
-                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></span>
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS</span>
                 <span class="sep">|</span>
                 <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
             </div>
@@ -1003,12 +986,12 @@ const submitReview = () => {
 
 
                             <!-- Dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26):
-                                 "Frete Grátis para todo o Brasil." e, em verde, "Expresso Turbo para todas as regiões do Brasil";
+                                 "Frete Grátis para todo o Brasil." e, em verde, "Entrega Expressa para todas as regiões do Brasil";
                                  caminhão verde inclinado (fa-truck-fast) no círculo, igual ao do homolog. -->
                             <ul class="fretefundo">
                                 <li>
                                     <span class="selo-icone carrinho"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
-                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-regiao">Expresso Turbo para todas as regiões do Brasil</span></span>
+                                    <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-regiao">Entrega Expressa para todas as regiões do Brasil</span></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
@@ -1030,22 +1013,13 @@ const submitReview = () => {
                                 <!-- Resposta na largura toda, centralizada e com "• GRÁTIS" (pedido do Lira 2026-10-24). -->
                                 <div v-else-if="prazo" ref="resultadoPrazoEl">
                                     <!-- Opções em caixas de rádio, uma por linha, centralizadas (pedido do Lira 2026-10-24):
-                                         Full e Flex em verde, Turbo em laranja da logo; marcar uma desmarca as outras. -->
-                                    <label v-if="mostrarFull" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'full' }">
-                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="full">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Full</b><span>{{ prazo.expressa.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
-                                    </label>
-                                    <label v-if="mostrarPac" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'pac' }">
-                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="pac">
-                                        <i class="fas fa-truck" aria-hidden="true"></i><b class="nome">PAC</b><span>{{ prazo.pac.mensagem }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
-                                    </label>
-                                    <label v-if="mostrarFlex" class="opcao-frete verde" :class="{ marcado: escolhaFrete === 'flex' }">
-                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="flex">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Flex</b><span>{{ prazo.flexMensagem || 'Receba de 1 a 7 dias' }}</span><span v-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
-                                    </label>
-                                    <label v-if="opcaoTurbo" class="opcao-frete turbo" :class="{ marcado: escolhaFrete === 'turbo' }">
-                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" value="turbo">
-                                        <i class="fas fa-bolt" aria-hidden="true"></i><b class="nome">Turbo</b><span>{{ opcaoTurbo.texto }}</span><span v-if="opcaoTurbo.excedente" class="valor">por <b>+ {{ formatPrice(opcaoTurbo.preco) }}</b></span><span v-else class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcaoTurbo.preco) }}</b></span>
+                                         grátis em verde, Entrega Expressa em laranja da logo; marcar uma desmarca as outras. -->
+                                    <label v-for="opcao in opcoesEntrega" :key="opcao.id" class="opcao-frete" :class="[opcao.preco > 0 ? 'expressa' : 'verde', { marcado: escolhaFrete === opcao.id }]">
+                                        <input v-model="escolhaFrete" type="radio" name="frete-produto" :value="opcao.id">
+                                        <i class="fas" :class="opcao.tipo === 'normal' ? 'fa-truck' : 'fa-bolt'" aria-hidden="true"></i><b class="nome">{{ opcao.nome }}</b><span>{{ opcao.chega }}</span>
+                                        <span v-if="opcao.preco > 0 && opcao.excedente" class="valor">por <b>+ {{ formatPrice(opcao.preco) }}</b></span>
+                                        <span v-else-if="opcao.preco > 0" class="valor"><span aria-hidden="true">•</span> <b>{{ formatPrice(opcao.preco) }}</b></span>
+                                        <span v-else-if="isFreeShipping" class="valor"><span aria-hidden="true">•</span> <b>GRÁTIS</b></span>
                                     </label>
                                 </div>
                             </form>
@@ -1943,14 +1917,14 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #00801a; }
 /* Turbo (Lira, 2026-10-24): fundo e borda no laranja oficial da logo (#FF7F00), como o verde do
    Full/Flex; o texto vai num laranja mais escuro para ler bem sobre o fundo claro. */
-.pd2 .prazo-cep .opcao-frete.turbo { background: #fff2e5; border-color: #FF7F00; color: #a34f00; }
-.pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #FF7F00; }
+.pd2 .prazo-cep .opcao-frete.expressa { background: #fff2e5; border-color: #FF7F00; color: #a34f00; }
+.pd2 .prazo-cep .opcao-frete.expressa input[type="radio"] { accent-color: #FF7F00; }
 .pd2 .prazo-cep .opcao-frete.marcado { box-shadow: 0 0 0 1px currentColor; }
 .pd2 .prazo-cep .opcao-frete:focus-within { outline: 2px solid currentColor; outline-offset: 2px; }
 .dark .pd2 .prazo-cep .opcao-frete.verde { background: rgba(0, 171, 33, .15); border-color: #22c55e; color: #4ade80; }
 .dark .pd2 .prazo-cep .opcao-frete.verde input[type="radio"] { accent-color: #4ade80; }
-.dark .pd2 .prazo-cep .opcao-frete.turbo { background: rgba(255, 127, 0, .15); border-color: #FF7F00; color: #ffa04d; }
-.dark .pd2 .prazo-cep .opcao-frete.turbo input[type="radio"] { accent-color: #ffa04d; }
+.dark .pd2 .prazo-cep .opcao-frete.expressa { background: rgba(255, 127, 0, .15); border-color: #FF7F00; color: #ffa04d; }
+.dark .pd2 .prazo-cep .opcao-frete.expressa input[type="radio"] { accent-color: #ffa04d; }
 /* Celular: menos sobra nas laterais para o Turbo do motoboy caber numa linha a partir de 360px. */
 @media (max-width: 480px) { .pd2 .compra .prazo-cep { padding-left: 6px; padding-right: 6px; } .pd2 .prazo-cep label.opcao-frete { padding: 10px 4px; } }
 

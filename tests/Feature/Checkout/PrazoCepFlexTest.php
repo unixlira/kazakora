@@ -89,7 +89,7 @@ class PrazoCepFlexTest extends TestCase
         $this->getJson("/frete/prazo?cep=07010-000&produto={$product->id}")->assertOk()->assertJsonPath('pac', null);
     }
 
-    public function test_motoboy_so_junto_do_full(): void
+    public function test_motoboy_em_toda_a_grande_sp(): void
     {
         $product = Product::factory()->create(['is_active' => true]);
         config([
@@ -99,8 +99,10 @@ class PrazoCepFlexTest extends TestCase
         ]);
         $this->correios([1]);
 
-        $this->getJson("/frete/prazo?cep=01310-100&produto={$product->id}")->assertOk()->assertJsonPath('motoboy.preco', 39);
-        // Mauá: Flex grátis sem o motoboy junto (pedido do Lira 2026-10-24).
-        $this->getJson("/frete/prazo?cep=09310-000&produto={$product->id}")->assertOk()->assertJsonPath('motoboy', null);
+        $this->getJson("/frete/prazo?cep=01310-100&produto={$product->id}")->assertOk()->assertJsonPath('motoboy.valor', 39);
+        // Entrega Expressa por motoboy em toda a Grande SP (pedido do Lira 2026-11-24),
+        // também fora da área do antigo Full (Mauá), e nada fora dela.
+        $this->getJson("/frete/prazo?cep=09310-000&produto={$product->id}")->assertOk()->assertJsonPath('motoboy.valor', 39);
+        $this->getJson("/frete/prazo?cep=20040-020&produto={$product->id}")->assertOk()->assertJsonPath('motoboy', null);
     }
 }

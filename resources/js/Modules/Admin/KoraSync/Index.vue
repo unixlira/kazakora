@@ -268,62 +268,69 @@ async function packOrder(order) {
         </div>
 
         <!-- Abas da Logística — mesmas 3 do app desktop, some fora dela -->
-        <div v-if="section === 'expedicao'" class="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <!-- No celular as 3 ficam lado a lado e compactas (antes eram 3
+             blocos empilhados que empurravam a fila pra baixo da dobra). -->
+        <div v-if="section === 'expedicao'" class="mb-4 grid grid-cols-3 gap-2">
             <button
                 v-for="tab in EXPEDICAO_TABS"
                 :key="tab.key"
                 type="button"
-                class="rounded-xl border px-4 py-2.5 text-center transition-colors"
+                class="min-h-[52px] rounded-xl border px-1.5 py-2 text-center transition-colors sm:px-4 sm:py-2.5"
                 :style="activeTab === tab.key
                     ? { background: tab.key === 'sem-estoque' ? 'var(--ks-warning)' : (tab.key === 'vendas-futuras' ? '#FFE600' : 'var(--ks-brand)'), borderColor: 'transparent', color: '#00170F' }
                     : { background: 'var(--ks-card)', borderColor: 'var(--ks-border)', color: 'var(--ks-text)' }"
                 @click="switchTab(tab.key)"
             >
-                <div class="text-sm font-bold">{{ tab.label }}</div>
-                <div class="text-xs opacity-80">{{ tab.subtitle }}</div>
+                <div class="text-[13px] font-bold leading-tight sm:text-sm">{{ tab.label }}</div>
+                <div class="mt-0.5 text-[11px] leading-tight opacity-80 sm:text-xs">{{ tab.subtitle }}</div>
             </button>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div class="rounded-xl border" style="background: var(--ks-card); border-color: var(--ks-border)">
-                <div class="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between" style="border-color: var(--ks-border)">
-                    <div class="flex items-center gap-2">
-                        <span class="h-4 w-1 rounded-full" :style="{ background: headerAccent }"></span>
+        <!-- Meta do dia ao lado só a partir de xl: com o menu lateral do
+             admin aberto, em lg a coluna da fila ficava com ~330 px e o
+             card quebrava palavra por palavra. -->
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div class="@container min-w-0 rounded-xl border" style="background: var(--ks-card); border-color: var(--ks-border)">
+                <div class="flex flex-col gap-3 border-b p-4 @2xl:flex-row @2xl:items-center @2xl:justify-between" style="border-color: var(--ks-border)">
+                    <div class="flex min-w-0 items-center gap-2">
+                        <span class="h-4 w-1 shrink-0 rounded-full" :style="{ background: headerAccent }"></span>
                         <span class="text-xs font-bold tracking-wide" style="color: var(--ks-text-secondary)">{{ headerLabel }}</span>
                     </div>
 
-                    <div class="relative w-full md:w-64">
+                    <div class="relative w-full @2xl:w-64 @2xl:shrink-0">
                         <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style="color: var(--ks-text-secondary)"></i>
                         <input
                             v-model="search"
                             type="text"
                             placeholder="Buscar por pedido, cliente, SKU..."
-                            class="w-full rounded-lg border py-2 pl-8 pr-3 text-sm outline-none focus:ring-1"
+                            class="min-h-10 w-full rounded-lg border py-2 pl-8 pr-3 text-base outline-none focus:ring-1 sm:text-sm"
                             style="background: var(--ks-row-bg); border-color: var(--ks-border); color: var(--ks-text)"
                         >
                     </div>
                 </div>
 
-                <div v-if="activeTab === 'vendas-futuras' && section === 'expedicao' && mlSummary" class="grid grid-cols-2 gap-3 border-b p-4 sm:grid-cols-4" style="border-color: var(--ks-border)">
-                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                <div v-if="activeTab === 'vendas-futuras' && section === 'expedicao' && mlSummary" class="grid grid-cols-2 gap-2 border-b p-4 sm:gap-3 @2xl:grid-cols-4" style="border-color: var(--ks-border)">
+                    <div class="min-w-0 rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
                         <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Flex — prontas</div>
                         <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.flex.prontos }}<span class="text-sm font-normal" style="color: var(--ks-text-secondary)"> / {{ mlSummary.flex.total }}</span></div>
                     </div>
-                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                    <div class="min-w-0 rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
                         <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Agência — prontas</div>
                         <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.agencia.prontos }}<span class="text-sm font-normal" style="color: var(--ks-text-secondary)"> / {{ mlSummary.agencia.total }}</span></div>
                     </div>
-                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                    <div class="min-w-0 rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
                         <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Nota fiscal pendente</div>
                         <div class="text-xl font-black" :style="{ color: mlSummary.agencia.nfe_pendente > 0 ? 'var(--ks-error)' : 'var(--ks-text)' }">{{ mlSummary.agencia.nfe_pendente }}</div>
                     </div>
-                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                    <div class="min-w-0 rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
                         <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Canceladas hoje</div>
                         <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.agencia.cancelada }}</div>
                     </div>
                 </div>
 
-                <div class="max-h-[65vh] overflow-y-auto p-4">
+                <!-- Rolagem interna só quando a Meta do dia está ao lado (xl): no
+                     celular, rolagem dentro de rolagem prendia o dedo. -->
+                <div class="p-3 sm:p-4 xl:max-h-[65vh] xl:overflow-y-auto">
                     <div v-if="loading" class="flex flex-col items-center gap-2 py-16" style="color: var(--ks-text-secondary)">
                         <i class="fas fa-spinner fa-spin text-2xl"></i>
                         <p class="text-sm">Carregando…</p>

@@ -32,22 +32,28 @@ const createdDate = computed(() => {
 
 <template>
     <div
-        class="mb-2.5 flex flex-col gap-2 rounded-[10px] border p-3.5 md:flex-row md:items-center md:justify-between md:p-4"
+        class="mb-2.5 flex flex-col gap-3 rounded-[10px] border p-3 @md:p-3.5 @2xl:flex-row @2xl:items-center @2xl:justify-between @2xl:gap-2 @2xl:p-4"
         style="background: var(--ks-row-bg); border-color: var(--ks-border)"
     >
         <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-semibold" style="color: var(--ks-text)">{{ shipment.customer_name || 'Cliente não informado' }}</p>
-            <p class="text-xs" style="color: var(--ks-text-secondary)">
-                Pedido {{ shipment.external_order_id || '—' }} · Criado: {{ createdDate }}
+            <p class="truncate text-sm font-semibold" style="color: var(--ks-text)" :title="shipment.customer_name">{{ shipment.customer_name || 'Cliente não informado' }}</p>
+            <p class="mt-0.5 flex flex-wrap gap-x-1 text-xs" style="color: var(--ks-text-secondary)">
+                <span class="break-all">Pedido {{ shipment.external_order_id || '—' }}</span>
+                <span class="whitespace-nowrap">· Criado: {{ createdDate }}</span>
             </p>
             <p class="mt-1 truncate text-xs" style="color: var(--ks-text-secondary)">
                 {{ shipment.products?.map((p) => `${p.quantity}x ${p.name}`).join(', ') || '—' }}
             </p>
         </div>
 
-        <div class="flex shrink-0 items-center gap-3 md:flex-col md:items-end md:gap-1">
+        <!-- Celular: selos lado a lado (quebram inteiros, nunca no meio da
+             palavra) e o aviso embaixo; desktop: coluna à direita. -->
+        <div
+            class="flex flex-wrap items-center gap-x-2 gap-y-2 border-t pt-3 @2xl:shrink-0 @2xl:flex-col @2xl:items-end @2xl:gap-1 @2xl:border-t-0 @2xl:pt-0"
+            style="border-color: var(--ks-border)"
+        >
             <span
-                class="rounded-full px-2.5 py-1 text-xs font-bold"
+                class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold"
                 :style="shipment.is_overdue
                     ? { background: 'color-mix(in srgb, var(--ks-error) 20%, transparent)', color: 'var(--ks-error)' }
                     : { background: 'color-mix(in srgb, #FFE600 20%, transparent)', color: '#B59F00' }"
@@ -55,8 +61,9 @@ const createdDate = computed(() => {
                 <i class="fas fa-calendar-day mr-1"></i>
                 Agendado {{ scheduledDate }}
             </span>
+            <!-- Tipo de entrega numa linha só (pedido do Lira 24/11). -->
             <span
-                class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold"
+                class="inline-flex min-w-0 max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-xs font-bold @2xl:max-w-[15rem]"
                 :title="envio.titulo"
                 :style="{
                     background: `color-mix(in srgb, ${envio.cor} 16%, transparent)`,
@@ -64,11 +71,11 @@ const createdDate = computed(() => {
                     color: envio.cor,
                 }"
             >
-                <i class="fas text-[10px]" :class="envio.icone"></i>
-                {{ envio.texto }}
+                <i class="fas shrink-0 text-[10px]" :class="envio.icone"></i>
+                <span class="truncate">{{ envio.texto }}</span>
             </span>
-            <span v-if="shipment.is_overdue" class="text-xs font-semibold" style="color: var(--ks-error)">Venceu — canal ainda não liberou</span>
-            <span v-else class="text-xs" style="color: var(--ks-text-secondary)">Aguardando liberação</span>
+            <span v-if="shipment.is_overdue" class="basis-full text-xs font-semibold @2xl:basis-auto" style="color: var(--ks-error)">Venceu — canal ainda não liberou</span>
+            <span v-else class="basis-full text-xs @2xl:basis-auto" style="color: var(--ks-text-secondary)">Aguardando liberação</span>
         </div>
     </div>
 </template>

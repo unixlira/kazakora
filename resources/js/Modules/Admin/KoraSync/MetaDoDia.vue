@@ -56,7 +56,9 @@ const dateTime = now.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit',
 
         <hr class="my-4" style="border-color: var(--ks-border)">
 
-        <div class="space-y-3.5">
+        <!-- Com a Meta do dia embaixo da fila (abaixo de xl) as linhas vão
+             em 2 colunas pra não virar uma tira comprida. -->
+        <div class="grid gap-x-6 gap-y-3.5 sm:grid-cols-2 xl:grid-cols-1">
             <div v-for="row in rows" :key="row.label" class="flex items-center gap-3">
                 <div
                     class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
@@ -64,7 +66,7 @@ const dateTime = now.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit',
                 >
                     <i class="fas text-base" :class="row.icon" :style="{ color: row.color }"></i>
                 </div>
-                <span class="flex-1 text-sm font-bold" style="color: var(--ks-text)">{{ row.label }}</span>
+                <span class="min-w-0 flex-1 text-sm font-bold" style="color: var(--ks-text)">{{ row.label }}</span>
                 <span class="text-2xl font-bold" :style="{ color: row.color }">{{ row.value }}</span>
             </div>
         </div>

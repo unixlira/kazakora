@@ -210,4 +210,45 @@ class CheckoutEventosTest extends TestCase
         }
         $this->assertSame(3, CheckoutEvento::count());
     }
+
+    public function test_motivo_do_erro_no_cartao_da_lista_fechada_e_gravado(): void
+    {
+        // Pedido 2026-11-24: o motivo vem em "valor" só no erro do cartão e vai para a coluna motivo.
+        $this->enviar(['pagina' => 'abc123def456', 'eventos' => [
+            ['evento' => 'finalizar'],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => 'validade'],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => 'nao_carregou'],
+            ['evento' => 'erro', 'campo' => 'cartao'],
+        ]])->assertNoContent();
+
+        $this->assertSame(['validade', 'nao_carregou', null], CheckoutEvento::where('evento', 'erro')->orderBy('id')->pluck('motivo')->all());
+        $this->assertSame(3, CheckoutEvento::where('evento', 'erro')->whereNull('valor')->count());
+
+        foreach (CheckoutEvento::MOTIVOS_CARTAO as $motivo) {
+            $this->enviar(['pagina' => 'abc123def456', 'eventos' => [['evento' => 'erro', 'campo' => 'cartao', 'valor' => $motivo]]])->assertNoContent();
+        }
+        $this->assertSame(3 + count(CheckoutEvento::MOTIVOS_CARTAO), CheckoutEvento::where('evento', 'erro')->count());
+    }
+
+    public function test_motivo_fora_da_lista_ou_fora_do_cartao_recusa_o_lote(): void
+    {
+        foreach ([
+            // Texto livre / número do cartão no lugar do código.
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => 'expirou em 12/29'],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => '4111111111111111'],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => 4111],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => null],
+            ['evento' => 'erro', 'campo' => 'cartao', 'valor' => ['validade']],
+            // Motivo só no cartão.
+            ['evento' => 'erro', 'campo' => 'cpf', 'valor' => 'documento'],
+            ['evento' => 'erro', 'campo' => 'pagamento', 'valor' => 'outro'],
+            // Motivo em outro evento.
+            ['evento' => 'foco', 'campo' => 'cartao', 'valor' => 'cvv'],
+            ['evento' => 'erro', 'campo' => 'cartao', 'motivo' => 'cvv'],
+        ] as $evento) {
+            $this->enviar(['pagina' => 'abc123def456', 'eventos' => [['evento' => 'finalizar'], $evento]])->assertStatus(422);
+        }
+
+        $this->assertSame(0, CheckoutEvento::count());
+    }
 }

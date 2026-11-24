@@ -287,6 +287,13 @@ rolagem máxima, e o pedido criado (servidor).
   conferir o número e grava `whatsapp_alerta_ddd55`, depois
   `whatsapp_confirmou` ou `whatsapp_corrigiu`, com `campo = celular` e nada
   mais. O número **não** é gravado nesses eventos.
+- **Motivo do erro no cartão (2026-11-24):** o evento `erro` com
+  `campo = cartao` pode trazer em `valor` um código da lista fechada
+  `CheckoutEvento::MOTIVOS_CARTAO` (numero, validade, cvv, nome, documento,
+  bin, parcelas, nao_carregou, sem_token, outro), gravado na coluna
+  `motivo`. Diz só QUAL parte do cartão deu erro; número, validade, CVV,
+  nome e CPF digitados **não** são lidos nem gravados (texto fora da lista
+  recusa o lote). Aparece na janela "Ver fluxo" do admin.
 - **Adicionar ao carrinho (2026-11-20):** o servidor grava
   `produto_carrinho` com o id do produto quando alguém põe um item no
   carrinho da loja ou clica em COMPRAR AGORA (`CartController`). Mesmo dado

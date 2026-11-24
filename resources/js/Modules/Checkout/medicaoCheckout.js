@@ -5,6 +5,8 @@
 // Vai em lote para POST /finalizacao/eventos; ao sair, por sendBeacon.
 // Leitura: php artisan checkout:funil. Sem Pixel/terceiros.
 
+import { MOTIVOS_CARTAO } from '@/Shared/useMercadoPagoSdk';
+
 const URL_EVENTOS = '/finalizacao/eventos';
 const MARCOS = [25, 50, 75, 100];
 const LOTE = 30;
@@ -137,7 +139,13 @@ export function useMedicaoCheckout() {
         tentativa += 1;
         registrar('finalizar', {}, null, true);
     };
-    const erro = (campo) => registrar('erro', { campo }, `erro:${tentativa}:${campo}`);
+    // Motivo (2026-11-24): só no cartão, código da lista fechada MOTIVOS_CARTAO
+    // (CheckoutEvento::MOTIVOS_CARTAO no servidor), nunca o que foi digitado.
+    const erro = (campo, motivo = null) => registrar(
+        'erro',
+        campo === 'cartao' && MOTIVOS_CARTAO.includes(motivo) ? { campo, valor: motivo } : { campo },
+        `erro:${tentativa}:${campo}`,
+    );
 
     return { iniciar, parar, registrar, finalizarClicado, erro };
 }

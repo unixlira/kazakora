@@ -62,10 +62,7 @@ class OutroSiteCheckoutEventosController extends Controller
         foreach ($eventos as $evento) {
             CheckoutEvento::create([
                 ...$base,
-                'evento' => $evento['evento'],
-                'campo' => $evento['campo'] ?? null,
-                'valor' => $evento['valor'] ?? $evento['segundos'] ?? null,
-                'rolagem' => $evento['rolagem'] ?? null,
+                ...CheckoutEvento::colunasDoNavegador($evento),
                 'origem' => $evento['evento'] === 'abriu' ? $origem : null,
             ]);
         }

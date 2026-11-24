@@ -173,6 +173,11 @@ abstract class CheckoutOutroSiteController extends Controller
                 return response()->json(['message' => 'O Mercado Pago recusou o CPF informado. Confira o CPF e tente de novo.', 'errors' => ['cliente.cpf' => ['Confira o CPF.']]], 422);
             }
 
+            // Cartão recusado (2026-11-24): diz o motivo (CVV, validade, limite...).
+            if ($e instanceof PagamentoRecusadoException) {
+                return response()->json(['message' => $e->mensagemCliente()], 422);
+            }
+
             return response()->json(['message' => match ($dados['pagamento']['metodo']) {
                 Payment::METHOD_CARD => 'O pagamento no cartão não foi aprovado. Confira os dados, tente outro cartão ou pague no Pix.',
                 Payment::METHOD_BOLETO => 'Não foi possível gerar o boleto agora. Tente de novo em instantes ou pague no Pix.',

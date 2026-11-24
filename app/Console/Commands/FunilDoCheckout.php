@@ -36,7 +36,7 @@ class FunilDoCheckout extends Command
         $eventos = CheckoutEvento::query()
             ->when($site === SiteVisit::SITE_LOJA, fn ($q) => $q->whereNull('site'), fn ($q) => $q->where('site', $site))
             ->where('created_at', '>=', $inicio)
-            ->get(['visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem', 'created_at']);
+            ->get(['visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'motivo', 'rolagem', 'dispositivo', 'origem', 'created_at']);
 
         $visitantes = $this->soDeFora($eventos, $inicio)->groupBy('visitor_id')
             ->filter(fn (Collection $doVisitante) => $doVisitante->contains('evento', 'abriu'))
@@ -138,7 +138,8 @@ class FunilDoCheckout extends Command
             'cepRespondido' => $e->contains('evento', 'cep_respondido'),
             'pagamentos' => $e->where('evento', 'pagamento')->pluck('campo')->unique()->values(),
             'finalizou' => $e->contains('evento', 'finalizar'),
-            'erros' => $e->where('evento', 'erro')->pluck('campo')->unique()->values(),
+            // Cartão com motivo (2026-11-24): "cartao:validade".
+            'erros' => $e->where('evento', 'erro')->map(fn ($x) => $x->campo === 'cartao' && $x->motivo ? 'cartao:'.$x->motivo : $x->campo)->unique()->values(),
             'pedido' => $e->contains('evento', CheckoutEvento::PEDIDO_CRIADO),
             'segundos' => $segundos,
         ];

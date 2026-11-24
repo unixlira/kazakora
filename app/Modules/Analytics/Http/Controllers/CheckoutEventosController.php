@@ -62,10 +62,7 @@ class CheckoutEventosController extends Controller
         foreach ($eventos as $evento) {
             CheckoutEvento::create([
                 ...$base,
-                'evento' => $evento['evento'],
-                'campo' => $evento['campo'] ?? null,
-                'valor' => $evento['valor'] ?? $evento['segundos'] ?? null,
-                'rolagem' => $evento['rolagem'] ?? null,
+                ...CheckoutEvento::colunasDoNavegador($evento),
                 'origem' => $evento['evento'] === 'abriu' ? $origem : null,
             ]);
         }
@@ -129,7 +126,10 @@ class CheckoutEventosController extends Controller
             'rolagem' => $so(['valor']) && is_int($e['valor'] ?? null) && in_array($e['valor'], CheckoutEvento::MARCOS_ROLAGEM, true),
             'foco', 'preencheu' => $so(['campo']) && $campoEm(CheckoutEvento::CAMPOS),
             'pagamento' => $so(['campo']) && $campoEm(CheckoutEvento::FORMAS_PAGAMENTO),
-            'erro' => $so(['campo']) && $campoEm([...CheckoutEvento::CAMPOS, ...CheckoutEvento::ERROS_EXTRAS]),
+            // Motivo (2026-11-24): só no cartão e só um código da lista fechada.
+            'erro' => $so(['campo', 'valor']) && $campoEm([...CheckoutEvento::CAMPOS, ...CheckoutEvento::ERROS_EXTRAS])
+                && (! array_key_exists('valor', $e)
+                    || ($e['campo'] === 'cartao' && is_string($e['valor']) && in_array($e['valor'], CheckoutEvento::MOTIVOS_CARTAO, true))),
             'saiu' => $so(['segundos', 'rolagem']) && $inteiro('segundos', 86400) && $inteiro('rolagem', 100),
             // Cupom (2026-11-23): só o nome do campo, nunca o código digitado.
             'cupom_clicou', 'cupom_aplicado', 'cupom_erro' => $so(['campo']) && $campoEm(['cupom']),

@@ -1503,6 +1503,17 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
                                 {{ processando ? 'Processando...' : 'Finalizar pedido' }}
                             </button>
+                            <!-- Selo do Mercado Pago (pedido do Lira 2026-11-23): o cartão é processado pelo Brick deles.
+                                 Símbolo oficial (mlstatic, o mesmo das páginas do Mercado Pago), com folga em volta (área
+                                 de proteção). Só aparece quando o Mercado Pago é o gateway ativo, para ser sempre verdade. -->
+                            <p v-if="paymentGateway === 'mercadopago'" class="mt-3 flex items-center justify-center gap-2 text-xs font-medium text-slate-600">
+                                <i class="fa-solid fa-lock text-[11px] text-slate-400" aria-hidden="true"></i>
+                                <span>Pagamento processado pelo</span>
+                                <span class="inline-flex items-center gap-1.5 p-1">
+                                    <img src="/images/pagamento/mercado-pago.svg" alt="" width="24" height="24" class="h-6 w-6" decoding="async">
+                                    <strong class="font-semibold text-[#0a0080]">Mercado Pago</strong>
+                                </span>
+                            </p>
                             <p v-if="!aceiteMostrado" class="mt-3 text-center text-[11px] leading-snug text-slate-500">
                                 Ao prosseguir com a compra, você declara que leu e aceita as <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">políticas de privacidade</Link> (incluindo a captação de dados por <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>) e os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>.
                             </p>

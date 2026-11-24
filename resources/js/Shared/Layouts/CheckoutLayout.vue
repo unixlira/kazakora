@@ -20,7 +20,6 @@ defineProps({
 });
 
 const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'];
-const ano = new Date().getFullYear();
 
 </script>
 
@@ -72,12 +71,7 @@ const ano = new Date().getFullYear();
                     </div>
                 </div>
 
-                <div class="mt-6 space-y-1 text-xs text-slate-600">
-                    <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
-                    <p>{{ COMPANY.enderecoCompleto }}</p>
-                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
-                    <p>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
-                </div>
+                <!-- Bloco de empresa (site, endereço, CNPJ, WhatsApp/e-mail) removido do rodapé do checkout a pedido do Lira (2026-11-24). -->
             </div>
         </footer>
     </div>

@@ -89,6 +89,7 @@ use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Catalog\Http\Controllers\ReviewController;
+use App\Modules\Catalog\Http\Controllers\AvaliacaoDoPedidoController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
 use App\Modules\Checkout\Http\Controllers\TrackingController;
 use App\Modules\Contato\Http\Controllers\ContatoController;
@@ -197,6 +198,17 @@ Route::get('/avaliar', [ReviewController::class, 'index'])
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
     ->middleware(['auth', 'throttle:20,1'])
     ->name('avaliacoes.armazenar');
+
+// Link de avaliação do pedido, 5 dias depois da entrega (pedido do Lira 2026-11-23):
+// público e assinado (30 dias), sem login. Ver PedidoDeAvaliacao.
+Route::get('/avaliar-pedido/{pedido}', [AvaliacaoDoPedidoController::class, 'ver'])
+    ->whereNumber('pedido')
+    ->middleware('signed')
+    ->name('avaliacao-pedido.ver');
+Route::post('/avaliar-pedido/{pedido}', [AvaliacaoDoPedidoController::class, 'salvar'])
+    ->whereNumber('pedido')
+    ->middleware(['signed', 'throttle:20,1'])
+    ->name('avaliacao-pedido.salvar');
 
 // Modal "Avalie sua compra" depois do login: "Não avaliar agora" fecha só neste login (2026-10-29).
 Route::post('/avaliar/dispensar', [ReviewController::class, 'dispensar'])

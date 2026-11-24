@@ -53,6 +53,8 @@ class Review extends Model
         // Apelido e texto como vieram do canal (ver AnonimizaAvaliacao).
         'nome_original',
         'comentario_original',
+        // Pedido da avaliação feita pelo link pós-entrega (PedidoDeAvaliacao).
+        'order_id',
     ];
 
     protected $appends = ['reviewer_display_name'];

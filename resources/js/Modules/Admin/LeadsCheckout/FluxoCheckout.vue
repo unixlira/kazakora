@@ -55,6 +55,12 @@ const COR_ETAPA = {
     finalizar: 'bg-rose-500',
     comprou: 'bg-emerald-500',
 };
+// Botão do cupom (2026-11-23): sem etapa, cor própria para achar na linha do tempo.
+const COR_EVENTO = {
+    cupom_clicou: 'bg-orange-500',
+    cupom_aplicado: 'bg-emerald-500',
+    cupom_erro: 'bg-red-500',
+};
 const NOME_ETAPA = {
     carrinho: 'Carrinho',
     abertura: 'Abertura',
@@ -86,11 +92,12 @@ const NOME_ETAPA = {
 
             <ol v-else class="relative ml-2 border-l border-[var(--surface-border)]">
                 <li v-for="(passo, i) in estado.dados.passos" :key="i" class="relative mb-3 pl-5">
-                    <span class="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full" :class="COR_ETAPA[passo.etapa] ?? 'bg-slate-300'"></span>
+                    <span class="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full" :class="COR_EVENTO[passo.evento] ?? COR_ETAPA[passo.etapa] ?? 'bg-slate-300'"></span>
                     <div class="flex flex-wrap items-baseline gap-x-2">
                         <span class="font-mono text-xs tabular-nums text-slate-500">{{ hora(passo.hora) }}</span>
                         <span class="text-sm font-medium">{{ passo.titulo }}</span>
                         <span v-if="passo.vezes > 1" class="text-xs text-slate-400">({{ passo.vezes }}x)</span>
+                        <span v-if="COR_EVENTO[passo.evento]" class="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-orange-700">Cupom</span>
                         <span v-if="passo.etapa" class="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">{{ NOME_ETAPA[passo.etapa] }}</span>
                     </div>
                     <div v-if="passo.detalhe" class="text-xs text-slate-500">{{ passo.detalhe }}</div>

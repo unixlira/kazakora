@@ -289,6 +289,10 @@ class FluxoDoCheckout
             'pagamento' => 'Escolheu pagamento: '.(self::NOME_PAGAMENTO[$e->campo] ?? (string) $e->campo),
             'finalizar' => 'Clicou em Finalizar',
             'erro' => 'Viu um erro em '.$this->nomeCampo($e->campo),
+            // Botão do cupom (2026-11-23): o código digitado nunca é gravado.
+            'cupom_clicou' => 'Clicou em Aplicar cupom',
+            'cupom_aplicado' => 'Cupom aplicado',
+            'cupom_erro' => 'Cupom deu erro',
             'saiu' => 'Saiu do checkout',
             CheckoutEvento::PEDIDO_CRIADO => 'Pedido criado',
             default => (string) $e->evento,

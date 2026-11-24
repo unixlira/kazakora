@@ -20,6 +20,7 @@ import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 // Depoimentos comentados no template (2026-11-24).
 // import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import CardConfianca from './Partes/CardConfianca.vue';
+import CartaoPrevia from './Partes/CartaoPrevia.vue';
 import { loadMercadoPagoSdk, mensagemDoMotivoCartao, mensagemErroCartao, motivoDoErroCartao, motivoNaTelaDoCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -467,20 +468,6 @@ const brickErro = ref(null);
 let brickErroBruto = null;
 
 const cartaoBin = ref('');
-const BANDEIRAS_BIN = [
-    ['elo', /^(4011(78|79)|43(1274|8935)|45(1416|7393|763(1|2))|50(4175|6699|67[0-7][0-9]|9000)|627780|63(6297|6368)|650(03([^4])|04([0-9])|05(0|1)|4(0[5-9]|3[0-9]|8[5-9]|9[0-9])|5([0-2][0-9]|3[0-8])|9([2-6][0-9]|7[0-8])|541|700|720|901)|651652|655000|655021)/],
-    ['hipercard', /^(606282|3841)/],
-    ['amex', /^3[47]/],
-    ['diners', /^3(0[0-5]|[68])/],
-    ['visa', /^4/],
-    ['mastercard', /^(5[1-5]|2(2[2-9]|[3-6]|7[01]|720))/],
-];
-const cartaoBandeira = computed(() => BANDEIRAS_BIN.find(([, regra]) => regra.test(cartaoBin.value))?.[0] ?? null);
-const cartaoNumeroPrevia = computed(() => {
-    const digitos = cartaoBin.value.padEnd(16, '•');
-    return digitos.replace(/(.{4})/g, '$1 ').trim();
-});
-
 // E-mail que o Brick recebe. Sem e-mail válido ainda (Identificação vazia),
 // vai um endereço neutro só para o Brick não abrir o campo dele: esse valor
 // nunca chega ao pagamento, que usa o e-mail da Identificação no servidor.
@@ -1562,18 +1549,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             </div>
 
                             <div v-else class="mt-4">
-                                <!-- Prévia do cartão (modelo Yampi): bandeira e 6 primeiros dígitos, que é o que o Mercado Pago libera. -->
-                                <div class="relative mx-auto mb-4 aspect-[1.586] w-full max-w-[300px] overflow-hidden rounded-2xl bg-gradient-to-br from-[#1f2937] via-[#111827] to-[#00843f] p-5 text-white shadow-lg" aria-hidden="true">
-                                    <div class="flex items-start justify-between">
-                                        <span class="block h-7 w-10 rounded-md bg-gradient-to-br from-amber-200 to-amber-400"></span>
-                                        <span class="text-sm font-extrabold uppercase tracking-wide">{{ cartaoBandeira ?? '' }}</span>
-                                    </div>
-                                    <p class="mt-6 font-mono text-lg tracking-[0.14em] tabular-nums">{{ cartaoNumeroPrevia }}</p>
-                                    <div class="mt-4 flex items-end justify-between text-[10px] uppercase text-white/70">
-                                        <span>Nome do titular</span>
-                                        <span>Validade</span>
-                                    </div>
-                                </div>
+                                <!-- Prévia do cartão (modelo Yampi, cartão black): bandeira e 6 primeiros dígitos, que é o que o Mercado Pago libera. -->
+                                <CartaoPrevia :bin="cartaoBin" />
                                 <!-- O Mercado Pago só mostra as parcelas depois de reconhecer o cartão pelos primeiros dígitos. -->
                                 <p v-if="brickPronto && cartaoBin.length < 6" class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-600"><i class="fa-solid fa-credit-card mr-1"></i>Digite o número do cartão para escolher em quantas parcelas pagar (até 12x).</p>
                                 <!-- Juros pelo cliente (pedido 2026-11-06): o valor de cada parcela e o total com juros aparecem no seletor do Mercado Pago. -->

@@ -157,6 +157,17 @@ const topoFlutuando = ref(false);
 const medirRolagem = () => {
     topoFlutuando.value = (marcaDoTopo.value?.getBoundingClientRect().top ?? 0) < 0;
 };
+// Frases da faixa do topo (FaixaDoTopo.php); sem a prop, as duas de sempre.
+const frasesDaFaixa = computed(() => {
+    const frases = page.props.faixa;
+    return Array.isArray(frases) && frases.length ? frases : [
+        { texto: 'Frete grátis', icone: 'fa-solid fa-truck-fast' },
+        { texto: 'Compra 100% segura', icone: 'fa-solid fa-lock' },
+    ];
+});
+// Mesma velocidade de antes com mais frases: 30s por frase (as duas de sempre davam 60s); a da BF conta como duas.
+const duracaoDaFaixa = computed(() => `${Math.max(60, (frasesDaFaixa.value.length + (page.props.blackfriday ? 2 : 0)) * 30)}s`);
+
 onMounted(() => {
     medirRolagem();
     window.addEventListener('scroll', medirRolagem, { passive: true });
@@ -181,17 +192,14 @@ onUnmounted(() => {
                  (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco.
                  Roda também com "reduzir movimento" ligado (pedido 2026-10-15): no celular
                  essa opção liga sozinha com a economia de bateria e a faixa ficava parada. -->
-            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2">
+            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2" :style="{ animationDuration: duracaoDaFaixa }">
                 <span v-for="n in 6" :key="n" class="contents">
-                    <!-- Só "Frete grátis | Compra 100% segura" (pedido do Lira 2026-11-24): sem os
-                         termos internos de logística (Full/Flex) na vista do cliente. -->
-                    <!-- Black Friday automática (pedido do Lira 2026-11-24): durante a BF a faixa troca;
-                         passou a data (loja.blackfriday_ate) o servidor manda null e volta a de sempre. -->
+                    <!-- Black Friday automática (pedido do Lira 2026-11-24): a frase da BF vem primeiro e as
+                         outras continuam depois dela; passou a data (loja.blackfriday_ate) o servidor manda null. -->
                     <span v-if="$page.props.blackfriday" class="font-store-mono px-5 text-[0.68rem] font-bold uppercase tracking-wider after:ml-5 after:content-['|']" data-faixa-blackfriday><i class="fa-solid fa-tag mr-1"></i>Black Friday: {{ $page.props.blackfriday.rotulo }} em todo o site, já aplicado no carrinho</span>
-                    <template v-else>
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-truck-fast mr-1"></i>Frete grátis</span>
-                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']"><i class="fa-solid fa-lock mr-1"></i>Compra 100% segura</span>
-                    </template>
+                    <!-- Frases da faixa (FaixaDoTopo.php, pedido do Lira 2026-11-24): na página de produto, os
+                         benefícios daquele produto; no resto da loja, as gerais. Sem raio (fa-bolt). -->
+                    <span v-for="(frase, i) in frasesDaFaixa" :key="i" class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']" data-faixa-frase><i v-if="frase.icone" :class="[frase.icone, 'mr-1']" aria-hidden="true"></i>{{ frase.texto }}</span>
                 </span>
             </div>
         </div>

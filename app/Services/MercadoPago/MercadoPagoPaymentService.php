@@ -207,6 +207,14 @@ class MercadoPagoPaymentService
         return (10 - $soma % 10) % 10;
     }
 
+    /** MP_DEVICE_SESSION_ID que o checkout manda junto do pagamento (mp_device_id). */
+    public static function dispositivoDoComprador(): ?string
+    {
+        $id = app()->runningInConsole() && ! app()->runningUnitTests() ? null : request()->input('mp_device_id');
+
+        return is_string($id) && preg_match('/^[A-Za-z0-9_\-:.]{8,200}$/', $id) ? $id : null;
+    }
+
     public function retrievePayment(string $paymentId): array
     {
         return $this->request('GET', "v1/payments/{$paymentId}");
@@ -242,6 +250,12 @@ class MercadoPagoPaymentService
 
         if ($idempotencyKey) {
             $request = $request->withHeaders(['X-Idempotency-Key' => $idempotencyKey]);
+        }
+
+        // Device ID do comprador (security.js do Mercado Pago no checkout, 2026-11-24):
+        // sem ele o antifraude recusava cartão bom como "high_risk".
+        if ($method === 'POST' && str_starts_with(ltrim($uri, '/'), 'v1/orders') && ($dispositivo = self::dispositivoDoComprador())) {
+            $request = $request->withHeaders(['X-meli-session-id' => $dispositivo]);
         }
 
         $response = $this->sendWithRetry($request, $method, ltrim($uri, '/'), $data);

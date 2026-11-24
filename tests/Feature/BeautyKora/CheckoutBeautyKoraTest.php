@@ -126,7 +126,9 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertJsonPath('avaliacoes.0.nome', 'Carla Souza')
             ->assertJsonPath('avaliacoes.1.nome', 'Cliente');
 
-        $this->assertMatchesRegularExpression('#/images/avaliacoes/avatares/f\d{2}\.webp$#', $resposta->json('avaliacoes.0.avatar'));
+        // Sem rosto de banco (2026-11-23): o avatar é o círculo com as iniciais.
+        $this->assertStringStartsWith('data:image/svg+xml;base64,', $resposta->json('avaliacoes.0.avatar'));
+        $this->assertSame('CS', $resposta->json('avaliacoes.0.iniciais'));
     }
 
     public function test_resumo_so_traz_avaliacoes_do_produto_do_carrinho(): void

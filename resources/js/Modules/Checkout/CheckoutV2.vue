@@ -15,8 +15,9 @@ import { deveAlertarDdd55, sugestaoSem55 } from './alertaWhatsapp';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { campoDoErro, useMedicaoCheckout } from './medicaoCheckout';
 import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
-// Depoimentos oculto a pedido do Lira em 2026-11-23: o carrossel está comentado no template.
-// import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
+// Depoimentos de volta (pedido do Lira 2026-11-23, à noite): carrossel parado, com bullets e
+// no máximo 4. A nota com estrelas e o total de avaliações continuam ocultos.
+import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -554,12 +555,14 @@ const SELOS_VERIFICADOS = [
 ];
 // Nota fiscal (pedido do Lira 2026-11-23): diz que vai por e-mail assim que o pagamento é
 // confirmado, com os livros digitais quando o pedido ganha o brinde.
+// Só esta frase fica (pedido do Lira 2026-11-23, à noite). Os selos Loja verificada e Compra
+// segura e os checks de frete grátis e devolução ficam comentados no template, sem apagar:
+//   'Frete grátis para todo o Brasil',
+//   'Devolução grátis em até 7 dias após o recebimento',
 const CHECKS_LOJA = computed(() => [
-    'Frete grátis para todo o Brasil',
     props.livrosBrinde
         ? 'Nota fiscal e livros digitais no seu e-mail assim que o pagamento é confirmado'
         : 'Nota fiscal no seu e-mail assim que o pagamento é confirmado',
-    'Devolução grátis em até 7 dias após o recebimento',
 ]);
 
 // ---------- Finalizar ----------
@@ -1506,10 +1509,9 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                         </div>
                     </section>
 
-                    <!-- Depoimentos oculto a pedido do Lira em 2026-11-23 (não apagar; para voltar, tirar o comentário).
-                    Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24).
+                    <!-- Celular: avaliações debaixo das etapas, para não empurrar o formulário para baixo do resumo (2026-10-24).
+                         Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
                     <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" />
-                    -->
                     </div>
                 </div>
             </main>
@@ -1614,27 +1616,29 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             -->
                         </div>
 
-                        <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974). -->
+                        <!-- Selos Loja verificada e Compra segura + 3 checks verdes (padrão KazaKora, #974).
+                             Só a frase da nota fiscal fica (pedido do Lira 2026-11-23, à noite): os selos estão
+                             comentados abaixo, sem apagar, e frete grátis e devolução em CHECKS_LOJA.
+                        <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
+                            <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
+                                <svg class="h-[18px] w-[18px] fill-[#1d9bf0] stroke-white" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
+                                </svg>
+                                {{ rotulo }}
+                            </li>
+                        </ul>
+                        -->
                         <div class="mt-4 border-t border-slate-100 pt-4">
-                            <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-[13px] font-semibold text-slate-800" aria-label="Selos de verificação">
-                                <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica" class="inline-flex items-center gap-1.5">
-                                    <svg class="h-[18px] w-[18px] fill-[#1d9bf0] stroke-white" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
-                                    </svg>
-                                    {{ rotulo }}
-                                </li>
-                            </ul>
-                            <ul class="mt-3 space-y-1 text-sm text-slate-700">
+                            <ul class="space-y-1 text-sm text-slate-700">
                                 <li v-for="item in CHECKS_LOJA" :key="item"><i class="fas fa-check mr-1.5 text-[1.1em] text-[#00a650] [-webkit-text-stroke:0.8px_#00a650]" aria-hidden="true"></i>{{ item }}</li>
                             </ul>
                         </div>
                     </div>
                 </div>
 
-                <!-- Depoimentos oculto a pedido do Lira em 2026-11-23 (não apagar; para voltar, tirar o comentário).
-                Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24).
+                <!-- Carrossel de avaliações reais (modelo Yampi). No celular fica debaixo das etapas (2026-10-24).
+                     Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
                 <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" />
-                -->
             </aside>
         </div>
 

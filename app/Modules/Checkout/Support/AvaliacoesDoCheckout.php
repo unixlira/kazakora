@@ -4,7 +4,6 @@ namespace App\Modules\Checkout\Support;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
-use App\Support\NomeBrasileiro;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -18,12 +17,14 @@ use Illuminate\Support\Str;
  * o produto não tem nenhuma: sem isso o carrossel sumia (2026-10-25). O nome segue a mesma regra da página do produto
  * (reviewer_display_name) e a UF só aparece quando é a real (reviews.uf).
  *
- * Foto redonda (pedido 2026-10-24): avatar do pacote da vitrine em
- * public/images/avaliacoes/avatares, do mesmo gênero do nome, escolhido
- * pelo id da avaliação (a mesma avaliação mostra sempre o mesmo rosto) e sem
- * repetir rosto no mesmo carrossel. Máximo de 5 avaliações (pedido 2026-10-24):
- * se o gênero do nome já usou todos os rostos dele, a avaliação é pulada e
- * entra a próxima, então nunca há duas pessoas com a mesma foto.
+ * Sem rosto de banco de imagens (pedido do Lira 2026-11-23, que achou os
+ * avatares "muito fake"): rosto que não é do autor ao lado da opinião dele
+ * engana o cliente. No lugar, círculo com as iniciais do nome numa cor suave,
+ * sempre a mesma para o mesmo nome (padrão Google e Mercado Livre); a foto que
+ * o cliente mandou do produto, em miniatura; e "Compra verificada" quando a
+ * avaliação veio do link do pedido (reviews.order_id, PR #1642). A chave
+ * `avatar` continua (os sites FerraKora e Beauty Kora a usam como <img>), mas
+ * agora é o círculo de iniciais em SVG. Máximo de 4 avaliações (2026-11-23).
  *
  * Só elogio claro (pedido 2026-10-25, "nada meia duvidoso"): nota 5 e texto
  * que elogia sem ressalva, dúvida ou reclamação (ver elogioClaro). Vale para
@@ -32,9 +33,9 @@ use Illuminate\Support\Str;
  */
 class AvaliacoesDoCheckout
 {
-    public const LIMITE = 5;
+    public const LIMITE = 4;
 
-    // Candidatas lidas do banco: avaliação com ressalva ou cujo rosto já saiu é pulada, então precisa sobrar.
+    // Candidatas lidas do banco: avaliação com ressalva é pulada, então precisa sobrar.
     private const CANDIDATAS = 300;
 
     // Texto até este tamanho aparece inteiro no carrossel (sem "..." escondendo o resto).
@@ -78,9 +79,17 @@ class AvaliacoesDoCheckout
         '\\b(pode|podem|comprem?) (comprar )?sem medo\\b', '\\bencantad', '\\bapaixonad',
     ];
 
-    public const AVATARES_FEMININOS = 16;
-
-    public const AVATARES_MASCULINOS = 3;
+    /** Fundo suave e texto escuro do mesmo tom, para o círculo de iniciais. */
+    public const CORES = [
+        ['fundo' => '#e0f2fe', 'texto' => '#075985'],
+        ['fundo' => '#dcfce7', 'texto' => '#166534'],
+        ['fundo' => '#fef3c7', 'texto' => '#92400e'],
+        ['fundo' => '#fce7f3', 'texto' => '#9d174d'],
+        ['fundo' => '#ede9fe', 'texto' => '#5b21b6'],
+        ['fundo' => '#ffedd5', 'texto' => '#9a3412'],
+        ['fundo' => '#ccfbf1', 'texto' => '#115e59'],
+        ['fundo' => '#e2e8f0', 'texto' => '#334155'],
+    ];
 
     /**
      * $catalogo (ids de produto pai publicados no site): os outros sites só
@@ -88,7 +97,7 @@ class AvaliacoesDoCheckout
      * mostrava "Torque forte" de parafusadeira).
      *
      * @param  Collection<int, int>|array<int, int>  $productIds  produtos do carrinho
-     * @return list<array{id: int, nota: int, nome: string, uf: ?string, texto: string, avatar: string}>
+     * @return list<array{id: int, nota: int, nome: string, uf: ?string, texto: string, iniciais: string, cor: array{fundo: string, texto: string}, avatar: string, foto: ?string, verificada: bool}>
      */
     public function paraProdutos(Collection|array $productIds, ?Builder $catalogo = null): array
     {
@@ -126,21 +135,17 @@ class AvaliacoesDoCheckout
             $avaliacoes = $base()->get()->filter(fn (Review $review) => self::elogioClaro((string) $review->comment));
         }
 
-        $usados = [];
         $resultado = [];
 
-        foreach ($avaliacoes as $review) {
-            if (count($resultado) >= self::LIMITE) {
-                break;
-            }
+        foreach ($avaliacoes->take(self::LIMITE) as $review) {
             if ($review->ocultar_nome) {
                 $review->setRelation('user', null);
             }
             $nome = $review->reviewer_display_name;
-            $arquivo = self::avatar($review->id, $nome, $usados, repetir: false);
-            if ($arquivo === null) {
-                continue;
-            }
+            $iniciais = self::iniciais($nome);
+            $cor = self::cor($nome);
+            // Foto do produto enviada pelo cliente (vídeo fica de fora): a miniatura, ou a original sem ela.
+            $foto = $review->images->first(fn ($imagem) => ! preg_match('/\.(mp4|mov|webm|m4v)(\?|$)/i', (string) $imagem->image_url));
 
             $resultado[] = [
                 'id' => $review->id,
@@ -148,7 +153,11 @@ class AvaliacoesDoCheckout
                 'nome' => $nome,
                 'uf' => $review->uf ? strtoupper($review->uf) : null,
                 'texto' => trim((string) $review->comment),
-                'avatar' => asset('images/avaliacoes/avatares/'.$arquivo),
+                'iniciais' => $iniciais,
+                'cor' => $cor,
+                'avatar' => self::avatarDeIniciais($iniciais, $cor),
+                'foto' => $foto ? ($foto->thumb_url ?: $foto->image_url) : null,
+                'verificada' => $review->order_id !== null,
             ];
         }
 
@@ -187,37 +196,43 @@ class AvaliacoesDoCheckout
         return false;
     }
 
-    /**
-     * Arquivo do avatar ("f03.webp"). $usados guarda os já mostrados no
-     * carrossel; quando todos do gênero já saíram, volta a repetir (ou devolve
-     * null com $repetir = false).
-     *
-     * @param  array<string, true>  $usados
-     */
-    public static function avatar(int $semente, string $nome, array &$usados = [], bool $repetir = true): ?string
+    /** Iniciais do nome: primeira e última palavra ("Carla S." vira "CS", "Ana" vira "A"). */
+    public static function iniciais(string $nome): string
     {
-        [$prefixo, $total] = NomeBrasileiro::feminino($nome)
-            ? ['f', self::AVATARES_FEMININOS]
-            : ['m', self::AVATARES_MASCULINOS];
-
-        $inicio = hexdec(substr(sha1('avatar-avaliacao:'.$semente), 0, 8)) % $total;
-        // Todos do gênero já saíram: começa outra rodada (revezando, sem cair sempre no mesmo).
-        if (count(array_filter(array_keys($usados), fn (string $usado) => $usado[0] === $prefixo)) >= $total) {
-            if (! $repetir) {
-                return null;
-            }
-            $usados = array_filter($usados, fn (string $usado) => $usado[0] !== $prefixo, ARRAY_FILTER_USE_KEY);
+        $palavras = preg_split('/\s+/u', trim(preg_replace('/[^\p{L}\s]/u', ' ', $nome) ?? '')) ?: [];
+        $palavras = array_values(array_filter($palavras, fn (string $palavra) => $palavra !== ''));
+        if ($palavras === []) {
+            return '?';
         }
-        $arquivo = null;
-        for ($passo = 0; $passo < $total; $passo++) {
-            $candidato = sprintf('%s%02d.webp', $prefixo, (($inicio + $passo) % $total) + 1);
-            if (! isset($usados[$candidato])) {
-                $arquivo = $candidato;
-                break;
-            }
-        }
-        $usados[$arquivo] = true;
+        $primeira = mb_substr($palavras[0], 0, 1);
+        $ultima = count($palavras) > 1 ? mb_substr($palavras[count($palavras) - 1], 0, 1) : '';
 
-        return $arquivo;
+        return mb_strtoupper($primeira.$ultima);
+    }
+
+    /**
+     * Cor do círculo, sempre a mesma para o mesmo nome.
+     *
+     * @return array{fundo: string, texto: string}
+     */
+    public static function cor(string $nome): array
+    {
+        return self::CORES[crc32(mb_strtolower(trim($nome))) % count(self::CORES)];
+    }
+
+    /**
+     * Círculo de iniciais em SVG (data URI) para quem mostra a avaliação com
+     * <img>, como os sites FerraKora e Beauty Kora.
+     *
+     * @param  array{fundo: string, texto: string}  $cor
+     */
+    public static function avatarDeIniciais(string $iniciais, array $cor): string
+    {
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">'
+            .'<circle cx="40" cy="40" r="40" fill="'.$cor['fundo'].'"/>'
+            .'<text x="40" y="40" dy=".35em" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="'.$cor['texto'].'">'
+            .htmlspecialchars($iniciais, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</text></svg>';
+
+        return 'data:image/svg+xml;base64,'.base64_encode($svg);
     }
 }

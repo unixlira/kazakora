@@ -52,7 +52,7 @@ class CardBlackFridayTest extends TestCase
         $this->assertSame('cupom', $card['tipo']);
         $this->assertSame('Black Friday', $card['selo']);
         $this->assertSame('5% de desconto extra', $card['titulo']);
-        $this->assertStringContainsString('Vale até '.$cupom->expires_at->format('d/m').'.', $card['texto']);
+        $this->assertStringContainsString('Válido até '.$cupom->expires_at->format('d/m').'.', $card['texto']);
         $this->assertSame($cupom->expires_at->format('Y-m-d'), $card['ate']);
     }
 

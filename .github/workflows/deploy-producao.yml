@@ -130,6 +130,25 @@ jobs:
             exit 1
           fi
 
+          # Abre as páginas de verdade (24/11/2026: o /up respondia 200 enquanto
+          # toda página de produto dava 500 por uma regex que o PCRE daqui não
+          # conhece). Qualquer 5xx ou falta de resposta volta para a anterior.
+          # Pelo HTTPS local (--resolve): no http://127.0.0.1 o nginx só devolve 301.
+          QUEBROU=""
+          for CAMINHO in \$(\$PHP artisan loja:paginas-para-conferir); do
+            CODIGO=\$(curl -s -o /dev/null -w '%{http_code}' -m 30 --resolve kazakora.com:443:127.0.0.1 "https://kazakora.com\$CAMINHO" || echo 000)
+            echo "conferido \$CODIGO \$CAMINHO"
+            if [ "\$CODIGO" = 000 ] || [ "\$CODIGO" -ge 500 ]; then QUEBROU="\$QUEBROU \$CAMINHO(\$CODIGO)"; fi
+          done
+          if [ -n "\$QUEBROU" ]; then
+            echo "Páginas com erro:\$QUEBROU — voltando para a versão anterior"
+            if [ -n "\$ANTERIOR" ] && [ -d "\$ANTERIOR" ]; then
+              ln -sfn \$ANTERIOR \$BASE/current.novo && mv -Tf \$BASE/current.novo \$BASE/current
+              sudo /usr/bin/systemctl reload php8.3-fpm
+            fi
+            exit 1
+          fi
+
           # Guarda as 5 últimas versões para voltar rápido.
           # Limpeza das versões antigas não derruba o deploy: em 11/10/2026 um
           # arquivo criado como root dentro de uma versão antiga (prévia feita

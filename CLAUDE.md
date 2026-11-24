@@ -76,3 +76,9 @@ servidor por fora: trazer pro git antes, nunca publicar por cima.
 - Backups manuais: `~/deploy-backups` no servidor.
 - WhatsApp/Manuela: a IA é o Gemini (`GEMINI_API_KEY`), código em
   `app/Modules/WhatsApp`. O caminho pelo Hermes existe mas está desligado.
+
+## Produção: regex e conferência depois do deploy (incidente 24/11/2026)
+
+- O PCRE do servidor é o **10.39**, mais antigo que o do CI e o das máquinas locais. Propriedades Unicode novas como `\p{Extended_Pictographic}` quebram o `preg_*` só em produção, e os testes passam mesmo assim. Em 24/11/2026 isso derrubou **todas as páginas de produto (500) por 9 minutos**. Use faixas explícitas `\x{1F000}-\x{1FAFF}` etc. O teste `PaginasParaConferirTest` barra essas propriedades no código.
+- O deploy de produção abre a home, o carrinho e páginas de produto reais (`php artisan loja:paginas-para-conferir`) depois de trocar a versão. Qualquer 5xx volta sozinho para a versão anterior.
+- Depois de qualquer deploy, abra a página de produto e olhe o `production.ERROR` do log antes de dizer que está no ar.

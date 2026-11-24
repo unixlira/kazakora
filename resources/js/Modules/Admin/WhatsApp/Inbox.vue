@@ -1312,7 +1312,7 @@ function linkify(text) {
                                 :class="[item.message.direction === 'outbound' ? 'justify-end' : 'justify-start', item.first ? 'mt-3' : 'mt-[2px]']"
                             >
                                 <!-- Balão + botões do modelo logo abaixo, da mesma largura (igual ao WhatsApp) -->
-                                <div class="flex min-w-0 max-w-[85%] flex-col sm:max-w-[65%]">
+                                <div class="flex min-w-0 max-w-[85%] flex-col sm:max-w-[65%]" :class="item.message.template_render ? 'w-[346px]' : ''">
                                 <div
                                     class="wa-bubble relative"
                                     :class="[
@@ -1335,9 +1335,9 @@ function linkify(text) {
                                     <!-- Modelo aprovado desenhado igual ao WhatsApp: imagem, corpo formatado e rodapé -->
                                     <template v-if="item.message.template_render">
                                         <a v-if="item.message.template_render.cabecalho_imagem" :href="item.message.template_render.cabecalho_imagem" target="_blank" rel="noopener noreferrer" class="-mx-1 -mt-0.5 mb-1 block">
-                                            <img :src="item.message.template_render.cabecalho_imagem" loading="lazy" alt="Imagem do modelo" class="max-h-[330px] w-[330px] max-w-full rounded-md object-cover">
+                                            <img :src="item.message.template_render.cabecalho_imagem" loading="lazy" alt="Imagem do modelo" class="max-h-[330px] w-full rounded-md object-cover">
                                         </a>
-                                        <span v-else-if="['image', 'video', 'document'].includes(item.message.template_render.cabecalho_tipo)" class="wa-tpl-media -mx-1 -mt-0.5 mb-1 flex h-[120px] w-[330px] max-w-full items-center justify-center rounded-md">
+                                        <span v-else-if="['image', 'video', 'document'].includes(item.message.template_render.cabecalho_tipo)" class="wa-tpl-media -mx-1 -mt-0.5 mb-1 flex h-[120px] w-full items-center justify-center rounded-md">
                                             <i :class="{ image: 'fas fa-image', video: 'fas fa-video', document: 'fas fa-file-lines' }[item.message.template_render.cabecalho_tipo]" class="text-3xl"></i>
                                         </span>
                                         <span v-if="item.message.template_render.cabecalho_texto" class="mb-1 block font-semibold">{{ item.message.template_render.cabecalho_texto }}</span>

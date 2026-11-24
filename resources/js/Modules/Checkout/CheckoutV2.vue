@@ -19,6 +19,7 @@ import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 // no máximo 4. A nota com estrelas e o total de avaliações continuam ocultos.
 // Depoimentos comentados no template (2026-11-24).
 // import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
+import CardConfianca from './Partes/CardConfianca.vue';
 import { loadMercadoPagoSdk, mensagemDoMotivoCartao, mensagemErroCartao, motivoDoErroCartao, motivoNaTelaDoCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -1469,10 +1470,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <i v-if="salvandoEntrega" class="fa-solid fa-spinner animate-spin"></i>
                                 {{ salvandoEntrega ? 'Salvando...' : 'Ir para Pagamento' }}
                             </button>
-                            <!-- Aceite dos termos e dos cookies (2026-10-24): no lugar do aviso flutuante; o servidor grava a prova ao finalizar. -->
-                            <p class="mt-3 text-center text-[11px] leading-snug text-slate-500">
-                                Ao prosseguir com a compra, você declara que leu e aceita as <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">políticas de privacidade</Link> (incluindo a captação de dados por <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>) e os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>.
-                            </p>
+                            <!-- Aceite dos termos: foi para o CardConfianca, em frase curta (pedido do Lira 2026-11-24). -->
                         </template>
 
                         <!-- Três linhas como a Identificação (2026-10-24): no computador a cidade fica numa linha só, com o endereço inteiro no title. -->
@@ -1598,17 +1596,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <!-- Selo do Mercado Pago (pedido do Lira 2026-11-23): o cartão é processado pelo Brick deles.
                                  Símbolo oficial (mlstatic, o mesmo das páginas do Mercado Pago), com folga em volta (área
                                  de proteção). Só aparece quando o Mercado Pago é o gateway ativo, para ser sempre verdade. -->
-                            <p v-if="paymentGateway === 'mercadopago'" class="mt-3 flex items-center justify-center gap-2 text-xs font-medium text-slate-600">
-                                <i class="fa-solid fa-lock text-[11px] text-slate-400" aria-hidden="true"></i>
-                                <span>Pagamento processado pelo</span>
-                                <span class="inline-flex items-center gap-1.5 p-1">
-                                    <img src="/images/pagamento/mercado-pago.svg" alt="" width="24" height="24" class="h-6 w-6" decoding="async">
-                                    <strong class="font-semibold text-[#0a0080]">Mercado Pago</strong>
-                                </span>
-                            </p>
-                            <p v-if="!aceiteMostrado" class="mt-3 text-center text-[11px] leading-snug text-slate-500">
-                                Ao prosseguir com a compra, você declara que leu e aceita as <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">políticas de privacidade</Link> (incluindo a captação de dados por <Link href="/politica-de-cookies" target="_blank" class="font-bold no-underline hover:text-slate-800">cookies</Link>) e os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link>.
-                            </p>
+                            <!-- Selo do Mercado Pago e aceite dos termos: foram para o CardConfianca (pedido do Lira 2026-11-24). -->
                         </div>
                     </section>
 
@@ -1616,6 +1604,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                          Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
                     <!-- Depoimentos comentados a pedido do Lira (2026-11-24), KazaKora e FerraKora.
                     <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="lg:hidden" /> -->
+                    <CardConfianca :mercado-pago="paymentGateway === 'mercadopago'" :nota-fiscal="CHECKS_LOJA[0]" class="mt-4 lg:hidden" />
                     </div>
                 </div>
             </main>
@@ -1731,11 +1720,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             </li>
                         </ul>
                         -->
-                        <div class="mt-4 border-t border-slate-100 pt-4">
-                            <ul class="space-y-1 text-sm text-slate-700">
-                                <li v-for="item in CHECKS_LOJA" :key="item"><i class="fas fa-check mr-1.5 text-[1.1em] text-[#00a650] [-webkit-text-stroke:0.8px_#00a650]" aria-hidden="true"></i>{{ item }}</li>
-                            </ul>
-                        </div>
+                        <!-- Frase da nota fiscal: foi para o CardConfianca, debaixo do resumo (pedido do Lira 2026-11-24). -->
                     </div>
                 </div>
 
@@ -1743,6 +1728,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                      Ocultas e de volta no mesmo dia (2026-11-23), agora paradas e com bullets. -->
                 <!-- Depoimentos comentados a pedido do Lira (2026-11-24), KazaKora e FerraKora.
                 <CarrosselAvaliacoes :avaliacoes="avaliacoesCarrossel" class="mt-4 hidden lg:block lg:mt-0" /> -->
+                <CardConfianca :mercado-pago="paymentGateway === 'mercadopago'" :nota-fiscal="CHECKS_LOJA[0]" class="mt-4 hidden lg:mt-0 lg:block" />
             </aside>
         </div>
 

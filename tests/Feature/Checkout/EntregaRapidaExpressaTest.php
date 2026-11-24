@@ -351,9 +351,11 @@ class EntregaRapidaExpressaTest extends TestCase
         }
 
         // Faixa do topo: só "Frete grátis | Compra 100% segura".
+        // Desde 2026-11-24 as frases vêm do servidor (FaixaDoTopo), não mais escritas no layout.
+        $faixa = file_get_contents(base_path('app/Modules/Catalog/Support/FaixaDoTopo.php'));
+        $this->assertStringContainsString("'Frete grátis'", $faixa);
+        $this->assertStringContainsString("'Compra 100% segura'", $faixa);
         $layout = file_get_contents(base_path('resources/js/Shared/Layouts/AppLayout.vue'));
-        $this->assertStringContainsString('Frete grátis</span>', $layout);
-        $this->assertStringContainsString('Compra 100% segura</span>', $layout);
-        $this->assertStringNotContainsString('Receba no mesmo dia', $layout);
+        $this->assertStringNotContainsString('Receba no mesmo dia', $layout.$faixa);
     }
 }

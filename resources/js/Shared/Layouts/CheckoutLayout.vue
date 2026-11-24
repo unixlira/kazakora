@@ -36,13 +36,14 @@ const ano = new Date().getFullYear();
              não muda. Textos em cinza-escuro para o contraste sobre o branco. -->
         <header class="border-b border-slate-200 bg-white px-4 py-3 text-center text-slate-900" data-topo-checkout>
             <img :src="$page.props.marca?.logoNav || '/images/marca/logo-nav.webp'" alt="KazaKora" width="160" height="28" class="mx-auto h-7 w-auto md:h-8">
-            <!-- Logo, razão social com CNPJ (a mesma fonte do rodapé da loja, COMPANY, 2026-11-23) e endereço. -->
+            <!-- Logo, marca e CNPJ. Em 2026-11-24 (pedido do Lira) saíram o nome de pessoa da razão
+                 social e o endereço do topo: fica "KazaKora | Grupo AlphaKora · CNPJ". O endereço
+                 continua no rodapé. -->
             <p class="mt-2 text-[11px] font-semibold leading-snug text-slate-800 sm:text-[13px]" data-razao-cnpj>
                 <i class="fa-solid fa-lock mr-1 text-[#00843f]" aria-hidden="true"></i>
-                <span>{{ COMPANY.razaoSocial }}</span> ·
+                <span>{{ COMPANY.nomeFantasia }} | Grupo AlphaKora</span> ·
                 <span class="whitespace-nowrap">CNPJ: {{ COMPANY.cnpj }}</span>
             </p>
-            <p class="text-[11px] leading-snug text-slate-600 sm:text-[13px]">{{ COMPANY.enderecoResumido }}</p>
         </header>
         <div class="checkout-oferta h-[3px]" aria-hidden="true"></div>
 
@@ -74,7 +75,7 @@ const ano = new Date().getFullYear();
                 <div class="mt-6 space-y-1 text-xs text-slate-600">
                     <p>{{ COMPANY.nomeFantasia }}: kazakora.com</p>
                     <p>{{ COMPANY.enderecoCompleto }}</p>
-                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · {{ COMPANY.razaoSocial }} · CNPJ: {{ COMPANY.cnpj }}</p>
+                    <p>© {{ ano }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora · CNPJ: {{ COMPANY.cnpj }}</p>
                     <p>WhatsApp: {{ COMPANY.whatsappDisplay }} / E-mail: {{ COMPANY.email }}</p>
                 </div>
             </div>

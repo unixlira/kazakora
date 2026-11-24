@@ -134,10 +134,10 @@ const REDES = [
         </div>
 
         <div class="mt-12 border-t border-white/10 pt-6 text-center text-xs">
-            <!-- Razão social e CNPJ (Merchant Center, 2026-11-23): cada pedaço quebra inteiro no celular. -->
+            <!-- Marca e CNPJ (Merchant Center, 2026-11-23): cada pedaço quebra inteiro no celular.
+                 Desde 2026-11-24 (pedido do Lira) sem o nome de pessoa da razão social. -->
             <p class="opacity-70">
-                <span class="whitespace-nowrap">© 2026 KazaKora</span> ·
-                <span class="text-[10px] sm:text-[11px]">{{ COMPANY.razaoSocial }}</span> ·
+                <span class="whitespace-nowrap">© 2026 KazaKora | Grupo AlphaKora</span> ·
                 <span class="whitespace-nowrap">CNPJ {{ COMPANY.cnpj }}</span> ·
                 <span>{{ COMPANY.enderecoResumido }}</span>
             </p>

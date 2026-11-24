@@ -19,6 +19,7 @@ use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -94,7 +95,7 @@ class WhatsAppInboxController extends Controller
 
         return response()->json([
             'conversation' => $this->conversationPayload($conversation) + $extra,
-            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes)),
+            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes, $conversation->loja)),
             'hasMore' => $messages->count() === self::MESSAGE_PAGE,
         ]);
     }
@@ -226,11 +227,12 @@ class WhatsAppInboxController extends Controller
                 ->get();
         }
         $reacoes = $request->filled('conversation') ? $this->reacoes((int) $request->query('conversation')) : [];
+        $loja = $messages->isNotEmpty() ? WhatsAppConversation::query()->whereKey((int) $request->query('conversation'))->value('loja') : null;
 
         return response()->json([
             'serverTime' => $now->toISOString(),
             'conversations' => $conversations->map(fn ($c) => $this->conversationPayload($c)),
-            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes)),
+            'messages' => $messages->map(fn ($m) => $this->messagePayload($m, $reacoes, $loja)),
         ]);
     }
 
@@ -284,7 +286,7 @@ class WhatsAppInboxController extends Controller
         $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id);
 
         return response()->json([
-            'message' => $this->messagePayload($message),
+            'message' => $this->messagePayload($message, [], $conversation->loja),
             'conversation' => $this->conversationPayload($conversation->fresh()),
         ]);
     }
@@ -364,7 +366,7 @@ class WhatsAppInboxController extends Controller
         }
 
         return response()->json([
-            'message' => $this->messagePayload($message),
+            'message' => $this->messagePayload($message, [], $conversation->loja),
             'conversation' => $this->conversationPayload($conversation->fresh()),
         ]);
     }
@@ -453,7 +455,7 @@ class WhatsAppInboxController extends Controller
         $message = $outbox->sendTemplate($conversation, $modelo, $valores, $botoes, $validated['cabecalho_link'] ?? null, $request->user()->name, $request->user()->id);
 
         return response()->json([
-            'message' => $this->messagePayload($message),
+            'message' => $this->messagePayload($message, [], $conversation->loja),
             'conversation' => $this->conversationPayload($conversation->fresh()),
         ]);
     }
@@ -560,9 +562,34 @@ class WhatsAppInboxController extends Controller
     private function conversationQuery()
     {
         return WhatsAppConversation::query()
+            ->select('whatsapp_conversations.*')
+            // Status (✓, ✓✓, azul) da última mensagem, para o tique da prévia na lista.
+            ->addSelect(['ultimo_status' => $this->ultimoStatusQuery()->whereColumn('conversation_id', 'whatsapp_conversations.id')])
             ->whereNotNull('last_message_preview')
             ->orderByDesc('last_message_at')
             ->orderByDesc('id');
+    }
+
+    /** Última mensagem que aparece na conversa (a mesma da prévia da lista). */
+    private function ultimoStatusQuery()
+    {
+        return WhatsAppMessage::query()
+            ->select('status')
+            ->whereIn('direction', ['inbound', 'outbound'])
+            ->orderByDesc('id')
+            ->limit(1);
+    }
+
+    /** Tique da prévia na lista: só quando a última mensagem foi nossa. */
+    private function previewStatus(WhatsAppConversation $c): ?string
+    {
+        if ($c->last_message_direction !== 'outbound') {
+            return null;
+        }
+
+        return array_key_exists('ultimo_status', $c->getAttributes())
+            ? $c->getAttribute('ultimo_status')
+            : $this->ultimoStatusQuery()->where('conversation_id', $c->id)->value('status');
     }
 
     private function conversationPayload(WhatsAppConversation $c): array
@@ -581,6 +608,7 @@ class WhatsAppInboxController extends Controller
             'unread' => (int) $c->unread_count,
             'preview' => $c->last_message_preview,
             'previewDirection' => $c->last_message_direction,
+            'previewStatus' => $this->previewStatus($c),
             'lastMessageAt' => $c->last_message_at?->toISOString(),
             'insideWindow' => $c->insideServiceWindow(),
             // Venda e nome do cadastro guardados ao abrir a conversa (ClienteDaConversa).
@@ -615,12 +643,70 @@ class WhatsAppInboxController extends Controller
         return array_map(fn ($emojis) => array_values(array_filter($emojis, 'filled')), $porAlvo);
     }
 
+    /**
+     * Balão do modelo igual ao do WhatsApp (pedido do Lira 23/11/2026):
+     * imagem do cabeçalho, corpo com variáveis e formatação, rodapé e botões.
+     * Mensagem antiga, sem as variáveis no payload, ou modelo que não está
+     * mais aprovado: null, e a tela mostra o texto gravado.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function templateRender(WhatsAppMessage $m, ?string $loja): ?array
+    {
+        $payload = $m->payload ?? [];
+        if ($m->type !== 'template' || ! filled($payload['template'] ?? null) || ! array_key_exists('variaveis', $payload)) {
+            return null;
+        }
+
+        $modelos = $this->modelosDaLoja($loja ?? $m->conversation?->loja ?? WhatsAppNumeros::KAZAKORA);
+        foreach ($modelos as $modelo) {
+            if ($modelo['nome'] === $payload['template'] && $modelo['idioma'] === ($payload['idioma'] ?? $modelo['idioma'])) {
+                return WhatsAppModelos::renderizar($modelo, $payload);
+            }
+        }
+
+        return null;
+    }
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private array $modelosPorLoja = [];
+
+    /**
+     * Modelos aprovados da loja, uma vez por requisição. A Graph fora do ar
+     * não pode travar o polling de 3s: a falha fica guardada 2 minutos e os
+     * balões caem no texto gravado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function modelosDaLoja(string $loja): array
+    {
+        $loja = WhatsAppNumeros::normalizar($loja);
+        if (array_key_exists($loja, $this->modelosPorLoja)) {
+            return $this->modelosPorLoja[$loja];
+        }
+
+        $falhou = "whatsapp_modelos_falhou_{$loja}";
+        if (Cache::has($falhou)) {
+            return $this->modelosPorLoja[$loja] = [];
+        }
+
+        try {
+            return $this->modelosPorLoja[$loja] = app(WhatsAppModelos::class)->aprovados($loja);
+        } catch (Throwable $exception) {
+            Log::info('whatsapp_modelos_balao_indisponivel', ['loja' => $loja, 'error' => mb_substr($exception->getMessage(), 0, 200)]);
+            Cache::put($falhou, true, now()->addMinutes(2));
+
+            return $this->modelosPorLoja[$loja] = [];
+        }
+    }
+
     /** @param  array<string, list<string>>  $reacoes */
-    private function messagePayload(WhatsAppMessage $m, array $reacoes = []): array
+    private function messagePayload(WhatsAppMessage $m, array $reacoes = [], ?string $loja = null): array
     {
         $payload = $m->payload ?? [];
 
         return [
+            'template_render' => $this->templateRender($m, $loja),
             'id' => $m->id,
             'direction' => $m->direction,
             'type' => $m->type,

@@ -158,9 +158,10 @@ class WhatsAppOutbox
         string $sentBy,
         ?int $userId = null,
     ): WhatsAppMessage {
-        $basePayload = ['template' => $modelo['nome'], 'idioma' => $modelo['idioma'], 'variaveis' => $valores];
         $formato = $modelo['cabecalho']['formato'] ?? null;
         $tipoCabecalho = in_array($formato, ['IMAGE', 'VIDEO', 'DOCUMENT'], true) ? strtolower($formato) : null;
+        // Tudo o que a tela de Conversas precisa para redesenhar o balão do modelo.
+        $basePayload = WhatsAppModelos::payloadDoEnvio($modelo['nome'], $modelo['idioma'], $valores, $tipoCabecalho ? $cabecalhoLink : null, $botoes);
 
         $message = WhatsAppMessage::query()->create([
             'conversation_id' => $conversation->id,

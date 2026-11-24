@@ -7,6 +7,7 @@ use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Services\WhatsAppModelos;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
@@ -107,7 +108,14 @@ class AvisarRetiradaNaAgenciaJob implements ShouldQueue
             'body' => "Pedido #{$order->numero} aguardando retirada na agência: {$this->endereco}. Código {$codigo}. Retirar até {$ate}. [Ir para o rastreio] [Falar com Atendente]",
             'status' => 'sent',
             'sent_by' => 'system',
-            'payload' => ['template' => $template, 'order_id' => $order->id],
+            // Dados do envio: a tela de Conversas redesenha o balão igual ao WhatsApp.
+            'payload' => WhatsAppModelos::payloadDoEnvio(
+                $template,
+                (string) WhatsAppNumeros::template($loja, 'pedido_retirada_idioma', 'pt_BR'),
+                [$nome, $order->numero, $this->endereco, $codigo, $ate],
+                $imagem,
+                [0 => $order->trackingRef()],
+            ) + ['order_id' => $order->id],
             'sent_at' => now(),
         ]);
         $conversation->registerMessage($message);

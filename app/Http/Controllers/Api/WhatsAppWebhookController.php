@@ -254,6 +254,10 @@ class WhatsAppWebhookController extends Controller
                 $this->marcarLidasAte($message->conversation_id, $message->id);
             }
 
+            // A lista de Conversas só busca o que mudou (updated_at): mexer na
+            // conversa faz o tique da prévia virar ✓✓ / azul sem recarregar.
+            WhatsAppConversation::query()->whereKey($message->conversation_id)->update(['updated_at' => now()]);
+
             return;
         }
 

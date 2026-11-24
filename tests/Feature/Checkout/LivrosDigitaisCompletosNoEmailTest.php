@@ -63,7 +63,8 @@ class LivrosDigitaisCompletosNoEmailTest extends TestCase
     private function pedido(array $produtos, array $extra = []): Order
     {
         $order = Order::create(array_merge([
-            'user_id' => User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'cliente@teste.com'])->id,
+            'user_id' => (User::query()->where('email', 'cliente@teste.com')->first()
+                ?? User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'cliente@teste.com']))->id,
             'origin' => Order::ORIGIN_STORE,
             'status' => Order::STATUS_PAID,
             'shipping_name' => 'Cliente',

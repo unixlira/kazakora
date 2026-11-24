@@ -3,8 +3,10 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\FluxoDoCheckout;
 use App\Modules\Checkout\Models\Lead;
 use App\Support\SiteAtual;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,6 +16,7 @@ use Inertia\Response;
  * no checkout (nome, CPF, e-mail, telefone, CEP) e o produto, para
  * acompanhar os abandonos. A tela se atualiza sozinha (recarga parcial do
  * Inertia a cada poucos segundos). Só leitura: nada vai ao cliente daqui.
+ * Desde 2026-11-23: "Parou em" e a janela "Ver fluxo" (FluxoDoCheckout).
  */
 class LeadsController extends Controller
 {
@@ -22,7 +25,7 @@ class LeadsController extends Controller
     /** Atividade nos últimos minutos = "no checkout agora". */
     private const MINUTOS_AGORA = 5;
 
-    public function index(Request $request): Response
+    public function index(Request $request, FluxoDoCheckout $fluxo): Response
     {
         $status = in_array($request->string('status')->toString(), [Lead::STATUS_ABERTO, Lead::STATUS_CONVERTIDO], true)
             ? $request->string('status')->toString()
@@ -47,8 +50,9 @@ class LeadsController extends Controller
             ->latest('updated_at')
             ->latest('id')
             ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (Lead $lead) => [
+            ->withQueryString();
+        $paradas = $fluxo->paradas($leads->getCollection());
+        $leads->through(fn (Lead $lead) => [
                 'id' => $lead->id,
                 'site' => $lead->site,
                 'nome' => $lead->nome,
@@ -57,6 +61,7 @@ class LeadsController extends Controller
                 'telefone' => $lead->telefone,
                 'cep' => $lead->cep,
                 'ultimo_campo' => $lead->ultimo_campo,
+                'parou' => $paradas[$lead->id] ?? null,
                 'itens' => $lead->itens ?? [],
                 'quantidade_itens' => $lead->quantidade_itens,
                 'subtotal' => (float) $lead->subtotal,
@@ -84,5 +89,11 @@ class LeadsController extends Controller
             'sites' => collect(SiteAtual::SITES)->map(fn ($nome, $id) => ['id' => $id, 'nome' => $nome])->values(),
             'filters' => ['status' => $status, 'site' => $site, 'search' => $busca],
         ]);
+    }
+
+    /** Janela "Ver fluxo": o passo a passo do checkout, sob demanda. Só o nome dos campos, nunca o que foi digitado. */
+    public function fluxo(Lead $lead, FluxoDoCheckout $fluxo): JsonResponse
+    {
+        return response()->json($fluxo->fluxo($lead));
     }
 }

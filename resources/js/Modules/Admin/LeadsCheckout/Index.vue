@@ -9,6 +9,7 @@ import { maskCpfCnpj, maskPhone } from '@/Shared/useMasks';
 import { useServerTable } from '@/Shared/useServerTable';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
+import FluxoCheckout from './FluxoCheckout.vue';
 
 const props = defineProps({
     leads: { type: Object, default: () => ({ data: [] }) },
@@ -43,6 +44,18 @@ const enviarTodos = () => {
         onFinish: () => { enviando.value = null; confirmarTodos.value = false; },
     });
 };
+
+// "Parou em" + botão "Ver fluxo" (pedido do Lira 2026-11-23): a janela carrega o passo a passo sob demanda.
+const fluxoLead = ref(null);
+const COR_PAROU = { comprou: 'text-emerald-700', pagamento: 'text-violet-700', finalizar: 'text-rose-700', entrega: 'text-amber-700', identificacao: 'text-indigo-700' };
+const celulaParou = (lead) => h('div', { class: 'min-w-[11rem] space-y-1 text-xs' }, [
+    h('div', { class: ['font-medium', COR_PAROU[lead.parou?.etapa] ?? 'text-slate-600'] }, lead.parou?.texto ?? '-'),
+    h('button', {
+        type: 'button',
+        class: 'rounded border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-50',
+        onClick: () => { fluxoLead.value = lead; },
+    }, 'Ver fluxo'),
+]);
 
 const abas = [
     { label: 'Todos', value: 'all' },
@@ -96,6 +109,13 @@ const columns = [
         ]),
     },
     {
+        // Etapa onde a pessoa parou + janela com o passo a passo (pedido do Lira 2026-11-23).
+        id: 'parou',
+        header: 'Parou em',
+        enableSorting: false,
+        cell: ({ row }) => celulaParou(row.original),
+    },
+    {
         id: 'origem',
         header: 'Loja / origem',
         enableSorting: false,
@@ -147,6 +167,7 @@ const columns = [
             Quem preencheu a Identificação do checkout e clicou em "Ir para Entrega". Vira "Convertido" quando o
             pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. A sequência automática manda WhatsApp e e-mail
             sozinha (D+1, D+3, D+5, D+7, D+20 e D+30, das 9h às 20h). Em Ações, o botão antecipa a 1ª mensagem; tudo fica registrado.
+            "Parou em" mostra a etapa do checkout onde a pessoa parou; "Ver fluxo" abre o passo a passo com o horário.
         </p>
 
         <div class="mb-4 grid gap-3 sm:grid-cols-3">
@@ -195,5 +216,6 @@ const columns = [
             @update:search="visit({ search: $event })"
             @update:active-tab="visit({ status: $event === 'all' ? null : $event })"
         />
+        <FluxoCheckout :lead="fluxoLead" base="/admin/carrinhos-abandonados" @close="fluxoLead = null" />
     </AdminLayout>
 </template>

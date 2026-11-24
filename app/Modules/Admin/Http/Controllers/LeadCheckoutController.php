@@ -3,9 +3,11 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\FluxoDoCheckout;
 use App\Modules\Cart\Support\RecuperacaoCarrinhoWhatsApp;
 use App\Modules\Checkout\Models\LeadCheckout;
 use App\Support\SiteAtual;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,6 +18,8 @@ use Inertia\Response;
  * Entrega do checkout, com os itens e se virou pedido. Desde 2026-11-23 (pedido
  * do Lira) tem o botão por carrinho e o "Disparar para todos": antecipam o
  * disparo da sequência automática (WhatsApp + e-mail, tudo registrado).
+ * Também desde 2026-11-23: coluna "Parou em" e a janela "Ver fluxo" com o
+ * passo a passo do checkout (FluxoDoCheckout).
  */
 class LeadCheckoutController extends Controller
 {
@@ -24,7 +28,7 @@ class LeadCheckoutController extends Controller
     /** Teto por clique em "Disparar para todos" (o envio é na hora, um por um). */
     private const LIMITE_DISPARO = 100;
 
-    public function index(Request $request): Response
+    public function index(Request $request, FluxoDoCheckout $fluxo): Response
     {
         $status = in_array($request->string('status')->toString(), [LeadCheckout::STATUS_ABERTO, LeadCheckout::STATUS_CONVERTIDO], true)
             ? $request->string('status')->toString()
@@ -45,8 +49,9 @@ class LeadCheckoutController extends Controller
             })
             ->latest('updated_at')
             ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (LeadCheckout $lead) => [
+            ->withQueryString();
+        $paradas = $fluxo->paradas($leads->getCollection());
+        $leads->through(fn (LeadCheckout $lead) => [
                 'id' => $lead->id,
                 'site' => $lead->site,
                 'nome' => $lead->nome,
@@ -58,6 +63,7 @@ class LeadCheckoutController extends Controller
                 'subtotal' => (float) $lead->subtotal,
                 'status' => $lead->status,
                 'etapa' => $lead->etapa,
+                'parou' => $paradas[$lead->id] ?? null,
                 'origem' => $lead->origem,
                 'utm_source' => $lead->utm_source,
                 'whatsapp_enviado_em' => $lead->whatsapp_enviado_em?->toIso8601String(),
@@ -80,6 +86,12 @@ class LeadCheckoutController extends Controller
             'sites' => collect(SiteAtual::SITES)->map(fn ($nome, $id) => ['id' => $id, 'nome' => $nome])->values(),
             'filters' => ['status' => $status, 'site' => $site, 'search' => $busca],
         ]);
+    }
+
+    /** Janela "Ver fluxo": o passo a passo do checkout, sob demanda. Só o nome dos campos, nunca o que foi digitado. */
+    public function fluxo(LeadCheckout $lead, FluxoDoCheckout $fluxo): JsonResponse
+    {
+        return response()->json($fluxo->fluxo($lead));
     }
 
     /** Um carrinho: manda a mensagem de recuperação pelo WhatsApp. */

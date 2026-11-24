@@ -96,6 +96,8 @@ class HandleInertiaRequests extends Middleware
             'parcelamento' => fn () => $request->is('admin*') ? null : \App\Modules\Checkout\Support\ParcelasCartao::tabela(),
             // Black Friday automática (2026-11-24): faixa do topo da loja; null fora da data e no admin.
             'blackfriday' => fn () => $request->is('admin*') ? null : rescue(fn () => \App\Modules\Checkout\Support\BlackFriday::faixa(), null, false),
+            // Frases da faixa do topo (pedido do Lira 2026-11-24): gerais aqui; a página de produto troca pelas do produto.
+            'faixa' => fn () => $request->is('admin*') ? null : \App\Modules\Catalog\Support\FaixaDoTopo::geral(),
             // Aviso de cookies (docs/privacidade-e-cookies.md): some depois do OK.
             'cookies' => fn () => $request->is('admin*') ? null : [
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),

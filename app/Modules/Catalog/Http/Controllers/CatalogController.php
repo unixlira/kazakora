@@ -11,6 +11,7 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\FaixaDoTopo;
 use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
@@ -548,6 +549,8 @@ class CatalogController extends Controller
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
             'salesCount' => $salesCount,
+            // Faixa do topo com os benefícios deste produto (pedido do Lira 2026-11-24); sem conteúdo, as gerais.
+            'faixa' => FaixaDoTopo::paraProduto($product->adContent),
         ]);
     }
 

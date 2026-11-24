@@ -50,8 +50,9 @@ const BANDEIRAS = ['amex', 'visa', 'mastercard', 'elo', 'hiper', 'boleto', 'pix'
                     </li>
                 </ul>
 
-                <!-- Selos sem link (o RA também, com semLink). -->
-                <div class="mt-5 flex flex-wrap items-center justify-center gap-2">
+                <!-- Selos sem link (o RA também, com semLink). Título "Segurança" no mesmo estilo de "Formas de pagamento" (2026-11-24). -->
+                <p class="mt-6 text-sm font-medium text-slate-600">Segurança</p>
+                <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                     <div class="flex h-9 items-center justify-center rounded-[8px] border border-slate-200 bg-white px-2">
                         <img src="/images/selos/selo-google-safe.webp" alt="Google Safe Browsing" width="139" height="45" class="h-7 w-auto">
                     </div>

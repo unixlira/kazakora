@@ -54,6 +54,19 @@ return [
     'loja_lat' => (float) env('MELHORENVIO_LOJA_LAT', -23.5606),
     'loja_lon' => (float) env('MELHORENVIO_LOJA_LON', -46.5826),
 
+    // Etiqueta da loja (2026-11-24, Jadlog). 'sku': 'abaixo_codigo' escreve
+    // SKU e quantidade no espaço livre medido de cada modelo (na Jadlog,
+    // embaixo do código de barras do rodapé); 'desligado' não escreve.
+    // 'logo_loja.jadlog': 'quadro_grande' troca de lado (KazaKora no lugar do
+    // logo da Jadlog, Jadlog no quadro do Melhor Envio); 'quadro_pequeno'
+    // deixa a Jadlog e põe a KazaKora no quadro do Melhor Envio.
+    'etiqueta' => [
+        'sku' => env('MELHORENVIO_ETIQUETA_SKU', 'abaixo_codigo'),
+        'logo_loja' => [
+            'jadlog' => env('MELHORENVIO_ETIQUETA_LOGO_JADLOG', 'quadro_grande'),
+        ],
+    ],
+
     'log_channel' => env('MELHORENVIO_LOG_CHANNEL', 'melhorenvio'),
 
     // Melhor Envio exige um User-Agent identificando a aplicação + um

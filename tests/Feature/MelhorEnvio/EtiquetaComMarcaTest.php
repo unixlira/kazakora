@@ -92,7 +92,7 @@ class EtiquetaComMarcaTest extends TestCase
         $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios SEDEX'));
         $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('Correios PAC'));
         $this->assertSame('correios', EtiquetaMelhorEnvioComMarca::modelo('SEDEX'));
-        $this->assertNull(EtiquetaMelhorEnvioComMarca::modelo('Jadlog .Package'));
+        $this->assertNull(EtiquetaMelhorEnvioComMarca::modelo('LATAM Cargo'));
 
         $original = $this->pdf();
         $novo = app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Correios SEDEX', 1);
@@ -131,7 +131,7 @@ class EtiquetaComMarcaTest extends TestCase
     {
         $original = $this->pdf();
 
-        $this->assertSame($original, app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'Jadlog .Package', 1));
+        $this->assertSame($original, app(EtiquetaMelhorEnvioComMarca::class)->aplicar($original, 'LATAM Cargo', 1));
         $this->assertSame('jet', EtiquetaMelhorEnvioComMarca::modelo('J&T Express'));
     }
 

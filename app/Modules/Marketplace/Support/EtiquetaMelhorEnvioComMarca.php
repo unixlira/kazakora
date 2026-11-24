@@ -82,11 +82,46 @@ class EtiquetaMelhorEnvioComMarca
         'correios' => [0.03, 0.7085, 0.97, 0.7335, 0.7298],
     ];
 
+    /**
+     * Jadlog (.Package / .Package Centralizado), medida na etiqueta real de
+     * 24/11/2026 (página de 577,5 x 813 pt, imagem de 770 x 1084 px). O
+     * Melhor Envio põe o logo da Jadlog no quadro GRANDE de cima à esquerda
+     * (px 28-211 x 84-134; quadro em 11-526 x 41-202) com a linha "ORD-..."
+     * embaixo (px 169-181, fica) e o logo dele no quadro PEQUENO à direita
+     * (quadro em 527-758 x 41-166, logo em 579-704 x 74-132).
+     *
+     * Pedido do Lira (24/11): troca de lado. A KazaKora vai para o quadro
+     * grande, no lugar do logo da Jadlog, e o logo da Jadlog vai para o
+     * quadro pequeno, cobrindo o do Melhor Envio. Tudo com margem das linhas.
+     * Com MELHORENVIO_ETIQUETA_LOGO_JADLOG=quadro_pequeno o logo da Jadlog
+     * fica onde está e a KazaKora entra no quadro pequeno.
+     *
+     * A Jadlog não imprime telefone do remetente (o bloco vertical
+     * "KazaKora, Rua Mogi Mirim..." não tem; o "Telefone" é do
+     * destinatário), então não há linha de remetente a reescrever.
+     *
+     * @var array<string, array{0: float, 1: float, 2: float, 3: float}>
+     */
+    public const JADLOG = [
+        // Faixa do logo da Jadlog no quadro grande (px 14-523 x 44-163): só o logo, nada mais ali.
+        'cobrir_grande' => [0.018, 0.041, 0.679, 0.150],
+        // Onde entra a KazaKora no quadro grande: 17 px das linhas e acima do ORD (que começa em 0,156).
+        'logo_grande' => [0.036, 0.050, 0.660, 0.146],
+        // Quadro pequeno inteiro por dentro das linhas (px 530-755 x 44-164).
+        'cobrir_pequeno' => [0.689, 0.041, 0.981, 0.151],
+        // Área do logo no quadro pequeno, com folga de ~14 px das linhas.
+        'logo_pequeno' => [0.7065, 0.0535, 0.965, 0.1385],
+    ];
+
+    /** Logo da Jadlog em preto e branco, tirado da própria etiqueta (vai no quadro pequeno). */
+    public const LOGO_JADLOG = 'images/marca/logo-jadlog-etiqueta.png';
+
     public static function modelo(?string $servico): ?string
     {
         $s = mb_strtolower((string) $servico);
 
         return match (true) {
+            str_contains($s, 'jadlog') => 'jadlog',
             str_contains($s, 'jet') || str_contains($s, 'j&t') => 'jet',
             str_contains($s, 'correios') || str_contains($s, 'sedex') || preg_match('/\bpac\b/', $s) === 1 => 'correios',
             default => null,
@@ -102,11 +137,19 @@ class EtiquetaMelhorEnvioComMarca
     /**
      * Onde entram a linha e a lista "SKU / quantidade" (pedido do Lira em
      * 14/11, #4172): abaixo do remetente, no espaço em branco da etiqueta
-     * [x0, y da linha, x1, primeira linha de base, limite de baixo].
+     * [x0, y da linha (null = sem linha), x1, primeira linha de base, limite
+     * de baixo]. Com uma linha só (primeira = limite), os itens vão lado a
+     * lado nela. MELHORENVIO_ETIQUETA_SKU=desligado não escreve nada.
      *
-     * @var array<string, array{0: float, 1: float, 2: float, 3: float, 4: float}>
+     * @var array<string, array{0: float, 1: ?float, 2: float, 3: float, 4: float}>
      */
     public const ITENS = [
+        // Jadlog: o código de barras principal vai até 5 px antes da linha
+        // do quadro (px 937 x 942), sem espaço. O livre de verdade é embaixo
+        // do código do rodapé: px 1030-1071 (barras acabam em 1029, a linha
+        // do quadro está em 1072). Uma linha de 14 pt (7 pt na folha 4x6),
+        // base em 0,973 (px 1055): ~12 px de folga em cima e embaixo.
+        'jadlog' => [0.0365, null, 0.9635, 0.973, 0.973],
         'correios' => [0.0365, 0.80, 0.9635, 0.826, 0.965],
         // J&T: rodapé livre abaixo do logo, medido na etiqueta do #4162 (14/11):
         // nada impresso entre 0,90 e 0,989. Cabem duas linhas.
@@ -176,22 +219,22 @@ class EtiquetaMelhorEnvioComMarca
                         $fpdi->Rect($cx0 * $w, $cy0 * $h, ($cx1 - $cx0) * $w, ($cy1 - $cy0) * $h, 'F');
                     }
 
+                    if (($layout['transportadora'] ?? null) !== null) {
+                        // Logo da transportadora trocado de lugar (Jadlog, 24/11).
+                        [$tx0, $ty0, $tx1, $ty1, $arquivoTransp] = $layout['transportadora'];
+                        $this->imagemCentrada($fpdi, public_path($arquivoTransp), [$tx0, $ty0, $tx1, $ty1], $w, $h);
+                    }
+
                     if ($layout['logo'] !== null) {
                         [$x0, $y0, $x1, $y1] = $layout['logo'];
                         $logo = public_path(self::logo($site));
-
-                        // Logo centrado na área, ocupando 90% da largura dela (ou
-                        // 90% da altura, se o desenho for alto demais para a área).
                         [$lw, $lh] = getimagesize($logo);
-                        $largura = ($x1 - $x0) * $w * 0.9;
-                        $altura = $largura * $lh / $lw;
-                        if ($altura > ($y1 - $y0) * $h * 0.9) {
-                            $altura = ($y1 - $y0) * $h * 0.9;
-                            $largura = $altura * $lw / $lh;
-                        }
-                        $centroX = ($x0 + $x1) / 2 * $w;
+                        // Contido: o bloco não passa da área (quadro fechado, Jadlog).
+                        $contido = (bool) ($layout['contido'] ?? false);
+
                         if ($site === \App\Support\SiteAtual::FERRAKORA) {
-                            $fpdi->Image($logo, $centroX - $largura / 2, ($y0 + $y1) / 2 * $h - $altura / 2, $largura, $altura);
+                            // Logo centrado na área, em até 90% da largura e da altura dela.
+                            $this->imagemCentrada($fpdi, $logo, [$x0, $y0, $x1, $y1], $w, $h);
                         } else {
                             // KazaKora (pedido do Lira em 21/11/2026): símbolo (a
                             // casa com KK, preto e traço grosso) e a palavra
@@ -203,8 +246,10 @@ class EtiquetaMelhorEnvioComMarca
                             $simbolo = public_path(self::SIMBOLO);
                             [$sw, $sh] = getimagesize($simbolo);
                             $direita = ($x0 + $x1) / 2 > 0.5;
-                            $maxLargura = $direita ? ($x1 - 0.5) * $w : ($x1 - $x0) * $w;
-                            $maxAltura = min(self::ALTURA_BLOCO * $h, max(($y1 - $y0) * $h, self::ALTURA_BLOCO * $h * 0.6));
+                            $maxLargura = $direita && ! $contido ? ($x1 - 0.5) * $w : ($x1 - $x0) * $w;
+                            $maxAltura = $contido
+                                ? min(self::ALTURA_BLOCO * $h, ($y1 - $y0) * $h)
+                                : min(self::ALTURA_BLOCO * $h, max(($y1 - $y0) * $h, self::ALTURA_BLOCO * $h * 0.6));
                             $proporcaoPalavra = $lw / $lh;
                             // Largura do bloco por unidade de altura do símbolo.
                             $porUnidade = $sw / $sh + self::VAO_INLINE + self::PALAVRA_INLINE * $proporcaoPalavra;
@@ -214,8 +259,14 @@ class EtiquetaMelhorEnvioComMarca
                             $largPalavra = $altPalavra * $proporcaoPalavra;
                             $vao = $altSimbolo * self::VAO_INLINE;
                             $larguraBloco = $largSimbolo + $vao + $largPalavra;
-                            $esquerda = $direita ? $x1 * $w - $larguraBloco : $x0 * $w;
-                            $topo = max(($y0 + $y1) / 2 * $h - $altSimbolo / 2, self::MARGEM_BORDA * $h);
+                            $esquerda = match (true) {
+                                $contido && $direita => ($x0 + $x1) / 2 * $w - $larguraBloco / 2,
+                                $direita => $x1 * $w - $larguraBloco,
+                                default => $x0 * $w,
+                            };
+                            $topo = $contido
+                                ? ($y0 + $y1) / 2 * $h - $altSimbolo / 2
+                                : max(($y0 + $y1) / 2 * $h - $altSimbolo / 2, self::MARGEM_BORDA * $h);
                             $fpdi->Image($simbolo, $esquerda, $topo, $largSimbolo, $altSimbolo);
                             // Palavra com a base alinhada à base da casa.
                             $fpdi->Image($logo, $esquerda + $largSimbolo + $vao, $topo + $altSimbolo - $altPalavra, $largPalavra, $altPalavra);
@@ -237,16 +288,23 @@ class EtiquetaMelhorEnvioComMarca
                         $fpdi->Text(0.0365 * $w + $recuo, $base * $h, self::remetente($site));
                     }
 
-                    if ($itens !== [] && $layout['itens'] !== null) {
+                    if ($itens !== [] && $layout['itens'] !== null && self::escreveSku()) {
                         [$ix0, $linha, $ix1, $primeira, $limite] = $layout['itens'];
-                        $fpdi->SetDrawColor(0, 0, 0);
-                        $fpdi->SetLineWidth(1);
-                        $fpdi->Line($ix0 * $w, $linha * $h, $ix1 * $w, $linha * $h);
+                        if ($linha !== null) {
+                            $fpdi->SetDrawColor(0, 0, 0);
+                            $fpdi->SetLineWidth(1);
+                            $fpdi->Line($ix0 * $w, $linha * $h, $ix1 * $w, $linha * $h);
+                        }
                         $fpdi->SetTextColor(0, 0, 0);
                         $passo = 0.0235;
                         $cabem = max(1, (int) floor(($limite - $primeira) / $passo) + 1);
+                        if ($cabem === 1 && count($itens) > 1) {
+                            // Uma linha só (Jadlog): os itens lado a lado.
+                            $this->itensNumaLinha($fpdi, array_values($itens), $ix0 * $w, $ix1 * $w, $primeira * $h);
+                            $itens = [];
+                        }
                         $linhas = array_values($itens);
-                        $sobra = count($linhas) - $cabem;
+                        $sobra = $linhas === [] ? 0 : count($linhas) - $cabem;
                         if ($sobra > 0) {
                             $linhas = array_slice($linhas, 0, $cabem - 1);
                         }
@@ -282,16 +340,95 @@ class EtiquetaMelhorEnvioComMarca
         }
     }
 
+    /** SKU e quantidade na etiqueta: MELHORENVIO_ETIQUETA_SKU = abaixo_codigo (padrão) | desligado. */
+    public static function escreveSku(): bool
+    {
+        return mb_strtolower(trim((string) config('melhorenvio.etiqueta.sku', 'abaixo_codigo'))) !== 'desligado';
+    }
+
     /**
-     * O que cobrir e onde escrever. Modelo medido (J&T, Correios) usa as
-     * posições medidas; qualquer outra transportadora (Loggi no #4198, Jadlog,
-     * LATAM...) é lida por OCR (EtiquetaOcr). null = sai como veio.
+     * Jadlog sem OCR, pelas posições medidas (JADLOG). quadro_grande (padrão):
+     * KazaKora no lugar do logo da Jadlog e o logo da Jadlog no quadro
+     * pequeno, por cima do Melhor Envio. quadro_pequeno: o logo da Jadlog
+     * fica e a KazaKora cobre o Melhor Envio.
      *
-     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: ?array{0: float, 1: float, 2: float, 3: float}, remetente: ?array{0: float, 1: float, 2: float, 3: float, 4: float, 5: bool}, itens: ?array{0: float, 1: float, 2: float, 3: float, 4: float}}|null
+     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: array{0: float, 1: float, 2: float, 3: float}, contido: bool, transportadora: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: null, itens: array{0: float, 1: ?float, 2: float, 3: float, 4: float}}
+     */
+    public static function layoutJadlog(): array
+    {
+        $j = self::JADLOG;
+        if (mb_strtolower(trim((string) config('melhorenvio.etiqueta.logo_loja.jadlog', 'quadro_grande'))) === 'quadro_pequeno') {
+            return ['cobrir' => [$j['cobrir_pequeno']], 'logo' => $j['logo_pequeno'], 'contido' => true, 'transportadora' => null, 'remetente' => null, 'itens' => self::ITENS['jadlog']];
+        }
+
+        return [
+            'cobrir' => [$j['cobrir_grande'], $j['cobrir_pequeno']],
+            'logo' => $j['logo_grande'],
+            'contido' => true,
+            'transportadora' => [...$j['logo_pequeno'], self::LOGO_JADLOG],
+            'remetente' => null,
+            'itens' => self::ITENS['jadlog'],
+        ];
+    }
+
+    /**
+     * Imagem centrada na área (fração da página), em até 90% da largura e da altura dela.
+     *
+     * @param  array{0: float, 1: float, 2: float, 3: float}  $area
+     */
+    private function imagemCentrada(Fpdi $fpdi, string $arquivo, array $area, float $w, float $h): void
+    {
+        [$x0, $y0, $x1, $y1] = $area;
+        [$lw, $lh] = getimagesize($arquivo);
+        $largura = ($x1 - $x0) * $w * 0.9;
+        $altura = $largura * $lh / $lw;
+        if ($altura > ($y1 - $y0) * $h * 0.9) {
+            $altura = ($y1 - $y0) * $h * 0.9;
+            $largura = $altura * $lw / $lh;
+        }
+        $fpdi->Image($arquivo, ($x0 + $x1) / 2 * $w - $largura / 2, ($y0 + $y1) / 2 * $h - $altura / 2, $largura, $altura);
+    }
+
+    /**
+     * Vários itens numa linha só: "SKU: A  Qtd: 1  |  SKU: B  Qtd: 2". O que
+     * não cabe na largura vira "+ N itens (ver pedido)".
+     *
+     * @param  list<array{sku: ?string, quantidade: int}>  $itens
+     */
+    private function itensNumaLinha(Fpdi $fpdi, array $itens, float $x0, float $x1, float $base): void
+    {
+        $fpdi->SetFont('Helvetica', '', 14);
+        $partes = array_map(function (array $item): string {
+            $sku = trim((string) ($item['sku'] ?? '')) ?: 'sem SKU';
+            $sku = (string) (@iconv('UTF-8', 'windows-1252//TRANSLIT', $sku) ?: $sku);
+
+            return 'SKU: '.$sku.'  Qtd: '.(int) ($item['quantidade'] ?? 1);
+        }, $itens);
+        $total = count($partes);
+        $texto = '+ '.$total.' itens (ver pedido)';
+        for ($n = $total; $n >= 1; $n--) {
+            $tentativa = implode('  |  ', array_slice($partes, 0, $n)).($n < $total ? '  |  + '.($total - $n).' itens (ver pedido)' : '');
+            if ($fpdi->GetStringWidth($tentativa) <= $x1 - $x0) {
+                $texto = $tentativa;
+                break;
+            }
+        }
+        $fpdi->Text($x0, $base, $texto);
+    }
+
+    /**
+     * O que cobrir e onde escrever. Modelo medido (J&T, Correios, Jadlog)
+     * usa as posições medidas; qualquer outra transportadora (Loggi no
+     * #4198, LATAM...) é lida por OCR (EtiquetaOcr). null = sai como veio.
+     *
+     * @return array{cobrir: list<array{0: float, 1: float, 2: float, 3: float}>, logo: ?array{0: float, 1: float, 2: float, 3: float}, contido?: bool, transportadora?: ?array{0: float, 1: float, 2: float, 3: float, 4: string}, remetente: ?array{0: float, 1: float, 2: float, 3: float, 4: float, 5: bool}, itens: ?array{0: float, 1: ?float, 2: float, 3: float, 4: float}}|null
      */
     private function layout(string $pdf, ?string $servico, ?int $orderId): ?array
     {
         $modelo = self::modelo($servico);
+        if ($modelo === 'jadlog') {
+            return self::layoutJadlog();
+        }
         if ($modelo && isset(self::AREAS[$modelo])) {
             return [
                 'cobrir' => [self::AREAS[$modelo]],

@@ -30,6 +30,29 @@ class CheckoutEvento extends Model
     public const MARCOS_ROLAGEM = [25, 50, 75, 100];
 
     /**
+     * Motivo do erro no cartão (pedido do Lira 2026-11-24, lead 21 viu só
+     * "Confira os dados do cartão."): lista FECHADA de códigos, aceita em
+     * `valor` só no evento `erro` com `campo` = cartao e gravada na coluna
+     * `motivo`. Nunca o que foi digitado. Mesma lista do navegador
+     * (resources/js/Shared/useMercadoPagoSdk.js, MOTIVOS_CARTAO).
+     */
+    public const MOTIVOS_CARTAO = ['numero', 'validade', 'cvv', 'nome', 'documento', 'bin', 'parcelas', 'nao_carregou', 'sem_token', 'outro'];
+
+    /** Texto do motivo no passo a passo do admin (FluxoDoCheckout). */
+    public const TEXTO_MOTIVO_CARTAO = [
+        'numero' => 'número do cartão incompleto ou inválido',
+        'validade' => 'validade inválida',
+        'cvv' => 'código de segurança (CVV) incompleto',
+        'nome' => 'nome do titular em branco',
+        'documento' => 'CPF do titular inválido',
+        'bin' => 'cartão não aceito como crédito',
+        'parcelas' => 'parcelas não escolhidas',
+        'nao_carregou' => 'o formulário do cartão não carregou',
+        'sem_token' => 'o Mercado Pago não validou o cartão (sem token)',
+        'outro' => 'outro erro do formulário do cartão',
+    ];
+
+    /**
      * Eventos aceitos do navegador (lista fechada) e o que cada um pode
      * trazer. pedido_criado só o servidor grava (CheckoutController).
      */
@@ -59,7 +82,28 @@ class CheckoutEvento extends Model
 
     public const PEDIDO_CRIADO = 'pedido_criado';
 
-    protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem'];
+    protected $fillable = ['site', 'visitor_id', 'user_id', 'pagina_id', 'evento', 'campo', 'valor', 'motivo', 'rolagem', 'dispositivo', 'origem'];
+
+    /**
+     * Colunas de um evento do navegador já validado (CheckoutEventosController::validar).
+     * O motivo do erro no cartão chega em `valor` (texto da lista fechada) e
+     * vai para a coluna `motivo`; `valor` (número) fica para rolagem e segundos.
+     *
+     * @param  array<string, mixed>  $evento
+     * @return array<string, mixed>
+     */
+    public static function colunasDoNavegador(array $evento): array
+    {
+        $motivo = $evento['evento'] === 'erro' && is_string($evento['valor'] ?? null) ? $evento['valor'] : null;
+
+        return [
+            'evento' => $evento['evento'],
+            'campo' => $evento['campo'] ?? null,
+            'valor' => $motivo !== null ? null : ($evento['valor'] ?? $evento['segundos'] ?? null),
+            'motivo' => $motivo,
+            'rolagem' => $evento['rolagem'] ?? null,
+        ];
+    }
 
     /**
      * Mesmo visitante do log de visitas (TrackSiteVisit, Cookies::visitante):

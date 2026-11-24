@@ -1029,8 +1029,9 @@ class CheckoutController extends Controller
             // Cartão recusado (2026-11-10): a frase genérica fazia o cliente
             // desistir (08/11, "high_risk" duas vezes e saiu). Diz que foi o
             // cartão e oferece o Pix, que não passa por esse antifraude.
+            // Desde 2026-11-24 diz o motivo (CVV, validade, limite...).
             if ($exception instanceof PagamentoRecusadoException) {
-                return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => PagamentoRecusadoException::MENSAGEM_CLIENTE]);
+                return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => $exception->mensagemCliente()]);
             }
 
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);

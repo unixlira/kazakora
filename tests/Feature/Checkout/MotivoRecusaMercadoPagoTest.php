@@ -64,6 +64,23 @@ class MotivoRecusaMercadoPagoTest extends TestCase
         $this->assertNull(MotivoRecusaMercadoPago::texto(null));
     }
 
+    public function test_mensagem_do_cliente_diz_o_motivo_e_oferece_o_pix(): void
+    {
+        // Pedido 2026-11-24: recusa com motivo claro e saída pelo Pix; antifraude fica na frase geral.
+        $cvv = MotivoRecusaMercadoPago::paraCliente('cc_rejected_bad_filled_security_code');
+        $this->assertStringContainsString('CVV', $cvv);
+        $this->assertSame($cvv, MotivoRecusaMercadoPago::paraCliente('bad_filled_security_code'));
+        $this->assertStringContainsString('limite', MotivoRecusaMercadoPago::paraCliente('insufficient_amount'));
+        $this->assertStringContainsString('validade', MotivoRecusaMercadoPago::paraCliente('cc_rejected_bad_filled_date'));
+        $this->assertStringContainsString('autorize', MotivoRecusaMercadoPago::paraCliente('cc_rejected_call_for_authorize'));
+        foreach (['insufficient_amount', 'bad_filled_date', 'call_for_authorize', 'card_disabled', 'rejected_by_issuer'] as $codigo) {
+            $this->assertStringContainsString('Pix', MotivoRecusaMercadoPago::paraCliente($codigo));
+        }
+        foreach (['high_risk', 'cc_rejected_high_risk', 'cc_rejected_blacklist', 'codigo_novo', null] as $codigo) {
+            $this->assertSame(MotivoRecusaMercadoPago::MENSAGEM_CLIENTE_GERAL, MotivoRecusaMercadoPago::paraCliente($codigo));
+        }
+    }
+
     public function test_webhook_de_cartao_recusado_guarda_o_motivo_no_pagamento(): void
     {
         Http::fake(['api.mercadopago.com/v1/orders/ORD9' => Http::response([

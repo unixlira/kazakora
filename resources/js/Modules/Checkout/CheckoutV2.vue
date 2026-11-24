@@ -19,7 +19,7 @@ import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 // no máximo 4. A nota com estrelas e o total de avaliações continuam ocultos.
 // Depoimentos comentados no template (2026-11-24).
 // import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
-import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
+import { loadMercadoPagoSdk, mensagemDoMotivoCartao, mensagemErroCartao, motivoDoErroCartao, motivoNaTelaDoCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
@@ -58,6 +58,8 @@ const props = defineProps({
 
 // Desconto Checkout em R$ fixo vira % com casas a mais: mostra no máximo 2 (2026-10-18).
 const pixPercentualTexto = computed(() => Number(Number(props.pixDiscountPercentage).toFixed(2)).toLocaleString('pt-BR'));
+// Saída pelo Pix nas mensagens de erro do cartão (2026-11-24).
+const saidaPix = computed(() => (props.pixDiscountPercentage > 0 ? `pague no Pix com ${pixPercentualTexto.value}% de desconto` : 'pague no Pix'));
 
 const page = usePage();
 const serverErrors = computed(() => page.props.errors ?? {});
@@ -459,6 +461,9 @@ let brick = null;
 let brickTimer = null;
 const brickPronto = ref(false);
 const brickErro = ref(null);
+// Último erro do Brick como veio (onError/criação), para saber o motivo
+// quando o Finalizar falhar (2026-11-24). Nunca sai da página.
+let brickErroBruto = null;
 
 const cartaoBin = ref('');
 const BANDEIRAS_BIN = [
@@ -495,6 +500,7 @@ const desmontarBrick = () => {
 const montarBrick = async () => {
     desmontarBrick();
     brickErro.value = null;
+    brickErroBruto = null;
     if (!props.mercadoPagoPublicKey || totalCartao.value <= 0) return;
 
     try {
@@ -523,20 +529,38 @@ const montarBrick = async () => {
                 onBinChange: (bin) => {
                     cartaoBin.value = String(bin ?? '').replace(/\D/g, '').slice(0, 8);
                     brickErro.value = null;
+                    brickErroBruto = null;
                 },
-                onError: (error) => { brickErro.value = mensagemErroCartao(error); },
+                onError: (error) => {
+                    brickErroBruto = error;
+                    brickErro.value = mensagemErroCartao(error);
+                },
                 onSubmit: () => Promise.resolve(),
             },
         });
     } catch (error) {
+        brickErroBruto = error ?? 'nao_carregou';
         brickErro.value = mensagemErroCartao(error);
     }
 };
 
-watch([metodo, totalCartao], ([novoMetodo]) => {
+watch([metodo, totalCartao], ([novoMetodo], [metodoAntes]) => {
     clearTimeout(brickTimer);
     if (novoMetodo !== 'card' || props.order) {
         desmontarBrick();
+        return;
+    }
+    // Só o valor mudou (frete, cupom) com o cartão já aberto: atualiza o valor
+    // no Brick sem remontar, para não apagar o que o cliente já digitou
+    // (2026-11-24). Remonta só se o Brick não tiver update().
+    if (metodoAntes === 'card' && brick && brickPronto.value && typeof brick.update === 'function') {
+        brickTimer = setTimeout(() => {
+            try {
+                if (brick?.update({ amount: totalCartao.value }) === false) montarBrick();
+            } catch {
+                montarBrick();
+            }
+        }, 400);
         return;
     }
     brickTimer = setTimeout(montarBrick, 400);
@@ -894,28 +918,54 @@ const finalizar = async () => {
     const pagamento = { payment_method: metodo.value, split: false, terms_accepted: true };
 
     if (metodo.value === 'card') {
-        try {
-            const dados = await brick?.getFormData();
-            if (!dados?.token) throw new Error();
-            if (!Number(dados.installments)) {
-                erroGeral.value = 'Escolha em quantas parcelas pagar.';
-                processando.value = false;
-                document.getElementById('cartao-brick-v2')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                return;
-            }
-            Object.assign(pagamento, {
-                mp_card_token: dados.token,
-                mp_card_installments: dados.installments,
-                mp_payment_method_id: dados.payment_method_id,
-                mp_issuer_id: dados.issuer_id ?? null,
-            });
-        } catch {
-            erroGeral.value = 'Confira os dados do cartão.';
-            medicao.erro('cartao');
+        // Motivo específico na tela e na medição (2026-11-24): antes era só
+        // "Confira os dados do cartão." e o cliente não sabia o que corrigir.
+        // Nada é desmontado aqui: o que foi digitado continua no Brick.
+        const falhaNoCartao = (motivo) => {
+            erroGeral.value = mensagemDoMotivoCartao(motivo, saidaPix.value);
+            brickErro.value = erroGeral.value;
+            medicao.erro('cartao', motivo);
             processando.value = false;
             document.getElementById('cartao-brick-v2')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+
+        // Formulário do cartão nem carregou (SDK bloqueado, rede, erro do Brick).
+        if (!brick || !brickPronto.value || typeof brick.getFormData !== 'function') {
+            falhaNoCartao('nao_carregou');
             return;
         }
+
+        let dados = null;
+        let erroDoBrick = null;
+        try {
+            // getFormData pode não responder se o campo seguro travar: 20 s e desiste.
+            dados = await Promise.race([
+                brick.getFormData(),
+                new Promise((_, rejeitar) => { setTimeout(() => rejeitar(new Error('sem_token: tempo esgotado')), 20000); }),
+            ]);
+        } catch (error) {
+            erroDoBrick = error ?? null;
+        }
+
+        if (!dados?.token) {
+            const motivo = motivoDoErroCartao(erroDoBrick)
+                ?? motivoDoErroCartao(brickErroBruto)
+                ?? motivoNaTelaDoCartao(document.getElementById('cartao-brick-v2'))
+                ?? (erroDoBrick ? 'outro' : 'sem_token');
+            falhaNoCartao(motivo);
+            return;
+        }
+
+        if (!Number(dados.installments)) {
+            falhaNoCartao('parcelas');
+            return;
+        }
+        Object.assign(pagamento, {
+            mp_card_token: dados.token,
+            mp_card_installments: dados.installments,
+            mp_payment_method_id: dados.payment_method_id,
+            mp_issuer_id: dados.issuer_id ?? null,
+        });
     }
 
     router.post('/finalizacao/pagamento', pagamento, {
@@ -1532,7 +1582,12 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 <p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-900"><i class="fa-solid fa-circle-info mr-1"></i>1x no cartão sai pelo total sem juros. De 2x a 12x os juros do cartão são pagos por você e já aparecem no valor de cada parcela antes de finalizar.</p>
                                 <div id="cartao-brick-v2"></div>
                                 <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
-                                <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>
+                                <div v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                                    <p>{{ brickErro }}</p>
+                                    <button type="button" class="mt-2 rounded-lg border border-[#00843f] bg-white px-3 py-1.5 text-xs font-bold text-[#00843f] hover:bg-emerald-50" @click="metodo = 'pix'; erroGeral = null">
+                                        <i class="fa-brands fa-pix mr-1" aria-hidden="true"></i>Pagar no Pix<template v-if="pixDiscountPercentage > 0"> com {{ pixPercentualTexto }}% de desconto</template>
+                                    </button>
+                                </div>
                             </div>
 
                             <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"

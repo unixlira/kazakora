@@ -259,4 +259,34 @@ class FluxoDoCheckoutTest extends TestCase
             ->assertJsonPath('passos.5.campo', 'celular')
             ->assertJsonPath('parou.etapa', 'entrega');
     }
+
+    public function test_erro_no_cartao_mostra_o_motivo(): void
+    {
+        // Achado real 2026-11-24 (lead 21): clicou Finalizar com cartão e só se sabia "erro no cartão".
+        $lead = Lead::create([
+            'site' => 'kazakora', 'visitor_id' => 'visitante-cartao', 'nome' => 'Cris Cartao', 'ultimo_campo' => 'cep',
+            'itens' => [], 'status' => Lead::STATUS_ABERTO,
+        ]);
+        $this->datas($lead, '2026-11-23 11:00', '2026-11-23 11:05');
+        $v = 'visitante-cartao';
+        $this->evento($v, '2026-11-23 11:00:00', 'abriu');
+        $this->evento($v, '2026-11-23 11:01:00', 'pagamento', 'cartao');
+        $this->evento($v, '2026-11-23 11:02:00', 'finalizar');
+        $this->evento($v, '2026-11-23 11:02:01', 'erro', 'cartao', null, ['motivo' => 'validade']);
+        $this->evento($v, '2026-11-23 11:03:00', 'finalizar');
+        $this->evento($v, '2026-11-23 11:03:01', 'erro', 'cartao');
+
+        $this->actingAs($this->admin())->getJson("/admin/leads/{$lead->id}/fluxo")
+            ->assertOk()
+            ->assertJsonPath('passos.3.titulo', 'Viu um erro no cartão: validade inválida')
+            // Sem motivo (eventos antigos): continua como antes.
+            ->assertJsonPath('passos.5.titulo', 'Viu um erro em cartão')
+            ->assertJsonPath('parou.etapa', 'finalizar')
+            ->assertJsonPath('parou.texto', 'Parou ao finalizar (clicou em Finalizar com cartão, deu erro em cartão)');
+
+        CheckoutEvento::query()->where('visitor_id', $v)->where('evento', 'erro')->whereNull('motivo')->update(['motivo' => 'nao_carregou']);
+
+        $this->actingAs($this->admin())->getJson("/admin/leads/{$lead->id}/fluxo")
+            ->assertJsonPath('parou.texto', 'Parou ao finalizar (clicou em Finalizar com cartão, erro no cartão: o formulário do cartão não carregou)');
+    }
 }

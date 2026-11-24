@@ -5,6 +5,7 @@ namespace App\Services\MercadoPago\Exceptions;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\PagamentoRecusado;
+use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 
 /**
  * Cartão recusado na criação do pagamento. Lançada dentro da transação do
@@ -14,7 +15,7 @@ use App\Modules\Checkout\Models\PagamentoRecusado;
 class PagamentoRecusadoException extends MercadoPagoException
 {
     /** O que o cliente lê na KazaKora quando o cartão volta recusado (a FerraKora já dizia isso). */
-    public const MENSAGEM_CLIENTE = 'O pagamento no cartão não foi aprovado pelo Mercado Pago. Pague no Pix (aprovação na hora) ou tente outro cartão.';
+    public const MENSAGEM_CLIENTE = MotivoRecusaMercadoPago::MENSAGEM_CLIENTE_GERAL;
 
     private array $tentativa;
 
@@ -34,6 +35,15 @@ class PagamentoRecusadoException extends MercadoPagoException
             'status' => $mpPayment['status'] ?? null,
             'motivo_recusa' => isset($mpPayment['status_detail']) ? mb_substr((string) $mpPayment['status_detail'], 0, 80) : null,
         ];
+    }
+
+    /**
+     * Frase para o cliente com o motivo da recusa (2026-11-24): CVV, validade,
+     * limite, banco pediu autorização... Antifraude fica com a frase geral.
+     */
+    public function mensagemCliente(): string
+    {
+        return MotivoRecusaMercadoPago::paraCliente($this->tentativa['motivo_recusa'] ?? null);
     }
 
     /** Chamar só depois do rollback: a conta de visitante criada no pedido some junto. */

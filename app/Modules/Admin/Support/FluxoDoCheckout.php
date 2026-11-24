@@ -54,7 +54,7 @@ class FluxoDoCheckout
 
     private const NOME_PAGAMENTO = ['pix' => 'Pix', 'boleto' => 'boleto', 'cartao' => 'cartão'];
 
-    private const COLUNAS = ['id', 'site', 'visitor_id', 'evento', 'campo', 'valor', 'rolagem', 'dispositivo', 'origem', 'created_at'];
+    private const COLUNAS = ['id', 'site', 'visitor_id', 'evento', 'campo', 'valor', 'motivo', 'rolagem', 'dispositivo', 'origem', 'created_at'];
 
     /**
      * Linha do tempo completa de um lead (endpoint da janela "Ver fluxo").
@@ -71,7 +71,7 @@ class FluxoDoCheckout
         $passos = [];
         $anterior = null;
         foreach ($eventos as $e) {
-            $chave = $e->evento.'|'.$e->campo.'|'.$e->valor;
+            $chave = $e->evento.'|'.$e->campo.'|'.$e->valor.'|'.$e->motivo;
             // Mesmo evento repetido em seguida (foco no mesmo campo, por exemplo): uma linha só.
             if ($chave === $anterior && $e->evento !== 'abriu') {
                 $passos[count($passos) - 1]['vezes']++;
@@ -216,7 +216,7 @@ class FluxoDoCheckout
         $etapa = $this->etapaDoEvento($ultimo);
         // Erro mostrado depois do último passo da etapa: entra no detalhe.
         $erro = $eventos->filter(fn ($e) => $e->evento === 'erro' && $e->created_at->gte($ultimo->created_at) && $e->id !== $ultimo->id)->last();
-        $sufixoErro = $erro ? ', deu erro em '.$this->nomeCampo($erro->campo) : '';
+        $sufixoErro = $erro ? ', '.$this->deuErro($erro) : '';
 
         $texto = match ($etapa) {
             'carrinho' => 'Parou no carrinho (não abriu o checkout)',
@@ -288,7 +288,7 @@ class FluxoDoCheckout
             'cep_respondido' => 'O CEP respondeu (frete calculado)',
             'pagamento' => 'Escolheu pagamento: '.(self::NOME_PAGAMENTO[$e->campo] ?? (string) $e->campo),
             'finalizar' => 'Clicou em Finalizar',
-            'erro' => 'Viu um erro em '.$this->nomeCampo($e->campo),
+            'erro' => $this->temMotivoCartao($e) ? 'Viu um erro no cartão: '.$this->textoMotivo($e) : 'Viu um erro em '.$this->nomeCampo($e->campo),
             // Botão do cupom (2026-11-23): o código digitado nunca é gravado.
             'cupom_clicou' => 'Clicou em Aplicar cupom',
             'cupom_aplicado' => 'Cupom aplicado',
@@ -347,7 +347,7 @@ class FluxoDoCheckout
         return match ($e->evento) {
             'preencheu' => $campo.' preenchido',
             'foco' => 'clicou em '.$campo,
-            'erro' => 'deu erro em '.$campo,
+            'erro' => $this->deuErro($e),
             default => $campo,
         };
     }
@@ -366,10 +366,26 @@ class FluxoDoCheckout
     {
         $forma = $this->ultimaForma($eventos);
         if ($ultimo->evento === 'erro') {
-            return ($forma ? 'escolheu '.$forma.', ' : '').'deu erro em '.$this->nomeCampo($ultimo->campo);
+            return ($forma ? 'escolheu '.$forma.', ' : '').$this->deuErro($ultimo);
         }
 
         return $forma ? 'escolheu '.$forma : 'chegou no pagamento';
+    }
+
+    /** "deu erro em CPF" ou, no cartão com motivo (2026-11-24), "erro no cartão: validade inválida". */
+    private function deuErro(CheckoutEvento $e): string
+    {
+        return $this->temMotivoCartao($e) ? 'erro no cartão: '.$this->textoMotivo($e) : 'deu erro em '.$this->nomeCampo($e->campo);
+    }
+
+    private function temMotivoCartao(CheckoutEvento $e): bool
+    {
+        return $e->campo === 'cartao' && filled($e->motivo);
+    }
+
+    private function textoMotivo(CheckoutEvento $e): string
+    {
+        return CheckoutEvento::TEXTO_MOTIVO_CARTAO[$e->motivo] ?? (string) $e->motivo;
     }
 
     private function ultimaForma(Collection $eventos): ?string

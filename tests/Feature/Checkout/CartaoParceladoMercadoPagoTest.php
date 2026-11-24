@@ -125,6 +125,21 @@ class CartaoParceladoMercadoPagoTest extends TestCase
         $this->assertSame(0, Order::count());
     }
 
+    public function test_cartao_recusado_por_cvv_diz_o_motivo_e_guarda_a_tentativa(): void
+    {
+        // Pedido 2026-11-24: a recusa diz o motivo ao cliente e fica em pagamentos_recusados.
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createOrder')->once()->andReturn(['id' => 'ORD3', 'status' => 'failed', 'transactions' => ['payments' => [['id' => 'PAY3', 'status' => 'failed', 'status_detail' => 'bad_filled_security_code']]]]);
+        });
+
+        $this->actingAs($this->user)->post('/finalizacao/pagamento', $this->cartao())
+            ->assertRedirect(route('finalizacao.pagamento'))
+            ->assertSessionHasErrors(['payment' => \App\Modules\Checkout\Support\MotivoRecusaMercadoPago::paraCliente('bad_filled_security_code')]);
+        $this->assertSame(0, Order::count());
+        $this->assertDatabaseHas('pagamentos_recusados', ['user_id' => $this->user->id, 'motivo_recusa' => 'bad_filled_security_code', 'mercadopago_order_id' => 'ORD3']);
+    }
+
     public function test_emissor_numerico_nao_derruba_o_pagamento(): void
     {
         $this->mock(MercadoPagoPaymentService::class, function ($mock) {

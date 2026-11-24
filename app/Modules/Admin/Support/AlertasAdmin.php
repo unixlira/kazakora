@@ -40,6 +40,9 @@ class AlertasAdmin
     /** Pedido do Lira em 24/11/2026: livro de brinde (Promoção PDFs) sem o PDF no disco. */
     public const LIVROS_DIGITAIS = 'livros_digitais';
 
+    /** Pedido do Lira em 24/11/2026 (#4474): pedido Amazon DBA que a API não deixou agendar. */
+    public const AMAZON_DBA_AGENDAMENTO = 'amazon_dba_agendamento';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -65,6 +68,10 @@ class AlertasAdmin
         self::LIVROS_DIGITAIS => [
             'nome' => 'Livro digital sem PDF',
             'descricao' => 'Um livro de brinde da Promoção PDFs está ativo (ou foi ganho num pedido) mas o PDF não está no servidor: o e-mail do pedido sai só com o link, que não baixa. Suba o PDF de novo em Entregáveis › Livros Digitais. Some sozinho quando o livros:conferir achar o arquivo.',
+        ],
+        self::AMAZON_DBA_AGENDAMENTO => [
+            'nome' => 'Amazon DBA: agendar no Seller Central',
+            'descricao' => 'A Amazon não deixou agendar o pedido do DBA pela API (nem listar horários de Ponto de Envio, nem agendar sem horário). Agende no Seller Central em Ponto de Envio, na data mais próxima, antes do prazo. O sistema confere a cada 30 min e some sozinho quando o pacote aparece agendado; a etiqueta é baixada sozinha.',
         ],
         self::MELHOR_ENVIO_CONEXAO => [
             'nome' => 'Conexão do Melhor Envio caiu',

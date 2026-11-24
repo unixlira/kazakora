@@ -412,10 +412,14 @@ class AmazonDriver extends AbstractMarketplaceDriver
         return app(AmazonDbaShipping::class)->agendar($order);
     }
 
-    /** Etiqueta do DBA baixada no agendamento (AmazonDbaShipping). */
+    /**
+     * Etiqueta do DBA: a baixada no agendamento ou, se o pacote foi agendado
+     * sem PDF (Seller Central), pedida pelo feed POST_EASYSHIP_DOCUMENTS um
+     * passo por chamada (AmazonDbaShipping::buscarEtiqueta()).
+     */
     public function fetchLabel(Order $order): array
     {
-        $etiqueta = app(AmazonDbaShipping::class)->etiqueta($order);
+        $etiqueta = app(AmazonDbaShipping::class)->buscarEtiqueta($order);
 
         return $etiqueta !== null
             ? ['ready' => true, 'contents' => $etiqueta, 'content_type' => 'application/pdf']

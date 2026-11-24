@@ -137,6 +137,7 @@ class WhatsAppModelos
                         'tipo' => $tipoBotao,
                         'texto' => (string) ($botao['text'] ?? ''),
                         'url' => $url ?: null,
+                        'telefone' => (string) ($botao['phone_number'] ?? '') ?: null,
                         // Botão de link com {{1}} no fim: o sufixo é preenchido no envio.
                         'variavel' => $tipoBotao === 'URL' && str_contains($url, '{{'),
                     ];
@@ -173,6 +174,101 @@ class WhatsAppModelos
         $botoes = array_map(fn (array $botao) => '['.$botao['texto'].']', $modelo['botoes'] ?? []);
 
         return trim(implode("\n\n", $partes).($botoes ? "\n".implode(' ', $botoes) : ''));
+    }
+
+    /**
+     * O que vai no payload da WhatsAppMessage de um template para a tela de
+     * Conversas redesenhar o balão igual ao do WhatsApp (pedido do Lira
+     * 23/11/2026): nome, idioma, variáveis do corpo, imagem do cabeçalho e
+     * sufixos dos botões de link. Lista posicional vira "1", "2"...
+     *
+     * @param  array<int|string, mixed>  $variaveis  [$a, $b] ou ['1' => $a] ou ['nome' => $a]
+     * @param  array<int, string>  $botoes  índice do botão de link => sufixo da URL
+     * @return array<string, mixed>
+     */
+    public static function payloadDoEnvio(string $nome, string $idioma, array $variaveis, ?string $cabecalhoLink = null, array $botoes = []): array
+    {
+        if ($variaveis !== [] && array_is_list($variaveis)) {
+            $variaveis = array_combine(array_map('strval', range(1, count($variaveis))), $variaveis);
+        }
+
+        return [
+            'template' => $nome,
+            'idioma' => $idioma,
+            'variaveis' => array_map(fn ($valor) => (string) $valor, $variaveis),
+            'cabecalho_link' => $cabecalhoLink,
+            'botoes' => array_map(fn ($valor) => (string) $valor, $botoes),
+        ];
+    }
+
+    /**
+     * Balão pronto para a tela: cabeçalho, corpo com as variáveis preenchidas
+     * e a formatação do WhatsApp (em HTML escapado), rodapé e botões com a
+     * URL final.
+     *
+     * @param  array<string, mixed>  $modelo  self::montar()
+     * @param  array<string, mixed>  $payload  self::payloadDoEnvio()
+     * @return array<string, mixed>
+     */
+    public static function renderizar(array $modelo, array $payload): array
+    {
+        $valores = (array) ($payload['variaveis'] ?? []);
+        $corpo = (string) preg_replace_callback(
+            '/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/',
+            fn ($m) => (string) ($valores[$m[1]] ?? $m[0]),
+            (string) ($modelo['corpo'] ?? ''),
+        );
+
+        $formato = $modelo['cabecalho']['formato'] ?? null;
+        $sufixos = (array) ($payload['botoes'] ?? []);
+
+        return [
+            'cabecalho_tipo' => $formato ? strtolower((string) $formato) : null,
+            'cabecalho_texto' => $formato === 'TEXT' ? ($modelo['cabecalho']['texto'] ?? null) : null,
+            'cabecalho_imagem' => $formato === 'IMAGE' && filled($payload['cabecalho_link'] ?? null) ? (string) $payload['cabecalho_link'] : null,
+            'corpo_formatado' => self::formatar($corpo),
+            'rodape' => $modelo['rodape'] ?? null,
+            'botoes' => array_map(function (array $botao) use ($sufixos) {
+                $url = $botao['url'] ?? null;
+                if ($botao['tipo'] === 'URL' && $url !== null) {
+                    $url = (string) preg_replace('/\{\{\s*[A-Za-z0-9_]+\s*\}\}/', (string) ($sufixos[$botao['indice']] ?? ''), $url);
+                } elseif ($botao['tipo'] === 'PHONE_NUMBER' && filled($botao['telefone'] ?? null)) {
+                    $url = 'tel:'.preg_replace('/[^\d+]/', '', (string) $botao['telefone']);
+                }
+
+                return ['texto' => $botao['texto'], 'tipo' => $botao['tipo'], 'url' => $url];
+            }, $modelo['botoes'] ?? []),
+        ];
+    }
+
+    /**
+     * Formatação do WhatsApp em HTML seguro: *negrito*, _itálico_, ~riscado~,
+     * ```monoespaçado``` e links. A quebra de linha continua \n (a tela usa
+     * white-space: pre-wrap). Link fica fora da formatação, senão o _ de uma
+     * URL vira itálico.
+     */
+    public static function formatar(string $texto): string
+    {
+        $partes = preg_split('~(https?://[^\s<>"]+)~u', $texto, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$texto];
+        $html = '';
+
+        foreach ($partes as $i => $parte) {
+            $seguro = htmlspecialchars($parte, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+            if ($i % 2 === 1) {
+                $html .= '<a href="'.$seguro.'" target="_blank" rel="noopener noreferrer" class="wa-link">'.$seguro.'</a>';
+
+                continue;
+            }
+
+            $seguro = (string) preg_replace('/```(.+?)```/su', '<code>$1</code>', $seguro);
+            $seguro = (string) preg_replace('/(?<![\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/u', '<strong>$1</strong>', $seguro);
+            $seguro = (string) preg_replace('/(?<![\w_])_(?=\S)([^_\n]*?\S)_(?![\w_])/u', '<em>$1</em>', $seguro);
+            $seguro = (string) preg_replace('/(?<![\w~])~(?=\S)([^~\n]*?\S)~(?![\w~])/u', '<s>$1</s>', $seguro);
+            $html .= $seguro;
+        }
+
+        return $html;
     }
 
     /** @return list<string> "1", "2"... ou nomes, na ordem em que aparecem, sem repetir */

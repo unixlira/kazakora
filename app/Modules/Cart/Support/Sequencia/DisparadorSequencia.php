@@ -8,6 +8,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Services\WhatsAppModelos;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use App\Support\SiteAtual;
@@ -148,13 +149,15 @@ class DisparadorSequencia
         // Variável de template da Meta não aceita quebra de linha nem tab.
         $produto = (string) preg_replace('/\s+/u', ' ', $nomeProduto);
 
+        $corpo = $numero === 1 ? [$nome, $produto] : [$nome, $produto, (string) $texto];
+        $cabecalho = $numero === 1 ? null : $imagem;
         $resposta = $numero === 1
             ? $cliente->sendTemplate($registro->telefone, $template['nome'], $template['idioma'],
-                bodyParams: [$nome, $produto],
+                bodyParams: $corpo,
                 urlButtonParams: [0 => $link['sufixo']])
             : $cliente->sendTemplate($registro->telefone, $template['nome'], $template['idioma'],
                 headerMediaType: 'image',
-                bodyParams: [$nome, $produto, (string) $texto],
+                bodyParams: $corpo,
                 urlButtonParams: [0 => $link['sufixo']],
                 headerMediaLink: $imagem);
 
@@ -176,7 +179,9 @@ class DisparadorSequencia
                     : "Carrinho abandonado (novidade {$numero}): {$produto} — {$texto} {$link['url']}",
                 'status' => 'sent',
                 'sent_by' => 'system',
-                'payload' => ['template' => $template['nome'], 'carrinho_sequencia_id' => $registro->id, 'disparo' => $numero],
+                // Nome, idioma, variáveis, imagem e sufixo do botão: a tela de Conversas redesenha o balão do modelo.
+                'payload' => WhatsAppModelos::payloadDoEnvio($template['nome'], $template['idioma'], $corpo, $cabecalho, [0 => (string) $link['sufixo']])
+                    + ['carrinho_sequencia_id' => $registro->id, 'disparo' => $numero],
                 'sent_at' => now(),
             ]);
             $conversa->registerMessage($mensagem);

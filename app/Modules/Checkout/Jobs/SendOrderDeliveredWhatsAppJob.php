@@ -8,6 +8,7 @@ use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Services\WhatsAppModelos;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
@@ -123,7 +124,14 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
             'body' => "Pedido #{$order->numero} foi entregue. Quem recebeu: {$recebidoPor}. [Comprovante Entrega] [Não Recebi] [Falar com Atendente]",
             'status' => 'sent',
             'sent_by' => 'system',
-            'payload' => ['template' => $template, 'order_id' => $order->id],
+            // Dados do envio: a tela de Conversas redesenha o balão igual ao WhatsApp.
+            'payload' => WhatsAppModelos::payloadDoEnvio(
+                $template,
+                (string) WhatsAppNumeros::template($loja, 'pedido_entregue_idioma', 'pt_BR'),
+                [$nome, $order->numero, $recebidoPor],
+                $imagem,
+                [0 => $order->trackingRef()],
+            ) + ['order_id' => $order->id],
             'sent_at' => now(),
         ]);
         $conversation->registerMessage($message);

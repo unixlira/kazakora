@@ -8,6 +8,7 @@ use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Services\WhatsAppModelos;
 use App\Modules\WhatsApp\Support\WhatsAppNumeros;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
@@ -148,7 +149,13 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
             'body' => "Pedido #{$order->numero} confirmado. Conferência de dados enviada: {$nomeCompleto}, {$email}, ".self::endereco($order).' [Tudo Certo] [Corrigir Informações]',
             'status' => 'sent',
             'sent_by' => 'system',
-            'payload' => ['template' => $template, 'order_id' => $order->id],
+            // Dados do envio: a tela de Conversas redesenha o balão igual ao WhatsApp.
+            'payload' => WhatsAppModelos::payloadDoEnvio(
+                $template,
+                (string) WhatsAppNumeros::template($loja, 'pedido_aprovado_idioma', 'pt_BR'),
+                [$nome, $order->numero, $nomeCompleto, $email, self::endereco($order)],
+                $imagem,
+            ) + ['order_id' => $order->id],
             'sent_at' => now(),
         ]);
         $conversation->registerMessage($message);

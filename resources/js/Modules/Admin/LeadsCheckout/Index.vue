@@ -122,7 +122,7 @@ const columns = [
         cell: ({ row }) => {
             const lead = row.original;
             if (lead.whatsapp_enviado_em) {
-                return h('span', { class: 'text-xs font-medium text-emerald-700' }, `WhatsApp enviado ${formatDate(lead.whatsapp_enviado_em)}`);
+                return h('span', { class: 'text-xs font-medium text-emerald-700' }, `Enviado ${formatDate(lead.whatsapp_enviado_em)}`);
             }
             if (lead.whatsapp_bloqueio) {
                 return h('span', { class: 'text-xs text-slate-400', title: lead.whatsapp_bloqueio }, '—');
@@ -132,7 +132,7 @@ const columns = [
                 class: 'rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50',
                 disabled: enviando.value !== null,
                 onClick: () => enviar(lead),
-            }, enviando.value === lead.id ? 'Enviando…' : 'Enviar WhatsApp');
+            }, enviando.value === lead.id ? 'Enviando…' : 'Enviar WhatsApp + e-mail');
         },
     },
 ];
@@ -145,8 +145,8 @@ const columns = [
         <h1 class="mb-2 text-2xl font-bold">Carrinhos abandonados</h1>
         <p class="mb-4 text-sm text-slate-500">
             Quem preencheu a Identificação do checkout e clicou em "Ir para Entrega". Vira "Convertido" quando o
-            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. Em Ações, "Enviar WhatsApp" manda a mensagem de
-            recuperação de carrinho (modelo aprovado na Meta); cada carrinho recebe uma vez só.
+            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. A sequência automática manda WhatsApp e e-mail
+            sozinha (D+1, D+3, D+5, D+7, D+20 e D+30, das 9h às 20h). Em Ações, o botão antecipa a 1ª mensagem; tudo fica registrado.
         </p>
 
         <div class="mb-4 grid gap-3 sm:grid-cols-3">
@@ -167,10 +167,10 @@ const columns = [
         <div class="mb-3 flex flex-wrap items-center gap-2">
             <template v-if="resumo.para_disparar > 0">
                 <button v-if="!confirmarTodos" type="button" class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" @click="confirmarTodos = true">
-                    Disparar WhatsApp para todos ({{ resumo.para_disparar }})
+                    Disparar WhatsApp + e-mail para todos ({{ resumo.para_disparar }})
                 </button>
                 <span v-else class="flex flex-wrap items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm">
-                    Enviar a mensagem de recuperação para {{ resumo.para_disparar }} {{ resumo.para_disparar === 1 ? 'carrinho aberto' : 'carrinhos abertos' }}<template v-if="filters.site"> da {{ nomeDoSite(filters.site) }}</template>?
+                    Enviar WhatsApp e e-mail de recuperação para {{ resumo.para_disparar }} {{ resumo.para_disparar === 1 ? 'carrinho aberto' : 'carrinhos abertos' }}<template v-if="filters.site"> da {{ nomeDoSite(filters.site) }}</template>?
                     <button type="button" class="rounded bg-emerald-600 px-2 py-1 font-semibold text-white disabled:opacity-50" :disabled="enviando !== null" @click="enviarTodos">{{ enviando === 'todos' ? 'Enviando…' : 'Sim, enviar' }}</button>
                     <button type="button" class="rounded px-2 py-1 text-slate-600 hover:underline" @click="confirmarTodos = false">Cancelar</button>
                 </span>

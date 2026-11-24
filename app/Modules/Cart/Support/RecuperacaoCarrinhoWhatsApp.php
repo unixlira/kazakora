@@ -2,28 +2,28 @@
 
 namespace App\Modules\Cart\Support;
 
-use App\Modules\Catalog\Models\Product;
+use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia as Registro;
+use App\Modules\Cart\Support\Sequencia\DisparadorSequencia;
+use App\Modules\Cart\Support\Sequencia\ImportadorSequencia;
 use App\Modules\Checkout\Models\LeadCheckout;
-use App\Modules\FerraKora\Models\FerraKoraProduto;
-use App\Modules\FerraKora\Services\CatalogoFerraKora;
-use App\Modules\WhatsApp\Models\WhatsAppConversation;
-use App\Modules\WhatsApp\Models\WhatsAppMessage;
-use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Mensagem de recuperação de carrinho pelo painel (pedido do Lira 2026-11-23):
- * botão por carrinho e "Disparar para todos" em Admin > Carrinhos abandonados.
- * Usa os modelos aprovados na Meta (KazaKora: recuperacao_carrinho_kazakora,
- * com foto do produto; FerraKora: carrinho_lembrete_ferrakora). Cada carrinho
- * recebe uma vez só (whatsapp_enviado_em).
+ * Botão "Enviar WhatsApp" e "Disparar para todos" em Admin > Carrinhos
+ * abandonados (pedido do Lira 2026-11-23). Não manda nada por fora: antecipa
+ * o disparo da vez da sequência automática (DisparadorSequencia), que manda
+ * WhatsApp E e-mail, grava no histórico do carrinho e na tela de Conversas, e
+ * segue o calendário a partir daí. Assim o automático não repete a mensagem.
  */
 class RecuperacaoCarrinhoWhatsApp
 {
     public const OK = 'enviado';
 
-    public function __construct(private readonly WhatsAppCloudApiClient $whatsapp) {}
+    public function __construct(
+        private readonly ImportadorSequencia $importador,
+        private readonly DisparadorSequencia $disparador,
+    ) {}
 
     /** Motivo para não enviar, ou null quando pode. */
     public function bloqueio(LeadCheckout $lead): ?string
@@ -31,94 +31,57 @@ class RecuperacaoCarrinhoWhatsApp
         return match (true) {
             $lead->status !== LeadCheckout::STATUS_ABERTO => 'O carrinho já virou pedido.',
             $lead->whatsapp_enviado_em !== null => 'A mensagem já foi enviada para este carrinho.',
-            self::telefone($lead->telefone) === null => 'O carrinho não tem celular válido.',
-            ! in_array($lead->site, ['kazakora', 'ferrakora'], true) => 'Loja sem modelo de mensagem aprovado.',
+            ! filled($lead->telefone) && ! filled($lead->email) => 'O carrinho não tem celular nem e-mail.',
             empty($lead->itens) => 'O carrinho não tem produto.',
             default => null,
         };
     }
 
-    /** Envia e devolve self::OK ou o motivo da falha. */
+    /** Envia e devolve self::OK ou o motivo de não ter enviado. */
     public function enviar(LeadCheckout $lead): string
     {
         if ($motivo = $this->bloqueio($lead)) {
             return $motivo;
         }
 
-        $telefone = self::telefone($lead->telefone);
-        $item = $lead->itens[0];
-        $produto = Product::query()->withTrashed()->find((int) ($item['product_id'] ?? 0));
-        $pai = $produto?->parent_product_id ? Product::query()->withTrashed()->find($produto->parent_product_id) : $produto;
-        // Variável de template da Meta não aceita quebra de linha nem tab.
-        $nomeProduto = (string) preg_replace('/\s+/u', ' ', (string) ($item['nome'] ?? $pai?->name ?? 'produto'));
-        $nome = self::primeiroNome($lead->nome);
-
         try {
-            if ($lead->site === 'kazakora') {
-                $modelo = 'recuperacao_carrinho_kazakora';
-                $imagem = $pai?->images()->orderByDesc('is_primary')->orderBy('position')->first();
-                $resposta = $this->whatsapp->paraLoja('kazakora')->sendTemplate($telefone, $modelo, 'pt_BR',
-                    headerMediaType: 'image',
-                    bodyParams: [$nome, $nomeProduto],
-                    urlButtonParams: [0 => (string) ($pai?->slug ?? '')],
-                    headerMediaLink: $imagem ? 'https://kazakora.com/storage/'.ltrim((string) $imagem->path, '/') : null);
-            } else {
-                $modelo = 'carrinho_lembrete_ferrakora';
-                $registro = $pai ? FerraKoraProduto::query()->where('product_id', $pai->id)->first() : null;
-                $slug = $registro ? app(CatalogoFerraKora::class)->slugPublicado($registro) : null;
-                $resposta = $this->whatsapp->paraLoja('ferrakora')->sendTemplate($telefone, $modelo, 'pt_BR',
-                    bodyParams: [$nome, $nomeProduto],
-                    urlButtonParams: [0 => $slug ? 'produto/'.$slug : '?carrinho=1']);
+            $registro = $this->registro($lead);
+            if (! $registro) {
+                return 'O carrinho ainda não entrou na sequência (fica parado 60 minutos antes).';
             }
-        } catch (Throwable $e) {
-            Log::warning('Recuperação de carrinho por WhatsApp falhou', ['lead' => $lead->id, 'erro' => $e->getMessage()]);
+            if ($registro->parado) {
+                return 'A sequência deste cliente está parada ('.$registro->motivo_parada.').';
+            }
+            if ($registro->disparos_enviados > 0) {
+                $lead->forceFill(['whatsapp_enviado_em' => $registro->ultimo_disparo_em ?? now()])->save();
 
-            return 'O WhatsApp recusou: '.mb_substr($e->getMessage(), 0, 160);
+                return 'O cliente já recebeu a mensagem pela sequência automática.';
+            }
+
+            $resultado = $this->disparador->disparar($registro);
+        } catch (Throwable $e) {
+            Log::warning('Recuperação de carrinho pelo painel falhou', ['lead' => $lead->id, 'erro' => $e->getMessage()]);
+
+            return 'Não foi possível enviar: '.mb_substr($e->getMessage(), 0, 160);
+        }
+
+        if ($resultado !== 'enviado') {
+            return $resultado === 'sem_canal'
+                ? 'Sem canal para enviar (celular sem modelo de WhatsApp e sem e-mail).'
+                : 'O WhatsApp e o e-mail recusaram o envio. Veja o histórico em Sequência.';
         }
 
         $lead->forceFill(['whatsapp_enviado_em' => now()])->save();
 
-        // Aparece no histórico da conversa no painel do WhatsApp (falha aqui não desfaz o envio).
-        try {
-            $conversa = WhatsAppConversation::paraNumero($telefone, $lead->site, [
-                'phone' => $telefone,
-                'profile_name' => $lead->nome,
-                'last_message_at' => now(),
-                'unread_count' => 0,
-            ]);
-            WhatsAppMessage::query()->create([
-                'conversation_id' => $conversa->id,
-                'wa_message_id' => $resposta['messages'][0]['id'] ?? null,
-                'direction' => 'outbound',
-                'type' => 'template',
-                'body' => "Recuperação de carrinho (painel): {$nomeProduto}",
-                'status' => 'sent',
-                'sent_by' => 'sistema',
-                'sent_at' => now(),
-                'payload' => ['template' => $modelo],
-            ]);
-        } catch (Throwable $e) {
-            Log::info('Histórico da recuperação de carrinho não gravado', ['lead' => $lead->id, 'erro' => $e->getMessage()]);
-        }
-
         return self::OK;
     }
 
-    /** Celular brasileiro com DDI 55, ou null. */
-    public static function telefone(?string $telefone): ?string
+    /** O carrinho deste lead na sequência (traz os novos antes de procurar). */
+    private function registro(LeadCheckout $lead): ?Registro
     {
-        $d = preg_replace('/\D/', '', (string) $telefone);
-        if (strlen($d) === 10 || strlen($d) === 11) {
-            $d = '55'.$d;
-        }
+        $achar = fn () => Registro::query()->where('origem', Registro::ORIGEM_LEAD)->where('origem_id', $lead->id)->first()
+            ?? $this->importador->daMesmaPessoa((string) $lead->site, $lead->email ? mb_strtolower($lead->email) : null, null, $lead->user_id);
 
-        return preg_match('/^55\d{10,11}$/', $d) ? $d : null;
-    }
-
-    private static function primeiroNome(?string $nome): string
-    {
-        $primeiro = trim(explode(' ', trim((string) $nome))[0] ?? '');
-
-        return $primeiro !== '' ? mb_convert_case(mb_strtolower($primeiro), MB_CASE_TITLE) : 'tudo bem';
+        return $achar() ?? (($this->importador->importar() || true) ? $achar() : null);
     }
 }

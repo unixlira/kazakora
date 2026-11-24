@@ -14,8 +14,8 @@ use Inertia\Response;
 /**
  * Admin > Carrinhos abandonados (pedido 2026-10-24). Lista quem chegou na
  * Entrega do checkout, com os itens e se virou pedido. Desde 2026-11-23 (pedido
- * do Lira) tem o botão de WhatsApp por carrinho e o "Disparar para todos", com
- * o modelo aprovado de recuperação de carrinho; cada carrinho recebe uma vez.
+ * do Lira) tem o botão por carrinho e o "Disparar para todos": antecipam o
+ * disparo da sequência automática (WhatsApp + e-mail, tudo registrado).
  */
 class LeadCheckoutController extends Controller
 {
@@ -102,7 +102,7 @@ class LeadCheckoutController extends Controller
             $recuperacao->enviar($lead) === RecuperacaoCarrinhoWhatsApp::OK ? $enviados++ : $falhas++;
         }
 
-        return back()->with($enviados ? 'success' : 'warning', "Mensagens enviadas: {$enviados}.".($falhas ? " Não enviadas: {$falhas} (celular inválido ou recusado pelo WhatsApp)." : ''));
+        return back()->with($enviados ? 'success' : 'warning', "Mensagens enviadas: {$enviados}.".($falhas ? " Não enviadas: {$falhas} (ainda fora da sequência, já recebidas ou recusadas)." : ''));
     }
 
     private function paraDisparar(?string $site)
@@ -110,7 +110,7 @@ class LeadCheckoutController extends Controller
         return LeadCheckout::query()
             ->where('status', LeadCheckout::STATUS_ABERTO)
             ->whereNull('whatsapp_enviado_em')
-            ->whereNotNull('telefone')->where('telefone', '!=', '')
+            ->where(fn ($q) => $q->where(fn ($q) => $q->whereNotNull('telefone')->where('telefone', '!=', ''))->orWhere(fn ($q) => $q->whereNotNull('email')->where('email', '!=', '')))
             ->whereIn('site', $site ? [$site] : ['kazakora', 'ferrakora'])
             ->latest('updated_at');
     }

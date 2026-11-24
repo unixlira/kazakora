@@ -81,7 +81,12 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 12px 0 0; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
             <tr>
                 <td valign="middle" style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
-                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ ! empty($livrosAnexados) ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : ($brindes->count() === 1 ? 'Ele' : 'Eles') }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido. Cada link é exclusivo do seu pedido e vale para um download, então guarde o PDF depois de baixar:
+                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. @php
+                        // 24/11/2026: anexa os que cabem no limite; todos têm o link.
+                        $qtdAnexados = count($idsAnexados ?? []);
+                        $todosAnexados = ! empty($livrosAnexados) && $qtdAnexados >= $brindes->count();
+                    @endphp
+                    {{ $todosAnexados ? ($brindes->count() === 1 ? 'Ele está anexado a este e-mail em PDF e também' : 'Estão anexados a este e-mail em PDF e também') : (! empty($livrosAnexados) ? ($qtdAnexados === 1 ? 'Um deles está anexado a este e-mail em PDF (marcado abaixo) e todos' : $qtdAnexados.' deles estão anexados a este e-mail em PDF (marcados abaixo) e todos') : ($brindes->count() === 1 ? 'Ele' : 'Eles')) }} {{ $brindes->count() === 1 ? 'pode ser baixado' : 'podem ser baixados' }} no link abaixo, que fica guardado na página do seu pedido. Cada link é exclusivo do seu pedido e vale para um download, então guarde o PDF depois de baixar:
                     <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 10px 0 0;">
                         @foreach ($brindes as $livro)
                             <tr>
@@ -90,7 +95,7 @@
                                         <img src="{{ $livro->capa_url }}" alt="" width="36" height="48" style="display: block; width: 36px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid #fed7aa;">
                                     @endif
                                 </td>
-                                <td style="padding: 0 0 8px; vertical-align: middle; font-size: 13px; color: #7c2d12;">{{ $livro->titulo }}: <a href="{{ $livro->urlDoPedido($order) }}" style="color: #c2450c; font-weight: 700;">baixar PDF</a></td>
+                                <td style="padding: 0 0 8px; vertical-align: middle; font-size: 13px; color: #7c2d12;">{{ $livro->titulo }}: <a href="{{ $livro->urlDoPedido($order) }}" style="color: #c2450c; font-weight: 700;">baixar PDF</a>@if (! empty($livrosAnexados) && ! $todosAnexados && in_array($livro->id, $idsAnexados ?? [], true)) <span style="color: #9a3412;">(em anexo)</span>@endif</td>
                             </tr>
                         @endforeach
                     </table>

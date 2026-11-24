@@ -438,3 +438,9 @@ Schedule::command('comportamento:prints')->hourlyAt(17)->withoutOverlapping(50)-
 // Todas as páginas das lojas e landings de madrugada (2026-11-20): o print já
 // está pronto quando o Lira abre a tela Comportamento.
 Schedule::command('comportamento:prints --todas --limite=1000 --dias=3')->dailyAt('02:20')->withoutOverlapping(240)->runInBackground();
+
+// Livros digitais da Promoção PDFs (24/11/2026): confere se o PDF de cada
+// livro ativo (e dos ganhos em pedidos recentes) está no servidor e avisa o
+// Lira por e-mail e no sino quando falta, uma vez até resolver. O e-mail do
+// pedido de teste tinha saído com menos livros do que a página prometia.
+Schedule::command('livros:conferir')->dailyAt('07:40')->withoutOverlapping(30);

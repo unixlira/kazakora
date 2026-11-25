@@ -13,8 +13,8 @@ import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 import RodapeLoja from '@/Shared/Components/RodapeLoja.vue';
 
 const page = usePage();
-// semTopo: a página manda o próprio cabeçalho pelo slot "topo" (página de brinquedo, 24/11/2026).
-defineProps({ semTopo: { type: Boolean, default: false } });
+// semFaixaTopo: sem a faixa promocional e o letreiro do topo (página de brinquedo, 24/11/2026).
+defineProps({ semFaixaTopo: { type: Boolean, default: false } });
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
@@ -178,10 +178,9 @@ onUnmounted(() => {
         <TrocarSenhaModal />
         <ModalAvaliacao />
         <AvisoCookies />
-        <!-- Página de brinquedo (pedido do Lira 24/11/2026): topo próprio no lugar da faixa, do
-             letreiro e do cabeçalho da loja; o rodapé continua o da loja. -->
-        <slot v-if="semTopo" name="topo" />
-        <template v-else>
+        <!-- Página de brinquedo (pedido do Lira 24/11/2026): sem a faixa promocional e sem o letreiro
+             do topo; o cabeçalho e o rodapé continuam os da loja. -->
+        <template v-if="!semFaixaTopo">
         <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
         <FaixaPromo />
         <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
@@ -201,6 +200,8 @@ onUnmounted(() => {
                 </span>
             </div>
         </div>
+
+        </template>
 
         <!-- Header -->
         <div ref="marcaDoTopo" aria-hidden="true"></div>
@@ -478,7 +479,6 @@ onUnmounted(() => {
                 </nav>
             </div>
         </header>
-        </template>
 
         <!-- Page content -->
         <main>

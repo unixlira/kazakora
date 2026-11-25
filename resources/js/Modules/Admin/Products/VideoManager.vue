@@ -80,6 +80,8 @@ const remove = async () => {
 <template>
     <div class="space-y-4">
         <p class="text-xs text-slate-500">Máximo de 100MB e 60 segundos de duração — usado nos anúncios de marketplace.</p>
+        <!-- Página de brinquedo (24/11/2026): o mesmo vídeo entra na seção "Diversão sem telas". -->
+        <p class="text-xs text-slate-500">Brinquedos: este vídeo também toca (mudo, em loop) na seção "Diversão sem telas" da página do produto, numa moldura de celular em pé (9:16). Ideal: 1080 x 1920 px (9:16), 10 a 20 s, MP4 H.264, até 15 MB; sem vídeo, a seção mostra a foto.</p>
 
         <div v-if="product.video_url" class="flex items-start gap-4">
             <video :src="product.video_url" controls preload="metadata" class="h-40 w-72 rounded border border-slate-200 bg-black" />

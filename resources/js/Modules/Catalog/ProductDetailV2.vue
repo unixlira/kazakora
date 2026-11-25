@@ -33,7 +33,6 @@ import SomComemoracao from './brinquedo/SomComemoracao.vue';
 import Cubo from './brinquedo/Cubo.vue';
 import Icone from './brinquedo/Icone.vue';
 import { kitRecomendado, nomeDoKit, semEmoji } from './brinquedo/kits';
-import CabecalhoBrinquedo from './brinquedo/CabecalhoBrinquedo.vue';
 import { ligarEntradas, tabelaDeParcelas, vigiarBotaoCompra } from './brinquedo/efeitos';
 
 const props = defineProps({
@@ -880,6 +879,15 @@ const contagem = computed(() => {
 const irParaCompra = () => {
     document.getElementById('comprar')?.scrollIntoView({ behavior: rolarSuave() ? 'smooth' : 'auto', block: 'start' });
 };
+// Maior desconto real entre os kits (preço "de" x "por"), para o card de campanha da página de brinquedo.
+const maiorDescontoKits = computed(() => {
+    const lista = opcoesVariacao.value.length ? opcoesVariacao.value : [props.product];
+    return lista.reduce((maior, item) => {
+        const de = Number(item.preco_de ?? 0);
+        const por = Number(item.final_price ?? 0);
+        return de > por && por > 0 ? Math.max(maior, Math.floor((1 - por / de) * 100)) : maior;
+    }, 0);
+});
 // Efeitos de entrada ao rolar e barra fixa escura de compra (só na página de brinquedo).
 const barraBrinquedo = ref(false);
 const parcelasAbertas = ref(false);
@@ -904,8 +912,7 @@ const escolherKit = (kit, rolar = false) => {
 <template>
     <Head :title="product.seo_title || product.name" />
 
-    <AppLayout :sem-topo="brinquedo">
-        <template v-if="brinquedo" #topo><CabecalhoBrinquedo /></template>
+    <AppLayout :sem-faixa-topo="brinquedo">
         <div class="pd2" :class="{ 'pg-brinquedo': brinquedo }">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
@@ -1008,7 +1015,19 @@ const escolherKit = (kit, rolar = false) => {
 
                             <!-- Oferta do produto em destaque, acima do preço (pedido do Lira 14/11/2026). Uma caixa só,
                                  lida do cadastro (comparativo.oferta); sem oferta no ar não aparece nada. -->
-                            <div v-if="oferta" class="oferta-bf" data-oferta-produto>
+                            <!-- Página de brinquedo: card de campanha no formato da referência, com o maior desconto
+                                 REAL entre os kits (de/por) e o cronômetro até o fim da oferta cadastrada. -->
+                            <div v-if="brinquedo && maiorDescontoKits > 0" class="pb-bf" data-oferta-produto>
+                                <div class="pb-bf-txt">
+                                    <span class="pb-bf-tag">{{ oferta?.selo || 'Oferta' }}</span>
+                                    <b>Até {{ maiorDescontoKits }}% OFF</b>
+                                    <small>{{ variations.length ? 'nos kits' : 'neste brinquedo' }} · tempo limitado</small>
+                                </div>
+                                <div v-if="contagem" class="pb-bf-timer" aria-label="Tempo até o fim da oferta">
+                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span v-if="!contagem.dias"><b>{{ contagem.seg }}</b>seg</span>
+                                </div>
+                            </div>
+                            <div v-if="oferta && !brinquedo" class="oferta-bf" data-oferta-produto>
                                 <span v-if="oferta.selo" class="oferta-bf-selo"><i class="fa-solid fa-bolt" aria-hidden="true"></i>{{ oferta.selo }}</span>
                                 <strong>{{ oferta.titulo }}</strong>
                                 <ul v-if="oferta.faixas?.length" class="oferta-bf-faixas">
@@ -1159,6 +1178,11 @@ const escolherKit = (kit, rolar = false) => {
                                  no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
                                  Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
                             <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
+                                <div v-if="brinquedo" class="pb-qtd" role="group" aria-label="Quantidade">
+                                    <button type="button" aria-label="Diminuir quantidade" @click="setQuantity(quantity - 1)"><Icone nome="minus" :tamanho="16" :traco="3" /></button>
+                                    <span aria-live="polite">{{ quantity }}</span>
+                                    <button type="button" aria-label="Aumentar quantidade" @click="setQuantity(quantity + 1)"><Icone nome="plus" :tamanho="16" :traco="3" /></button>
+                                </div>
                                 <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">{{ brinquedo ? 'Comprar' : 'COMPRAR AGORA' }}</button>
                             </div>
                         </aside>

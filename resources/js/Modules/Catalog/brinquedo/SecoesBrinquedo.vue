@@ -1,10 +1,13 @@
 <script setup>
-// Seções da página de brinquedo (pedido do Lira 24/11/2026, "quero que páginas de
-// brinquedo sejam assim"): a estrutura de loja infantil que ele mandou de referência,
-// com a cara e os textos da KazaKora. Todo texto do produto sai do conteúdo do
-// anúncio (product_ad_contents); os textos fixos aqui são da loja (entrega,
-// garantia, pagamento) e valem para qualquer brinquedo.
-import { computed } from 'vue';
+// Seções da página de brinquedo (pedido do Lira 24/11/2026: "clone idêntico da página de referência,
+// menos o rodapé e o nav"). Mesma ordem, medidas e efeitos da referência (medidos em 1440 e 390 px),
+// com o conteúdo da KazaKora: todo texto do produto vem do conteúdo do anúncio (product_ad_contents);
+// os textos fixos aqui são da loja (entrega, garantia, pagamento) e valem para qualquer brinquedo.
+//
+// Ordem: letreiro → história com vídeo → por que não larga (foto + 4 cartões) → habilidades (6 pílulas +
+// foto) → detalhes (foto + 4 cartões) → comparativo → família (colagem + citação) → kits → como funciona
+// → garantia → perguntas → descrição completa → chamada final.
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import Cubo from './Cubo.vue';
 import Icone from './Icone.vue';
 import KitsBrinquedo from './KitsBrinquedo.vue';
@@ -22,269 +25,329 @@ const props = defineProps({
 });
 const emit = defineEmits(['escolher', 'comprar']);
 
-const CORES = ['amarelo', 'azul', 'verde', 'laranja'];
-const SOBRETITULOS = ['Diversão de verdade', 'Brincadeira que ensina', 'Feito para a criançada', 'Pensado nos detalhes', 'Hora de brincar junto', 'Tudo o que vem na caixa'];
-const BOTOES = ['Quero o meu kit', 'Escolher meu kit', 'Quero esse presente', 'Garantir o meu', 'Quero ver brincando', 'Escolher agora'];
-
-const nomeCurto = computed(() => semEmoji(props.product.name).split(/[,–\-|]/)[0].split(' ').slice(0, 3).join(' '));
-
-const imagem = (indice) => {
+const CORES = ['amarelo', 'azul', 'verde', 'vermelho'];
+const foto = (indice) => {
     if (indice === null || indice === undefined) return null;
-    const foto = props.product.images?.[indice];
-    return foto ? (foto.media_url ?? foto.url) : null;
+    const imagem = props.product.images?.[indice];
+    return imagem ? (imagem.media_url ?? imagem.url) : null;
 };
-
-const blocos = computed(() => (props.anuncio?.blocos ?? []).slice(0, 6).map((bloco, i) => ({
-    ...bloco,
-    titulo: tituloComMarcador(bloco.titulo),
-    texto: semEmoji(bloco.texto),
-    foto: imagem(bloco.imagem),
-    cor: CORES[i % CORES.length],
-    sobre: SOBRETITULOS[i % SOBRETITULOS.length],
-    botao: BOTOES[i % BOTOES.length],
-    fundo: i % 2 === 0 ? 'creme' : 'branco',
-})));
-
-const ICONES = ['sparkles', 'hand', 'smile', 'backpack', 'puzzle', 'gift'];
-const beneficios = computed(() => (props.anuncio?.beneficios ?? []).slice(0, 6).map((item, i) => ({
-    titulo: semEmoji(item[0]), texto: semEmoji(item[1] ?? ''), cor: CORES[i % CORES.length], icone: ICONES[i % ICONES.length],
-})));
-const habilidades = computed(() => (props.anuncio?.comparativo?.habilidades ?? []).map(semEmoji).filter(Boolean).slice(0, 8));
-
-const comparativo = computed(() => {
-    const c = props.anuncio?.comparativo;
-    if (!c?.linhas?.length) return null;
-    const rotulos = Array.isArray(c.rotulos) && c.rotulos.length === 2 ? c.rotulos : ['Brinquedo comum', nomeCurto.value];
-    return {
-        titulo: tituloComMarcador(c.titulo || `Por que escolher ${nomeCurto.value}`),
-        intro: semEmoji(c.intro),
-        rotulos,
-        linhas: c.linhas.map((linha) => ({ criterio: semEmoji(linha[0]), ruim: semEmoji(linha[1]), bom: semEmoji(linha[2]) })),
-    };
+const capa = computed(() => foto(0));
+const bloco = (i) => {
+    const b = props.anuncio?.blocos?.[i];
+    if (!b) return null;
+    return { titulo: tituloComMarcador(b.titulo), texto: semEmoji(b.texto), sub: semEmoji(b.subtitulo ?? ''), foto: foto(b.imagem) };
+};
+const historia = computed(() => bloco(0));
+const porque = computed(() => bloco(1));
+const ensina = computed(() => bloco(2));
+const detalhe = computed(() => bloco(3));
+const familia = computed(() => bloco(4));
+// Segunda foto da colagem da família: a primeira foto do produto que ainda não apareceu nas seções.
+const fotoExtra = computed(() => {
+    const usadas = new Set((props.anuncio?.blocos ?? []).map((b) => b.imagem));
+    const indice = (props.product.images ?? []).findIndex((_, i) => i > 0 && !usadas.has(i));
+    return indice > 0 ? foto(indice) : capa.value;
 });
 
-const letreiro = computed(() => {
-    const itens = [...(props.anuncio?.destaques ?? []), ...(props.anuncio?.beneficios ?? []).map((b) => b[0])]
-        .map(semEmoji).filter(Boolean);
-    const unicos = [...new Set(itens)].slice(0, 8);
-    return unicos.length ? unicos : ['Frete grátis', 'Compra segura', `Até ${props.parcelas}x no cartão`, 'Garantia de 30 dias'];
+// Vídeo da história: o vídeo do produto (admin › Produto › Vídeo). Toca mudo, em loop, só quando
+// aparece na tela (como na referência); sem vídeo, fica a foto no mesmo quadro 9:16 (celular em pé).
+const videoUrl = computed(() => props.product.video_url || null);
+const videoEl = ref(null);
+let observadorVideo = null;
+onMounted(() => {
+    const v = videoEl.value;
+    if (!v) return;
+    if (!('IntersectionObserver' in window)) { v.play?.().catch(() => {}); return; }
+    observadorVideo = new IntersectionObserver(([e]) => {
+        if (e.isIntersecting) v.play?.().catch(() => {}); else v.pause?.();
+    }, { threshold: 0.25 });
+    observadorVideo.observe(v);
 });
+onUnmounted(() => observadorVideo?.disconnect());
 
-const duvidas = computed(() => [
-    ...(props.anuncio?.duvidas ?? []).map((d) => [semEmoji(d[0]), semEmoji(d[1])]),
-    ...props.faqLoja,
-]);
-
-const PASSOS = [
-    { icone: 'gift', titulo: 'Escolha o kit', texto: 'Do kit para começar ao mais completo: é só escolher o tamanho da diversão.' },
-    { icone: 'truck', titulo: 'Enviamos com rastreio', texto: 'O código aparece em Meus Pedidos assim que o pedido é postado.' },
-    { icone: 'sparkles', titulo: 'Chegou a caixa', texto: 'A criança abre, descobre o brinquedo e os olhos brilham.' },
-    { icone: 'blocks', titulo: 'Hora de brincar', texto: 'Brincadeira de verdade, longe das telas, para aprender se divertindo.' },
-];
-const TELAS = ['smartphone', 'tv', 'gamepad-2', 'tablet'];
-// Ícone de cada habilidade pelo assunto (cai num ícone da lista quando não reconhece).
+const ICONES_BENEFICIO = ['sparkles', 'hand', 'smile', 'backpack'];
+const beneficios = computed(() => (props.anuncio?.beneficios ?? []).slice(0, 4).map((item, i) => ({
+    titulo: semEmoji(item[0]), texto: semEmoji(item[1] ?? ''), cor: ['vermelho', 'azul', 'verde', 'amarelo'][i % 4], icone: ICONES_BENEFICIO[i % 4],
+})));
 const ICONES_HABILIDADE = [
     [/ingl|idioma|bil[ií]ng/i, 'languages'], [/portugu|vocabul|palavra|leitura/i, 'book-open'], [/mem[oó]ria|associa/i, 'brain'],
     [/sonor|ouvi|audi|som/i, 'ear'], [/coordena|motor/i, 'hand'], [/curios|descobr/i, 'search'],
     [/racioc|l[oó]gic|problema/i, 'lightbulb'], [/criativ|imagina/i, 'palette'], [/concentra|aten/i, 'target'],
 ];
-const RESERVA = ['star', 'lightbulb', 'puzzle', 'heart'];
-const iconeHabilidade = (texto, j) => ICONES_HABILIDADE.find(([regra]) => regra.test(texto))?.[1] ?? RESERVA[j % RESERVA.length];
-const CONFIANCA = [
-    { icone: 'shield-check', cor: 'verde', titulo: 'Garantia de 30 dias', texto: 'Gostou ou seu dinheiro de volta' },
-    { icone: 'truck', cor: 'azul', titulo: 'Envio com rastreio', texto: 'Acompanhe em Meus Pedidos' },
-    { icone: 'lock', cor: 'laranja', titulo: 'Compra 100% segura', texto: 'Seus dados protegidos' },
-    { icone: 'credit-card', cor: 'amarelo', titulo: 'Pix ou até 12x', texto: 'No cartão de crédito' },
+const habilidades = computed(() => (props.anuncio?.comparativo?.habilidades ?? []).map(semEmoji).filter(Boolean).slice(0, 6)
+    .map((texto, j) => ({ texto, cor: ['amarelo', 'vermelho', 'azul', 'verde', 'azul', 'vermelho'][j % 6], icone: ICONES_HABILIDADE.find(([r]) => r.test(texto))?.[1] ?? 'star' })));
+const ICONES_DETALHE = ['blocks', 'book-open', 'sparkles', 'backpack'];
+const detalhes = computed(() => (props.anuncio?.comparativo?.detalhes ?? []).slice(0, 4)
+    .map((d, i) => ({ titulo: semEmoji(d[0]), texto: semEmoji(d[1] ?? ''), icone: ICONES_DETALHE[i % 4] })));
+
+const comparativo = computed(() => {
+    const c = props.anuncio?.comparativo;
+    if (!c?.linhas?.length) return null;
+    const rotulos = Array.isArray(c.rotulos) && c.rotulos.length === 2 ? c.rotulos : ['Comum', 'Este'];
+    return {
+        titulo: tituloComMarcador(c.titulo || 'Por que escolher'),
+        intro: semEmoji(c.intro),
+        rotulos,
+        // Cada linha: o que o produto faz (✓) e o comum não (✗); a linha pode dizer que os dois fazem.
+        linhas: c.linhas.map((l) => ({ texto: semEmoji(l[2] || l[0]), comum: Boolean(l[3]) })),
+    };
+});
+
+const letreiro = computed(() => {
+    const itens = [...(props.anuncio?.destaques ?? []), ...(props.anuncio?.beneficios ?? []).map((b) => b[0])].map(semEmoji).filter(Boolean);
+    const unicos = [...new Set(itens)].slice(0, 8);
+    return unicos.length ? unicos : ['Frete grátis', 'Compra segura', `Até ${props.parcelas}x no cartão`, 'Garantia de 30 dias'];
+});
+const duvidas = computed(() => [...(props.anuncio?.duvidas ?? []).map((d) => [semEmoji(d[0]), semEmoji(d[1])]), ...props.faqLoja]);
+const abertaFaq = ref(0);
+const citacao = computed(() => semEmoji(props.anuncio?.chamada ?? ''));
+
+const TELAS = ['smartphone', 'tv', 'gamepad-2', 'tablet'];
+const PASSOS = [
+    { icone: 'gift', cor: 'vermelho', titulo: 'Escolha o kit', texto: 'Do kit para começar ao mais completo: é só escolher o tamanho da diversão.' },
+    { icone: 'truck', cor: 'azul', titulo: 'Enviamos com rastreio', texto: 'Você acompanha cada passo do pedido em Meus Pedidos.' },
+    { icone: 'sparkles', cor: 'amarelo', titulo: 'Olhos brilhando', texto: 'A caixa chega e a criança descobre o brinquedo novo.' },
+    { icone: 'blocks', cor: 'verde', titulo: 'Hora de brincar', texto: 'Aprender, criar e se divertir todos os dias, longe das telas.' },
 ];
 const GARANTIA = [
-    { cor: 'laranja', texto: 'Criança mais feliz' },
-    { cor: 'azul', texto: 'Mais tempo longe das telas' },
+    { cor: 'vermelho', texto: 'Mais feliz' },
+    { cor: 'azul', texto: 'Mais longe das telas' },
     { cor: 'amarelo', texto: 'Brincando e aprendendo' },
-    { cor: 'verde', texto: 'Família brincando junto' },
+    { cor: 'verde', texto: 'Se desenvolvendo mais' },
 ];
+const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
 </script>
 
 <template>
     <div class="pb-secoes">
-        <!-- Letreiro com os destaques do produto -->
-        <div class="pb-letreiro" aria-hidden="true">
-            <div class="pb-letreiro-faixa">
-                <template v-for="volta in 2" :key="volta">
-                    <span v-for="(item, i) in letreiro" :key="`${volta}-${i}`"><i class="pb-quadradinho" :class="`cor-${CORES[i % 4]}`"></i>{{ item }}</span>
-                </template>
+        <!-- Letreiro -->
+        <div class="pb-mq" aria-hidden="true">
+            <div class="pb-mq-trilho">
+                <div v-for="volta in 2" :key="volta" class="pb-mq-linha">
+                    <template v-for="(item, i) in letreiro" :key="`${volta}-${i}`"><span>{{ item }}</span><i :class="`pb-q cor-${CORES[i % 4]}`"></i></template>
+                </div>
             </div>
         </div>
 
-        <template v-for="(bloco, i) in blocos" :key="`bloco-${i}`">
-            <section class="pb-sec" :class="`fundo-${bloco.fundo}`">
-                <div class="pb-centro">
-                    <!-- Primeira história: as telas riscadas (brincadeira longe das telas). -->
-                    <ul v-if="i === 0" class="pb-sem-telas pb-reveal" aria-label="Longe das telas">
-                        <li v-for="tela in TELAS" :key="tela"><Icone :nome="tela" /></li>
-                    </ul>
-                    <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>{{ bloco.sobre }}</p>
-                    <h2 class="pb-h2 pb-reveal">{{ bloco.titulo.antes }} <mark :class="`cor-${bloco.cor}`">{{ bloco.titulo.marcado }}</mark></h2>
-                    <p class="pb-texto pb-reveal">{{ bloco.texto }}</p>
-                    <figure v-if="bloco.foto" class="pb-moldura pb-reveal" :class="{ 'com-coracao': i === 4 || (i === blocos.length - 1 && blocos.length < 5) }">
-                        <span class="pb-coracao" aria-hidden="true"><Icone nome="heart" :tamanho="28" /></span>
-                        <img :src="bloco.foto" :alt="bloco.titulo.antes + ' ' + bloco.titulo.marcado" loading="lazy" decoding="async">
-                        <template v-if="i === 0">
-                            <span class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="40" /><Cubo cor="azul" :tamanho="40" /></span>
-                            <span class="pb-adesivo" aria-hidden="true">Uau!</span>
-                        </template>
-                    </figure>
-                    <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">{{ bloco.botao }} <Icone nome="arrow-right" :tamanho="22" /></button>
-                </div>
-            </section>
-
-            <!-- Depois da primeira história: os benefícios em cartões e as habilidades -->
-            <section v-if="i === 0 && (beneficios.length || habilidades.length)" class="pb-sec fundo-branco">
-                <div class="pb-centro">
-                    <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>O segredo da brincadeira</p>
-                    <h2 class="pb-h2 pb-reveal">Por que a criançada <mark class="cor-azul">não larga</mark></h2>
-                    <ul v-if="beneficios.length" class="pb-cartoes-icone pb-reveal">
-                        <li v-for="(b, j) in beneficios" :key="j">
-                            <span class="pb-icone" :class="`cor-${b.cor}`"><Icone :nome="b.icone" :tamanho="28" /></span>
-                            <strong>{{ b.titulo }}</strong>
-                            <span>{{ b.texto }}</span>
-                        </li>
-                    </ul>
-                    <template v-if="habilidades.length">
-                        <h3 class="pb-h3 pb-reveal">Enquanto brinca, a criança treina:</h3>
-                        <ul class="pb-habilidades pb-reveal">
-                            <li v-for="(h, j) in habilidades" :key="j"><span class="pb-icone mini" :class="`cor-${CORES[j % 4]}`"><Icone :nome="iconeHabilidade(h, j)" :tamanho="22" /></span>{{ h }}</li>
-                        </ul>
-                    </template>
-                </div>
-            </section>
-        </template>
-
-        <!-- Comparativo no fundo escuro -->
-        <section v-if="comparativo" class="pb-sec fundo-tinta">
-            <div class="pb-centro">
-                <p class="pb-sobre pb-reveal claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>A troca que vale a pena</p>
-                <h2 class="pb-h2 pb-reveal">{{ comparativo.titulo.antes }} <mark class="cor-amarelo">{{ comparativo.titulo.marcado }}</mark></h2>
-                <p v-if="comparativo.intro" class="pb-texto pb-reveal">{{ comparativo.intro }}</p>
-                <div class="pb-tabela pb-reveal">
-                    <div class="pb-tabela-cab" aria-hidden="true">
-                        <span></span><span class="bom">{{ comparativo.rotulos[1] }}</span><span class="ruim">{{ comparativo.rotulos[0] }}</span>
+        <!-- História, com o vídeo do produto -->
+        <section v-if="historia" class="pb-sec fundo-creme">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <div class="pb-semtelas" aria-label="Longe das telas">
+                        <span v-for="tela in TELAS" :key="tela"><Icone :nome="tela" /></span>
                     </div>
-                    <div v-for="(linha, j) in comparativo.linhas" :key="j" class="pb-tabela-linha" :style="{ '--i': j }">
-                        <strong>{{ linha.criterio }}</strong>
-                        <span class="bom"><span class="pb-marca sim"><Icone nome="check" :tamanho="20" /></span><span><span class="sr-only">{{ comparativo.rotulos[1] }}: </span>{{ linha.bom }}</span></span>
-                        <span class="ruim"><span class="pb-marca nao"><Icone nome="x" :tamanho="20" /></span><span><span class="sr-only">{{ comparativo.rotulos[0] }}: </span>{{ linha.ruim }}</span></span>
-                    </div>
+                    <h2 class="pb-h2">{{ historia.titulo.antes }} <em class="cor-amarelo">{{ historia.titulo.marcado }}</em></h2>
+                    <p v-if="historia.sub" class="pb-sub">{{ historia.sub }}</p>
+                    <p class="pb-lead">{{ historia.texto }}</p>
                 </div>
-                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Quero trocar a tela pelo brinquedo <Icone nome="arrow-right" :tamanho="22" /></button>
+                <div class="pb-historia-midia pb-reveal">
+                    <div class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="42" /><Cubo cor="azul" :tamanho="42" /></div>
+                    <div class="pb-media pb-media-video">
+                        <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="historia.foto || capa" muted loop playsinline preload="none" :aria-label="product.name"></video>
+                        <img v-else :src="historia.foto || capa" :alt="product.name" loading="lazy" decoding="async">
+                    </div>
+                    <span class="pb-adesivo" aria-hidden="true">Uau!</span>
+                </div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero o meu kit <Icone nome="arrow-right" :tamanho="22" /></button></div>
             </div>
         </section>
 
-        <!-- Os kits de novo, em cartões com foto -->
+        <!-- Por que a criançada não larga -->
+        <section v-if="porque" class="pb-sec fundo-branco">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>O segredo da brincadeira</p>
+                    <h2 class="pb-h2">{{ porque.titulo.antes }} <em class="cor-azul">{{ porque.titulo.marcado }}</em></h2>
+                </div>
+                <div v-if="porque.foto" class="pb-media pb-media-560 pb-reveal"><img :src="porque.foto" :alt="porque.titulo.antes + ' ' + porque.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div v-if="beneficios.length" class="pb-why-cards pb-reveal">
+                    <div v-for="(b, j) in beneficios" :key="j" class="pb-why-card">
+                        <span class="pb-why-ico" :class="`cor-${b.cor}`"><Icone :nome="b.icone" :tamanho="28" :traco="2.4" /></span>
+                        <h3 class="pb-h3">{{ b.titulo }}</h3>
+                        <p>{{ b.texto }}</p>
+                    </div>
+                </div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero ver brincando <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
+        <!-- Brincadeira que ensina -->
+        <section v-if="ensina" class="pb-sec fundo-creme">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Brincadeira que ensina</p>
+                    <h2 class="pb-h2">{{ ensina.titulo.antes }} <em class="cor-verde">{{ ensina.titulo.marcado }}</em></h2>
+                    <p class="pb-lead">{{ ensina.texto }}</p>
+                </div>
+                <div v-if="habilidades.length" class="pb-sk-list pb-reveal">
+                    <div v-for="(h, j) in habilidades" :key="j" class="pb-sk-item"><span class="pb-sk-ico" :class="`cor-${h.cor}`"><Icone :nome="h.icone" :tamanho="22" :traco="2.4" /></span>{{ h.texto }}</div>
+                </div>
+                <div v-if="ensina.foto" class="pb-media pb-media-620 pb-reveal"><img :src="ensina.foto" :alt="ensina.titulo.antes + ' ' + ensina.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero esse presente <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
+        <!-- Detalhes -->
+        <section v-if="detalhe" class="pb-sec fundo-branco">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Feito para durar</p>
+                    <h2 class="pb-h2">{{ detalhe.titulo.antes }} <em class="cor-vermelho">{{ detalhe.titulo.marcado }}</em></h2>
+                    <p class="pb-lead">{{ detalhe.texto }}</p>
+                </div>
+                <div v-if="detalhe.foto" class="pb-media pb-media-520 pb-reveal"><img :src="detalhe.foto" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div v-if="detalhes.length" class="pb-dt-list pb-reveal">
+                    <div v-for="(d, j) in detalhes" :key="j" class="pb-dt-i">
+                        <span class="pb-dt-ico"><Icone :nome="d.icone" :tamanho="24" /></span>
+                        <h3 class="pb-h3">{{ d.titulo }}</h3>
+                        <p>{{ d.texto }}</p>
+                    </div>
+                </div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Escolher meu kit <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
+        <!-- Comparativo -->
+        <section v-if="comparativo" class="pb-sec fundo-tinta">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>A troca que vale a pena</p>
+                    <h2 class="pb-h2">{{ comparativo.titulo.antes }} <em class="cor-amarelo">{{ comparativo.titulo.marcado }}</em></h2>
+                    <p v-if="comparativo.intro" class="pb-lead">{{ comparativo.intro }}</p>
+                </div>
+                <div class="pb-vs-table pb-reveal">
+                    <div class="pb-vs-row pb-vs-top"><span></span><span class="pb-vs-col pb-vs-us">{{ comparativo.rotulos[1] }}</span><span class="pb-vs-col pb-vs-them">{{ comparativo.rotulos[0] }}</span></div>
+                    <div v-for="(linha, j) in comparativo.linhas" :key="j" class="pb-vs-row" :style="{ '--i': j }">
+                        <span class="pb-vs-txt">{{ linha.texto }}</span>
+                        <i class="pb-vs-mark sim" :aria-label="`${comparativo.rotulos[1]}: sim`"><Icone nome="check" :tamanho="20" :traco="3" /></i>
+                        <i class="pb-vs-mark" :class="linha.comum ? 'sim' : 'nao'" :aria-label="`${comparativo.rotulos[0]}: ${linha.comum ? 'sim' : 'não'}`"><Icone :nome="linha.comum ? 'check' : 'x'" :tamanho="20" :traco="3" /></i>
+                    </div>
+                </div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero trocar a tela pelo brinquedo <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
+        <!-- Família -->
+        <section v-if="familia" class="pb-sec fundo-branco">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Hora de brincar junto</p>
+                    <h2 class="pb-h2">{{ familia.titulo.antes }} <em class="cor-amarelo">{{ familia.titulo.marcado }}</em></h2>
+                    <p class="pb-lead">{{ familia.texto }}</p>
+                </div>
+                <div class="pb-fm-collage pb-reveal">
+                    <div class="pb-fm-a"><img :src="familia.foto || capa" :alt="familia.titulo.antes + ' ' + familia.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <div class="pb-fm-b"><img :src="fotoExtra" alt="" loading="lazy" decoding="async"></div>
+                    <span class="pb-fm-heart" aria-hidden="true"><Icone nome="heart" :tamanho="28" :traco="2.4" /></span>
+                </div>
+                <p v-if="citacao" class="pb-fm-quote pb-reveal">{{ citacao }}</p>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero brincar junto <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
+        <!-- Kits -->
         <section v-if="opcoes.length > 1" id="kits" class="pb-sec fundo-creme">
-            <div class="pb-centro largo">
-                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Monte a sua diversão</p>
-                <h2 class="pb-h2 pb-reveal">Escolha o tamanho <mark class="cor-amarelo">da diversão</mark></h2>
-                <p class="pb-texto pb-reveal">Quanto mais brinquedos no kit, menor o preço de cada um.</p>
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Monte a sua diversão</p>
+                    <h2 class="pb-h2">Escolha o tamanho <em class="cor-amarelo">da diversão</em></h2>
+                    <p class="pb-lead">Quanto mais brinquedos no kit, <b>menor o preço de cada um</b>.</p>
+                </div>
                 <KitsBrinquedo :opcoes="opcoes" :escolhida-id="escolhidaId" formato="cartoes" @escolher="(kit) => emit('escolher', kit, true)" />
             </div>
         </section>
 
         <!-- Como funciona -->
-        <section class="pb-sec fundo-creme">
-            <div class="pb-centro largo">
-                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Como funciona</p>
-                <h2 class="pb-h2 pb-reveal">Do clique na loja à <mark class="cor-azul">brincadeira</mark></h2>
-                <ol class="pb-passos pb-reveal">
-                    <li v-for="(passo, j) in PASSOS" :key="j">
-                        <span class="pb-num" :class="`cor-${CORES[(j + 3) % 4]}`">{{ j + 1 }}</span>
-                        <Icone class="pb-passo-icone" :nome="passo.icone" :tamanho="28" />
-                        <strong>{{ passo.titulo }}</strong>
-                        <span>{{ passo.texto }}</span>
-                    </li>
-                </ol>
-                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Começar a diversão <Icone nome="arrow-right" :tamanho="22" /></button>
+        <section class="pb-sec fundo-creme pb-sec-colada">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Como funciona</p>
+                    <h2 class="pb-h2">Do clique na loja à <em class="cor-azul">brincadeira</em></h2>
+                </div>
+                <div class="pb-st-grid pb-reveal">
+                    <div v-for="(passo, j) in PASSOS" :key="j" class="pb-st">
+                        <div class="pb-st-n"><i :class="`cor-${passo.cor}`">{{ j + 1 }}</i><Icone :nome="passo.icone" :tamanho="28" /></div>
+                        <div><h3 class="pb-h3">{{ passo.titulo }}</h3><p>{{ passo.texto }}</p></div>
+                    </div>
+                </div>
+                <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Começar a diversão <Icone nome="arrow-right" :tamanho="22" /></button></div>
             </div>
         </section>
 
         <!-- Garantia -->
-        <section class="pb-sec fundo-creme">
-            <div class="pb-garantia pb-reveal">
-                <div class="pb-garantia-selo" aria-hidden="true">
-                    <svg viewBox="0 0 150 150" class="pb-garantia-anel">
-                        <defs><path id="pb-anel" d="M75,75 m-58,0 a58,58 0 1,1 116,0 a58,58 0 1,1 -116,0" /></defs>
-                        <circle cx="75" cy="75" r="72" fill="#fcbd10" stroke="#1b1b2f" stroke-width="3" />
-                        <text font-size="12.5" font-weight="800" letter-spacing="2.2" fill="#1b1b2f"><textPath href="#pb-anel">GARANTIA KAZAKORA • 30 DIAS • GARANTIA KAZAKORA • 30 DIAS •</textPath></text>
-                        <circle cx="75" cy="75" r="44" fill="#16a34a" stroke="#1b1b2f" stroke-width="3" />
-                    </svg>
-                    <b>30</b><span>dias</span>
+        <section class="pb-sec fundo-creme pb-sec-colada">
+            <div class="pb-wrap">
+                <div class="pb-gt-box pb-reveal">
+                    <div class="pb-gt-seal" aria-hidden="true">
+                        <svg viewBox="0 0 150 150" class="pb-gt-ring">
+                            <defs><path id="pb-anel" d="M75,75 m-58,0 a58,58 0 1,1 116,0 a58,58 0 1,1 -116,0" /></defs>
+                            <circle cx="75" cy="75" r="72" fill="#ffc21a" stroke="#17182c" stroke-width="3" />
+                            <text font-size="12.5" font-weight="800" letter-spacing="2.2" fill="#17182c" font-family="Nunito, sans-serif"><textPath href="#pb-anel">GARANTIA KAZAKORA • 30 DIAS • GARANTIA KAZAKORA • 30 DIAS •</textPath></text>
+                            <circle cx="75" cy="75" r="44" fill="#21a346" stroke="#17182c" stroke-width="3" />
+                        </svg>
+                        <b>30</b><span>dias</span>
+                    </div>
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Garantia KazaKora de 30 dias</p>
+                    <h2 class="pb-h2">Mais diversão <em class="cor-verde">ou seu dinheiro de volta</em></h2>
+                    <p class="pb-lead">Teste por <b>30 dias</b>. A gente tem certeza de que a criança vai ficar:</p>
+                    <div class="pb-gt-ps">
+                        <div v-for="(g, j) in GARANTIA" :key="j" class="pb-gt-p"><Cubo :cor="corCubo(g.cor)" :tamanho="30" />{{ g.texto }}</div>
+                    </div>
+                    <p class="pb-gt-or">Se não for assim, <em>devolvemos 100%</em> do seu dinheiro.</p>
+                    <p class="pb-gt-fine">É só falar com a gente em até 30 dias após o recebimento.</p>
+                    <div class="pb-cta"><button type="button" class="pb-btn" @click="emit('comprar')">Experimentar sem risco <Icone nome="arrow-right" :tamanho="22" /></button></div>
                 </div>
-                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Garantia KazaKora de 30 dias</p>
-                <h2 class="pb-h2 pb-reveal">Mais diversão <mark class="cor-verde">ou seu dinheiro de volta</mark></h2>
-                <p class="pb-texto pb-reveal">Você tem <b>30 dias</b> depois de receber para ver a criança brincando:</p>
-                <ul class="pb-garantia-itens pb-reveal">
-                    <li v-for="(g, j) in GARANTIA" :key="j"><Cubo :cor="g.cor" :tamanho="30" />{{ g.texto }}</li>
-                </ul>
-                <p class="pb-garantia-frase pb-reveal">Se não gostar, <mark class="cor-amarelo">devolvemos 100%</mark> do seu dinheiro.</p>
-                <p class="pb-pequeno">É só falar com a gente em até 30 dias após o recebimento.</p>
-                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Experimentar sem risco <Icone nome="arrow-right" :tamanho="22" /></button>
             </div>
         </section>
 
         <!-- Perguntas frequentes -->
         <section v-if="duvidas.length" class="pb-sec fundo-branco">
-            <div class="pb-centro">
-                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Tire suas dúvidas</p>
-                <h2 class="pb-h2 pb-reveal">Perguntas <mark class="cor-azul">frequentes</mark></h2>
+            <div class="pb-wrap">
+                <div class="pb-head pb-faq-head pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Tire suas dúvidas</p>
+                    <h2 class="pb-h2">Perguntas <em class="cor-azul">frequentes</em></h2>
+                </div>
                 <div class="pb-faq pb-reveal">
-                    <details v-for="(d, j) in duvidas" :key="j" :open="j === 0">
-                        <summary><span>{{ d[0] }}</span><i class="pb-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="18" /></i></summary>
-                        <p>{{ d[1] }}</p>
+                    <div v-for="(d, j) in duvidas" :key="j" class="pb-faq-item" :class="{ aberto: abertaFaq === j }">
+                        <button type="button" class="pb-faq-toggle" :aria-expanded="abertaFaq === j" @click="abertaFaq = abertaFaq === j ? -1 : j">
+                            <span>{{ d[0] }}</span><i class="pb-faq-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="16" :traco="3" /></i>
+                        </button>
+                        <div v-show="abertaFaq === j" class="pb-faq-body">{{ d[1] }}</div>
+                    </div>
+                    <details v-if="descriptionSections.length || dimensoes" class="pb-faq-item pb-detalhes">
+                        <summary class="pb-faq-toggle"><span>Descrição completa e ficha técnica</span><i class="pb-faq-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="16" :traco="3" /></i></summary>
+                        <div class="pb-faq-body">
+                            <div v-for="(section, j) in descriptionSections" :key="j">
+                                <h3 v-if="section.heading">{{ section.heading }}</h3>
+                                <template v-for="(part, k) in section.parts" :key="k">
+                                    <ul v-if="part.type === 'ul' || part.type === 'linhas'"><li v-for="(item, n) in part.items" :key="n">{{ item }}</li></ul>
+                                    <p v-else>{{ part.items[0] }}</p>
+                                </template>
+                            </div>
+                            <p v-if="dimensoes"><strong>Dimensões da embalagem:</strong> {{ dimensoes }}</p>
+                        </div>
                     </details>
                 </div>
             </div>
         </section>
 
-        <!-- Detalhes completos do produto (a descrição de sempre, recolhida) -->
-        <section v-if="descriptionSections.length || dimensoes" class="pb-sec fundo-branco pb-sec-detalhes">
-            <div class="pb-centro">
-                <details class="pb-detalhes pb-reveal">
-                    <summary><span>Descrição completa e ficha técnica</span><i class="pb-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="18" /></i></summary>
-                    <div class="pb-detalhes-corpo">
-                        <div v-for="(section, j) in descriptionSections" :key="j">
-                            <h3 v-if="section.heading">{{ section.heading }}</h3>
-                            <template v-for="(part, k) in section.parts" :key="k">
-                                <ul v-if="part.type === 'ul' || part.type === 'linhas'"><li v-for="(item, n) in part.items" :key="n">{{ item }}</li></ul>
-                                <p v-else>{{ part.items[0] }}</p>
-                            </template>
-                        </div>
-                        <p v-if="dimensoes"><strong>Dimensões da embalagem:</strong> {{ dimensoes }}</p>
-                    </div>
-                </details>
-            </div>
-        </section>
-
         <!-- Chamada final -->
-        <section class="pb-sec fundo-tinta pb-final">
-            <i class="pb-confete c1" aria-hidden="true"></i><i class="pb-confete c2" aria-hidden="true"></i>
-            <i class="pb-confete c3" aria-hidden="true"></i><i class="pb-confete c4" aria-hidden="true"></i>
-            <div class="pb-centro">
-                <p class="pb-sobre pb-reveal claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Bora brincar?</p>
-                <h2 class="pb-h2 pb-reveal">Dê a eles um presente <mark class="cor-amarelo">pra lembrar</mark></h2>
-                <p class="pb-texto pb-reveal">Menos tela, mais imaginação, e um brinquedo que cresce junto com a criança.</p>
-                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Escolher meu kit <Icone nome="arrow-right" :tamanho="22" /></button>
-                <ul class="pb-confianca pb-reveal">
-                    <li><Icone nome="shield-check" :tamanho="18" /> Garantia de 30 dias</li>
-                    <li><Icone nome="truck" :tamanho="18" /> Envio com rastreio</li>
-                    <li><Icone nome="lock" :tamanho="18" /> Compra segura</li>
-                    <li><Icone nome="credit-card" :tamanho="18" /> Pix ou até {{ parcelas }}x</li>
-                </ul>
+        <section class="pb-sec fundo-tinta pb-fn">
+            <div class="pb-fn-cubes" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <div class="pb-wrap">
+                <div class="pb-fn-box pb-reveal">
+                    <p class="pb-eyebrow claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Bora brincar?</p>
+                    <h2 class="pb-h2">Dê a eles um presente <em class="cor-amarelo">pra lembrar</em></h2>
+                    <p class="pb-lead">Menos tela, mais imaginação, e um brinquedo que cresce junto com a criança.</p>
+                    <div class="pb-cta"><button type="button" class="pb-btn" @click="emit('comprar')">Escolher meu kit <Icone nome="arrow-right" :tamanho="22" /></button></div>
+                    <div class="pb-fn-badges">
+                        <span><Icone nome="shield-check" :tamanho="18" /> Garantia de 30 dias</span>
+                        <span><Icone nome="truck" :tamanho="18" /> Envio com rastreio</span>
+                        <span><Icone nome="lock" :tamanho="18" /> Compra segura</span>
+                        <span><Icone nome="credit-card" :tamanho="18" /> Pix ou até {{ parcelas }}x</span>
+                    </div>
+                </div>
             </div>
         </section>
-
-        <!-- Faixa de confiança (garantia, rastreio, compra segura, Pix/parcelas) -->
-        <ul class="pb-faixa-confianca pb-reveal">
-            <li v-for="item in CONFIANCA" :key="item.titulo"><span class="pb-icone" :class="`cor-${item.cor}`"><Icone :nome="item.icone" :tamanho="26" /></span>
-                <span><strong>{{ item.titulo }}</strong><small>{{ item.texto }}</small></span></li>
-        </ul>
     </div>
 </template>

@@ -56,7 +56,7 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
         <div class="mx-auto flex max-w-7xl items-center gap-3 py-2 pl-4 pr-2 sm:gap-4 sm:pl-6">
             <i class="fa-solid fa-cookie-bite shrink-0 text-[16px] text-[#FD7B41]" aria-hidden="true"></i>
             <p class="min-w-0 flex-1 text-[12.5px] leading-snug sm:text-[13.5px]">
-                Usamos cookies para melhorar sua experiência.
+                Usamos cookies<span class="hidden sm:inline"> para melhorar sua experiência</span>.
                 <Link href="/politica-de-cookies" class="whitespace-nowrap font-semibold underline decoration-[#FD7B41] decoration-2 underline-offset-[3px] hover:text-[#FD7B41]">Saiba mais</Link>
             </p>
             <button type="button" :disabled="enviando"

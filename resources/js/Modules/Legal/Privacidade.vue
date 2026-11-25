@@ -10,7 +10,7 @@ const dadosCategorias = [
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
     { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e do Pixel da Meta (publicidade), carregado desde o primeiro acesso: ao navegar você concorda, conforme os Termos de Uso. Com o seu aceite ao finalizar a compra, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Depois desse aceite, a tag do Google Ads (publicidade) também mede as compras vindas dos nossos anúncios no Google. Veja a Política de Cookies.' },
-    { titulo: 'Newsletter', texto: 'e-mail e, se você quiser, o nome, só depois que você marca o aceite e confirma pelo link que mandamos por e-mail. Guardamos a data, o IP e o texto do aceite como prova. Usamos para mandar novidades, ofertas e as matérias do blog; todo e-mail tem o link para sair com 1 clique. Inscrição não confirmada é apagada em 30 dias.' },
+    { titulo: 'Newsletter (Caderno KazaKora)', texto: 'e-mail e nome. Entra quem se inscreve no site (com o aceite e a confirmação pelo link que mandamos por e-mail; inscrição não confirmada é apagada em 30 dias) e quem conclui uma compra na KazaKora: ao comprar, você passa a receber o Caderno KazaKora (matérias do blog e ofertas) por e-mail, por legítimo interesse (LGPD, art. 7º, IX). Guardamos a data e o texto do aceite como prova. Todo e-mail tem o link para sair com 1 clique, e quem sai não é inscrito de novo.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
@@ -19,7 +19,7 @@ const finalidades = [
     'Comunicação com o cliente sobre seu pedido',
     'Cumprimento de obrigações legais e regulatórias',
     'Melhoria da experiência de compra',
-    'Marketing e promoções (mediante consentimento)',
+    'Marketing e promoções: newsletter Caderno KazaKora para clientes (legítimo interesse, com descadastro em 1 clique) e demais comunicações mediante consentimento',
     'Prevenção de fraudes',
 ];
 

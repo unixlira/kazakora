@@ -17,6 +17,7 @@ use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\AvaliacoesDoCheckout;
@@ -34,6 +35,7 @@ use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\PrazoPorCep;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\LeadsDoCheckout;
+use App\Modules\Checkout\Support\OrderBump;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Checkout\Jobs\EnviarEventoMetaJob;
 use App\Services\Meta\ConversoesMeta;
@@ -195,6 +197,8 @@ class CheckoutController extends Controller
             // Motoboy pelo excedente: valor menos o frete que já está no preço.
             'motoboy' => $motoboy = $entregaExpressa->motoboyGrandeSp($cep, (float) ($entrega['embutido'] ?? 0)),
             'entregas' => app(EntregasDaLoja::class)->opcoes($cep, $expressa, ['prazo' => $entrega['prazo'], 'turbo' => $turbo], $motoboy),
+            // Order bump (2026-11-24): o preço dele tem o frete embutido do CEP, então volta junto.
+            'order_bump' => app(OrderBump::class)->paraTela(app(OrderBump::class)->oferta($cartItems)),
         ]);
     }
 
@@ -804,7 +808,19 @@ class CheckoutController extends Controller
         $pixDiscount = $methods === [Payment::METHOD_PIX]
             ? DescontoPix::descontoSobreCupom($subtotal - $descontoPlataforma, $discount, DescontoPix::percentualDosItens($cartItems))
             : 0.0;
-        $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
+        // Order bump (pedido do Lira 2026-11-24): o navegador só diz qual produto
+        // marcou; a oferta e o preço são conferidos de novo aqui. Fica fora do
+        // cupom, do Pix e do frete (ver OrderBump) e soma no subtotal e no total.
+        $bump = app(OrderBump::class)->confirmar($cartItems, $request->input('order_bump_id'));
+        if ($bump === false) {
+            unset($draft['order_bump']);
+            $request->session()->put(self::SESSION_KEY, $draft);
+
+            return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
+                ->withErrors(['payment' => 'A oferta especial mudou ou acabou. Confira o total e finalize de novo.']);
+        }
+        $precoBump = $bump ? (float) $bump['preco'] : 0.0;
+        $total = round($subtotal + $precoBump - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
         // Aceite dos termos, da privacidade e dos cookies (2026-10-24): é a
         // frase abaixo do "Finalizar pedido", no lugar do aviso flutuante.
@@ -818,11 +834,12 @@ class CheckoutController extends Controller
         $sessaoDoLead = $request->session()->getId();
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago, $bump, $precoBump) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
                 $lockedProducts = $this->lockProductsForCart($cartItems);
+                $produtoBump = $bump ? $this->travarProdutoDoBump($bump['product']) : null;
 
                 // Limite de usos do cupom conferido de novo sob trava da linha
                 // (2026-10-16): sem isso, dois pagamentos ao mesmo tempo
@@ -867,7 +884,8 @@ class CheckoutController extends Controller
                     // Para o Purchase da API de Conversões da Meta quando o
                     // pagamento aprovar (2026-10-18): só com o OK de cookies.
                     'meta_rastreio' => app(ConversoesMeta::class)->rastreioDoPedido($request),
-                    'subtotal' => $subtotal,
+                    // Com o order bump, o subtotal tem o item dele (soma dos itens = vProd da NF-e).
+                    'subtotal' => round($subtotal + $precoBump, 2),
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
                     // discount_amount é o desconto TOTAL do pedido (vDesc da
@@ -880,6 +898,9 @@ class CheckoutController extends Controller
                 ]);
 
                 $this->createOrderItems($order, $cartItems, $lockedProducts);
+                if ($produtoBump) {
+                    $this->criarItemDoBump($order, $produtoBump, $precoBump);
+                }
                 $this->garantirLivrosDigitais($order);
                 // Transportadora do Melhor Envio fica escolhida no pedido e a
                 // etiqueta sai com ela (pedido do Lira em 2026-11-03).
@@ -1878,6 +1899,81 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Produto do order bump travado junto com os do carrinho: sem estoque ou
+     * fora da loja entre a tela e o pagamento, o pedido inteiro volta (mesma
+     * regra do carrinho, CartStockChangedException).
+     */
+    private function travarProdutoDoBump(Product $produto): Product
+    {
+        $travado = Product::query()->whereKey($produto->id)->lockForUpdate()->first();
+
+        if (! $travado || ! $travado->naKazaKora() || $travado->stock < 1) {
+            throw new CartStockChangedException([$produto->name]);
+        }
+
+        return $travado;
+    }
+
+    /**
+     * Item do order bump (2026-11-24): item normal do pedido (estoque, NF-e,
+     * expedição, integrações), com o preço do bump conferido no servidor e
+     * origem "order_bump" para medir.
+     */
+    private function criarItemDoBump(Order $order, Product $produto, float $preco): void
+    {
+        $frete = round(min($produto->freteEmbutido(), $preco), 2);
+
+        $order->items()->create([
+            'product_id' => $produto->id,
+            'product_name' => $produto->nomeParaPedido(),
+            'product_price' => $preco,
+            'quantity' => 1,
+            'subtotal' => $preco,
+            'frete_embutido' => $frete,
+            'origem' => OrderItem::ORIGEM_ORDER_BUMP,
+        ]);
+
+        $this->stock->adjust($produto, -1, StockMovement::TYPE_SALE, reason: "Pedido #{$order->id} (order bump)", reference: $order);
+
+        $order->update(['frete_embutido_amount' => round((float) $order->frete_embutido_amount + $frete, 2)]);
+    }
+
+    /**
+     * Caixa do order bump no checkout (2026-11-24): a tela avisa quando
+     * mostrou a oferta, quando o cliente marcou e quando desmarcou. Grava o
+     * evento (medição) e lembra a escolha no rascunho. O preço não vem daqui:
+     * o pagamento confere a oferta de novo.
+     */
+    public function orderBump(Request $request, OrderBump $orderBump): JsonResponse
+    {
+        $acao = (string) $request->input('acao');
+        $productId = (int) $request->input('product_id');
+        if (! in_array($acao, [OrderBump::EVENTO_EXIBIDO, OrderBump::EVENTO_MARCOU, OrderBump::EVENTO_DESMARCOU], true) || $productId <= 0) {
+            return response()->json(['ok' => false, 'message' => 'Pedido inválido.'], 422);
+        }
+
+        $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        if ($cep = $this->cepDoRascunho($request, $draft)) {
+            app(FreteEmbutido::class)->usarCep($cep);
+        }
+        $oferta = $orderBump->oferta($this->cart->items());
+        if (! $oferta || (int) $oferta['product']->id !== $productId) {
+            unset($draft['order_bump']);
+            $request->session()->put(self::SESSION_KEY, $draft);
+
+            return response()->json(['ok' => false, 'order_bump' => $orderBump->paraTela($oferta)], 409);
+        }
+
+        $orderBump->registrar($request, $acao, $productId, $oferta['preco']);
+        if ($acao !== OrderBump::EVENTO_EXIBIDO) {
+            $draft['order_bump'] = $acao === OrderBump::EVENTO_MARCOU ? $productId : null;
+            $request->session()->put(self::SESSION_KEY, $draft);
+        }
+
+        return response()->json(['ok' => true, 'order_bump' => $orderBump->paraTela($oferta)]);
+    }
+
+    /**
      * Livros digitais da Promoção PDFs (pedido 2026-10-21): grava no pedido os
      * que a página do produto mostrava agora, para o cliente baixar depois do
      * pagamento mesmo que a promoção mude. Falha aqui não derruba a compra
@@ -2155,6 +2251,9 @@ class CheckoutController extends Controller
             'cupomFaixa' => fn () => $this->subtotalParaCupom($cartItems) <= 0 ? null : $this->cupomFaixa($subtotal, $user, $draft),
             // InitiateCheckout (2026-11-24): o event_id que o Pixel usa, o mesmo do servidor.
             'metaInitiateCheckout' => $this->initiateCheckoutNaMeta($request, $cartItems, $subtotal),
+            // Order bump (pedido do Lira 2026-11-24): a caixa antes do "Finalizar pedido".
+            'orderBump' => $orderBump = app(OrderBump::class)->paraTela(app(OrderBump::class)->oferta($cartItems)),
+            'orderBumpMarcado' => $orderBump !== null && (int) ($draft['order_bump'] ?? 0) === $orderBump['product_id'],
         ];
     }
 

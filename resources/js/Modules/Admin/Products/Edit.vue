@@ -19,6 +19,11 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    // Order bump do checkout (2026-11-24): [{ id, nome }] dos produtos da loja.
+    produtosOrderBump: {
+        type: Array,
+        default: () => [],
+    },
     // Conteúdo do anúncio (benefícios + descrição em blocos) — pedido 2026-10-09.
     adContent: {
         type: Object,
@@ -66,6 +71,8 @@ const form = useForm({
     name: props.product.name,
     nome_interno: props.product.nome_interno ?? '',
     cta_compra: props.product.cta_compra ?? '',
+    order_bump_product_id: props.product.order_bump_product_id ?? null,
+    order_bump_desconto_pct: props.product.order_bump_desconto_pct ?? null,
     sku: props.product.sku,
     category_id: props.product.category_id,
     brand: props.product.brand ?? '',
@@ -254,7 +261,7 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                             <p class="text-xs text-slate-500">"Usar esta descrição" coloca o texto no campo Descrição abaixo; ele só vale depois de "Salvar alterações".</p>
                         </div>
                     </div>
-                    <ProductForm :form="form" :categories="categories" :is-edit="true"
+                    <ProductForm :form="form" :categories="categories" :is-edit="true" :produtos-order-bump="produtosOrderBump"
                         submit-label="Salvar alterações" @submit="submit" />
                 </div>
 

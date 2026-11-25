@@ -21,6 +21,7 @@ import { maskCnpj, maskCpf, maskPhone } from '@/Shared/useMasks';
 // import CarrosselAvaliacoes from '@/Shared/Components/CarrosselAvaliacoes.vue';
 import CardConfianca from './Partes/CardConfianca.vue';
 import CartaoPrevia from './Partes/CartaoPrevia.vue';
+import OrderBump from './Partes/OrderBump.vue';
 import { loadMercadoPagoSdk, mensagemDoMotivoCartao, mensagemErroCartao, motivoDoErroCartao, motivoNaTelaDoCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
@@ -56,6 +57,9 @@ const props = defineProps({
     avaliacoesCarrossel: { type: Array, default: () => [] },
     // Cupom da faixa do topo (BLACKFRIDAY, 2026-11-06): { code, descricao } ou null.
     cupomFaixa: { type: Object, default: null },
+    // Order bump (2026-11-24): { product_id, nome, imagem, preco_de, preco, desconto_pct, beneficio } ou null.
+    orderBump: { type: Object, default: null },
+    orderBumpMarcado: { type: Boolean, default: false },
 });
 
 // Desconto Checkout em R$ fixo vira % com casas a mais: mostra no máximo 2 (2026-10-18).
@@ -247,6 +251,7 @@ const atualizarFrete = async (zip) => {
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
         if (cupomAplicado.value) descontoCupom.value = Number(data.discount_amount) || 0;
+        if ('order_bump' in data) atualizarOfertaBump(data.order_bump);
         if (rolarAteFrete) {
             rolarAteFrete = false;
             mostrarOpcoesFrete();
@@ -280,7 +285,7 @@ const alterarQuantidade = async (item, delta) => {
         });
         if (!resposta.ok) throw new Error();
         await new Promise((resolve) => router.reload({
-            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
+            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde', 'orderBump', 'orderBumpMarcado'],
             preserveScroll: true,
             preserveState: true,
             onFinish: resolve,
@@ -443,6 +448,35 @@ const acompanharTela = (evento) => { ehComputador.value = evento.matches; };
 onMounted(() => consultaComputador?.addEventListener('change', acompanharTela));
 onUnmounted(() => consultaComputador?.removeEventListener('change', acompanharTela));
 
+// ---------- Order bump (pedido do Lira 2026-11-24) ----------
+// Caixa antes do "Finalizar pedido": marca/desmarca e o total muda na hora. O servidor
+// grava a exibição e o aceite (medição) e confere oferta e preço de novo no pagamento.
+const ofertaBump = ref(props.orderBump);
+const bumpMarcado = ref(!!props.orderBump && props.orderBumpMarcado);
+const valorBump = computed(() => (bumpMarcado.value && ofertaBump.value && !props.order ? Number(ofertaBump.value.preco) || 0 : 0));
+const atualizarOfertaBump = (nova) => {
+    if (!nova || nova.product_id !== ofertaBump.value?.product_id) bumpMarcado.value = false;
+    ofertaBump.value = nova ?? null;
+};
+watch(() => props.orderBump, (nova) => atualizarOfertaBump(nova));
+const avisarBump = (acao) => {
+    if (!ofertaBump.value) return;
+    fetch('/finalizacao/order-bump', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '') },
+        body: JSON.stringify({ acao, product_id: ofertaBump.value.product_id }),
+    }).then(async (resposta) => {
+        // 409: a oferta mudou (estoque, carrinho): a caixa troca ou some.
+        if (resposta.status === 409) atualizarOfertaBump((await resposta.json().catch(() => ({}))).order_bump ?? null);
+    }).catch(() => {});
+};
+const marcarBump = (marcado) => {
+    bumpMarcado.value = marcado;
+    avisarBump(marcado ? 'marcou' : 'desmarcou');
+};
+const bumpExibidos = new Set();
+
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
 // Pix desde 2026-10-24: o % sobre os produtos ANTES do cupom (3% do BEMVINDO
@@ -453,7 +487,8 @@ const descontoPixCalculado = computed(() => {
     return Math.min(round2(base * props.pixDiscountPercentage / 100), round2(Math.max(0, base - descontoCupom.value)));
 });
 const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0 ? descontoPixCalculado.value : 0));
-const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value - descontoPlataforma.value + valorFrete.value));
+// Order bump fora do cupom, do Pix e do frete (mesma conta do servidor, OrderBump.php): só soma.
+const totalCartao = computed(() => round2(subtotalAtual.value + valorBump.value - descontoCupom.value - descontoPlataforma.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
 
 // Card Payment Brick do Mercado Pago embutido (sem o botão próprio dele):
@@ -700,6 +735,12 @@ const conferirCpf = () => {
 // grava a entrega no servidor (mesma validação de sempre, e-mail/CPF em uso
 // voltam para a Identificação); o Finalizar grava de novo e cria o pagamento.
 const etapa = ref(1);
+// Exibição do order bump: conta quando a etapa Pagamento (onde a caixa fica) abre com a oferta.
+watch(() => [etapa.value, ofertaBump.value?.product_id], ([atual, produto]) => {
+    if (atual !== 3 || !produto || props.order || bumpExibidos.has(produto)) return;
+    bumpExibidos.add(produto);
+    avisarBump('exibido');
+}, { immediate: true });
 const salvandoEntrega = ref(false);
 // Celular: obrigatório para visitante e para endereço novo (o servidor pede o
 // mesmo); logado entregando num endereço salvo segue sem, como antes.
@@ -915,7 +956,10 @@ const finalizar = async () => {
         return;
     }
 
-    const pagamento = { payment_method: metodo.value, split: false, terms_accepted: true, mp_device_id: window.MP_DEVICE_SESSION_ID ?? null };
+    const pagamento = {
+        payment_method: metodo.value, split: false, terms_accepted: true, mp_device_id: window.MP_DEVICE_SESSION_ID ?? null,
+        order_bump_id: valorBump.value > 0 ? ofertaBump.value.product_id : null,
+    };
 
     if (metodo.value === 'card') {
         // Motivo específico na tela e na medição (2026-11-24): antes era só
@@ -1576,6 +1620,8 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                                 </div>
                             </div>
 
+                            <OrderBump v-if="ofertaBump && !order" :oferta="ofertaBump" :model-value="bumpMarcado" :disabled="processando" @update:model-value="marcarBump" />
+
                             <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
                                 :class="[botaoVerde, 'mt-5 text-xl']" @click="finalizar">
                                 <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
@@ -1609,6 +1655,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
 
                         <dl class="mt-4 space-y-2 text-sm text-slate-600">
                             <div class="flex justify-between"><dt>Produtos ({{ totalProdutosResumo }})</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
+                            <div v-if="valorBump > 0" class="flex justify-between gap-3" data-linha-order-bump><dt class="min-w-0 truncate">Oferta especial: {{ ofertaBump.nome }}</dt><dd class="shrink-0">{{ formatPrice(valorBump) }}</dd></div>
                             <div v-if="descontoCupom > 0" class="flex justify-between text-[#00843f]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                             <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                             <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#00843f]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>

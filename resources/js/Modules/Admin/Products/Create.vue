@@ -17,12 +17,19 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    // Order bump do checkout (2026-11-24): [{ id, nome }] dos produtos da loja.
+    produtosOrderBump: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const form = useForm({
     name: '',
     nome_interno: '',
     cta_compra: '',
+    order_bump_product_id: null,
+    order_bump_desconto_pct: null,
     sku: '',
     category_id: props.parent?.category_id ?? null,
     brand: props.parent?.brand ?? '',
@@ -61,7 +68,7 @@ const submit = () => {
         </div>
 
         <div class="mt-6">
-            <ProductForm :form="form" :categories="categories" submit-label="Criar produto" @submit="submit" />
+            <ProductForm :form="form" :categories="categories" :produtos-order-bump="produtosOrderBump" submit-label="Criar produto" @submit="submit" />
         </div>
     </AdminLayout>
 </template>

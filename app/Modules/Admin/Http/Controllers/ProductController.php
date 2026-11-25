@@ -75,7 +75,24 @@ class ProductController extends Controller
             'taxasLucro' => LucroProduto::taxas(),
             // Cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24): entra no resumo do lucro no Pix.
             'cupomAutomatico' => ['codigo' => \App\Support\CupomAutomatico::codigo(), 'percentual' => \App\Support\CupomAutomatico::percentualNaVitrine()],
+            'produtosOrderBump' => self::produtosParaOrderBump(),
         ]);
+    }
+
+    /**
+     * Lista do campo "Produto do order bump" (2026-11-24): só os que aparecem
+     * na loja KazaKora, sem os appends do model (só id, nome e variação).
+     *
+     * @return list<array{id: int, nome: string}>
+     */
+    public static function produtosParaOrderBump(?int $menos = null): array
+    {
+        return Product::query()->naKazaKora()
+            ->when($menos, fn ($q) => $q->whereKeyNot($menos))
+            ->orderBy('name')
+            ->get(['id', 'name', 'variation', 'stock'])
+            ->map(fn (Product $p) => ['id' => $p->id, 'nome' => trim($p->name.($p->variation ? ' - '.$p->variation : '')).($p->stock > 0 ? '' : ' (sem estoque)')])
+            ->all();
     }
 
     /**
@@ -205,6 +222,7 @@ class ProductController extends Controller
             'taxasLucro' => LucroProduto::taxas(),
             // Cupom que o checkout aplica sozinho (BEMVINDO, 2026-10-24): entra no resumo do lucro no Pix.
             'cupomAutomatico' => ['codigo' => \App\Support\CupomAutomatico::codigo(), 'percentual' => \App\Support\CupomAutomatico::percentualNaVitrine()],
+            'produtosOrderBump' => self::produtosParaOrderBump($product->id),
         ]);
     }
 
@@ -415,6 +433,10 @@ class ProductController extends Controller
             'seo_description' => ['nullable', 'string', 'max:320'],
             // Texto do botão de compra da página (2026-11-24); vazio = gerado pela IA.
             'cta_compra' => ['nullable', 'string', 'max:28'],
+            // Order bump do checkout (2026-11-24): produto oferecido a quem tem este no
+            // carrinho e o % de desconto dele (vazio = o padrão da tela Order bump).
+            'order_bump_product_id' => ['nullable', 'integer', 'exists:products,id', ...($ignoreId ? [Rule::notIn([$ignoreId])] : [])],
+            'order_bump_desconto_pct' => ['nullable', 'numeric', 'min:0', 'max:90'],
             'tags' => ['nullable', 'string', 'max:1000'],
         ];
 

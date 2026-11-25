@@ -12,6 +12,9 @@ class OrderItem extends Model
 
     public const TYPE_SERVICE = 'servico';
 
+    /** Item que entrou pela caixa de oferta do checkout (OrderBump, 2026-11-24). */
+    public const ORIGEM_ORDER_BUMP = 'order_bump';
+
     protected $fillable = [
         'product_id',
         // Item id/model id do canal (ML/Shopee) — persistido SEMPRE (item
@@ -26,6 +29,8 @@ class OrderItem extends Model
         'subtotal',
         // Frete somado ao preço da unidade (FreteEmbutido), 2026-10-22.
         'frete_embutido',
+        // "order_bump" quando veio da caixa de oferta do checkout; nulo nos normais.
+        'origem',
         // Custo manual da linha, só usado quando product_id é nulo (sem
         // produto local pra editar cost_price) — ver migration
         // add_manual_cost_price_to_order_items_table e

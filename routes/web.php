@@ -286,6 +286,8 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/lead-campo', [\App\Modules\Checkout\Http\Controllers\LeadCampoController::class, 'store'])->middleware('throttle:60,1')->name('lead-campo.salvar');
     Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
+    // Order bump (pedido do Lira 2026-11-24): exibiu/marcou/desmarcou a caixa da oferta. Com CSRF.
+    Route::post('/order-bump', [CheckoutController::class, 'orderBump'])->middleware('throttle:60,1')->name('order-bump');
     Route::patch('/itens/{product}', [CheckoutController::class, 'updateItem'])->whereNumber('product')->middleware('throttle:60,1')->name('itens.atualizar');
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/cupom', [CheckoutController::class, 'applyCouponJson'])->middleware('throttle:20,1')->name('cupom.aplicar');
@@ -450,6 +452,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor('destroy', 'permission:cadastros.delete');
 
     // Cupons de desconto + disparo em lote (pedido 2026-10-10).
+    // Order bump do checkout (pedido do Lira 2026-11-24): configuração e números.
+    Route::get('order-bump', [\App\Modules\Admin\Http\Controllers\OrderBumpController::class, 'index'])->middleware('permission:cadastros.view')->name('order-bump');
+    Route::put('order-bump', [\App\Modules\Admin\Http\Controllers\OrderBumpController::class, 'salvar'])->middleware('permission:cadastros.edit')->name('order-bump.salvar');
     Route::get('cupons', [CouponController::class, 'index'])->middleware('permission:cadastros.view')->name('cupons.listar');
     Route::post('cupons', [CouponController::class, 'store'])->middleware('permission:cadastros.create')->name('cupons.armazenar');
     Route::put('cupons/{coupon}', [CouponController::class, 'update'])->middleware('permission:cadastros.edit')->name('cupons.atualizar');

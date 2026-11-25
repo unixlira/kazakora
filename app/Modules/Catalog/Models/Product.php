@@ -55,6 +55,9 @@ class Product extends Model
         'seo_title',
         'seo_description',
         'cta_compra',
+        // Order bump do checkout (2026-11-24): produto oferecido a quem tem este no carrinho.
+        'order_bump_product_id',
+        'order_bump_desconto_pct',
         'tags',
         'brinde_fisico',
     ];
@@ -82,6 +85,8 @@ class Product extends Model
             'is_new_release' => 'boolean',
             'video_duration_seconds' => 'integer',
             'tags' => 'array',
+            'order_bump_product_id' => 'integer',
+            'order_bump_desconto_pct' => 'decimal:2',
         ];
     }
 

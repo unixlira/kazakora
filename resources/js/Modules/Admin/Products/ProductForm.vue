@@ -32,6 +32,11 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // Order bump do checkout (2026-11-24): [{ id, nome }] dos produtos da loja KazaKora.
+    produtosOrderBump: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const emit = defineEmits(['submit']);
@@ -217,6 +222,30 @@ const resumo = computed(() => {
                     Até 28 caracteres, sem preço nem prazo. Vazio = a IA escreve ao salvar.
                 </p>
                 <InputError :message="form.errors.cta_compra" />
+            </div>
+
+            <!-- Order bump do checkout (pedido do Lira 2026-11-24): a oferta que aparece antes do
+                 "Finalizar pedido" para quem tem este produto no carrinho. Vazio = escolha automática
+                 (ou o produto geral da tela Order bump). -->
+            <div v-if="form.order_bump_product_id !== undefined" class="rounded border border-dashed border-orange-300 p-3">
+                <p class="text-sm font-medium">Order bump no checkout</p>
+                <div class="mt-2 grid gap-3 sm:grid-cols-[1fr_8rem]">
+                    <div>
+                        <label for="order_bump_product_id" class="block text-xs font-medium text-gray-600">Produto do order bump</label>
+                        <select id="order_bump_product_id" v-model="form.order_bump_product_id" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                            <option :value="null">Automático (mais vendido que cabe no carrinho)</option>
+                            <option v-for="opcao in produtosOrderBump" :key="opcao.id" :value="opcao.id">{{ opcao.nome }}</option>
+                        </select>
+                        <InputError :message="form.errors.order_bump_product_id" />
+                    </div>
+                    <div>
+                        <label for="order_bump_desconto_pct" class="block text-xs font-medium text-gray-600">% de desconto do bump</label>
+                        <input id="order_bump_desconto_pct" v-model="form.order_bump_desconto_pct" type="number" min="0" max="90" step="0.5"
+                            placeholder="padrão" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                        <InputError :message="form.errors.order_bump_desconto_pct" />
+                    </div>
+                </div>
+                <p class="mt-1 text-xs text-gray-400">Quem tiver este produto no carrinho vê a oferta. O desconto nunca deixa o preço abaixo de custo + 30%; sem custo cadastrado no produto oferecido, a oferta não aparece.</p>
             </div>
 
             <div>

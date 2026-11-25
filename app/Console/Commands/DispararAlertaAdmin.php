@@ -34,8 +34,9 @@ class DispararAlertaAdmin extends Command
             if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 continue;
             }
-            rescue(fn () => retry(2, fn () => Mail::raw($mensagem.($this->option('link') ? "\n\n".$this->option('link') : ''),
-                fn ($m) => $m->to($email)->subject('[KazaKora] '.$titulo)), 3000));
+            // E-mail estilizado com o logo (pedido do Lira 25/11/2026), não texto puro.
+            rescue(fn () => retry(2, fn () => Mail::to($email)->send(new \App\Modules\Admin\Mail\AlertaPorEmail(
+                $titulo, $mensagem, $this->option('link') ?: null, AlertasAdmin::TIPOS[$tipo]['nome'])), 3000));
             $this->line("e-mail para {$email}");
         }
 

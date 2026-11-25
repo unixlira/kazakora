@@ -1,0 +1,254 @@
+{
+  "titulo": "Pistola de Água Elétrica que Recarrega Sozinha na Água",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Disparo elétrico",
+      "sem esforço"
+    ],
+    [
+      "Sucção automática",
+      "recarga rápida"
+    ],
+    [
+      "Alcance longo",
+      "até 9,7 metros"
+    ],
+    [
+      "Zero telas",
+      "diversão no sol"
+    ]
+  ],
+  "letreiro": [
+    "Disparos automáticos no gatilho",
+    "Recarga de água por sucção",
+    "Alcance de até 9,7 metros",
+    "Bateria recarregável inclusa",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão de verdade no sol",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Trocar o brilho da tela pelo brilho do sol na piscina. Com a recarga automática e jatos elétricos, a diversão não para. Menos tempo sentado no sofá e muito mais movimento, fôlego e risadas em família.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a família adora",
+    "imagem": 4,
+    "chamadas": [
+      "Jatos de 9,7 metros",
+      "Plástico ABS resistente"
+    ],
+    "cards": [
+      {
+        "titulo": "Ação contínua",
+        "texto": "Disparos elétricos sem precisar bombear a água manualmente.",
+        "icone": "flame"
+      },
+      {
+        "titulo": "Recarga mágica",
+        "texto": "Mergulhe a ponta e ela suga a água sozinha para o reservatório.",
+        "icone": "droplet"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Desenvolve noção de espaço e foco ao mirar nos alvos.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Ao ar livre",
+        "texto": "Gastar energia no sol, longe da tela, deixa o dia mais divertido.",
+        "icone": "sun"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Longe do celular, a criança volta a interagir com o mundo real e a treinar habilidades essenciais:",
+    "imagem": 3,
+    "chamadas": [
+      "Sucção em 15s",
+      "Alcance de 32 pés",
+      "Bateria inclusa",
+      "Plástico ABS"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "focus"
+      },
+      {
+        "texto": "Socialização",
+        "icone": "users"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Tecnologia para brincar de verdade",
+    "texto": "Esqueça o cansaço de bombear. O sistema motorizado cuida de tudo para a criança focar na mira e na diversão.",
+    "imagem": 1,
+    "cards": [
+      {
+        "titulo": "Sucção automática",
+        "texto": "Recarrega em cerca de 10 a 15 segundos",
+        "icone": "rotate-cw"
+      },
+      {
+        "titulo": "Alcance longo",
+        "texto": "Jatos de até cerca de 9,7 metros",
+        "icone": "crosshair"
+      },
+      {
+        "titulo": "Bateria inclusa",
+        "texto": "Bateria recarregável com carregador USB",
+        "icone": "battery-charging"
+      },
+      {
+        "titulo": "Material ABS",
+        "texto": "Plástico ABS leve e resistente",
+        "icone": "shield-check"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pistola comum × Pistola Elétrica",
+    "intro": "As duas molham. Só uma traz ação sem parar.",
+    "rotulos": [
+      "Comum",
+      "Elétrica"
+    ],
+    "linhas": [
+      {
+        "texto": "Diverte nos dias de sol",
+        "comum": true
+      },
+      {
+        "texto": "Disparos automáticos no gatilho",
+        "comum": false
+      },
+      {
+        "texto": "Recarga automática por sucção",
+        "comum": false
+      },
+      {
+        "texto": "Bateria recarregável inclusa",
+        "comum": false
+      },
+      {
+        "texto": "Alcance de até 9,7 metros",
+        "comum": false
+      },
+      {
+        "texto": "Brincadeira sem cansar o braço",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção longe das telas",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos que ficam na memória",
+    "texto": "Seja no quintal, na praia ou na piscina, o importante é estar junto. A pistola elétrica é o convite perfeito para os pais entrarem na brincadeira e criarem laços reais.",
+    "imagem": 0,
+    "citacao": "Menos celular na mão e mais água no quintal: o verão fica melhor com a família toda na brincadeira."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit de verão",
+    "texto": "Pistola, bateria e carregador: tudo pronto para a família brincar junto.",
+    "itens": [
+      {
+        "id": 176,
+        "nome": "Kit Ação de Verão",
+        "itens": "Pistola + bateria + carregador",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pistola Elétrica",
+            "icone": "crosshair"
+          },
+          {
+            "texto": "Bateria e Cabo",
+            "icone": "battery-charging"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Recarga rápida",
+      "texto": "Carregue a bateria e encha o reservatório.",
+      "icone": "battery-full"
+    },
+    {
+      "titulo": "Partiu piscina",
+      "texto": "Horas de brincadeira de verdade no sol.",
+      "icone": "sun"
+    }
+  ],
+  "garantia": [
+    "Brincando no sol",
+    "Longe do celular",
+    "Gastando energia",
+    "Correndo e rindo"
+  ],
+  "duvidas": [
+    [
+      "Como recarregar a água?",
+      "Basta mergulhar a parte frontal em água limpa e a sucção automática enche o reservatório em cerca de 10 a 15 segundos."
+    ],
+    [
+      "Qual o alcance do jato?",
+      "O alcance informado é de aproximadamente 26 a 32 pés, cerca de 8 a 9,7 metros."
+    ],
+    [
+      "A bateria é recarregável?",
+      "Sim, o produto acompanha uma bateria recarregável e um carregador."
+    ],
+    [
+      "Qual o material do brinquedo?",
+      "Ela é fabricada em plástico ABS, um material leve e resistente para as brincadeiras."
+    ],
+    [
+      "O que vem na embalagem?",
+      "A caixa contém 01 Arma d'Água Elétrica, 01 Bateria Recarregável e 01 Carregador."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, movimento e muita risada em família sob o sol."
+  },
+  "ctas": {
+    "historia": "Quero diversão no sol",
+    "comparativo": "Quero a pistola elétrica"
+  }
+}

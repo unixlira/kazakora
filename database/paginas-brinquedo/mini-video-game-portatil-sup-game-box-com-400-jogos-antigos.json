@@ -1,0 +1,257 @@
+{
+  "titulo": "Mini Video Game Sup Game Box com 400 Jogos Antigos que Liga na TV",
+  "sem_telas": false,
+  "chips": [
+    [
+      "400 jogos",
+      "clássicos em 1"
+    ],
+    [
+      "Liga na TV",
+      "cabo AV incluso"
+    ],
+    [
+      "Bateria",
+      "recarregável"
+    ],
+    [
+      "Portátil",
+      "leve e compacto"
+    ]
+  ],
+  "letreiro": [
+    "400 jogos antigos em 1",
+    "Liga na TV com o cabo AV",
+    "Bateria recarregável inclusa",
+    "Tela colorida e portátil",
+    "Clássicos para jogar em família",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Os clássicos de volta à família",
+    "subtitulo": "400 jogos antigos na palma da mão",
+    "texto": "Aqueles jogos que os pais conhecem de cor agora são da criançada. Joga no portátil ou liga na TV, e a sala vira torcida.",
+    "imagem": 6
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 1,
+    "chamadas": [
+      "400 jogos em 1",
+      "Liga na TV"
+    ],
+    "cards": [
+      {
+        "titulo": "Jogo que não acaba",
+        "texto": "São 400 jogos antigos para trocar de fase.",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Na tela grande",
+        "texto": "Com o cabo AV, a partida vai para a TV.",
+        "icone": "tv"
+      },
+      {
+        "titulo": "Bateria inclusa",
+        "texto": "Recarregável, com cabo de carregamento.",
+        "icone": "battery-charging"
+      },
+      {
+        "titulo": "Cabe no bolso",
+        "texto": "Leve e compacto para levar no passeio.",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Diversão que reúne a família",
+    "texto": "Jogo antigo é feito para passar a vez, torcer e tentar de novo:",
+    "imagem": 2,
+    "chamadas": [
+      "Tela colorida",
+      "Controles intuitivos",
+      "Cabo AV",
+      "400 jogos"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação",
+        "icone": "hand"
+      },
+      {
+        "texto": "Reflexo",
+        "icone": "timer"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Persistência",
+        "icone": "award"
+      },
+      {
+        "texto": "Atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Jogar junto",
+        "icone": "users"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para jogar",
+    "texto": "Console, bateria e cabos na caixa: é carregar e começar, no portátil ou na televisão.",
+    "imagem": 7,
+    "cards": [
+      {
+        "titulo": "400 jogos",
+        "texto": "Clássicos retrô",
+        "icone": "joystick"
+      },
+      {
+        "titulo": "Tela colorida",
+        "texto": "Controles intuitivos",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Cabo AV",
+        "texto": "Para jogar na TV",
+        "icone": "cable"
+      },
+      {
+        "titulo": "Bateria",
+        "texto": "Recarregável",
+        "icone": "battery-full"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Jogo no celular × Sup Game Box",
+    "intro": "Os dois têm jogos. Só um leva a família para a TV.",
+    "rotulos": [
+      "Celular",
+      "Game Box"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem jogos para passar o tempo",
+        "comum": true
+      },
+      {
+        "texto": "400 jogos antigos em 1",
+        "comum": false
+      },
+      {
+        "texto": "Botões físicos de verdade",
+        "comum": false
+      },
+      {
+        "texto": "Liga na TV com cabo AV",
+        "comum": false
+      },
+      {
+        "texto": "Sem notificação no meio do jogo",
+        "comum": false
+      },
+      {
+        "texto": "Clássicos que os pais conhecem",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Na TV da sala, um joga e todo mundo torce. Os pais mostram o segredo da fase, os filhos querem mais uma partida.",
+    "imagem": 4,
+    "citacao": "Uma partida, duas gerações: o jogo da infância dos pais virando a diversão dos filhos."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Console com 400 jogos, bateria e cabos: tudo para jogar no portátil ou na TV.",
+    "itens": [
+      {
+        "id": 326,
+        "nome": "Kit Retrô Completo",
+        "itens": "Console + bateria + cabos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Console 400 jogos",
+            "icone": "gamepad-2"
+          },
+          {
+            "texto": "Bateria",
+            "icone": "battery-charging"
+          },
+          {
+            "texto": "Cabo AV e USB",
+            "icone": "cable"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeira partida",
+      "texto": "Chegou! Carregue e escolha o clássico.",
+      "icone": "play"
+    },
+    {
+      "titulo": "Jogo em família",
+      "texto": "Liga na TV e a sala vira torcida.",
+      "icone": "tv"
+    }
+  ],
+  "garantia": [
+    "Jogando em família",
+    "Revivendo os clássicos",
+    "Torcendo junto",
+    "Sorrindo a cada fase"
+  ],
+  "duvidas": [
+    [
+      "Quantos jogos vêm no console?",
+      "São 400 jogos antigos integrados."
+    ],
+    [
+      "O que vem na caixa?",
+      "1 console portátil, 1 bateria recarregável, 1 cabo de carregamento e 1 cabo AV para conexão com a TV."
+    ],
+    [
+      "Dá para jogar na televisão?",
+      "Sim. Com o cabo AV incluso, o console liga na TV para jogar na tela grande."
+    ],
+    [
+      "Como funciona a bateria?",
+      "O console usa bateria recarregável, que já vem na caixa com o cabo de carregamento."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que reúne a família na TV",
+    "texto": "400 jogos clássicos, partidas de passar a vez e a família torcendo junto."
+  },
+  "ctas": {
+    "historia": "Quero o Sup Game Box",
+    "porque": "Quero os 400 jogos",
+    "ensina": "Quero jogar em família",
+    "detalhes": "Quero o meu",
+    "comparativo": "Quero jogar na TV",
+    "familia": "Quero os clássicos em casa",
+    "passos": "Quero o meu",
+    "garantia": "Quero o Sup Game Box",
+    "final": "Quero o Sup Game Box"
+  }
+}

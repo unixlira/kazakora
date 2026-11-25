@@ -13,6 +13,8 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FaixaDoTopo;
 use App\Modules\Catalog\Support\FichaTecnica;
+use App\Modules\Catalog\Support\LayoutDaPagina;
+use App\Modules\Catalog\Support\PaginaBrinquedo;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
@@ -553,6 +555,13 @@ class CatalogController extends Controller
             'salesCount' => $salesCount,
             // Faixa do topo com os benefícios deste produto (pedido do Lira 2026-11-24); sem conteúdo, as gerais.
             'faixa' => FaixaDoTopo::paraProduto($product->adContent),
+            // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
+            // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
+            'layout' => LayoutDaPagina::para($product),
+            // Conteúdo próprio da página de brinquedo (25/11/2026), do produto ou do pai.
+            'paginaBrinquedo' => LayoutDaPagina::para($product) === LayoutDaPagina::BRINQUEDO
+                ? PaginaBrinquedo::paraPagina($product)
+                : null,
         ]);
     }
 
@@ -609,10 +618,45 @@ class CatalogController extends Controller
      *
      * @return array{total: int, media: float|null, estrelas: array<int, int>}
      */
+    /**
+     * Produtos cujas avaliações a página junta (products.avaliacoes_de, no produto ou no pai;
+     * pedido do Lira 24/11/2026): [id => rótulo] de cada produto listado e das variações dele.
+     *
+     * @return array<int, string>
+     */
+    private static function avaliacoesDeOutros(Product $product): array
+    {
+        $lista = $product->avaliacoes_de ?: $product->parent?->avaliacoes_de;
+        if (! is_array($lista) || ! $lista) {
+            return [];
+        }
+        $rotulos = [];
+        foreach ($lista as $item) {
+            $id = (int) ($item['id'] ?? 0);
+            if ($id < 1) {
+                continue;
+            }
+            foreach (Product::withTrashed()->where('id', $id)->orWhere('parent_product_id', $id)->pluck('id') as $irmao) {
+                $rotulos[(int) $irmao] ??= (string) ($item['rotulo'] ?? '');
+            }
+        }
+
+        return $rotulos;
+    }
+
+    /** Ids das avaliações da página: o grupo do produto e os produtos de avaliacoes_de. */
+    private static function idsDasAvaliacoes(Product $product): array
+    {
+        return array_values(array_unique(array_merge(
+            self::idsDoGrupo($product)->pluck('id')->all(),
+            array_keys(self::avaliacoesDeOutros($product)),
+        )));
+    }
+
     private function resumoDasAvaliacoes(Product $product): array
     {
         $porNota = Review::query()
-            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
             ->selectRaw('rating, count(*) as total')
             ->groupBy('rating')
             ->pluck('total', 'rating');
@@ -639,8 +683,14 @@ class CatalogController extends Controller
      */
     private function paginaDeAvaliacoes(Product $product, int $pular, ?int $quantidade)
     {
+        $rotulos = self::avaliacoesDeOutros($product);
+
+        if (LayoutDaPagina::para($product) === LayoutDaPagina::BRINQUEDO) {
+            return $this->avaliacoesDoBrinquedo($product, $rotulos, $pular, $quantidade);
+        }
+
         return Review::query()
-            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
             ->with(['user:id,name', 'images'])
             ->withCount('images')
             ->orderByRaw('images_count > 0 desc')
@@ -649,8 +699,103 @@ class CatalogController extends Controller
             ->when($quantidade !== null, fn ($query) => $query->skip($pular)->take($quantidade))
             ->get()
             // Nome oculto: o usuário não vai no JSON da página.
-            ->each(fn (Review $review) => $review->ocultar_nome && $review->setRelation('user', null))
+            ->each(function (Review $review) use ($rotulos) {
+                if ($review->ocultar_nome) {
+                    $review->setRelation('user', null);
+                }
+                // Etiqueta do produto avaliado quando a página junta avaliações de outros produtos.
+                if (isset($rotulos[$review->product_id]) && $rotulos[$review->product_id] !== '') {
+                    $review->setAttribute('produto_rotulo', $rotulos[$review->product_id]);
+                }
+                // Sem selo "Comprado em outra loja" na página (pedido do Lira 07/11,
+                // tarefa 3908): o canal da avaliação não vira selo na tela.
+            })
             ->values();
+    }
+
+    /**
+     * Avaliações da página de brinquedo (pedidos do Lira 25/11/2026): todas as reais, das 5 estrelas
+     * para as de nota baixa (1 e 2 sempre no fim); dentro da mesma nota, intercaladas por produto do kit
+     * (livro, lousa, quebra-cabeça, livro...) para cada linha da grade ter um de cada. A etiqueta pode
+     * vir do texto: avaliacoes_de[].texto = {"lousa": "Lousa Mágica"} marca a avaliação daquele produto
+     * que cita a palavra (sem expressão regular: o PCRE da produção é antigo).
+     *
+     * @param  array<int, string>  $rotulos
+     */
+    private function avaliacoesDoBrinquedo(Product $product, array $rotulos, int $pular, ?int $quantidade)
+    {
+        $porTexto = self::rotulosPorTexto($product);
+        // Ordem dos grupos: o próprio produto, depois cada item de avaliacoes_de seguido das etiquetas por texto dele.
+        $ordemDosGrupos = [''];
+        foreach ((array) ($product->avaliacoes_de ?: $product->parent?->avaliacoes_de) as $item) {
+            $ordemDosGrupos[] = (string) ($item['rotulo'] ?? '');
+            foreach ((array) ($item['texto'] ?? []) as $etiqueta) {
+                $ordemDosGrupos[] = (string) $etiqueta;
+            }
+        }
+        $ordemDosGrupos = array_values(array_unique($ordemDosGrupos));
+
+        $todas = Review::query()
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->latest()
+            ->orderByDesc('id')
+            ->get()
+            ->each(function (Review $review) use ($rotulos, $porTexto) {
+                if ($review->ocultar_nome) {
+                    $review->setRelation('user', null);
+                }
+                $rotulo = $rotulos[$review->product_id] ?? '';
+                foreach ($porTexto[$review->product_id] ?? [] as $palavra => $outro) {
+                    if (mb_stripos((string) $review->comment, (string) $palavra) !== false) {
+                        $rotulo = $outro;
+                        break;
+                    }
+                }
+                if ($rotulo !== '') {
+                    $review->setAttribute('produto_rotulo', $rotulo);
+                }
+            });
+
+        $ordenadas = collect();
+        foreach ([5, 4, 3, 2, 1] as $nota) {
+            $grupos = $todas->filter(fn (Review $r) => (int) round((float) $r->rating) === $nota)
+                ->groupBy(fn (Review $r) => (string) ($r->produto_rotulo ?? ''))
+                ->sortBy(fn ($itens, $grupo) => ($i = array_search($grupo, $ordemDosGrupos, true)) === false ? 99 : $i)
+                ->map(fn ($itens) => $itens->values())
+                ->values();
+            $maior = $grupos->max(fn ($itens) => $itens->count()) ?? 0;
+            for ($i = 0; $i < $maior; $i++) {
+                foreach ($grupos as $itens) {
+                    if (isset($itens[$i])) {
+                        $ordenadas->push($itens[$i]);
+                    }
+                }
+            }
+        }
+
+        return ($quantidade === null ? $ordenadas->slice($pular) : $ordenadas->slice($pular, $quantidade))->values();
+    }
+
+    /** [id do produto => [palavra => etiqueta]] de avaliacoes_de[].texto (e das variações dele). */
+    private static function rotulosPorTexto(Product $product): array
+    {
+        $lista = $product->avaliacoes_de ?: $product->parent?->avaliacoes_de;
+        $mapa = [];
+        foreach (is_array($lista) ? $lista : [] as $item) {
+            $texto = $item['texto'] ?? null;
+            $id = (int) ($item['id'] ?? 0);
+            if (! is_array($texto) || $texto === [] || $id < 1) {
+                continue;
+            }
+            foreach (Product::withTrashed()->where('id', $id)->orWhere('parent_product_id', $id)->pluck('id') as $irmao) {
+                $mapa[(int) $irmao] = $texto;
+            }
+        }
+
+        return $mapa;
     }
 
     /**

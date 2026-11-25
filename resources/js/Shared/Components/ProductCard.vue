@@ -80,7 +80,17 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // Card de kit da página de brinquedo (pedido do Lira 24/11/2026, "os cards das 3 ofertas
+    // devem ser os cards do 'você também pode gostar'"): mesmo card, com o nome do kit, o selo
+    // (Para começar / Recomendado / Mais completo) e o clique escolhendo o kit na página em vez
+    // de abrir outro produto. Fora da página de brinquedo nada disso é passado e o card não muda.
+    nome: { type: String, default: null },
+    selo: { type: Object, default: null },
+    escolher: { type: Boolean, default: false },
+    selecionado: { type: Boolean, default: false },
 });
+const emit = defineEmits(['escolher']);
+const nomeDoCard = computed(() => String(props.nome || props.product.name || '').trim());
 
 // Sem tabela do Mercado Pago, a parcela não mostra valor.
 const PARCELAS = 12;
@@ -126,7 +136,7 @@ const secondImageVisible = computed(() => isHovering.value && secondImageLoaded.
 
 // Navegação rápida (pedido 2026-10-10): ao passar o mouse ou encostar o dedo
 // no card, a página do produto já é buscada; o clique abre na hora.
-const prefetchProduct = () => router.prefetch(`/produtos/${props.product.slug}`, { method: 'get' }, { cacheFor: '1m' });
+const prefetchProduct = () => props.escolher || router.prefetch(`/produtos/${props.product.slug}`, { method: 'get' }, { cacheFor: '1m' });
 
 const onPointerEnter = () => {
     isHovering.value = true;
@@ -142,6 +152,10 @@ const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
 // produto. Botões e links de dentro (carrinho, Avaliar, Detalhes) fazem a
 // própria ação. Ctrl/Cmd+clique abre em outra aba, como num link.
 const clicarCard = (evento) => {
+    if (props.escolher) {
+        if (!evento.target.closest('a, button, input, textarea, select')) emit('escolher');
+        return;
+    }
     if (evento.target.closest('a, button, input, textarea, select')) return;
     if (window.getSelection?.().toString()) return;
     if (evento.ctrlKey || evento.metaKey) {
@@ -175,7 +189,7 @@ const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n 
 // para "… Ver mais" terminar exatamente no fim da última linha.
 const tituloEl = ref(null);
 const medidorEl = ref(null);
-const titulo = ref({ texto: String(props.product.name ?? '').trim(), cortado: false });
+const titulo = ref({ texto: nomeDoCard.value, cortado: false });
 const SELINHO = '<span class="titulo-ver-mais">Ver mais</span>';
 const escapar = (texto) => texto.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -190,7 +204,7 @@ const ajustarTitulo = () => {
     const alvo = tituloEl.value;
     const medidor = medidorEl.value;
     if (!alvo || !medidor) return;
-    const nome = String(props.product.name ?? '').trim();
+    const nome = nomeDoCard.value;
     larguraMedida = alvo.clientWidth;
     alturaMedida = alvo.clientHeight;
     const limite = alturaMedida + 1;
@@ -262,7 +276,8 @@ onBeforeUnmount(() => {
 
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 // Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).
-const preco = computed(() => props.product.preco_vitrine ?? props.product);
+// Kit: o preço do próprio kit (preco_vitrine seria o da variação mais barata do grupo).
+const preco = computed(() => (props.escolher ? props.product : (props.product.preco_vitrine ?? props.product)));
 // Black Friday automática (pedido do Lira 2026-11-24): o servidor manda pronto o preço com o
 // cupom ({ de, por, pix, code }, BlackFriday::precos, a mesma conta do checkout). Riscado = preço
 // sem o cupom; grande = com o cupom; embaixo, no Pix. Null fora da BF: o card de sempre.
@@ -292,18 +307,18 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
     <!-- card-produto + font-store: o card é igual em toda vitrine, mesmo dentro de página
          com estilo próprio (página do produto, pedido 2026-10-22). -->
     <article class="card-produto group flex cursor-pointer font-store text-store-fg overflow-hidden border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]"
-        :class="horizontal ? 'card-horizontal flex-row items-center rounded-xl' : 'h-full flex-col rounded-[1.15rem]'"
+        :class="[horizontal ? 'card-horizontal flex-row items-center rounded-xl' : 'h-full flex-col rounded-[1.15rem]', { 'card-kit-selecionado': selecionado }]"
         @mouseenter="prefetchProduct" @touchstart.passive="prefetchProduct" @click="clicarCard">
         <div class="relative aspect-square bg-white"
             :class="{ 'm-2 w-[120px] shrink-0 overflow-hidden rounded-lg': horizontal }"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false">
             <template v-if="primaryImage(product)">
                 <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
-                <img ref="fotoEl" :src="imagensLiberadas ? primaryImage(product) : undefined" :alt="product.name" loading="lazy" decoding="async"
+                <img ref="fotoEl" :src="imagensLiberadas ? primaryImage(product) : undefined" :alt="nomeDoCard" loading="lazy" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
                     :class="secondImageVisible || !fotoCarregada ? 'opacity-0' : 'opacity-100'"
                     @load="fotoCarregada = true" @error="fotoCarregada = true">
-                <img v-if="showSecondImage" :src="secondImage" :alt="product.name" decoding="async"
+                <img v-if="showSecondImage" :src="secondImage" :alt="nomeDoCard" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
                     :class="secondImageVisible ? 'opacity-100' : 'opacity-0'"
                     @load="secondImageLoaded = true">
@@ -322,6 +337,9 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
             </button>
             -->
 
+
+            <!-- Selo do kit (página de brinquedo) no alto da foto. -->
+            <span v-if="selo" class="selo-kit" :class="`selo-kit-${selo.tom}`"><i v-if="selo.estrela" class="fas fa-star" aria-hidden="true"></i>{{ selo.texto }}</span>
 
             <!-- Card deitado: o "X% OFF" vermelho fica no canto de cima da foto (exemplo do Lira 2026-10-24). -->
             <span v-if="horizontal && precoAntes" class="absolute left-0 top-1.5 z-[6] whitespace-nowrap rounded-r-full bg-[#d71920] py-0.5 pl-1.5 pr-2 text-[10px] font-bold leading-tight text-white shadow">{{ descontoPct }}% OFF</span>
@@ -348,7 +366,7 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
-                <h3 ref="tituloEl" class="titulo-card overflow-hidden font-semibold group-hover:text-store-accent" :title="product.name">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
+                <h3 ref="tituloEl" class="titulo-card overflow-hidden font-semibold group-hover:text-store-accent" :title="nomeDoCard">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h3>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
@@ -425,6 +443,8 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
                         <template v-if="cupomBf && cupomBf.pix !== null">No Pix: {{ formatPrice(cupomBf.pix) }}</template>
                     </p>
                 </template>
+                <!-- Extra do card de kit (preço por brinquedo e economia); vazio nas vitrines. -->
+                <slot />
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                     <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-[11px] font-semibold text-red-600 md:text-xs">Esgotado</p>
@@ -441,7 +461,12 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
                          (pedido 2026-10-17): era 30px de altura e ficava grande no card.
                          Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
                          avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
-                    <Link :href="`/produtos/${product.slug}`"
+                    <button v-if="escolher" type="button" :disabled="product.stock <= 0"
+                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes md:inline-flex rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] disabled:opacity-50"
+                        @click.stop="emit('escolher')">
+                        {{ selecionado ? 'Escolhido' : 'Escolher' }}
+                    </button>
+                    <Link v-else :href="`/produtos/${product.slug}`"
                         class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>

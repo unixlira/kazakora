@@ -1,0 +1,261 @@
+{
+  "titulo": "Pista Montessori com Botões e Alavancas que Treinam Mãos e Raciocínio",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Controle manual",
+      "botões e alavancas"
+    ],
+    [
+      "Vários percursos",
+      "níveis e acessos"
+    ],
+    [
+      "Carrinhos",
+      "e helicóptero"
+    ],
+    [
+      "Zero telas",
+      "brincadeira ativa"
+    ]
+  ],
+  "letreiro": [
+    "Botões, alavancas e engrenagens",
+    "A criança guia o caminho",
+    "Pista com níveis e acessos",
+    "Carrinhos e helicóptero",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão longe das telas",
+    "subtitulo": "A criança comanda cada percurso",
+    "texto": "Aperta o botão, puxa a alavanca, gira a engrenagem e o carrinho segue. Brincadeira de mão na massa, longe do celular. Menos tela também é mais descanso para os olhos e uma noite mais tranquila.",
+    "imagem": 7
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 2,
+    "chamadas": [
+      "Aperta e vê acontecer",
+      "Vários caminhos"
+    ],
+    "cards": [
+      {
+        "titulo": "Ela no comando",
+        "texto": "Cada botão e alavanca muda o caminho do carrinho.",
+        "icone": "pointer"
+      },
+      {
+        "titulo": "Sempre diferente",
+        "texto": "Níveis e acessos deixam cada rodada nova.",
+        "icone": "route"
+      },
+      {
+        "titulo": "Histórias",
+        "texto": "Carrinhos e helicóptero viram aventuras inteiras.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "Brinca por mais tempo, sem precisar de tela.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto guia o carrinho pela pista, a criança treina sem perceber:",
+    "imagem": 6,
+    "chamadas": [
+      "Botões e alavancas",
+      "Inspiração Montessori",
+      "Causa e efeito",
+      "Vários percursos"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio lógico",
+        "icone": "brain"
+      },
+      {
+        "texto": "Causa e efeito",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada peça pensada para mãos pequenas",
+    "texto": "Botões, alavancas e engrenagens fáceis de acionar, numa pista colorida e resistente.",
+    "imagem": 3,
+    "cards": [
+      {
+        "titulo": "Controle manual",
+        "texto": "Botões, alavancas e engrenagens",
+        "icone": "cog"
+      },
+      {
+        "titulo": "Vários níveis",
+        "texto": "Percursos e acessos diferentes",
+        "icone": "layers"
+      },
+      {
+        "titulo": "Veículos",
+        "texto": "Carrinhos e helicóptero",
+        "icone": "car"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Sem celular nem TV",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pista comum × Pista Montessori",
+    "intro": "As duas têm carrinhos. Só uma deixa a criança comandar o caminho.",
+    "rotulos": [
+      "Comum",
+      "Montessori"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem carrinhos coloridos",
+        "comum": true
+      },
+      {
+        "texto": "Botões, alavancas e engrenagens",
+        "comum": false
+      },
+      {
+        "texto": "A criança controla o trajeto",
+        "comum": false
+      },
+      {
+        "texto": "Diferentes níveis e acessos",
+        "comum": false
+      },
+      {
+        "texto": "Vem com helicóptero",
+        "comum": false
+      },
+      {
+        "texto": "Inspiração Montessori",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção por mais tempo",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinha de pais e filhos",
+    "texto": "A criança mostra o caminho, os pais torcem em cada descida: uma pista colorida para trocar a tela pela brincadeira, com a família por perto.",
+    "imagem": 1,
+    "citacao": "Menos tela, mais descoberta: cada alavanca puxada é uma pequena conquista no chão da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Pista completa com carrinhos e helicóptero para brincar longe das telas.",
+    "itens": [
+      {
+        "id": 378,
+        "nome": "Kit Pista Montessori",
+        "itens": "Pista colorida + carrinhos e helicóptero",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pista com níveis",
+            "icone": "route"
+          },
+          {
+            "texto": "Carrinhos",
+            "icone": "car"
+          },
+          {
+            "texto": "Helicóptero",
+            "icone": "plane"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça a sua pista",
+      "texto": "Pista, carrinhos e helicóptero numa caixa só.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! Primeiro botão, primeira descida.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Aprender brincando",
+      "texto": "Coordenação e raciocínio todo dia, longe das telas.",
+      "icone": "blocks"
+    }
+  ],
+  "garantia": [
+    "Brincando mais",
+    "Mais longe das telas",
+    "Resolvendo desafios",
+    "Inventando percursos"
+  ],
+  "duvidas": [
+    [
+      "Como a pista funciona?",
+      "Por botões, alavancas e engrenagens manuais: a criança aciona e controla o trajeto do carrinho."
+    ],
+    [
+      "O que vem na caixa?",
+      "A pista colorida com diferentes níveis e acessos, carrinhos e helicóptero."
+    ],
+    [
+      "Por que Montessori?",
+      "O design ludo-pedagógico é inspirado no método Montessori, para aprender brincando com as mãos."
+    ],
+    [
+      "É resistente?",
+      "Sim. É um brinquedo colorido e resistente, feito para o público infantil. Recomendamos a supervisão de um adulto."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, mãos e cabeça trabalhando e a família mais perto."
+  },
+  "ctas": {
+    "historia": "Quero a minha pista",
+    "porque": "Quero a Pista Montessori",
+    "ensina": "Quero aprender brincando",
+    "detalhes": "Quero a minha pista",
+    "comparativo": "Quero trocar a tela pela pista",
+    "familia": "Quero brincar em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero a Pista Montessori",
+    "final": "Quero a minha pista"
+  }
+}

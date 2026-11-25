@@ -1,0 +1,257 @@
+{
+  "titulo": "Pistola de Bolhas Automática com Luzes para Brincar ao Ar Livre",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Muitas bolhas",
+      "de uma vez só"
+    ],
+    [
+      "Luzes coloridas",
+      "brilho na brincadeira"
+    ],
+    [
+      "Ao ar livre",
+      "festa e parque"
+    ],
+    [
+      "Zero telas",
+      "corre e pula"
+    ]
+  ],
+  "letreiro": [
+    "Muitas bolhas de uma vez só",
+    "Luzes coloridas que encantam",
+    "Recipiente acoplado embaixo",
+    "Festa, parque e quintal",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão longe das telas",
+    "subtitulo": "Um aperto e o quintal enche de bolhas",
+    "texto": "Aperta o gatilho e sai uma nuvem de bolhas coloridas. A criançada corre, pula e estoura, longe do celular. Mais tempo ao ar livre e menos tela também ajudam numa noite mais tranquila.",
+    "imagem": 8
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 1,
+    "chamadas": [
+      "Muitas bolhas",
+      "Luzes coloridas"
+    ],
+    "cards": [
+      {
+        "titulo": "Chuva de bolhas",
+        "texto": "Lançamento automático com muitas bolhas a cada aperto.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Luzes animadas",
+        "texto": "Luzes coloridas deixam tudo mais divertido.",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Ao ar livre",
+        "texto": "Festa, parque e quintal viram pura correria.",
+        "icone": "sun"
+      },
+      {
+        "titulo": "Fácil de usar",
+        "texto": "Prepara o recipiente, aperta e pronto.",
+        "icone": "hand"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também desenvolve",
+    "texto": "Correndo atrás das bolhas, a criança treina sem nem perceber:",
+    "imagem": 5,
+    "chamadas": [
+      "Lançamento automático",
+      "Luzes coloridas",
+      "Recipiente acoplado",
+      "Ao ar livre"
+    ],
+    "habilidades": [
+      {
+        "texto": "Movimento",
+        "icone": "person-standing"
+      },
+      {
+        "texto": "Coordenação",
+        "icone": "hand"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Brincar junto",
+        "icone": "users"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Alegria",
+        "icone": "laugh"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para encantar",
+    "texto": "Cores vibrantes, detalhes mecânicos aparentes e recipiente acoplado na parte de baixo.",
+    "imagem": 3,
+    "cards": [
+      {
+        "titulo": "Automática",
+        "texto": "Muitas bolhas de uma só vez",
+        "icone": "wind"
+      },
+      {
+        "titulo": "Com luzes",
+        "texto": "Luzes coloridas integradas",
+        "icone": "sparkle"
+      },
+      {
+        "titulo": "Recipiente",
+        "texto": "Acoplado embaixo do brinquedo",
+        "icone": "droplet"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Brincadeira ao ar livre",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Bolha comum × Pistola de Bolhas",
+    "intro": "As duas fazem bolhas. Só uma enche o ar de bolhas com um aperto.",
+    "rotulos": [
+      "Comum",
+      "Pistola"
+    ],
+    "linhas": [
+      {
+        "texto": "Faz bolhas de sabão",
+        "comum": true
+      },
+      {
+        "texto": "Muitas bolhas de uma vez só",
+        "comum": false
+      },
+      {
+        "texto": "Lançamento automático",
+        "comum": false
+      },
+      {
+        "texto": "Luzes coloridas integradas",
+        "comum": false
+      },
+      {
+        "texto": "Recipiente acoplado",
+        "comum": false
+      },
+      {
+        "texto": "Sem precisar assoprar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Alegria para a família toda",
+    "texto": "Uma pistola e uma nuvem de bolhas: crianças correndo, pais rindo junto e a tarde inteira ao ar livre, longe da tela.",
+    "imagem": 8,
+    "citacao": "Menos tela, mais céu cheio de bolhas: a brincadeira mais simples continua sendo a mais feliz."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Pistola com luzes e recipiente acoplado para a festa das bolhas começar.",
+    "itens": [
+      {
+        "id": 448,
+        "nome": "Kit Festa das Bolhas",
+        "itens": "Pistola de bolhas com luzes",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pistola de bolhas",
+            "icone": "wind"
+          },
+          {
+            "texto": "Luzes coloridas",
+            "icone": "sparkle"
+          },
+          {
+            "texto": "Recipiente",
+            "icone": "droplet"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça a sua pistola",
+      "texto": "Pronta para a próxima festa ou passeio.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Prepare o recipiente",
+      "texto": "Coloque o líquido de bolhas e encaixe.",
+      "icone": "droplets"
+    },
+    {
+      "titulo": "Solte as bolhas",
+      "texto": "Aperte o gatilho e corra ao ar livre.",
+      "icone": "sun"
+    }
+  ],
+  "garantia": [
+    "Correndo ao ar livre",
+    "Mais longe das telas",
+    "Rindo sem parar",
+    "Brincando em grupo"
+  ],
+  "duvidas": [
+    [
+      "Como funciona?",
+      "Prepare o recipiente com líquido de bolhas, encaixe na parte de baixo e aperte o gatilho: o lançamento automático solta muitas bolhas de uma vez."
+    ],
+    [
+      "Tem luzes?",
+      "Sim, luzes coloridas integradas que deixam a brincadeira mais animada."
+    ],
+    [
+      "Onde dá para brincar?",
+      "Em festas, parques e brincadeiras ao ar livre. Recomendamos a supervisão de um adulto."
+    ],
+    [
+      "Quais as cores?",
+      "O brinquedo aparece em cores vibrantes, como vermelho e azul, com detalhes mecânicos aparentes."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Tardes ao ar livre, bolhas para todo lado e a família rindo junto."
+  },
+  "ctas": {
+    "historia": "Quero a pistola de bolhas",
+    "porque": "Quero muitas bolhas",
+    "ensina": "Quero brincar ao ar livre",
+    "detalhes": "Quero a minha pistola",
+    "comparativo": "Quero a pistola automática",
+    "familia": "Quero brincar em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero a pistola de bolhas",
+    "final": "Quero a pistola de bolhas"
+  }
+}

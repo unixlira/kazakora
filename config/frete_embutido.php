@@ -87,5 +87,7 @@ return [
     // (parafusadeira leve 18V) saiu em 2026-11-10, pedido do Lira: a R$ 108,75
     // fixos ela perdia R$ 5,73 no CE e R$ 27,87 no AM; agora segue o frete da
     // região com teto e piso de margem, como os outros.
-    'produtos_sem_frete' => [],
+    // 620 = Livro Falante e seus kits (variações 621 e 622), pedido do Lira
+    // 25/11/2026: preço fixo 167,99 / 229,99 / 301,99 para qualquer CEP.
+    'produtos_sem_frete' => [620],
 ];

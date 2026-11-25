@@ -1,0 +1,253 @@
+{
+  "titulo": "Câmera Infantil que Tira a Foto e Imprime na Hora para Guardar",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Imprime na hora",
+      "foto na mão"
+    ],
+    [
+      "Papel térmico",
+      "já acompanha"
+    ],
+    [
+      "Orelhinhas fofas",
+      "rostinho amigável"
+    ],
+    [
+      "Criatividade",
+      "olhar de fotógrafo"
+    ]
+  ],
+  "letreiro": [
+    "Tira a foto e imprime na hora",
+    "Acompanha rolo de papel térmico",
+    "Design fofo com orelhinhas",
+    "Feita para mãos pequenas",
+    "Memórias para guardar e colar",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Momentos que viram lembrança",
+    "subtitulo": "A foto sai na hora, direto para a mão",
+    "texto": "A criança escolhe o que quer registrar, aperta e vê a foto sair na hora. Nada de imagem esquecida na galeria: vira lembrança para colar no caderno, no mural ou dar de presente para a vovó.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Imprime na hora",
+      "Visual com orelhinhas"
+    ],
+    "cards": [
+      {
+        "titulo": "Foto na mão",
+        "texto": "Clicou, imprimiu: a lembrança sai na hora, pronta para guardar.",
+        "icone": "printer"
+      },
+      {
+        "titulo": "Olhar criativo",
+        "texto": "Escolhe o ângulo, o amigo, o bichinho: cada foto conta uma história.",
+        "icone": "aperture"
+      },
+      {
+        "titulo": "Fofura",
+        "texto": "Orelhinhas e rostinho amigável que dá vontade de levar junto.",
+        "icone": "rabbit"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "A criança mesma registra o próprio dia, do jeito dela.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto escolhe o que fotografar e espera a foto sair, a criança treina sem nem perceber:",
+    "imagem": 0,
+    "chamadas": [
+      "Imprime na hora",
+      "Papel térmico",
+      "Orelhinhas fofas",
+      "Lembranças reais"
+    ],
+    "habilidades": [
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Olhar atento",
+        "icone": "eye"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Contar histórias",
+        "icone": "book-open"
+      },
+      {
+        "texto": "Autonomia",
+        "icone": "star"
+      },
+      {
+        "texto": "Memória afetiva",
+        "icone": "heart"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para a criança",
+    "texto": "Câmera e impressora no mesmo aparelho, com visual colorido e rostinho amigável que encanta logo de cara.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Imprime na hora",
+        "texto": "Foto pronta em instantes",
+        "icone": "printer"
+      },
+      {
+        "titulo": "Papel térmico",
+        "texto": "Rolo incluso para começar",
+        "icone": "layers"
+      },
+      {
+        "titulo": "Design infantil",
+        "texto": "Orelhinhas e rostinho fofo",
+        "icone": "rabbit"
+      },
+      {
+        "titulo": "Tudo em um",
+        "texto": "Câmera e impressora juntas",
+        "icone": "camera"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Câmera comum × Câmera Instantânea",
+    "intro": "As duas tiram foto. Só uma entrega a lembrança na mão da criança.",
+    "rotulos": [
+      "Comum",
+      "Instantânea"
+    ],
+    "linhas": [
+      {
+        "texto": "Tira fotos",
+        "comum": true
+      },
+      {
+        "texto": "Imprime a foto na hora",
+        "comum": false
+      },
+      {
+        "texto": "Já acompanha papel térmico",
+        "comum": false
+      },
+      {
+        "texto": "Visual fofo com orelhinhas",
+        "comum": false
+      },
+      {
+        "texto": "Pensada para mãos pequenas",
+        "comum": false
+      },
+      {
+        "texto": "Vira lembrança para colar e guardar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinha de pais e filhos",
+    "texto": "No passeio, na festa ou no quintal: a criança registra o dia e a família ganha fotinhos de verdade para guardar.",
+    "imagem": 0,
+    "citacao": "Cada clique vira uma lembrança de papel, pronta para ir para a geladeira ou para o álbum da família."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Câmera e papel juntos para a criança começar a registrar o mundo dela.",
+    "itens": [
+      {
+        "id": 519,
+        "nome": "Kit Fotógrafo Mirim",
+        "itens": "Câmera Instantânea + papel térmico",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Câmera",
+            "icone": "camera"
+          },
+          {
+            "texto": "Papel térmico",
+            "icone": "layers"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeiro clique",
+      "texto": "Chegou! A primeira foto já sai na hora.",
+      "icone": "camera"
+    },
+    {
+      "titulo": "Álbum de memórias",
+      "texto": "Fotinhos de verdade para guardar e colar.",
+      "icone": "image"
+    }
+  ],
+  "garantia": [
+    "Registrando o dia",
+    "Criando com as fotos",
+    "Colecionando lembranças",
+    "Mostrando o próprio olhar"
+  ],
+  "duvidas": [
+    [
+      "Como funciona a impressão?",
+      "A criança tira a foto e a câmera imprime na hora, de forma prática."
+    ],
+    [
+      "O que vem na compra?",
+      "1 câmera infantil de impressão instantânea e rolo de papel térmico para impressão."
+    ],
+    [
+      "Como é o visual?",
+      "Design infantil e colorido, com orelhas decorativas e rostinho amigável."
+    ],
+    [
+      "É uma boa opção de presente?",
+      "Sim: une câmera e impressora num aparelho fofo, feito para crianças."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que guarda as memórias da infância",
+    "texto": "A criança fotografa, imprime na hora e cria lembranças de verdade para guardar com a família."
+  },
+  "ctas": {
+    "historia": "Quero a minha câmera",
+    "porque": "Quero imprimir na hora",
+    "ensina": "Quero estimular a criatividade",
+    "detalhes": "Quero o meu",
+    "comparativo": "Quero a câmera instantânea",
+    "familia": "Quero guardar memórias",
+    "passos": "Quero o meu",
+    "garantia": "Quero a minha câmera",
+    "final": "Quero presentear agora"
+  }
+}

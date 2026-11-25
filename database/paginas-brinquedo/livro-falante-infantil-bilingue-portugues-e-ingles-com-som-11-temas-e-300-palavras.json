@@ -1,0 +1,246 @@
+{
+  "titulo": "Livro Falante com 300+ Palavras em Português e Inglês",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Bilíngue real",
+      "Português e inglês"
+    ],
+    [
+      "300+ palavras",
+      "Vocabulário que cresce"
+    ],
+    [
+      "Toque e ouça",
+      "Áudio interativo"
+    ],
+    [
+      "Zero telas",
+      "Diversão de verdade"
+    ]
+  ],
+  "letreiro": [
+    "Aprende português e inglês brincando",
+    "Mais de 300 palavras interativas",
+    "11 temas educativos para explorar",
+    "O presente que tira a criança do celular",
+    "Horas de brincadeira de verdade",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Menos tela, mais descobertas",
+    "subtitulo": "O mundo na ponta dos dedos",
+    "texto": "Trocar o celular por um livro que fala ajuda a criança a focar no que importa. Menos tela antes de dormir ajuda no sono e ainda dá um descanso para os olhos.",
+    "imagem": 7
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 1,
+    "chamadas": [
+      "Aprende ouvindo",
+      "11 temas divertidos"
+    ],
+    "cards": [
+      {
+        "titulo": "Voz de verdade",
+        "texto": "A criança toca no botão e ouve a palavra nos dois idiomas.",
+        "icone": "volume-2"
+      },
+      {
+        "titulo": "Cores vibrantes",
+        "texto": "Desenhos que prendem a atenção e despertam a curiosidade natural.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Fácil de levar",
+        "texto": "Com alça lateral para carregar a diversão para qualquer lugar.",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "A criança descobre palavras novas sozinha, sem precisar de tela.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que desenvolve de verdade",
+    "texto": "Enquanto explora as páginas, seu pequeno treina habilidades valiosas para a vida toda:",
+    "imagem": 9,
+    "chamadas": [
+      "Foco e atenção",
+      "Novo vocabulário",
+      "Coordenação motora",
+      "Associação visual"
+    ],
+    "habilidades": [
+      {
+        "texto": "Linguagem bilíngue",
+        "icone": "languages"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Percepção sonora",
+        "icone": "ear"
+      },
+      {
+        "texto": "Memória visual",
+        "icone": "eye"
+      },
+      {
+        "texto": "Concentração",
+        "icone": "target"
+      },
+      {
+        "texto": "Curiosidade",
+        "icone": "lightbulb"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para mãos pequenas",
+    "texto": "Um livro colorido, com áudio integrado e alça para acompanhar a criança pela casa.",
+    "imagem": 2,
+    "cards": [
+      {
+        "titulo": "Tamanho ideal",
+        "texto": "Com 25 por 25 cm, é fácil de manusear e folhear.",
+        "icone": "move-3d"
+      },
+      {
+        "titulo": "Alça ergonômica",
+        "texto": "Praticidade para a criança segurar e levar sozinha.",
+        "icone": "grab"
+      },
+      {
+        "titulo": "Páginas resistentes",
+        "texto": "Fáceis de virar e manusear para os pequenos.",
+        "icone": "layers"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Dá um descanso para os olhos com diversão real.",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Livro comum × Livro Falante",
+    "intro": "Os dois têm figuras. Só um ensina a falar nos dois idiomas.",
+    "rotulos": [
+      "Comum",
+      "Falante"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem figuras coloridas",
+        "comum": true
+      },
+      {
+        "texto": "Fala a palavra em voz alta",
+        "comum": false
+      },
+      {
+        "texto": "Áudio integrado no livro",
+        "comum": false
+      },
+      {
+        "texto": "Mais de 300 palavras interativas",
+        "comum": false
+      },
+      {
+        "texto": "Alça lateral para transporte",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção sem usar telas",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos que viram grandes lembranças",
+    "texto": "O Livro Falante é o convite perfeito para sentar no chão e aprender junto. É tempo de qualidade, risadas e muitas palavras novas em família.",
+    "imagem": 4,
+    "citacao": "Cada palavra nova vira festa: menos tela e mais conversa entre pais e filhos."
+  },
+  "kits": {
+    "titulo": "Escolha o kit da diversão",
+    "texto": "O livro que transforma o aprendizado em uma grande aventura bilíngue.",
+    "itens": [
+      {
+        "id": 213,
+        "nome": "Kit Diversão Bilíngue",
+        "itens": "1 Livro Falante Bilíngue Amarelo",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Livro Falante",
+            "icone": "book-open"
+          },
+          {
+            "texto": "11 Temas",
+            "icone": "list-checks"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeiro toque",
+      "texto": "A alegria de ouvir a primeira palavra em inglês.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Brincar de verdade",
+      "texto": "Horas de aprendizado bilíngue, longe do celular.",
+      "icone": "smile-plus"
+    }
+  ],
+  "garantia": [
+    "Aprendendo inglês",
+    "Longe do celular",
+    "Brincando muito",
+    "Falando tudo"
+  ],
+  "duvidas": [
+    [
+      "Quais idiomas o livro possui?",
+      "O livro possui áudio integrado em Português e Inglês para a criança aprender por associação."
+    ],
+    [
+      "Quantas palavras ele ensina?",
+      "São mais de 300 palavras divididas em 11 temas educativos diferentes para explorar."
+    ],
+    [
+      "O produto precisa de pilhas?",
+      "Sim, para o funcionamento do áudio é necessário o uso de 3 pilhas AAA."
+    ],
+    [
+      "Qual é o tamanho do livro?",
+      "O livro possui dimensões aproximadas de 25 por 25 cm e pesa cerca de 300 g."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Peça o seu e proporcione horas de brincadeira de verdade, com aprendizado bilíngue e muita conexão em família."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero trocar a tela pelo livro"
+  }
+}

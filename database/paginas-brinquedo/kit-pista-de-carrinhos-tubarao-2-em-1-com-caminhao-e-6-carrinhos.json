@@ -1,0 +1,246 @@
+{
+  "titulo": "Caminhão Tubarão que Vira Pista de 165 cm e Lança Carrinhos",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Vira pista",
+      "165 cm de aventura"
+    ],
+    [
+      "Lança carrinhos",
+      "botão de ação"
+    ],
+    [
+      "Vem com 6",
+      "carrinhos coloridos"
+    ],
+    [
+      "Zero telas",
+      "diversão real"
+    ]
+  ],
+  "letreiro": [
+    "Caminhão que vira pista de 165 cm",
+    "Lançador para corridas emocionantes",
+    "Acompanha 6 carrinhos coloridos",
+    "Brincadeira longe do celular e TV",
+    "Estimula a coordenação e imaginação",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão que acelera",
+    "subtitulo": "De caminhão a pista em segundos",
+    "texto": "O caminhão abre e vira uma pista gigante de 165 cm para lançar os carrinhos. É o presente que tira a criança do celular para viver aventuras de verdade, estimulando o foco e a coordenação motora.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Pista de 165 cm",
+      "Botão lançador"
+    ],
+    "cards": [
+      {
+        "titulo": "Ação e velocidade",
+        "texto": "Aperte o botão e veja os carrinhos acelerarem pela pista reta.",
+        "icone": "flame"
+      },
+      {
+        "titulo": "Imaginação",
+        "texto": "Crie histórias de resgate e corridas com o caminhão tubarão.",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Abrir a pista e lançar os carros treina os movimentos das mãos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Fácil de guardar",
+        "texto": "É dobrável e ocupa menos espaço, com os carrinhos no caminhão.",
+        "icone": "box"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Longe das telas, a criança desenvolve habilidades essenciais enquanto se diverte com o kit:",
+    "imagem": 1,
+    "chamadas": [
+      "Vira pista",
+      "6 carrinhos",
+      "165 cm",
+      "2 em 1"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "brain"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Brincar junto",
+        "icone": "users"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para a aventura",
+    "texto": "Um brinquedo 2 em 1 que acompanha o ritmo da imaginação dos pequenos motoristas.",
+    "imagem": 2,
+    "cards": [
+      {
+        "titulo": "Pista gigante",
+        "texto": "Abertura total de 165 cm",
+        "icone": "ruler"
+      },
+      {
+        "titulo": "Kit completo",
+        "texto": "Vem com 6 carrinhos",
+        "icone": "car-front"
+      },
+      {
+        "titulo": "2 em 1",
+        "texto": "Transportador e pista",
+        "icone": "truck"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Ação de verdade",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Pista Tubarão",
+    "intro": "Carrinhos sozinhos são legais. Com uma pista lançadora de 165 cm, a diversão dobra.",
+    "rotulos": [
+      "Comum",
+      "Tubarão"
+    ],
+    "linhas": [
+      {
+        "texto": "Carrinhos para brincar",
+        "comum": true
+      },
+      {
+        "texto": "Caminhão vira pista de 165 cm",
+        "comum": false
+      },
+      {
+        "texto": "Botão lançador de velocidade",
+        "comum": false
+      },
+      {
+        "texto": "Leva os carrinhos no caminhão",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a coordenação motora",
+        "comum": false
+      },
+      {
+        "texto": "Brincadeira ativa sem telas",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Horas de brincadeira de verdade",
+    "texto": "O caminhão tubarão é o convite perfeito para sentar no chão e brincar em família. Menos tempo de tela antes de dormir ajuda no sono e cria memórias felizes.",
+    "imagem": 4,
+    "citacao": "Diversão que une a família e desperta sorrisos reais longe do celular."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O caminhão e os 6 carrinhos juntos, prontos para a primeira corrida.",
+    "itens": [
+      {
+        "id": 175,
+        "nome": "Kit Diversão Tubarão",
+        "itens": "1 Caminhão Pista + 6 Carrinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão Pista",
+            "icone": "truck"
+          },
+          {
+            "texto": "6 Carrinhos",
+            "icone": "car-front"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Abra a pista",
+      "texto": "Desdobre o caminhão e monte a pista de 165 cm.",
+      "icone": "move"
+    },
+    {
+      "titulo": "Hora da corrida",
+      "texto": "Aperte o botão e veja os carros voarem.",
+      "icone": "flame"
+    }
+  ],
+  "garantia": [
+    "Brincando muito",
+    "Longe do celular",
+    "Criando histórias",
+    "Acelerando a pista"
+  ],
+  "duvidas": [
+    [
+      "O que vem no kit?",
+      "Acompanha 1 Caminhão Pista Tubarão e 6 carrinhos com cores sortidas conforme o estoque."
+    ],
+    [
+      "Qual o tamanho da pista?",
+      "Quando totalmente aberta, a pista atinge 165 cm de comprimento para lançar os carrinhos."
+    ],
+    [
+      "Como funciona o lançador?",
+      "Basta colocar o carrinho na pista e apertar o botão lançador para ele acelerar pela pista reta."
+    ],
+    [
+      "É fácil de guardar?",
+      "Sim, o caminhão é dobrável, ocupa menos espaço e serve de transportador para levar os carrinhos."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Peça o seu e garanta horas de brincadeira de verdade, corridas emocionantes e muita imaginação em família."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero a pista tubarão"
+  }
+}

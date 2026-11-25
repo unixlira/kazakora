@@ -1,0 +1,298 @@
+{
+  "titulo": "Seu Filho Aprende Português e Inglês Só Tocando nas Figuras",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Fala 2 idiomas",
+      "português e inglês"
+    ],
+    [
+      "Toque e ouça",
+      "resposta na hora"
+    ],
+    [
+      "300+ palavras",
+      "em 11 temas"
+    ],
+    [
+      "Zero telas",
+      "aprende brincando"
+    ]
+  ],
+  "letreiro": [
+    "Ouve e fala em português e inglês",
+    "Mais de 300 palavras em 11 temas",
+    "Pronúncia certa na ponta do dedo",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão sem telas",
+    "subtitulo": "Ouve, desenha e monta, tudo longe da tela",
+    "texto": "No livro, toca na figura e ouve a palavra em português e inglês. Na lousa, desenha com luz. No quebra-cabeça, monta cenas com ímãs. Brincadeira de verdade, longe do celular e da TV, com mais descanso para os olhos e uma hora de dormir mais tranquila.",
+    "imagem": 4,
+    "capa": "products/620/video/kit-3-produtos-real-com-som-v3-poster.webp"
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 3,
+    "chamadas": [
+      "Fala 2 idiomas",
+      "300+ palavras"
+    ],
+    "cards": [
+      {
+        "titulo": "Aprende brincando",
+        "texto": "Cada toque no livro é uma palavra nova, em português e em inglês.",
+        "icone": "book-open"
+      },
+      {
+        "titulo": "Pronúncia certa",
+        "texto": "Ouve a palavra do jeito certo e repete em voz alta.",
+        "icone": "ear"
+      },
+      {
+        "titulo": "Atenção",
+        "texto": "Figuras coloridas e som prendem a atenção por mais tempo.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "Brinca sozinha por mais tempo, sem precisar de tela.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto aperta e escuta, a criança treina sem nem perceber:",
+    "imagem": 5,
+    "chamadas": [
+      "Português e Inglês",
+      "Toque e ouça",
+      "11 temas",
+      "300+ palavras"
+    ],
+    "habilidades": [
+      {
+        "texto": "Português e inglês",
+        "icone": "languages"
+      },
+      {
+        "texto": "Pronúncia",
+        "icone": "ear"
+      },
+      {
+        "texto": "Vocabulário",
+        "icone": "book-open"
+      },
+      {
+        "texto": "Memória",
+        "icone": "brain"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Livro pensado para mãos pequenas",
+    "texto": "Figuras grandes, toque simples e alça para carregar: a criança usa sozinha, em qualquer canto da casa.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Fala 2 idiomas",
+        "texto": "português e inglês",
+        "icone": "languages"
+      },
+      {
+        "titulo": "Toque e ouça",
+        "texto": "a resposta vem na hora",
+        "icone": "pointer"
+      },
+      {
+        "titulo": "11 temas",
+        "texto": "300+ palavras",
+        "icone": "book-open"
+      },
+      {
+        "titulo": "Alça para levar",
+        "texto": "brinca em qualquer lugar",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Livro comum × Livro Falante",
+    "intro": "Os dois têm figuras. Só um fala com a criança.",
+    "rotulos": [
+      "Comum",
+      "Falante"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem figuras coloridas",
+        "comum": true
+      },
+      {
+        "texto": "Fala a palavra em voz alta",
+        "comum": false
+      },
+      {
+        "texto": "Português e inglês no mesmo livro",
+        "comum": false
+      },
+      {
+        "texto": "Ensina a pronúncia certa",
+        "comum": false
+      },
+      {
+        "texto": "300+ palavras em 11 temas",
+        "comum": false
+      },
+      {
+        "texto": "A criança brinca sozinha",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção por mais tempo",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "O livro que a criança pega sozinha para ouvir, repetir e mostrar para a família cada palavra nova.",
+    "imagem": 4,
+    "citacao": "Menos tela, mais conversa: a família toda aprendendo inglês junto, no chão da sala."
+  },
+  "kits": {
+    "titulo": "Quer o dia inteiro sem tela? Monte o kit",
+    "texto": "Comece pelo livro e, se quiser, junte mais brincadeiras:",
+    "itens": [
+      {
+        "id": 620,
+        "nome": "Livro Falante",
+        "itens": "Livro Falante Bilíngue",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Livro Falante",
+            "icone": "book-open"
+          }
+        ],
+        "acrescenta": "Aprende português e inglês tocando"
+      },
+      {
+        "id": 621,
+        "nome": "Livro + Quebra-Cabeça",
+        "itens": "Livro + Quebra-Cabeça Magnético",
+        "unidades": 2,
+        "partes": [
+          {
+            "texto": "Livro",
+            "icone": "book-open"
+          },
+          {
+            "texto": "Quebra-Cabeça",
+            "icone": "puzzle"
+          }
+        ],
+        "acrescenta": "+ monta cenas com peças de ímã"
+      },
+      {
+        "id": 622,
+        "nome": "Kit Sem Telas",
+        "itens": "Livro + Lousa + Quebra-Cabeça",
+        "unidades": 3,
+        "partes": [
+          {
+            "texto": "Livro",
+            "icone": "book-open"
+          },
+          {
+            "texto": "Lousa",
+            "icone": "palette"
+          },
+          {
+            "texto": "Quebra-Cabeça",
+            "icone": "puzzle"
+          }
+        ],
+        "acrescenta": "+ desenha com luz na lousa de LED"
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha",
+      "texto": "Só o livro ou o kit com mais brincadeiras.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! Primeiro toque, primeira palavra.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Aprender brincando",
+      "texto": "Português e inglês todo dia, longe das telas.",
+      "icone": "blocks"
+    }
+  ],
+  "garantia": [
+    "Falando palavras novas",
+    "Mais longe das telas",
+    "Brincando e aprendendo",
+    "Arriscando o inglês"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicado?",
+      "O livro é pensado para a fase das primeiras palavras. No kit completo, o quebra-cabeça magnético é a partir de 3 anos. Brinque sempre com um adulto por perto."
+    ],
+    [
+      "Precisa de pilha?",
+      "O livro usa 3 pilhas AAA. No kit, a lousa LED liga pelo cabo USB que vem junto e o quebra-cabeça não usa energia."
+    ],
+    [
+      "Fala mesmo em português e em inglês?",
+      "Sim. A criança toca na figura e ouve a palavra nos dois idiomas: são 11 temas e mais de 300 palavras."
+    ],
+    [
+      "O que vem em cada opção?",
+      "Livro Falante: só o livro. Livro + Quebra-Cabeça: o livro e o Quebra-Cabeça Magnético (modelo sortido). Kit Sem Telas: livro, quebra-cabeça e a Lousa Mágica LED."
+    ]
+  ],
+  "final": {
+    "titulo": "O livro que tira a criança do celular",
+    "texto": "Palavras novas todo dia, em português e inglês, e a família mais perto."
+  },
+  "ctas": {
+    "historia": "Quero o meu livro",
+    "comparativo": "Quero trocar a tela pelo livro"
+  },
+  "avaliacoes_de": [
+    {
+      "slug": "livro-falante-infantil-bilingue-portugues-e-ingles-com-som-11-temas-e-300-palavras",
+      "rotulo": "Livro Falante",
+      "texto": {
+        "lousa": "Lousa Mágica"
+      }
+    },
+    {
+      "slug": "quebra-cabeca-magnetico-montessori-3d-de-rostos-educativo-para-criancas",
+      "rotulo": "Quebra-Cabeça"
+    }
+  ]
+}

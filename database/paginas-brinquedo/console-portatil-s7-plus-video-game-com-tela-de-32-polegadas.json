@@ -1,0 +1,237 @@
+{
+  "titulo": "Console Portátil S7 Plus com Tela Colorida de 3.2 Polegadas",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Tela Colorida",
+      "3.2 polegadas"
+    ],
+    [
+      "Design Ergonômico",
+      "conforto e firmeza"
+    ],
+    [
+      "Sempre com Você",
+      "formato portátil"
+    ],
+    [
+      "Controles laterais",
+      "pegada firme"
+    ]
+  ],
+  "letreiro": [
+    "Tela colorida de 3.2 polegadas",
+    "Design ergonômico para as mãos",
+    "Controles integrados nas laterais",
+    "Diversão em qualquer lugar",
+    "Leve e prático para viagens",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O presente para jogar junto",
+    "subtitulo": "Diversão clássica na palma da mão",
+    "texto": "O console S7 Plus leva a diversão dos games para a palma da mão, num formato portátil e confortável. Ideal para momentos de lazer, com sorrisos e partidas divididas com a família.",
+    "imagem": 5
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 1,
+    "chamadas": [
+      "Tela de 3.2 polegadas",
+      "Design ergonômico"
+    ],
+    "cards": [
+      {
+        "titulo": "Visual Incrível",
+        "texto": "Tela colorida que dá vida aos personagens e aventuras.",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Conforto Total",
+        "texto": "Design ergonômico para jogar com conforto e firmeza.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Leve a Diversão",
+        "texto": "Tamanho portátil que cabe na mochila para qualquer passeio.",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Fácil de Usar",
+        "texto": "Controles integrados e intuitivos para a criança jogar sozinha.",
+        "icone": "gamepad-2"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Habilidades em cada partida",
+    "texto": "Mais do que diversão, cada partida exercita capacidades importantes de forma leve e envolvente:",
+    "imagem": 8,
+    "chamadas": [
+      "Foco e Atenção",
+      "Coordenação Motora",
+      "Raciocínio Rápido"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio rápido",
+        "icone": "brain"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção espacial",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Persistência",
+        "icone": "award"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para o jogador",
+    "texto": "Um console colorido e portátil, pronto para acompanhar o ritmo e a energia da criançada.",
+    "imagem": 6,
+    "cards": [
+      {
+        "titulo": "Tela Colorida",
+        "texto": "3.2 polegadas de brilho",
+        "icone": "aperture"
+      },
+      {
+        "titulo": "Pegada Firme",
+        "texto": "Controles nas laterais",
+        "icone": "grab"
+      },
+      {
+        "titulo": "Leve e prático",
+        "texto": "Sempre com você",
+        "icone": "package"
+      },
+      {
+        "titulo": "Jogue onde quiser",
+        "texto": "Formato portátil",
+        "icone": "map-pin"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Jogo no Celular × Console S7 Plus",
+    "intro": "Um é multitarefa. O outro é pura diversão gamer.",
+    "rotulos": [
+      "Celular",
+      "S7 Plus"
+    ],
+    "linhas": [
+      {
+        "texto": "Tela colorida e brilhante",
+        "comum": true
+      },
+      {
+        "texto": "Botões físicos para jogar",
+        "comum": false
+      },
+      {
+        "texto": "Formato ergonômico para as mãos",
+        "comum": false
+      },
+      {
+        "texto": "Sem notificações atrapalhando",
+        "comum": false
+      },
+      {
+        "texto": "Mais firmeza ao segurar",
+        "comum": false
+      },
+      {
+        "texto": "Experiência de console real",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos de alegria compartilhada",
+    "texto": "Passar o console de mão em mão, torcer a cada fase e rir junto: a diversão dos games vira momento compartilhado em família.",
+    "imagem": 9,
+    "citacao": "Brincar junto fortalece os laços e transforma qualquer tarde em uma grande aventura gamer."
+  },
+  "kits": {
+    "titulo": "Escolha o seu console",
+    "texto": "Selecione o kit ideal para começar a diversão portátil agora mesmo.",
+    "itens": [
+      {
+        "id": 263,
+        "nome": "Kit Diversão Portátil",
+        "itens": "1 Console Portátil S7 Plus",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Console S7 Plus",
+            "icone": "gamepad-2"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Abra e jogue",
+      "texto": "Chegou! Hora da primeira partida.",
+      "icone": "party-popper"
+    },
+    {
+      "titulo": "Diversão de verdade",
+      "texto": "Horas de entretenimento em qualquer lugar.",
+      "icone": "smile-plus"
+    }
+  ],
+  "garantia": [
+    "Jogando com alegria",
+    "Focado na diversão",
+    "Explorando mundos",
+    "Sorrindo a cada fase"
+  ],
+  "duvidas": [
+    [
+      "Qual o tamanho da tela?",
+      "O console possui uma tela colorida de 3.2 polegadas para uma ótima experiência visual."
+    ],
+    [
+      "O design é confortável?",
+      "Sim, ele possui design ergonômico com controles integrados nas laterais para maior firmeza."
+    ],
+    [
+      "Ele é fácil de transportar?",
+      "Sim! O formato portátil é leve e prático para levar em viagens e jogar onde quiser."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que desperta sorrisos",
+    "texto": "Diversão portátil, partidas em família e muitos sorrisos com o console que cabe na palma da mão."
+  },
+  "ctas": {
+    "historia": "Quero este console",
+    "comparativo": "Quero diversão de verdade"
+  }
+}

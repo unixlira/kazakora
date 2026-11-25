@@ -56,23 +56,23 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
         class="aviso-cookies relative isolate z-[60] overflow-hidden border-b border-white/10 bg-[#0b0b0b] text-white [color-scheme:light]">
         <span aria-hidden="true" class="pointer-events-none absolute -left-12 -top-16 -z-10 h-40 w-44 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
         <span aria-hidden="true" class="pointer-events-none absolute -bottom-20 right-10 -z-10 h-40 w-48 rounded-full bg-[#f27a2a] opacity-50 blur-2xl"></span>
-        <div class="mx-auto flex max-w-7xl items-center gap-3 py-2 pl-4 pr-2 sm:gap-4 sm:pl-6">
-            <i class="fa-solid fa-cookie-bite shrink-0 text-[16px] text-[#f6c343]" aria-hidden="true"></i>
-            <p class="min-w-0 flex-1 text-[12.5px] leading-snug sm:text-[13.5px]">
-                Usamos cookies<span class="hidden sm:inline"> para melhorar sua experiência</span>.
-                <span class="whitespace-nowrap">
-                    <Link href="/politica-de-cookies" class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343]">Saiba mais</Link>
-                    <span class="mx-1 text-white/40" aria-hidden="true">·</span>
-                    <button type="button" :disabled="enviando"
-                        class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343] disabled:opacity-60"
-                        @click="soNecessarios">Só os necessários</button>
-                </span>
+        <!-- Celular (25/11/2026): uma linha só, baixinha; "Usamos cookies" vira o link da política. -->
+        <div class="mx-auto flex max-w-7xl items-center gap-2 py-1 pl-3 pr-1.5 sm:gap-4 sm:py-2 sm:pl-6 sm:pr-2">
+            <i class="fa-solid fa-cookie-bite hidden shrink-0 text-[16px] text-[#f6c343] sm:inline" aria-hidden="true"></i>
+            <p class="min-w-0 flex-1 truncate text-[12px] leading-tight sm:whitespace-normal sm:text-[13.5px] sm:leading-snug">
+                <Link href="/politica-de-cookies" class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343] sm:hidden">Usamos cookies</Link>
+                <span class="hidden sm:inline">Usamos cookies para melhorar sua experiência.
+                    <Link href="/politica-de-cookies" class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343]">Saiba mais</Link></span>
+                <span class="mx-1 text-white/40" aria-hidden="true">·</span>
+                <button type="button" :disabled="enviando"
+                    class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343] disabled:opacity-60"
+                    @click="soNecessarios">Só os necessários</button>
             </p>
             <button type="button" :disabled="enviando" aria-label="Aceitar os cookies e fechar"
-                class="botao pulsa inline-flex shrink-0 items-center gap-2 rounded-full bg-[#FD7B41] py-1.5 pl-4 pr-1.5 text-[14px] font-extrabold text-[#1F2225] shadow-[0_0_0_3px_rgba(253,123,65,0.25)] hover:bg-[#ff8d58] disabled:opacity-60 sm:text-[15px]"
+                class="botao pulsa inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FD7B41] py-1 pl-3 pr-1 text-[13px] font-extrabold text-[#1F2225] shadow-[0_0_0_3px_rgba(253,123,65,0.25)] hover:bg-[#ff8d58] disabled:opacity-60 sm:gap-2 sm:py-1.5 sm:pl-4 sm:pr-1.5 sm:text-[15px]"
                 @click="aceitar">
                 Aceitar
-                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-[#1F2225] text-[#FD7B41]" aria-hidden="true"><i class="fa-solid fa-xmark text-[13px]"></i></span>
+                <span class="flex h-5 w-5 items-center justify-center rounded-full bg-[#1F2225] text-[#FD7B41] sm:h-6 sm:w-6" aria-hidden="true"><i class="fa-solid fa-xmark text-[11px] sm:text-[13px]"></i></span>
             </button>
         </div>
     </div>

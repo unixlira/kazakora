@@ -1,36 +1,35 @@
 {
-  "titulo": "Ele Ouve, Desenha e Monta Sem Parar — e Nem Lembra da Tela",
+  "titulo": "Seu Filho Aprende Português e Inglês Só Tocando nas Figuras",
   "sem_telas": true,
   "chips": [
     [
       "Fala 2 idiomas",
-      "toque e ouça"
+      "português e inglês"
     ],
     [
-      "Desenha e apaga",
-      "lousa de LED"
+      "Toque e ouça",
+      "resposta na hora"
     ],
     [
-      "Monta com ímãs",
-      "quebra-cabeça"
+      "300+ palavras",
+      "em 11 temas"
     ],
     [
       "Zero telas",
-      "3 brincadeiras"
+      "aprende brincando"
     ]
   ],
   "letreiro": [
     "Ouve e fala em português e inglês",
-    "Desenha com luz na lousa LED",
-    "Monta cenas com peças de ímã",
-    "Mais de 300 palavras",
+    "Mais de 300 palavras em 11 temas",
+    "Pronúncia certa na ponta do dedo",
     "Brincadeira longe do celular",
     "Garantia de 30 dias"
   ],
   "historia": {
     "titulo": "Diversão sem telas",
     "subtitulo": "Português e inglês na ponta do dedo",
-    "texto": "Ouvir e falar no livro, desenhar na lousa, montar o quebra-cabeça: brincadeira de verdade, longe do celular e da TV. Menos tela também é mais descanso para os olhos e uma hora de dormir mais tranquila.",
+    "texto": "Toca na figura, ouve a palavra e repete em voz alta: brincadeira de verdade, longe do celular e da TV. Menos tela também é mais descanso para os olhos e uma hora de dormir mais tranquila.",
     "imagem": 4,
     "capa": "products/620/video/kit-livro-falante-diversao-sem-telas-9x16-poster.webp"
   },
@@ -48,14 +47,14 @@
         "icone": "book-open"
       },
       {
-        "titulo": "Criatividade",
-        "texto": "Desenha na lousa de LED, apaga e começa outra vez.",
-        "icone": "palette"
+        "titulo": "Pronúncia certa",
+        "texto": "Ouve a palavra do jeito certo e repete em voz alta.",
+        "icone": "ear"
       },
       {
-        "titulo": "Raciocínio",
-        "texto": "Monta os rostos do quebra-cabeça copiando os cartões.",
-        "icone": "puzzle"
+        "titulo": "Atenção",
+        "texto": "Figuras coloridas e som prendem a atenção por mais tempo.",
+        "icone": "target"
       },
       {
         "titulo": "Autonomia",
@@ -67,11 +66,11 @@
   "ensina": {
     "titulo": "Brincadeira que também ensina",
     "texto": "Enquanto aperta e escuta, a criança treina sem nem perceber:",
-    "imagem": 14,
+    "imagem": 5,
     "chamadas": [
       "Português e Inglês",
-      "Desenha com luz",
-      "Peças com ímã",
+      "Toque e ouça",
+      "11 temas",
       "300+ palavras"
     ],
     "habilidades": [
@@ -84,16 +83,16 @@
         "icone": "ear"
       },
       {
-        "texto": "Criatividade",
-        "icone": "palette"
+        "texto": "Vocabulário",
+        "icone": "book-open"
+      },
+      {
+        "texto": "Memória",
+        "icone": "brain"
       },
       {
         "texto": "Coordenação motora",
         "icone": "hand"
-      },
-      {
-        "texto": "Raciocínio",
-        "icone": "lightbulb"
       },
       {
         "texto": "Atenção e foco",
@@ -102,169 +101,83 @@
     ]
   },
   "detalhes": {
-    "titulo": "Cada brinquedo pensado para a criança",
-    "texto": "Livro que fala, lousa que acende e peças que grudam: feitos para mãos pequenas.",
-    "imagem": 11,
+    "titulo": "Livro pensado para mãos pequenas",
+    "texto": "Figuras grandes, toque simples e alça para carregar: a criança usa sozinha, em qualquer canto da casa.",
+    "imagem": 0,
     "cards": [
       {
-        "titulo": "Ouve e repete",
-        "texto": "300+ palavras em 2 idiomas",
-        "icone": "volume-2"
+        "titulo": "Fala 2 idiomas",
+        "texto": "português e inglês",
+        "icone": "languages"
       },
       {
-        "titulo": "Desenha com luz",
-        "texto": "Apaga num toque",
-        "icone": "lightbulb"
+        "titulo": "Toque e ouça",
+        "texto": "a resposta vem na hora",
+        "icone": "pointer"
       },
       {
-        "titulo": "Monta com ímãs",
-        "texto": "Encaixa com clique",
-        "icone": "magnet"
+        "titulo": "11 temas",
+        "texto": "300+ palavras",
+        "icone": "book-open"
       },
       {
-        "titulo": "Longe das telas",
-        "texto": "Sem celular nem TV",
-        "icone": "heart"
-      }
-    ],
-    "produtos": [
-      {
-        "rotulo": "Livro Falante",
-        "titulo": "Toca na figura e o livro fala",
-        "texto": "Mais de 300 palavras em português e inglês, com a pronúncia certa para a criança ouvir e repetir em voz alta.",
-        "imagem": 5,
-        "cards": [
-          {
-            "titulo": "Fala 2 idiomas",
-            "texto": "português e inglês",
-            "icone": "languages"
-          },
-          {
-            "titulo": "Toque e ouça",
-            "texto": "a resposta vem na hora",
-            "icone": "pointer"
-          },
-          {
-            "titulo": "11 temas",
-            "texto": "300+ palavras",
-            "icone": "book-open"
-          },
-          {
-            "titulo": "Brinca sozinha",
-            "texto": "sem precisar de tela",
-            "icone": "smile"
-          }
-        ]
-      },
-      {
-        "rotulo": "Lousa Mágica LED",
-        "titulo": "Desenha com luz e apaga num toque",
-        "texto": "As canetas neon brilham na lousa de LED: a criança cria, apaga e começa de novo quantas vezes quiser.",
-        "imagem": 7,
-        "cards": [
-          {
-            "titulo": "Desenho que brilha",
-            "texto": "luz de LED",
-            "icone": "lightbulb"
-          },
-          {
-            "titulo": "Apaga fácil",
-            "texto": "é só passar o paninho",
-            "icone": "eraser"
-          },
-          {
-            "titulo": "Fica em pé",
-            "texto": "suporte para a mesa",
-            "icone": "palette"
-          },
-          {
-            "titulo": "Recarrega no cabo",
-            "texto": "cabo USB na caixa",
-            "icone": "usb"
-          }
-        ]
-      },
-      {
-        "rotulo": "Quebra-Cabeça Magnético",
-        "titulo": "Monta cenas com peças de ímã",
-        "texto": "As peças grudam no cenário do trânsito e os cartões de modelo mostram o que montar. A caixa vira tabuleiro e vai junto na viagem.",
-        "imagem": 12,
-        "cards": [
-          {
-            "titulo": "Peças com ímã",
-            "texto": "grudam no cenário",
-            "icone": "magnet"
-          },
-          {
-            "titulo": "Cartões de modelo",
-            "texto": "copie as cenas",
-            "icone": "puzzle"
-          },
-          {
-            "titulo": "Leva na viagem",
-            "texto": "a caixa vira tabuleiro",
-            "icone": "car"
-          },
-          {
-            "titulo": "Raciocínio",
-            "texto": "e coordenação motora",
-            "icone": "brain"
-          }
-        ]
+        "titulo": "Alça para levar",
+        "texto": "brinca em qualquer lugar",
+        "icone": "backpack"
       }
     ]
   },
   "comparativo": {
-    "titulo": "Celular × Kit Sem Telas",
-    "intro": "Os dois prendem a atenção. Só um faz a criança criar com as mãos.",
+    "titulo": "Livro comum × Livro Falante",
+    "intro": "Os dois têm figuras. Só um fala com a criança.",
     "rotulos": [
-      "Celular",
-      "Kit Sem Telas"
+      "Comum",
+      "Falante"
     ],
     "linhas": [
       {
-        "texto": "Prende a atenção da criança",
+        "texto": "Tem figuras coloridas",
         "comum": true
       },
       {
-        "texto": "Ouve e repete palavras em 2 idiomas, sem tela",
+        "texto": "Fala a palavra em voz alta",
         "comum": false
       },
       {
-        "texto": "Desenha com luz e apaga num toque",
+        "texto": "Português e inglês no mesmo livro",
         "comum": false
       },
       {
-        "texto": "Monta cenas com peças de ímã",
+        "texto": "Ensina a pronúncia certa",
         "comum": false
       },
       {
-        "texto": "Treina as mãos e a coordenação",
+        "texto": "300+ palavras em 11 temas",
         "comum": false
       },
       {
-        "texto": "Descansa os olhos da luz da tela",
+        "texto": "A criança brinca sozinha",
         "comum": false
       },
       {
-        "texto": "Brinca junto na mesa com a família",
+        "texto": "Prende a atenção por mais tempo",
         "comum": false
       }
     ]
   },
   "familia": {
     "titulo": "Queridinho de pais e filhos",
-    "texto": "Livro, lousa e quebra-cabeça juntos: três jeitos de brincar para a criança trocar a tela pela diversão, com a família por perto.",
-    "imagem": 6,
+    "texto": "O livro que a criança pega sozinha para ouvir, repetir e mostrar para a família cada palavra nova.",
+    "imagem": 4,
     "citacao": "Menos tela, mais conversa: a família toda aprendendo inglês junto, no chão da sala."
   },
   "kits": {
-    "titulo": "Escolha o kit da diversão",
-    "texto": "Quanto mais brinquedos no kit, mais jeitos de brincar longe das telas.",
+    "titulo": "Quer o dia inteiro sem tela? Monte o kit",
+    "texto": "Comece pelo livro e, se quiser, junte mais brincadeiras:",
     "itens": [
       {
         "id": 620,
-        "nome": "Kit Primeiras Palavras",
+        "nome": "Livro Falante",
         "itens": "Livro Falante Bilíngue",
         "unidades": 1,
         "partes": [
@@ -272,11 +185,12 @@
             "texto": "Livro Falante",
             "icone": "book-open"
           }
-        ]
+        ],
+        "acrescenta": "Aprende português e inglês tocando"
       },
       {
         "id": 621,
-        "nome": "Kit Aprende Brincando",
+        "nome": "Livro + Lousa",
         "itens": "Livro + Lousa Mágica LED",
         "unidades": 2,
         "partes": [
@@ -288,7 +202,8 @@
             "texto": "Lousa LED",
             "icone": "palette"
           }
-        ]
+        ],
+        "acrescenta": "+ desenha com luz e apaga num toque"
       },
       {
         "id": 622,
@@ -308,14 +223,15 @@
             "texto": "Quebra-Cabeça",
             "icone": "puzzle"
           }
-        ]
+        ],
+        "acrescenta": "+ monta cenas com peças de ímã"
       }
     ]
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Só o livro ou com mais brinquedos: você decide.",
+      "titulo": "Escolha",
+      "texto": "Só o livro ou o kit com mais brincadeiras.",
       "icone": "gift"
     },
     {
@@ -343,32 +259,28 @@
   "duvidas": [
     [
       "Para qual idade é indicado?",
-      "O quebra-cabeça magnético é indicado a partir de 3 anos, e o kit todo é pensado para a fase das primeiras palavras. Brinque sempre com um adulto por perto."
+      "O livro é pensado para a fase das primeiras palavras. No kit completo, o quebra-cabeça magnético é a partir de 3 anos. Brinque sempre com um adulto por perto."
     ],
     [
-      "Precisa de pilha ou de carregar?",
-      "O livro usa 3 pilhas AAA. A lousa LED liga pelo cabo USB que vem junto, e o quebra-cabeça não usa energia."
+      "Precisa de pilha?",
+      "O livro usa 3 pilhas AAA. No kit, a lousa LED liga pelo cabo USB que vem junto e o quebra-cabeça não usa energia."
     ],
     [
       "Fala mesmo em português e em inglês?",
       "Sim. A criança toca na figura e ouve a palavra nos dois idiomas: são 11 temas e mais de 300 palavras."
     ],
     [
-      "É seguro para os pequenos?",
-      "O quebra-cabeça tem peças pequenas com ímã, por isso é para maiores de 3 anos e com um adulto acompanhando."
-    ],
-    [
-      "O que vem em cada kit?",
-      "Primeiras Palavras: o Livro Falante. Aprende Brincando: livro + Lousa Mágica LED. Sem Telas: livro + lousa + Quebra-Cabeça Magnético (modelo sortido)."
+      "O que vem em cada opção?",
+      "Livro Falante: só o livro. Livro + Lousa: o livro e a Lousa Mágica LED. Kit Sem Telas: livro, lousa e Quebra-Cabeça Magnético (modelo sortido)."
     ]
   ],
   "final": {
-    "titulo": "O presente que tira a criança do celular",
-    "texto": "Horas de brincadeira de verdade, palavras novas todo dia e a família mais perto."
+    "titulo": "O livro que tira a criança do celular",
+    "texto": "Palavras novas todo dia, em português e inglês, e a família mais perto."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
-    "comparativo": "Quero trocar a tela pelo kit"
+    "historia": "Quero o meu livro",
+    "comparativo": "Quero trocar a tela pelo livro"
   },
   "avaliacoes_de": [
     {

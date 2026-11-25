@@ -19,6 +19,7 @@ class DispararAlertaAdminTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(1, AlertaAdmin::query()->where('tipo', 'trafego_meta')->count());
+        Mail::assertSent(\App\Modules\Admin\Mail\AlertaPorEmail::class, fn ($m) => $m->hasTo('lira@exemplo.com') && str_contains($m->render(), 'Desligar M03'));
     }
 
     public function test_tipo_desconhecido_nao_abre_nada(): void

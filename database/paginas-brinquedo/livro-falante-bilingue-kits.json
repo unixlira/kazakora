@@ -126,42 +126,128 @@
         "texto": "Sem celular nem TV",
         "icone": "heart"
       }
+    ],
+    "produtos": [
+      {
+        "rotulo": "Livro Falante",
+        "titulo": "Toca na figura e o livro fala",
+        "texto": "Mais de 300 palavras em português e inglês, com a pronúncia certa para a criança ouvir e repetir em voz alta.",
+        "imagem": 5,
+        "cards": [
+          {
+            "titulo": "Fala 2 idiomas",
+            "texto": "português e inglês",
+            "icone": "languages"
+          },
+          {
+            "titulo": "Toque e ouça",
+            "texto": "a resposta vem na hora",
+            "icone": "pointer"
+          },
+          {
+            "titulo": "11 temas",
+            "texto": "300+ palavras",
+            "icone": "book-open"
+          },
+          {
+            "titulo": "Brinca sozinha",
+            "texto": "sem precisar de tela",
+            "icone": "smile"
+          }
+        ]
+      },
+      {
+        "rotulo": "Lousa Mágica LED",
+        "titulo": "Desenha com luz e apaga num toque",
+        "texto": "As canetas neon brilham na lousa de LED: a criança cria, apaga e começa de novo quantas vezes quiser.",
+        "imagem": 7,
+        "cards": [
+          {
+            "titulo": "Desenho que brilha",
+            "texto": "luz de LED",
+            "icone": "lightbulb"
+          },
+          {
+            "titulo": "Apaga fácil",
+            "texto": "é só passar o paninho",
+            "icone": "eraser"
+          },
+          {
+            "titulo": "Fica em pé",
+            "texto": "suporte para a mesa",
+            "icone": "palette"
+          },
+          {
+            "titulo": "Recarrega no cabo",
+            "texto": "cabo USB na caixa",
+            "icone": "usb"
+          }
+        ]
+      },
+      {
+        "rotulo": "Quebra-Cabeça Magnético",
+        "titulo": "Monta cenas com peças de ímã",
+        "texto": "As peças grudam no cenário do trânsito e os cartões de modelo mostram o que montar. A caixa vira tabuleiro e vai junto na viagem.",
+        "imagem": 12,
+        "cards": [
+          {
+            "titulo": "Peças com ímã",
+            "texto": "grudam no cenário",
+            "icone": "magnet"
+          },
+          {
+            "titulo": "Cartões de modelo",
+            "texto": "copie as cenas",
+            "icone": "puzzle"
+          },
+          {
+            "titulo": "Leva na viagem",
+            "texto": "a caixa vira tabuleiro",
+            "icone": "car"
+          },
+          {
+            "titulo": "Raciocínio",
+            "texto": "e coordenação motora",
+            "icone": "brain"
+          }
+        ]
+      }
     ]
   },
   "comparativo": {
-    "titulo": "Livro comum × Livro Falante",
-    "intro": "Os dois têm figuras. Só um fala com a criança.",
+    "titulo": "Celular × Kit Sem Telas",
+    "intro": "Os dois prendem a atenção. Só um faz a criança criar com as mãos.",
     "rotulos": [
-      "Comum",
-      "Falante"
+      "Celular",
+      "Kit Sem Telas"
     ],
     "linhas": [
       {
-        "texto": "Tem figuras coloridas",
+        "texto": "Prende a atenção da criança",
         "comum": true
       },
       {
-        "texto": "Fala a palavra em voz alta",
+        "texto": "Ouve e repete palavras em 2 idiomas, sem tela",
         "comum": false
       },
       {
-        "texto": "Português e inglês no mesmo livro",
+        "texto": "Desenha com luz e apaga num toque",
         "comum": false
       },
       {
-        "texto": "Ensina a pronúncia certa",
+        "texto": "Monta cenas com peças de ímã",
         "comum": false
       },
       {
-        "texto": "300+ palavras em 11 temas",
+        "texto": "Treina as mãos e a coordenação",
         "comum": false
       },
       {
-        "texto": "A criança brinca sozinha",
+        "texto": "Descansa os olhos da luz da tela",
         "comum": false
       },
       {
-        "texto": "Prende a atenção por mais tempo",
+        "texto": "Brinca junto na mesa com a família",
         "comum": false
       }
     ]
@@ -282,7 +368,7 @@
   },
   "ctas": {
     "historia": "Quero o meu kit",
-    "comparativo": "Quero trocar a tela pelo livro"
+    "comparativo": "Quero trocar a tela pelo kit"
   },
   "avaliacoes_de": [
     {

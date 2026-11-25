@@ -736,14 +736,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
     // Carrinho abandonado (pedido 2026-10-24); botões de WhatsApp desde 2026-11-23.
-    Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
+    // Desde 25/11/2026 a tela é Leads (tela única); a lista antiga (LeadCheckoutController::index) fica no código.
+    Route::get('carrinhos-abandonados', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'deCarrinhos'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.listar');
     // Recuperação de carrinho por WhatsApp pelo painel (pedido do Lira 2026-11-23).
     Route::post('carrinhos-abandonados/whatsapp-todos', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'whatsappTodos'])->middleware(['permission:pedidos.edit', 'throttle:6,1'])->name('carrinhos-abandonados.whatsapp-todos');
     Route::post('carrinhos-abandonados/{lead}/whatsapp', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'whatsapp'])->middleware(['permission:pedidos.edit', 'throttle:30,1'])->whereNumber('lead')->name('carrinhos-abandonados.whatsapp');
     // Passo a passo do checkout de um carrinho (pedido do Lira 2026-11-23): JSON da janela "Ver fluxo".
     Route::get('carrinhos-abandonados/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('carrinhos-abandonados.fluxo');
     // Sequência de carrinho abandonado (pedido 2026-11-21): só leitura, quem manda é o comando.
-    Route::get('carrinhos-abandonados/sequencia', [\App\Modules\Admin\Http\Controllers\CarrinhoSequenciaController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.sequencia');
+    // Desde 25/11/2026 vai para Leads com o chip Em remarketing (CarrinhoSequenciaController fica no código).
+    Route::get('carrinhos-abandonados/sequencia', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'daSequencia'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.sequencia');
     // Newsletter (pedido do Lira 24/11/2026): inscritos, CSV, prévia e teste do resumo do blog só para quem clicou.
     Route::middleware('permission:pedidos.view')->prefix('newsletter')->name('newsletter.')->group(function () {
         Route::get('/', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'index'])->name('listar');
@@ -752,17 +754,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('teste', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'teste'])->middleware('throttle:5,1')->name('teste');
     });
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
-    Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
-    Route::get('leads/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('leads.fluxo');
     // Leads, tela única (plano do Lira 25/11/2026): Leads + Carrinhos abandonados + Sequência numa lista só.
-    // Rota temporária para comparar; as três telas antigas continuam como estão até a troca.
-    Route::prefix('leads-v2')->name('leads-v2.')->group(function () {
-        Route::get('/', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'index'])->middleware('permission:pedidos.view')->name('listar');
-        Route::post('antecipar-todos', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'anteciparTodos'])->middleware(['permission:pedidos.edit', 'throttle:6,1'])->name('antecipar-todos');
-        Route::get('{chave}/remarketing', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'remarketing'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('remarketing');
-        Route::get('{chave}/jornada', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'jornada'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('jornada');
-        Route::post('{chave}/antecipar', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'antecipar'])->middleware(['permission:pedidos.edit', 'throttle:30,1'])->where('chave', '[lcs][0-9]+')->name('antecipar');
-    });
+    // A lista antiga (LeadsController::index) fica no código; o /fluxo antigo continua.
+    Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
+    Route::get('leads/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('leads.fluxo');
+    Route::post('leads/antecipar-todos', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'anteciparTodos'])->middleware(['permission:pedidos.edit', 'throttle:6,1'])->name('leads.antecipar-todos');
+    Route::get('leads/{chave}/remarketing', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'remarketing'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('leads.remarketing');
+    Route::get('leads/{chave}/jornada', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'jornada'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('leads.jornada');
+    Route::post('leads/{chave}/antecipar', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'antecipar'])->middleware(['permission:pedidos.edit', 'throttle:30,1'])->where('chave', '[lcs][0-9]+')->name('leads.antecipar');
+    // Rota de teste da tela única (25/11/2026): vai para /admin/leads com os mesmos filtros.
+    Route::get('leads-v2', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'daV2'])->middleware('permission:pedidos.view')->name('leads-v2.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
     // Clientes dos sites (pedido do Lira 2026-11-16): contas criadas na KazaKora e na FerraKora. Só leitura.
     Route::middleware('permission:pedidos.view')->prefix('clientes-dos-sites')->name('clientes-dos-sites.')->group(function () {

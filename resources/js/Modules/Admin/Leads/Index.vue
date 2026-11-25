@@ -45,17 +45,10 @@ const formatDate = (value) => (value
     : '-');
 const NOME_CAMPO = { nome: 'nome', email: 'e-mail', cpf: 'CPF', telefone: 'telefone', cep: 'CEP' };
 
-// "Parou em" + botão "Ver fluxo" (pedido do Lira 2026-11-23): a janela carrega o passo a passo sob demanda.
+// "Parou em" + "Ver fluxo" (pedido do Lira 2026-11-23): a janela carrega o passo a passo sob demanda.
+// Desde 25/11/2026 o "Ver fluxo" é o botão de olho da última coluna.
 const fluxoLead = ref(null);
 const COR_PAROU = { comprou: 'text-emerald-700', pagamento: 'text-violet-700', finalizar: 'text-rose-700', entrega: 'text-amber-700', identificacao: 'text-indigo-700' };
-const celulaParou = (lead) => h('div', { class: 'min-w-[11rem] space-y-1 text-xs' }, [
-    h('div', { class: ['font-medium', COR_PAROU[lead.parou?.etapa] ?? 'text-slate-600'] }, lead.parou?.texto ?? '-'),
-    h('button', {
-        type: 'button',
-        class: 'rounded border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-50',
-        onClick: () => { fluxoLead.value = lead; },
-    }, 'Ver fluxo'),
-]);
 
 const abas = [
     { label: 'Todos', value: 'all' },
@@ -63,13 +56,16 @@ const abas = [
     { label: 'Convertidos', value: 'convertido' },
 ];
 
+// 6 colunas sem rolagem lateral (pedido do Lira 25/11/2026): Cliente junta nome, CPF, contato e CEP;
+// Checkout junta produtos e total; Fluxo junta situação, pedido, "parou em" e origem; o olho abre o fluxo.
+// Nenhum dado some, só muda a disposição. Larguras em meta.width com a tabela em table-layout fixed.
 const columns = [
     {
         // Coluna própria do projeto (pedido do Lira em 15/11/2026).
         id: 'projeto',
         header: 'Projeto',
         enableSorting: false,
-        meta: { cellClass: 'whitespace-nowrap' },
+        meta: { width: '8%' },
         cell: ({ row }) => h('span', {
             class: ['inline-block rounded px-2 py-0.5 text-xs font-semibold', row.original.site === 'ferrakora' ? 'bg-indigo-100 text-indigo-800' : 'bg-orange-100 text-orange-800'],
         }, nomeDoSite(row.original.site)),
@@ -78,73 +74,82 @@ const columns = [
         id: 'cliente',
         header: 'Cliente',
         enableSorting: false,
-        cell: ({ row }) => h('div', {}, [
-            h('div', { class: 'flex items-center gap-1.5 font-medium' }, [
-                row.original.agora ? h('span', { class: 'inline-block h-2 w-2 animate-pulse rounded-full bg-green-500', title: 'No checkout agora' }) : null,
-                row.original.nome ?? (row.original.email || row.original.telefone || row.original.cpf || row.original.cep ? 'Sem nome' : 'Só abriu o checkout'),
-            ]),
-            h('div', { class: 'text-xs text-slate-400' }, row.original.cpf ? maskCpfCnpj(row.original.cpf) : 'Sem CPF'),
+        meta: { width: '21%' },
+        cell: ({ row }) => {
+            const l = row.original;
+            const temDado = l.nome || l.email || l.telefone || l.cpf || l.cep;
+            return h('div', { class: 'min-w-0 space-y-0.5' }, [
+                h('div', { class: 'flex items-center gap-1.5 font-semibold' }, [
+                    l.agora ? h('span', { class: 'inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-green-500', title: 'No checkout agora' }) : null,
+                    l.nome ?? (temDado ? 'Sem nome' : 'Só abriu o checkout'),
+                ]),
+                l.cpf ? h('div', { class: 'text-xs text-slate-500' }, maskCpfCnpj(l.cpf)) : (temDado ? null : h('div', { class: 'text-xs text-slate-400' }, 'Sem CPF')),
+                l.email ? h('div', { class: 'break-all text-xs text-slate-600' }, l.email) : null,
+                l.telefone ? h('div', { class: 'text-xs text-slate-600' }, maskPhone(l.telefone)) : null,
+                l.cep ? h('div', { class: 'text-xs text-slate-500' }, `CEP ${maskCep(l.cep)}`) : null,
+            ]);
+        },
+    },
+    {
+        // Produtos + total (o "Subtotal" separado só repetia o valor).
+        id: 'checkout',
+        header: 'Checkout',
+        enableSorting: false,
+        meta: { width: '35%' },
+        cell: ({ row }) => h('div', { class: 'space-y-1 text-xs' }, [
+            h('ul', { class: 'space-y-0.5' }, (row.original.itens ?? []).map((item) => h('li', { key: item.product_id, class: 'break-words' }, [
+                h('span', { class: 'font-semibold' }, `${item.quantidade}x `),
+                `${item.nome}${item.variacao ? ` (${item.variacao})` : ''}`,
+                h('span', { class: 'text-slate-500' }, ` · ${formatPrice(item.preco_unitario)}`),
+            ]))),
+            (row.original.itens ?? []).length ? h('div', { class: 'text-sm font-bold' }, `Total: ${formatPrice(row.original.subtotal)}`) : null,
         ]),
     },
     {
-        id: 'contato',
-        header: 'Contato',
+        id: 'fluxo',
+        header: 'Fluxo',
         enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'text-sm' }, [
-            h('div', {}, row.original.email ?? '-'),
-            h('div', { class: 'text-xs text-slate-400' }, row.original.telefone ? maskPhone(row.original.telefone) : '-'),
-        ]),
-    },
-    { id: 'cep', header: 'CEP', enableSorting: false, meta: { cellClass: 'whitespace-nowrap' }, cell: ({ row }) => (row.original.cep ? maskCep(row.original.cep) : '-') },
-    {
-        id: 'itens',
-        header: 'Produtos',
-        enableSorting: false,
-        cell: ({ row }) => h('ul', { class: 'space-y-0.5 text-xs' }, (row.original.itens ?? []).map((item) => h('li', { key: item.product_id }, [
-            h('span', { class: 'font-semibold' }, `${item.quantidade}x `),
-            `${item.nome}${item.variacao ? ` (${item.variacao})` : ''}`,
-            h('span', { class: 'text-slate-400' }, ` · ${formatPrice(item.preco_unitario)}`),
-        ]))),
-    },
-    { id: 'subtotal', header: 'Subtotal', enableSorting: false, cell: ({ row }) => formatPrice(row.original.subtotal) },
-    {
-        id: 'status',
-        header: 'Situação',
-        enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'space-y-1' }, [
-            h(StatusBadge, {
-                status: row.original.status,
-                tone: row.original.status === 'convertido' ? 'green' : (row.original.agora ? 'blue' : 'yellow'),
-                label: row.original.status === 'convertido' ? 'Convertido' : (row.original.agora ? 'No checkout agora' : 'Abandonou'),
-            }),
-            row.original.pedido
-                ? h(Link, { href: `/admin/pedidos/${row.original.pedido.id}`, class: 'block text-xs text-sky-700 hover:underline' }, () => `Pedido ${row.original.pedido.numero ?? `#${row.original.pedido.id}`}`)
-                : null,
-        ]),
-    },
-    {
-        // Etapa onde a pessoa parou + janela com o passo a passo (pedido do Lira 2026-11-23).
-        id: 'parou',
-        header: 'Parou em',
-        enableSorting: false,
-        cell: ({ row }) => celulaParou(row.original),
-    },
-    {
-        id: 'origem',
-        header: 'Origem',
-        enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'text-xs text-slate-500' }, [row.original.origem, row.original.utm_source, row.original.utm_campaign].filter(Boolean).join(' · ') || '-'),
+        meta: { width: '18%' },
+        cell: ({ row }) => {
+            const l = row.original;
+            const origem = [l.origem, l.utm_source, l.utm_campaign].filter(Boolean).join(' · ');
+            return h('div', { class: 'space-y-1' }, [
+                h(StatusBadge, {
+                    status: l.status,
+                    tone: l.status === 'convertido' ? 'green' : (l.agora ? 'blue' : 'yellow'),
+                    label: l.status === 'convertido' ? 'Convertido' : (l.agora ? 'No checkout agora' : 'Abandonou'),
+                }),
+                l.pedido
+                    ? h(Link, { href: `/admin/pedidos/${l.pedido.id}`, class: 'block break-all text-xs text-sky-700 hover:underline' }, () => `Pedido ${l.pedido.numero ?? `#${l.pedido.id}`}`)
+                    : null,
+                h('div', { class: ['text-xs font-medium', COR_PAROU[l.parou?.etapa] ?? 'text-slate-600'] }, l.parou?.texto ?? '-'),
+                origem ? h('div', { class: 'break-words text-[11px] text-slate-400' }, origem) : null,
+            ]);
+        },
     },
     {
         id: 'quando',
         header: 'Última atividade',
         enableSorting: false,
-        meta: { cellClass: 'whitespace-nowrap' },
+        meta: { width: '13%' },
         cell: ({ row }) => h('div', { class: 'text-xs' }, [
             h('div', {}, formatDate(row.original.atualizado_em)),
             row.original.ultimo_campo ? h('div', { class: 'text-slate-400' }, `último campo: ${NOME_CAMPO[row.original.ultimo_campo] ?? row.original.ultimo_campo}`) : null,
             h('div', { class: 'text-slate-400' }, `começou ${formatDate(row.original.criado_em)}`),
         ]),
+    },
+    {
+        id: 'acao',
+        header: '',
+        enableSorting: false,
+        meta: { width: '5%', cellClass: 'text-center' },
+        cell: ({ row }) => h('button', {
+            type: 'button',
+            title: 'Ver fluxo',
+            'aria-label': 'Ver fluxo',
+            class: 'inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-sky-700 hover:bg-sky-50',
+            onClick: () => { fluxoLead.value = row.original; },
+        }, [h('i', { class: 'fas fa-eye text-sm', 'aria-hidden': 'true' })]),
     },
 ];
 </script>
@@ -156,9 +161,9 @@ const columns = [
         <h1 class="mb-2 text-2xl font-bold">Leads</h1>
         <p class="mb-4 text-sm text-slate-500">
             O que o cliente está preenchendo no checkout, campo a campo, com os produtos do carrinho. Atualiza sozinho a
-            cada 5 segundos (última às {{ formatDate(resumo.atualizado_em) }}). Vira "Convertido" quando o pedido sai da
-            mesma sessão, do mesmo e-mail ou do mesmo CPF. "Parou em" mostra a etapa do checkout; "Ver fluxo" abre o
-            passo a passo com o horário. Só consulta: nada é enviado ao cliente daqui.
+            cada 5 segundos (última às {{ formatDate(resumo.atualizado_em) }}). Vira "Convertido" quando o pedido da
+            mesma sessão, do mesmo e-mail ou do mesmo CPF é pago. "Fluxo" mostra a situação, a etapa do checkout e a origem; o
+            olho abre o passo a passo com o horário. Só consulta: nada é enviado ao cliente daqui.
         </p>
 
         <div class="mb-4 grid gap-3 sm:grid-cols-4">
@@ -195,7 +200,7 @@ const columns = [
             :search="filters.search ?? ''"
             :filter-tabs="abas"
             :initial-active-tab="filters.status ?? 'all'"
-            dense
+            fixed
             search-placeholder="Buscar por nome, e-mail, telefone, CPF ou CEP..."
             empty-message="Nenhum lead ainda."
             @update:search="visit({ search: $event })"

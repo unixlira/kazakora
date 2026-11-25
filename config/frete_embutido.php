@@ -66,5 +66,7 @@ return [
     // a página, o carrinho e o checkout mostram o preço do cadastro, sem frete
     // somado, para qualquer CEP. A loja paga o frete da caixa. 262 =
     // parafusadeira leve 18V (riscado 179,34, venda 143,47).
-    'produtos_sem_frete' => [262],
+    // 620 = Livro Falante e seus kits (variações 621 e 622), pedido do Lira
+    // 25/11/2026: preço fixo 167,99 / 229,99 / 301,99, sem frete por região.
+    'produtos_sem_frete' => [262, 620],
 ];

@@ -592,6 +592,8 @@ const resultadoPrazoEl = ref(null);
 // diferença no resto. Nasce no grátis; a finalização continua nascendo no grátis.
 const opcoesEntrega = computed(() => (prazo.value?.entregas ?? []).filter((opcao) => !opcao.excedente || isFreeShipping.value));
 const escolhaFrete = ref('gratis');
+// Pedido do Lira 2026-11-24: sem cálculo de frete na página de produto (só no checkout).
+const MOSTRAR_CALCULO_FRETE = false;
 const onCepPrazo = (event) => {
     cep.value = maskCep(event.target.value);
     prazo.value = null;
@@ -1029,7 +1031,9 @@ const submitReview = () => {
 
                             <!-- Calcular o prazo logo abaixo das bandeiras de pagamento (pedido do Lira 2026-10-23;
                                  antes ficava depois dos cards, na posição da Mavo); os selos ficam entre os dois. -->
-                            <form ref="prazoCepEl" class="prazo-cep" @submit.prevent="consultarPrazo()">
+                            <!-- Cálculo de frete/prazo escondido em todas as páginas de produto (pedido do Lira 2026-11-24):
+                                 o frete aparece só no checkout. Para voltar, troque MOSTRAR_CALCULO_FRETE para true. -->
+                            <form v-if="MOSTRAR_CALCULO_FRETE" ref="prazoCepEl" class="prazo-cep" @submit.prevent="consultarPrazo()">
                                 <label for="cep-prazo">Calcular o prazo de entrega</label>
                                 <div class="linha">
                                     <input id="cep-prazo" data-kzm="frete" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">

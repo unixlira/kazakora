@@ -643,7 +643,7 @@ const cancelInvoice = () => {
                                     v-if="canCheckLabel()"
                                     type="button"
                                     :disabled="checkLabelForm.processing"
-                                    title="Consulta o canal (Shopee/ML) agora mesmo e grava a etiqueta se já estiver liberada — o mesmo que o sistema já tenta sozinho automaticamente, só que na hora"
+                                    title="Marketplace: consulta o canal agora. Venda do site: tenta comprar a etiqueta de novo no Melhor Envio. É o mesmo que o sistema tenta sozinho, só que na hora"
                                     class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
                                     @click="checkLabel"
                                 >

@@ -51,19 +51,23 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
 </script>
 
 <template>
+    <!-- Fundo no mesmo degradê da faixa Black November (FaixaPromo.vue): preto com brilhos laranja desfocados. -->
     <div v-if="visivel" role="region" aria-label="Aviso de cookies"
-        class="aviso-cookies relative z-[60] bg-[#1F2225] text-white [color-scheme:light]">
+        class="aviso-cookies relative isolate z-[60] overflow-hidden border-b border-white/10 bg-[#0b0b0b] text-white [color-scheme:light]">
+        <span aria-hidden="true" class="pointer-events-none absolute -left-12 -top-16 -z-10 h-40 w-44 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
+        <span aria-hidden="true" class="pointer-events-none absolute -bottom-20 right-10 -z-10 h-40 w-48 rounded-full bg-[#f27a2a] opacity-50 blur-2xl"></span>
         <div class="mx-auto flex max-w-7xl items-center gap-3 py-2 pl-4 pr-2 sm:gap-4 sm:pl-6">
-            <i class="fa-solid fa-cookie-bite shrink-0 text-[16px] text-[#FD7B41]" aria-hidden="true"></i>
+            <i class="fa-solid fa-cookie-bite shrink-0 text-[16px] text-[#f6c343]" aria-hidden="true"></i>
             <p class="min-w-0 flex-1 text-[12.5px] leading-snug sm:text-[13.5px]">
                 Usamos cookies<span class="hidden sm:inline"> para melhorar sua experiência</span>.
-                <Link href="/politica-de-cookies" class="whitespace-nowrap font-semibold underline decoration-[#FD7B41] decoration-2 underline-offset-[3px] hover:text-[#FD7B41]">Saiba mais</Link>
+                <span class="whitespace-nowrap">
+                    <Link href="/politica-de-cookies" class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343]">Saiba mais</Link>
+                    <span class="mx-1 text-white/40" aria-hidden="true">·</span>
+                    <button type="button" :disabled="enviando"
+                        class="font-medium text-white/65 underline underline-offset-2 hover:text-white disabled:opacity-60"
+                        @click="soNecessarios">Só os necessários</button>
+                </span>
             </p>
-            <button type="button" :disabled="enviando"
-                class="shrink-0 px-1 text-[11.5px] font-medium text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-60 sm:text-[12.5px]"
-                @click="soNecessarios">
-                Só os necessários
-            </button>
             <button type="button" :disabled="enviando" aria-label="Aceitar os cookies e fechar"
                 class="botao pulsa inline-flex shrink-0 items-center gap-2 rounded-full bg-[#FD7B41] py-1.5 pl-4 pr-1.5 text-[14px] font-extrabold text-[#1F2225] shadow-[0_0_0_3px_rgba(253,123,65,0.25)] hover:bg-[#ff8d58] disabled:opacity-60 sm:text-[15px]"
                 @click="aceitar">

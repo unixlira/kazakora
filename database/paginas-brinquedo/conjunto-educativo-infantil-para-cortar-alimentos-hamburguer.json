@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O conjunto de cortar com tema hambúrguer.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -241,12 +241,12 @@
   },
   "ctas": {
     "historia": "Quero abrir a lanchonete",
-    "porque": "Quero o meu kit",
+    "porque": "Quero o meu",
     "ensina": "Quero estimular a coordenação",
     "detalhes": "Quero montar o hambúrguer",
     "comparativo": "Quero trocar a tela pelo lanche",
     "familia": "Quero brincar em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero a lanchonete",
     "final": "Quero presentear agora"
   }

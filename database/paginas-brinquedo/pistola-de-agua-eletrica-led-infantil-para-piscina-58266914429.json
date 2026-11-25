@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Escolha a pistola e prepare-se para a ação.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -240,7 +240,7 @@
     "texto": "O presente que tira a criança do celular e transforma o quintal no melhor lugar do mundo."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pela água"
   }
 }

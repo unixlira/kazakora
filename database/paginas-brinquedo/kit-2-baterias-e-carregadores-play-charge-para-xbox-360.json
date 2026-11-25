@@ -191,8 +191,8 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Selecione a oferta para seus controles.",
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
       "icone": "shopping-bag"
     },
     {
@@ -237,10 +237,10 @@
   ],
   "final": {
     "titulo": "O presente que traz a diversão real",
-    "texto": "Chega de pilhas descarregadas. Escolha o kit e garanta horas de jogos clássicos e sorrisos com quem você ama."
+    "texto": "Chega de pilhas descarregadas. Peça o seu e garanta horas de jogos clássicos e sorrisos com quem você ama."
   },
   "ctas": {
-    "historia": "Quero meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero jogar sem parar"
   }
 }

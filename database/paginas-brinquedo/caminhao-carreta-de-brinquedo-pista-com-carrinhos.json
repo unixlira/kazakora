@@ -187,9 +187,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Garanta o caminhão que vira pista de corrida.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -236,7 +236,7 @@
     "texto": "Escolha o caminhão que vira pista e garanta horas de brincadeira de verdade para quem você ama."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pela pista"
   }
 }

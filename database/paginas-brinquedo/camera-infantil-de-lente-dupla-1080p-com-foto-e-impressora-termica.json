@@ -1,253 +1,253 @@
 {
- "titulo": "Câmera Infantil que Tira a Foto e Imprime na Hora, sem Tinta",
- "sem_telas": false,
- "chips": [
-  [
-   "Imprime na hora",
-   "logo após o clique"
-  ],
-  [
-   "Sem tinta",
-   "impressão térmica"
-  ],
-  [
-   "Lente dupla",
-   "fotos criativas"
-  ],
-  [
-   "Gatinho fofo",
-   "presente lindo"
-  ]
- ],
- "letreiro": [
-  "Clica e imprime na hora",
-  "Impressão térmica sem tinta",
-  "Lente dupla para fotos criativas",
-  "Resolução 1080p",
-  "Design fofo de gatinho",
-  "Garantia de 30 dias"
- ],
- "historia": {
-  "titulo": "Criatividade em cada clique",
-  "subtitulo": "A foto sai na mão da criança",
-  "texto": "Ela escolhe o que fotografar, aperta o botão e a foto sai na hora. O gato da casa, o desenho, a vovó: cada clique vira uma lembrança de papel para colar, guardar e mostrar.",
-  "imagem": 4
- },
- "porque": {
-  "titulo": "Por que a criançada adora",
-  "imagem": 5,
-  "chamadas": [
-   "Clica e imprime",
-   "Sem tinta"
-  ],
-  "cards": [
-   {
-    "titulo": "Foto na mão",
-    "texto": "Imprime a foto favorita logo após o clique.",
-    "icone": "printer"
-   },
-   {
-    "titulo": "Sem bagunça",
-    "texto": "Impressão térmica direta, sem cartucho de tinta.",
-    "icone": "sparkles"
-   },
-   {
-    "titulo": "Olhar criativo",
-    "texto": "Lente dupla para fotos e registros divertidos.",
-    "icone": "aperture"
-   },
-   {
-    "titulo": "Fofa demais",
-    "texto": "Formato de gatinho que encanta à primeira vista.",
-    "icone": "cat"
-   }
-  ]
- },
- "ensina": {
-  "titulo": "Brincadeira que também desperta",
-  "texto": "Fotografando o mundo do seu jeito, a criança treina sem perceber:",
-  "imagem": 1,
-  "chamadas": [
-   "Lente dupla",
-   "Impressão na hora",
-   "Formato de gatinho",
-   "Resolução 1080p"
-  ],
-  "habilidades": [
-   {
-    "texto": "Criatividade",
-    "icone": "palette"
-   },
-   {
-    "texto": "Olhar atento",
-    "icone": "eye"
-   },
-   {
-    "texto": "Contar histórias",
-    "icone": "book-open"
-   },
-   {
-    "texto": "Autonomia",
-    "icone": "smile"
-   },
-   {
-    "texto": "Memória afetiva",
-    "icone": "heart"
-   },
-   {
-    "texto": "Paciência",
-    "icone": "hourglass"
-   }
-  ]
- },
- "detalhes": {
-  "titulo": "Cada detalhe pensado para a criança",
-  "texto": "Câmera em formato de gatinho, lente dupla e impressão térmica direta, sem uso de tinta.",
-  "imagem": 8,
-  "cards": [
-   {
-    "titulo": "Resolução 1080p",
-    "texto": "Fotos com boa nitidez",
-    "icone": "camera"
-   },
-   {
-    "titulo": "Lente dupla",
-    "texto": "Registros mais divertidos",
-    "icone": "aperture"
-   },
-   {
-    "titulo": "Impressão térmica",
-    "texto": "Sem cartucho de tinta",
-    "icone": "printer"
-   },
-   {
-    "titulo": "Design gatinho",
-    "texto": "Fofo e fácil de segurar",
-    "icone": "cat"
-   }
-  ]
- },
- "comparativo": {
-  "titulo": "Câmera comum × Câmera Gatinho",
-  "intro": "As duas tiram foto. Só uma entrega a foto na mão da criança.",
-  "rotulos": [
-   "Comum",
-   "Gatinho"
-  ],
-  "linhas": [
-   {
-    "texto": "Tira fotos",
-    "comum": true
-   },
-   {
-    "texto": "Imprime a foto na hora",
-    "comum": false
-   },
-   {
-    "texto": "Impressão sem tinta",
-    "comum": false
-   },
-   {
-    "texto": "Lente dupla",
-    "comum": false
-   },
-   {
-    "texto": "Formato fofo de gatinho",
-    "comum": false
-   },
-   {
-    "texto": "Foto de papel para guardar",
-    "comum": false
-   }
-  ]
- },
- "familia": {
-  "titulo": "Queridinha de pais e filhos",
-  "texto": "Fotos da família impressas na hora, coladas na geladeira e no caderno: a criança vira a fotógrafa oficial da casa.",
-  "imagem": 9,
-  "citacao": "Cada foto impressa é uma memória que a criança pode segurar, mostrar e guardar para sempre."
- },
- "kits": {
-  "titulo": "Escolha o seu kit",
-  "texto": "A câmera que fotografa e imprime para a criança criar as próprias memórias.",
-  "itens": [
-   {
-    "id": 481,
-    "nome": "Kit Fotógrafo Mirim",
-    "itens": "Câmera infantil com impressora térmica",
-    "unidades": 1,
-    "partes": [
-     {
-      "texto": "Câmera gatinho",
-      "icone": "camera"
-     },
-     {
-      "texto": "Impressão térmica",
-      "icone": "printer"
-     }
+  "titulo": "Câmera Infantil que Tira a Foto e Imprime na Hora, sem Tinta",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Imprime na hora",
+      "logo após o clique"
+    ],
+    [
+      "Sem tinta",
+      "impressão térmica"
+    ],
+    [
+      "Lente dupla",
+      "fotos criativas"
+    ],
+    [
+      "Gatinho fofo",
+      "presente lindo"
     ]
-   }
-  ]
- },
- "passos": [
-  {
-   "titulo": "Peça a sua câmera",
-   "texto": "Um presente que vira lembrança todo dia.",
-   "icone": "gift"
+  ],
+  "letreiro": [
+    "Clica e imprime na hora",
+    "Impressão térmica sem tinta",
+    "Lente dupla para fotos criativas",
+    "Resolução 1080p",
+    "Design fofo de gatinho",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Criatividade em cada clique",
+    "subtitulo": "A foto sai na mão da criança",
+    "texto": "Ela escolhe o que fotografar, aperta o botão e a foto sai na hora. O gato da casa, o desenho, a vovó: cada clique vira uma lembrança de papel para colar, guardar e mostrar.",
+    "imagem": 4
   },
-  {
-   "titulo": "Enviamos com rastreio",
-   "texto": "Acompanhe cada passo em Meus Pedidos.",
-   "icone": "truck"
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 5,
+    "chamadas": [
+      "Clica e imprime",
+      "Sem tinta"
+    ],
+    "cards": [
+      {
+        "titulo": "Foto na mão",
+        "texto": "Imprime a foto favorita logo após o clique.",
+        "icone": "printer"
+      },
+      {
+        "titulo": "Sem bagunça",
+        "texto": "Impressão térmica direta, sem cartucho de tinta.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Olhar criativo",
+        "texto": "Lente dupla para fotos e registros divertidos.",
+        "icone": "aperture"
+      },
+      {
+        "titulo": "Fofa demais",
+        "texto": "Formato de gatinho que encanta à primeira vista.",
+        "icone": "cat"
+      }
+    ]
   },
-  {
-   "titulo": "Primeiro clique",
-   "texto": "Ela escolhe o momento e aperta o botão.",
-   "icone": "camera"
+  "ensina": {
+    "titulo": "Brincadeira que também desperta",
+    "texto": "Fotografando o mundo do seu jeito, a criança treina sem perceber:",
+    "imagem": 1,
+    "chamadas": [
+      "Lente dupla",
+      "Impressão na hora",
+      "Formato de gatinho",
+      "Resolução 1080p"
+    ],
+    "habilidades": [
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Olhar atento",
+        "icone": "eye"
+      },
+      {
+        "texto": "Contar histórias",
+        "icone": "book-open"
+      },
+      {
+        "texto": "Autonomia",
+        "icone": "smile"
+      },
+      {
+        "texto": "Memória afetiva",
+        "icone": "heart"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
   },
-  {
-   "titulo": "Foto na mão",
-   "texto": "A foto sai na hora para guardar.",
-   "icone": "image"
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para a criança",
+    "texto": "Câmera em formato de gatinho, lente dupla e impressão térmica direta, sem uso de tinta.",
+    "imagem": 8,
+    "cards": [
+      {
+        "titulo": "Resolução 1080p",
+        "texto": "Fotos com boa nitidez",
+        "icone": "camera"
+      },
+      {
+        "titulo": "Lente dupla",
+        "texto": "Registros mais divertidos",
+        "icone": "aperture"
+      },
+      {
+        "titulo": "Impressão térmica",
+        "texto": "Sem cartucho de tinta",
+        "icone": "printer"
+      },
+      {
+        "titulo": "Design gatinho",
+        "texto": "Fofo e fácil de segurar",
+        "icone": "cat"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Câmera comum × Câmera Gatinho",
+    "intro": "As duas tiram foto. Só uma entrega a foto na mão da criança.",
+    "rotulos": [
+      "Comum",
+      "Gatinho"
+    ],
+    "linhas": [
+      {
+        "texto": "Tira fotos",
+        "comum": true
+      },
+      {
+        "texto": "Imprime a foto na hora",
+        "comum": false
+      },
+      {
+        "texto": "Impressão sem tinta",
+        "comum": false
+      },
+      {
+        "texto": "Lente dupla",
+        "comum": false
+      },
+      {
+        "texto": "Formato fofo de gatinho",
+        "comum": false
+      },
+      {
+        "texto": "Foto de papel para guardar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinha de pais e filhos",
+    "texto": "Fotos da família impressas na hora, coladas na geladeira e no caderno: a criança vira a fotógrafa oficial da casa.",
+    "imagem": 9,
+    "citacao": "Cada foto impressa é uma memória que a criança pode segurar, mostrar e guardar para sempre."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "A câmera que fotografa e imprime para a criança criar as próprias memórias.",
+    "itens": [
+      {
+        "id": 481,
+        "nome": "Kit Fotógrafo Mirim",
+        "itens": "Câmera infantil com impressora térmica",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Câmera gatinho",
+            "icone": "camera"
+          },
+          {
+            "texto": "Impressão térmica",
+            "icone": "printer"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça a sua câmera",
+      "texto": "Um presente que vira lembrança todo dia.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeiro clique",
+      "texto": "Ela escolhe o momento e aperta o botão.",
+      "icone": "camera"
+    },
+    {
+      "titulo": "Foto na mão",
+      "texto": "A foto sai na hora para guardar.",
+      "icone": "image"
+    }
+  ],
+  "garantia": [
+    "Fotografando tudo",
+    "Criando memórias",
+    "Soltando a criatividade",
+    "Mostrando as fotos"
+  ],
+  "duvidas": [
+    [
+      "Precisa de tinta para imprimir?",
+      "Não. A impressão é térmica direta, sem uso de tinta nem cartucho."
+    ],
+    [
+      "Como funciona a impressão?",
+      "A criança tira a foto e pode imprimir a favorita logo após o clique."
+    ],
+    [
+      "Qual a resolução?",
+      "A câmera tem resolução 1080p e lente dupla para fotos e registros divertidos."
+    ],
+    [
+      "Quais as cores?",
+      "O modelo em formato de gatinho aparece nas cores azul e rosa."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que vira memória de verdade",
+    "texto": "Cliques, fotos impressas na hora e uma criança orgulhosa de mostrar o que criou."
+  },
+  "ctas": {
+    "historia": "Quero a câmera gatinho",
+    "porque": "Quero imprimir na hora",
+    "ensina": "Quero soltar a criatividade",
+    "detalhes": "Quero a minha câmera",
+    "comparativo": "Quero a Câmera Gatinho",
+    "familia": "Quero o presente perfeito",
+    "passos": "Quero o meu",
+    "garantia": "Quero a câmera gatinho",
+    "final": "Quero a minha câmera"
   }
- ],
- "garantia": [
-  "Fotografando tudo",
-  "Criando memórias",
-  "Soltando a criatividade",
-  "Mostrando as fotos"
- ],
- "duvidas": [
-  [
-   "Precisa de tinta para imprimir?",
-   "Não. A impressão é térmica direta, sem uso de tinta nem cartucho."
-  ],
-  [
-   "Como funciona a impressão?",
-   "A criança tira a foto e pode imprimir a favorita logo após o clique."
-  ],
-  [
-   "Qual a resolução?",
-   "A câmera tem resolução 1080p e lente dupla para fotos e registros divertidos."
-  ],
-  [
-   "Quais as cores?",
-   "O modelo em formato de gatinho aparece nas cores azul e rosa."
-  ]
- ],
- "final": {
-  "titulo": "O presente que vira memória de verdade",
-  "texto": "Cliques, fotos impressas na hora e uma criança orgulhosa de mostrar o que criou."
- },
- "ctas": {
-  "historia": "Quero a câmera gatinho",
-  "porque": "Quero imprimir na hora",
-  "ensina": "Quero soltar a criatividade",
-  "detalhes": "Quero a minha câmera",
-  "comparativo": "Quero a Câmera Gatinho",
-  "familia": "Quero o presente perfeito",
-  "passos": "Quero o meu kit",
-  "garantia": "Quero a câmera gatinho",
-  "final": "Quero a minha câmera"
- }
 }

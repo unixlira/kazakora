@@ -176,12 +176,12 @@ const opcoesVariacao = computed(() => (props.variations.length
 // variações, o próprio produto vira o cartão da oferta única.
 const opcoesKits = computed(() => {
     if (!brinquedo.value) return opcoesVariacao.value;
-    const base = opcoesVariacao.value.length ? opcoesVariacao.value : (props.paginaBrinquedo?.kits?.itens?.length ? [props.product] : []);
-    return aplicarKits(base, props.paginaBrinquedo?.kits);
+    // Produto único (sem variações): sem kits em lugar nenhum (pedido do Lira 25/11/2026).
+    return aplicarKits(opcoesVariacao.value, props.paginaBrinquedo?.kits);
 });
 const kitEscolhido = computed(() => {
     if (!brinquedo.value) return null;
-    if (!props.variations.length) return opcoesKits.value[0] ?? null;
+    if (!props.variations.length) return null;
     return opcoesKits.value.find((kit) => kit.id === escolhida.value?.id) ?? null;
 });
 const nomeCurtoDe = (variant) => String(variant.variation || variant.name).replace(/\s*\(.*\)\s*$/, '').split('·').pop().trim();

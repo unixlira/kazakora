@@ -195,9 +195,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "A máquina perfeita para a sua diversão.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -244,7 +244,7 @@
     "texto": "Horas de brincadeira de verdade com movimentos reais, luzes e muita imaginação no comando da obra."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pela obra"
   }
 }

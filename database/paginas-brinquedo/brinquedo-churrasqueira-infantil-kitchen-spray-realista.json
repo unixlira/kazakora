@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Garanta horas de brincadeira de verdade.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -237,10 +237,10 @@
   ],
   "final": {
     "titulo": "O presente que tira a criança do celular",
-    "texto": "Escolha o kit e transforme a tarde em um churrasco inesquecível, com muita imaginação e longe das telas."
+    "texto": "Peça o seu e transforme a tarde em um churrasco inesquecível, com muita imaginação e longe das telas."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Escolher churrasqueira realista"
   }
 }

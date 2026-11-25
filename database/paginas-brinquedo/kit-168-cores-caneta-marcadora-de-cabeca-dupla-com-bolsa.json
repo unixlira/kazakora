@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "168 cores com bolsa organizadora.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -243,10 +243,10 @@
     "historia": "Quero as 168 cores",
     "porque": "Quero o kit de canetas",
     "ensina": "Quero desenhar sem telas",
-    "detalhes": "Escolher o meu kit",
+    "detalhes": "Quero o meu",
     "comparativo": "Quero o kit 168 cores",
     "familia": "Quero colorir em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero as 168 cores",
     "final": "Quero as 168 cores"
   }

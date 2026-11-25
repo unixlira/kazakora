@@ -195,9 +195,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "A mini geladeira rosa com as bolas surpresa.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -250,11 +250,11 @@
   "ctas": {
     "historia": "Quero a minha geladeira",
     "porque": "Quero abrir as surpresas",
-    "ensina": "Quero o meu kit",
+    "ensina": "Quero o meu",
     "detalhes": "Quero a geladeira rosa",
     "comparativo": "Quero trocar a tela pela coleção",
     "familia": "Quero brincar em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero a minha geladeira",
     "final": "Quero presentear agora"
   }

@@ -195,9 +195,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O console retrô com 10000 jogos.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -247,10 +247,10 @@
     "historia": "Quero o video game retrô",
     "porque": "Quero os 10000 jogos",
     "ensina": "Quero jogar em família",
-    "detalhes": "Escolher o meu kit",
+    "detalhes": "Quero o meu",
     "comparativo": "Quero o console de verdade",
     "familia": "Quero os clássicos em casa",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero o video game retrô",
     "final": "Quero o video game retrô"
   }

@@ -457,6 +457,9 @@ class LeadsUnicosTest extends TestCase
 
     public function test_telas_antigas_redirecionam_para_leads_e_os_json_antigos_continuam(): void
     {
+        // Sem login vai para o login, não para Leads.
+        $this->assertStringNotContainsString('/admin/leads', (string) $this->get('/admin/carrinhos-abandonados')->assertRedirect()->headers->get('Location'));
+
         $admin = $this->admin();
         $this->actingAs($admin)->get('/admin/carrinhos-abandonados')->assertStatus(302)->assertRedirect('/admin/leads?status=abertos');
         $this->actingAs($admin)->get('/admin/carrinhos-abandonados?site=ferrakora&search=ana')->assertStatus(302)
@@ -464,8 +467,6 @@ class LeadsUnicosTest extends TestCase
         $this->actingAs($admin)->get('/admin/carrinhos-abandonados/sequencia')->assertStatus(302)->assertRedirect('/admin/leads?status=remarketing');
         $this->actingAs($admin)->get('/admin/leads-v2?status=pagos&loja=kazakora')->assertStatus(302)->assertRedirect('/admin/leads?loja=kazakora&status=pagos');
         $this->actingAs($admin)->get('/admin/leads-v2')->assertStatus(302)->assertRedirect('/admin/leads');
-        $this->get('/admin/carrinhos-abandonados')->assertRedirect();
-        $this->assertStringNotContainsString('/admin/leads', (string) $this->get('/admin/carrinhos-abandonados')->headers->get('Location'));
 
         $this->props('/admin/leads');
         $lead = $this->lead('Maria', 90);

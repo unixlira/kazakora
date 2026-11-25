@@ -9,7 +9,7 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e, só se você fechar a faixa de cookies no X (ou aceitar ao finalizar a compra), do Pixel da Meta e da tag do Google Ads (publicidade). Com esse aceite, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança), de navegação (um código aleatório criado no primeiro acesso que registra as páginas abertas no site e quantas foram) e, só se você clicar em Aceitar na faixa de cookies (ou aceitar ao finalizar a compra), do Pixel da Meta e da tag do Google Ads (publicidade). Com esse aceite, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
@@ -107,7 +107,7 @@ const direitos = [
                         (LGPD, art. 7º, I).
                     </p>
                     <p>
-                        No primeiro acesso, uma faixa no topo do site pergunta a sua escolha. <strong>Fechar no X</strong> libera os
+                        No primeiro acesso, uma faixa no topo do site pergunta a sua escolha. <strong>Aceitar</strong> libera os
                         cookies de publicidade e o aviso à Meta pelo nosso servidor, descrito abaixo. <strong>Só os necessários</strong>
                         mantém só os cookies necessários e o registro de visitas da própria Loja: nada vai para a Meta nem para o Google. A frase
                         abaixo do botão <strong>Finalizar pedido</strong> também registra o aceite. Você muda a escolha quando

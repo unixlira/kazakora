@@ -1,12 +1,12 @@
 <script setup>
-// Kits da página de brinquedo (pedido do Lira 24/11/2026). Dois formatos:
-// "lista" na caixa de compra (cartão selecionável com caixinha de marcar) e
-// "cartoes" na seção "Escolha o seu kit" mais abaixo (foto, preço e botão).
+// Kits da página de brinquedo (pedido do Lira 24/11/2026), com a estrutura e as medidas da referência:
+// "lista" na caixa de compra (cartão com caixinha de marcar, selo no canto, nome, itens, de/por e
+// pílulas de preço por brinquedo e economia) e "cartoes" na seção "Escolha o tamanho da diversão"
+// (selo no alto, foto quadrada, nome, itens, preço, pílulas e botão verde de largura total).
 import { computed } from 'vue';
-import ProductCard from '@/Shared/Components/ProductCard.vue';
-import Icone from './Icone.vue';
 import { formatPrice } from '@/Shared/productCard';
-import { economia, itensDoKit, nomeDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, unidadesDoKit } from './kits';
+import Icone from './Icone.vue';
+import { economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, unidadesDoKit } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -22,39 +22,45 @@ const selos = computed(() => selosDosKits(props.opcoes));
 <template>
     <div v-if="formato === 'lista'" class="kb-lista" role="radiogroup" aria-label="Escolha o seu kit">
         <button v-for="kit in kits" :key="kit.id" type="button" role="radio" class="kb-kit"
-            :class="{ 'is-sel': kit.id === escolhidaId, 'is-hot': selos[kit.id]?.tom === 'amarelo', esgotado: kit.stock < 1 }"
+            :class="{ 'is-sel': kit.id === escolhidaId, esgotado: kit.stock < 1 }"
             :aria-checked="kit.id === escolhidaId" :data-kzm="`kit:${kit.id}`" @click="emit('escolher', kit)">
             <span v-if="selos[kit.id]" class="kb-selo" :class="`tom-${selos[kit.id].tom}`">
-                <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="13" />{{ selos[kit.id].texto }}
+                <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="12" :traco="2.4" />{{ selos[kit.id].texto }}
             </span>
-            <span class="kb-marca" aria-hidden="true"><Icone nome="check" :tamanho="18" :traco="3" /></span>
+            <span class="kb-marca" aria-hidden="true"><Icone nome="check" :tamanho="16" :traco="3.4" /></span>
             <span class="kb-info">
-                <strong class="kb-nome">{{ nomeDoKit(kit) }}</strong>
+                <span class="kb-nome">{{ nomeCurtoDoKit(kit) }}</span>
                 <span class="kb-itens">{{ kit.stock < 1 ? 'Esgotado' : itensDoKit(kit) }}</span>
-                <span class="kb-pilulas">
-                    <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
-                    <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
-                </span>
             </span>
             <span class="kb-precos">
                 <s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s>
                 <b>{{ formatPrice(precoDoKit(kit)) }}</b>
             </span>
+            <span class="kb-pilulas">
+                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
+            </span>
         </button>
     </div>
 
-    <!-- Cartões da seção "Escolha o tamanho da diversão": o MESMO card do "Você também pode gostar"
-         (pedido do Lira 24/11/2026), com nome, selo e economia do kit; o clique escolhe o kit. -->
-    <div v-else class="kb-cartoes-vitrine pb-reveal">
-        <div v-for="kit in kits" :key="kit.id" class="kb-cartao-vitrine">
-            <ProductCard :product="kit" :nome="nomeDoKit(kit)" :selo="selos[kit.id] ?? null" escolher
-                :selecionado="kit.id === escolhidaId" @escolher="emit('escolher', kit)">
-                <span class="kb-pilulas kb-pilulas-card">
-                    <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
-                    <span v-else class="kb-pilula azul">{{ itensDoKit(kit) }}</span>
-                    <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
-                </span>
-            </ProductCard>
-        </div>
+    <div v-else class="kb-grid pb-reveal">
+        <article v-for="kit in kits" :key="kit.id" class="kb-kc" :class="{ 'is-sel': kit.id === escolhidaId }">
+            <span v-if="selos[kit.id]" class="kb-kc-selo" :class="`tom-${selos[kit.id].tom}`">
+                <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="12" :traco="2.4" />{{ selos[kit.id].texto }}
+            </span>
+            <div class="kb-kc-img">
+                <img v-if="fotoDoKit(kit)" :src="fotoDoKit(kit)" :alt="nomeCurtoDoKit(kit)" loading="lazy" decoding="async">
+            </div>
+            <h3 class="kb-kc-nome">{{ nomeCurtoDoKit(kit) }}</h3>
+            <p class="kb-kc-sub">{{ itensDoKit(kit) }}</p>
+            <div class="kb-kc-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></div>
+            <div class="kb-kc-chips">
+                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
+            </div>
+            <button type="button" class="pb-btn kb-kc-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">
+                {{ kit.stock < 1 ? 'Esgotado' : 'Quero este kit' }}
+            </button>
+        </article>
     </div>
 </template>

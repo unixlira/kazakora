@@ -179,6 +179,45 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         $this->assertSame(Registro::PAROU_COMPROU, $registro->motivo_parada);
     }
 
+    /** Decisão do Lira (25/11/2026): pedido só gerado (Pix/boleto esperando) ou cancelado não para; pago para. */
+    public function test_pedido_so_gerado_ou_cancelado_nao_para_e_pago_para(): void
+    {
+        Mail::fake();
+        $this->lead([], 60 * 24 * 5);
+        $pedido = fn (string $status) => Order::create([
+            'status' => $status, 'shipping_email' => 'maria@exemplo.com',
+            'shipping_name' => 'Maria', 'shipping_phone' => '(11) 99999-0000', 'shipping_zip' => '03187040',
+            'shipping_street' => 'Rua X', 'shipping_number' => '1', 'shipping_neighborhood' => 'Mooca',
+            'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
+            'subtotal' => 100, 'shipping_cost' => 0, 'total' => 100,
+        ]);
+        $aguardando = $pedido(Order::STATUS_AWAITING_PAYMENT);
+        $pedido(Order::STATUS_CANCELLED);
+        $pedido(Order::STATUS_PENDING);
+
+        $this->artisan('loja:carrinho-abandonado-sequencia')->assertSuccessful();
+
+        Mail::assertSent(\App\Modules\Cart\Mail\SequenciaCarrinho::class, 1);
+        $registro = Registro::sole();
+        $this->assertFalse($registro->parado);
+        $this->assertSame(1, $registro->disparos_enviados);
+
+        // Pagou: a próxima rodada para.
+        $aguardando->forceFill(['status' => Order::STATUS_PAID])->saveQuietly();
+        $this->artisan('loja:carrinho-abandonado-sequencia')->assertSuccessful();
+        $this->assertTrue($registro->fresh()->parado);
+        $this->assertSame(Registro::PAROU_COMPROU, $registro->fresh()->motivo_parada);
+
+        // A lista de "pago" da sequência é a mesma do lead (LeadsDigitados::pago).
+        foreach ([Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED] as $status) {
+            $this->assertSame(
+                \App\Modules\Checkout\Support\LeadsDigitados::pago(new Order(['status' => $status])),
+                in_array($status, \App\Modules\Cart\Support\Sequencia\ParadasSequencia::STATUS_PAGOS, true),
+                $status,
+            );
+        }
+    }
+
     public function test_para_quando_o_lead_vira_convertido(): void
     {
         Mail::fake();

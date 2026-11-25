@@ -77,12 +77,40 @@ const capaVideo = computed(() => {
 });
 const videoEl = ref(null);
 let observadorVideo = null;
+// Controles do vídeo (pedido do Lira 25/11/2026): o vídeo tem som; botões de som e de play/pause no
+// adesivo amarelo à direita. O navegador só deixa tocar com som depois que a pessoa já tocou na página;
+// antes disso começa mudo e o botão de som liga. Quem pausou ou mutou continua assim.
+const videoMudo = ref(true);
+const videoPausado = ref(false);
+let pausadoPelaPessoa = false;
+let mutadoPelaPessoa = false;
+const tocar = (v) => {
+    const comSom = !mutadoPelaPessoa && !!navigator.userActivation?.hasBeenActive;
+    v.muted = !comSom;
+    videoMudo.value = v.muted;
+    v.play?.().catch(() => { v.muted = true; videoMudo.value = true; v.play?.().catch(() => {}); });
+};
+const alternarSomVideo = () => {
+    const v = videoEl.value;
+    if (!v) return;
+    v.muted = !v.muted;
+    mutadoPelaPessoa = v.muted;
+    videoMudo.value = v.muted;
+    if (!v.muted && v.paused) { pausadoPelaPessoa = false; v.play?.().catch(() => {}); }
+};
+const alternarPlayVideo = () => {
+    const v = videoEl.value;
+    if (!v) return;
+    if (v.paused) { pausadoPelaPessoa = false; tocar(v); } else { pausadoPelaPessoa = true; v.pause?.(); }
+};
 onMounted(() => {
     const v = videoEl.value;
     if (!v) return;
-    if (!('IntersectionObserver' in window)) { v.play?.().catch(() => {}); return; }
+    v.addEventListener('play', () => { videoPausado.value = false; });
+    v.addEventListener('pause', () => { videoPausado.value = true; });
+    if (!('IntersectionObserver' in window)) { tocar(v); return; }
     observadorVideo = new IntersectionObserver(([e]) => {
-        if (e.isIntersecting) v.play?.().catch(() => {}); else v.pause?.();
+        if (e.isIntersecting) { if (!pausadoPelaPessoa) tocar(v); } else v.pause?.();
     }, { threshold: 0.25 });
     observadorVideo.observe(v);
 });
@@ -242,10 +270,14 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                 <div class="pb-historia-midia pb-reveal">
                     <div class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="42" /><Cubo cor="azul" :tamanho="42" /></div>
                     <div class="pb-media pb-media-video">
-                        <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="capaVideo" muted loop playsinline preload="none" :aria-label="product.name"></video>
+                        <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="capaVideo" muted loop playsinline preload="none" :aria-label="product.name" @click="alternarPlayVideo"></video>
                         <img v-else :src="historia.foto || capa" :srcset="srcsetDe(historia.foto || capa)" sizes="(max-width: 767px) 340px, 360px" width="720" height="1280" :alt="product.name" loading="lazy" decoding="async">
                     </div>
                     <span class="pb-adesivo" aria-hidden="true">Uau!</span>
+                    <div v-if="videoUrl" class="pb-video-ctrl">
+                        <button type="button" :aria-label="videoPausado ? 'Tocar o vídeo' : 'Pausar o vídeo'" @click="alternarPlayVideo"><Icone :nome="videoPausado ? 'play' : 'pause'" :tamanho="16" :traco="2.4" /></button>
+                        <button type="button" :aria-pressed="videoMudo" :aria-label="videoMudo ? 'Ligar o som do vídeo' : 'Desligar o som do vídeo'" @click="alternarSomVideo"><Icone :nome="videoMudo ? 'volume-x' : 'volume-2'" :tamanho="16" :traco="2.4" /></button>
+                    </div>
                 </div>
                 <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">{{ cta('historia', 'Quero o meu kit') }} <Icone nome="arrow-right" :tamanho="22" /></button></div>
             </div>

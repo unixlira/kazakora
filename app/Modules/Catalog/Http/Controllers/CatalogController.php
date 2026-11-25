@@ -13,6 +13,7 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Support\LayoutDaPagina;
+use App\Modules\Catalog\Support\PaginaBrinquedo;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
@@ -553,6 +554,10 @@ class CatalogController extends Controller
             // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
             // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
             'layout' => LayoutDaPagina::para($product),
+            // Conteúdo próprio da página de brinquedo (25/11/2026), do produto ou do pai.
+            'paginaBrinquedo' => LayoutDaPagina::para($product) === LayoutDaPagina::BRINQUEDO
+                ? PaginaBrinquedo::paraPagina($product)
+                : null,
         ]);
     }
 

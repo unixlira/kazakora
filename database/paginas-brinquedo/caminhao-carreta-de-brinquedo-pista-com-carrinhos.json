@@ -1,0 +1,242 @@
+{
+  "titulo": "Caminhão Carreta de Brinquedo que Vira Pista de Corrida",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Vira pista",
+      "corrida em casa"
+    ],
+    [
+      "Zero telas",
+      "brincadeira real"
+    ],
+    [
+      "Articulado",
+      "monta a pista"
+    ],
+    [
+      "Foco e ação",
+      "longe do celular"
+    ]
+  ],
+  "letreiro": [
+    "O caminhão que vira pista de corrida",
+    "Brincadeira de verdade longe do celular",
+    "Estimula a coordenação e o foco",
+    "Estrutura articulada e detalhada",
+    "Cabine detalhada estilo corrida",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão que acelera a imaginação",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Troque o brilho da tela pela emoção das pistas. Este caminhão articulado se transforma em uma pista de corrida, para horas de movimento, foco e criatividade longe dos vídeos de internet.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Vira pista de corrida",
+      "Cabine detalhada"
+    ],
+    "cards": [
+      {
+        "titulo": "Ação real",
+        "texto": "A criança monta a pista e cria suas próprias corridas emocionantes.",
+        "icone": "flag"
+      },
+      {
+        "titulo": "Foco total",
+        "texto": "Brincar de carrinho ajuda a desenvolver a paciência e a atenção.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Manipular o caminhão articulado treina os movimentos das mãos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Uma alternativa saudável para gastar energia sem usar o celular.",
+        "icone": "smartphone"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto a carreta vira pista e os carrinhos aceleram, o desenvolvimento acontece de forma natural:",
+    "imagem": 0,
+    "chamadas": [
+      "Estrutura articulada",
+      "Cabine detalhada",
+      "Noção de espaço",
+      "Foco na ação"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para a diversão",
+    "texto": "Com cabine detalhada e corpo que se abre, este caminhão é o sonho de qualquer pequeno colecionador.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Vira pista",
+        "texto": "Estrutura articulada que se abre",
+        "icone": "route"
+      },
+      {
+        "titulo": "Visual realista",
+        "texto": "Cabine detalhada e estilosa",
+        "icone": "truck"
+      },
+      {
+        "titulo": "Cores vivas",
+        "texto": "Visual colorido de corrida",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Brincar junto",
+        "texto": "Ideal para reunir a família",
+        "icone": "users-round"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Caminhão Carreta",
+    "intro": "Um brinquedo simples diverte, mas um caminhão que vira pista surpreende.",
+    "rotulos": [
+      "Comum",
+      "Carreta"
+    ],
+    "linhas": [
+      {
+        "texto": "Rodinhas que giram",
+        "comum": true
+      },
+      {
+        "texto": "Estrutura que vira pista de corrida",
+        "comum": false
+      },
+      {
+        "texto": "Cabine com detalhes realistas",
+        "comum": false
+      },
+      {
+        "texto": "Mantém o foco longe do celular",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a coordenação motora",
+        "comum": false
+      },
+      {
+        "texto": "Ideal para colecionar e brincar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos inesquecíveis em família",
+    "texto": "Ver o sorriso no rosto ao abrir a pista e começar a corrida não tem preço. É o convite perfeito para pais e filhos brincarem juntos no chão da sala, criando memórias reais.",
+    "imagem": 0,
+    "citacao": "Menos tempo de tela e mais tempo de qualidade com quem a gente mais ama."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Garanta agora o presente que vai transformar a tarde da criançada em uma grande corrida.",
+    "itens": [
+      {
+        "id": 587,
+        "nome": "Kit Carreta Veloz",
+        "itens": "1 Caminhão Carreta que Vira Pista",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão Pista",
+            "icone": "truck"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Garanta o caminhão que vira pista de corrida.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Pista montada",
+      "texto": "Abra a carreta e transforme a sala em um circuito.",
+      "icone": "route"
+    },
+    {
+      "titulo": "Diversão real",
+      "texto": "Horas de corrida e imaginação longe das telas.",
+      "icone": "flag"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Criando memórias",
+    "Focado na diversão"
+  ],
+  "duvidas": [
+    [
+      "O caminhão vira pista mesmo?",
+      "Sim! Ele possui uma estrutura articulada que se abre e vira uma pista de corrida."
+    ],
+    [
+      "Para que serve a estrutura articulada?",
+      "Ela permite criar pistas de corrida a partir da carreta, além de deixar o caminhão com visual de corrida."
+    ],
+    [
+      "O que vem na embalagem?",
+      "O kit contém 1 Caminhão Carreta com estrutura articulada."
+    ],
+    [
+      "É bom para colecionadores?",
+      "Com certeza! A cabine é detalhada e o visual é ideal para montar cenários e coleções."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Escolha o caminhão que vira pista e garanta horas de brincadeira de verdade para quem você ama."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "comparativo": "Quero trocar a tela pela pista"
+  }
+}

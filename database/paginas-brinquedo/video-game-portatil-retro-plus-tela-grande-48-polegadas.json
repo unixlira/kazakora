@@ -1,0 +1,238 @@
+{
+  "titulo": "Video Game Portátil Retrô com Tela Grande de 4.8 Polegadas",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Tela de 4.8\"",
+      "conforto visual"
+    ],
+    [
+      "Jogos Clássicos",
+      "nostalgia pura"
+    ],
+    [
+      "Design Ergonômico",
+      "pegada firme"
+    ],
+    [
+      "Cores Vibrantes",
+      "estilo retrô"
+    ]
+  ],
+  "letreiro": [
+    "Tela grande de 4.8 polegadas",
+    "Reviva os clássicos dos jogos retrô",
+    "Controles confortáveis e ergonômicos",
+    "Diversão portátil para qualquer lugar",
+    "Visual colorido e retrô",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Nostalgia para toda a família",
+    "subtitulo": "O clássico na palma da mão",
+    "texto": "Relembrar os jogos que marcaram época é um convite para pais e filhos brincarem juntos. Com a tela grande de 4.8 polegadas, cada partida fica mais confortável de acompanhar.",
+    "imagem": 4
+  },
+  "porque": {
+    "titulo": "Por que a família adora",
+    "imagem": 1,
+    "chamadas": [
+      "Tela de 4.8 polegadas",
+      "Design ergonômico"
+    ],
+    "cards": [
+      {
+        "titulo": "Diversão retrô",
+        "texto": "Relembre os clássicos que fizeram história com seu filho.",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Conforto visual",
+        "texto": "Tela de 4.8 polegadas para jogar com muito mais clareza.",
+        "icone": "eye"
+      },
+      {
+        "titulo": "Pegada firme",
+        "texto": "Controles ergonômicos pensados para o conforto das mãos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Portátil",
+        "texto": "Leve a brincadeira para viagens e passeios com praticidade.",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que desenvolve foco",
+    "texto": "Jogar os clássicos junto treina a paciência para vencer desafios e a coordenação das mãos, enquanto todo mundo se diverte.",
+    "imagem": 5,
+    "chamadas": [
+      "4.8 polegadas",
+      "Jogos clássicos",
+      "Cores vibrantes",
+      "Ergonômico"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Raciocínio",
+        "icone": "brain"
+      },
+      {
+        "texto": "Noção espacial",
+        "icone": "shapes"
+      },
+      {
+        "texto": "Persistência",
+        "icone": "trophy"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para o pequeno player",
+    "texto": "Um console compacto, com tela ampla e controles confortáveis nos dois lados, feito para os momentos de lazer.",
+    "imagem": 2,
+    "cards": [
+      {
+        "titulo": "Tela Ampla",
+        "texto": "4.8 polegadas de cores",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Controles",
+        "texto": "Direcional, analógicos e botões",
+        "icone": "joystick"
+      },
+      {
+        "titulo": "Corpo Compacto",
+        "texto": "Fácil de segurar e levar",
+        "icone": "box"
+      },
+      {
+        "titulo": "Visual Retrô",
+        "texto": "Estilo clássico e moderno",
+        "icone": "palette"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Console comum × Retro Plus",
+    "intro": "Existem muitos consoles, mas poucos com este conforto visual.",
+    "rotulos": [
+      "Comum",
+      "Retro Plus"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem jogos clássicos",
+        "comum": true
+      },
+      {
+        "texto": "Tela grande de 4.8 polegadas",
+        "comum": false
+      },
+      {
+        "texto": "Design ergonômico",
+        "comum": false
+      },
+      {
+        "texto": "Visual colorido e retrô",
+        "comum": false
+      },
+      {
+        "texto": "Pegada confortável nos dois lados",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos de lazer em família",
+    "texto": "Nada como mostrar para os filhos os jogos que a gente amava. É o presente perfeito para criar novas memórias e rir junto no sofá da sala ou em viagens.",
+    "imagem": 7,
+    "citacao": "Os clássicos que marcaram época, agora na palma da mão para pais e filhos jogarem juntos."
+  },
+  "kits": {
+    "titulo": "Escolha o seu favorito",
+    "texto": "Leve a nostalgia para casa com o console que é puro estilo.",
+    "itens": [
+      {
+        "id": 295,
+        "nome": "Kit Diversão Retrô",
+        "itens": "1 Video Game Portátil Retro Plus",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Video Game",
+            "icone": "gamepad-2"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o modelo",
+      "texto": "Escolha o presente do seu pequeno player.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Nostalgia pura",
+      "texto": "Ligue e reviva os clássicos na hora com toda a família.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Diversão de verdade",
+      "texto": "Horas de jogos e sorrisos, longe do tédio.",
+      "icone": "laugh"
+    }
+  ],
+  "garantia": [
+    "Jogando os clássicos",
+    "Com sorriso no rosto",
+    "Longe do tédio",
+    "Explorando fases"
+  ],
+  "duvidas": [
+    [
+      "A tela é boa para enxergar?",
+      "O console tem tela grande de 4,8 polegadas, pensada para mais conforto visual nas partidas."
+    ],
+    [
+      "Os controles são confortáveis?",
+      "Sim, o aparelho tem design ergonômico, com controles confortáveis nos dois lados."
+    ],
+    [
+      "Ele é fácil de transportar?",
+      "Sim. Ele tem formato portátil e corpo compacto, fácil de levar para viagens e passeios."
+    ],
+    [
+      "O que vem na caixa?",
+      "Vem 1 Video Game Portátil Retro Plus com tela de 4.8 polegadas."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que traz a nostalgia para casa",
+    "texto": "Horas de diversão com os clássicos, tela grande e momentos inesquecíveis em família."
+  },
+  "ctas": {
+    "historia": "Quero o meu Retro Plus",
+    "comparativo": "Escolher o Retro Plus"
+  }
+}

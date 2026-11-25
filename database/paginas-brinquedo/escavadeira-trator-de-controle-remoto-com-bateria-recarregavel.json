@@ -1,0 +1,250 @@
+{
+  "titulo": "Escavadeira de Controle Remoto com Braço e Bateria Recarregável",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Braço articulado",
+      "movimentos reais"
+    ],
+    [
+      "Bateria inclusa",
+      "mais diversão"
+    ],
+    [
+      "Controle total",
+      "sem fios"
+    ],
+    [
+      "Zero telas",
+      "foco na obra"
+    ]
+  ],
+  "letreiro": [
+    "Comanda movimentos de escavação",
+    "Braço articulado com caçamba",
+    "Esteiras de lagarta realistas",
+    "Luzes integradas para a obra",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Obras incríveis longe das telas",
+    "subtitulo": "Engenharia e foco no chão da sala",
+    "texto": "Trocar o brilho do celular pelo controle de uma máquina de verdade. Operar a escavadeira desenvolve o foco e a noção de espaço, transformando a sala em um canteiro de obras cheio de imaginação e sem distrações digitais.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Braço com caçamba",
+      "Luzes integradas"
+    ],
+    "cards": [
+      {
+        "titulo": "Realismo puro",
+        "texto": "Design amarelo e preto com esteiras de lagarta que encantam.",
+        "icone": "tractor"
+      },
+      {
+        "titulo": "Controle total",
+        "texto": "Comandos detalhados para manobras precisas na brincadeira.",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Sempre pronta",
+        "texto": "Bateria recarregável para horas de diversão.",
+        "icone": "battery-charging"
+      },
+      {
+        "titulo": "Foco e paciência",
+        "texto": "A criança se concentra em cada movimento da escavação.",
+        "icone": "target"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto opera os controles e move a terra imaginária, seu filho desenvolve competências fundamentais:",
+    "imagem": 0,
+    "chamadas": [
+      "Braço articulado",
+      "Esteiras reais",
+      "Controle sem fio",
+      "Luzes integradas"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção espacial",
+        "icone": "compass"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Raciocínio",
+        "icone": "brain"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe de uma máquina de obra",
+    "texto": "Uma escavadeira realista com luzes, esteiras e braço com caçamba para uma brincadeira de construção completa.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Braço com caçamba",
+        "texto": "Articulação para escavar",
+        "icone": "construction"
+      },
+      {
+        "titulo": "Luzes integradas",
+        "texto": "Mais brilho na obra",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Sem pilhas no trator",
+        "texto": "Bateria recarregável",
+        "icone": "battery-full"
+      },
+      {
+        "titulo": "Esteira lagarta",
+        "texto": "Visual de máquina real",
+        "icone": "route"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Escavadeira Realista",
+    "intro": "Carrinhos comuns só rolam. Esta máquina opera de verdade.",
+    "rotulos": [
+      "Comum",
+      "Escavadeira"
+    ],
+    "linhas": [
+      {
+        "texto": "Move para frente e trás",
+        "comum": true
+      },
+      {
+        "texto": "Braço articulado com caçamba",
+        "comum": false
+      },
+      {
+        "texto": "Esteiras de lagarta funcionais",
+        "comum": false
+      },
+      {
+        "texto": "Bateria recarregável inclusa",
+        "comum": false
+      },
+      {
+        "texto": "Luzes integradas de operação",
+        "comum": false
+      },
+      {
+        "texto": "Controle remoto com comandos detalhados",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Engenharia em família",
+    "texto": "Nada como montar o canteiro de obras juntos. Pais e filhos se conectam enquanto planejam a próxima escavação, criando memórias longe das redes sociais.",
+    "imagem": 0,
+    "citacao": "Menos tempo de tela e mais tempo de qualidade construindo histórias no tapete de casa."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit de construção",
+    "texto": "Garanta a máquina completa para começar a obra agora mesmo.",
+    "itens": [
+      {
+        "id": 497,
+        "nome": "Kit Operador Realista",
+        "itens": "Escavadeira + Controle + Bateria",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Escavadeira",
+            "icone": "tractor"
+          },
+          {
+            "texto": "Controle",
+            "icone": "gamepad-2"
+          },
+          {
+            "texto": "Bateria",
+            "icone": "battery-charging"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "A máquina perfeita para a sua diversão.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Canteiro pronto",
+      "texto": "Chegou! Hora de carregar a bateria e começar.",
+      "icone": "construction"
+    },
+    {
+      "titulo": "Obra de verdade",
+      "texto": "Movimente a caçamba e brinque longe do celular.",
+      "icone": "tractor"
+    }
+  ],
+  "garantia": [
+    "Operando a máquina",
+    "Longe das telas",
+    "Focado na obra",
+    "Criando histórias"
+  ],
+  "duvidas": [
+    [
+      "O que vem na caixa?",
+      "Acompanha a escavadeira trator, o controle remoto sem fio e a bateria recarregável."
+    ],
+    [
+      "Como o trator se movimenta?",
+      "Ela tem esteiras de lagarta e é comandada pelo controle remoto sem fio, com comandos para a movimentação."
+    ],
+    [
+      "Como funciona a energia?",
+      "A escavadeira é movida a bateria recarregável, então não depende de pilhas no veículo."
+    ],
+    [
+      "Tem luzes?",
+      "Sim, o modelo possui luzes integradas que acendem durante a brincadeira para mais realismo."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade com movimentos reais, luzes e muita imaginação no comando da obra."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "comparativo": "Quero trocar a tela pela obra"
+  }
+}

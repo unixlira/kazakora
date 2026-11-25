@@ -1,0 +1,249 @@
+{
+  "titulo": "Pista de Carrinhos Espacial com Sistema Automático e Obstáculos",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Tema espacial",
+      "astronautas"
+    ],
+    [
+      "Automática",
+      "pistas e obstáculos"
+    ],
+    [
+      "Carrinhos",
+      "e miniaturas"
+    ],
+    [
+      "Zero telas",
+      "imaginação solta"
+    ]
+  ],
+  "letreiro": [
+    "Pista com tema espacial",
+    "Sistema automático com obstáculos",
+    "Acompanha carrinhos e miniaturas",
+    "Elementos interativos",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Aventura espacial, sem telas",
+    "subtitulo": "Um circuito cheio de detalhes para explorar",
+    "texto": "Os carrinhos passam por pistas e obstáculos numa missão espacial no chão do quarto. Brincadeira de verdade, longe do celular e da TV, e mais descanso para os olhos antes de dormir.",
+    "imagem": 4
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Tema espacial",
+      "Sistema automático"
+    ],
+    "cards": [
+      {
+        "titulo": "Missão espacial",
+        "texto": "Astronautas e foguete num circuito colorido.",
+        "icone": "rocket"
+      },
+      {
+        "titulo": "Anda sozinho",
+        "texto": "Sistema automático com pistas e obstáculos.",
+        "icone": "route"
+      },
+      {
+        "titulo": "Muito para mexer",
+        "texto": "Elementos interativos em cada canto da pista.",
+        "icone": "pointer"
+      },
+      {
+        "titulo": "Vem com carrinhos",
+        "texto": "Carrinhos e miniaturas para a aventura.",
+        "icone": "car"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto acompanha cada carrinho no circuito, a criança treina sem nem perceber:",
+    "imagem": 2,
+    "chamadas": [
+      "Pistas",
+      "Obstáculos",
+      "Carrinhos",
+      "Astronautas"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Causa e efeito",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para explorar",
+    "texto": "Pistas, rampas, obstáculos e miniaturas espaciais num circuito colorido cheio de surpresas.",
+    "imagem": 5,
+    "cards": [
+      {
+        "titulo": "Tema espacial",
+        "texto": "Design colorido",
+        "icone": "rocket"
+      },
+      {
+        "titulo": "Automático",
+        "texto": "Pistas e obstáculos",
+        "icone": "repeat"
+      },
+      {
+        "titulo": "Interativo",
+        "texto": "Muito para explorar",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Miniaturas",
+        "texto": "Carrinhos inclusos",
+        "icone": "car"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pista comum × Pista Espacial",
+    "intro": "As duas têm carrinhos. Só uma é uma missão espacial.",
+    "rotulos": [
+      "Comum",
+      "Espacial"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem pista para carrinhos",
+        "comum": true
+      },
+      {
+        "texto": "Tema espacial com astronautas",
+        "comum": false
+      },
+      {
+        "texto": "Sistema automático",
+        "comum": false
+      },
+      {
+        "texto": "Obstáculos pelo caminho",
+        "comum": false
+      },
+      {
+        "texto": "Elementos interativos",
+        "comum": false
+      },
+      {
+        "texto": "Acompanha miniaturas",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Cada volta do carrinho é uma nova missão, e todo mundo quer ver onde ele vai parar. Diversão de chão, com a família por perto.",
+    "imagem": 6,
+    "citacao": "Menos tela, mais imaginação: uma viagem ao espaço no chão da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Pista espacial com carrinhos e miniaturas, pronta para a primeira missão.",
+    "itens": [
+      {
+        "id": 365,
+        "nome": "Kit Missão Espacial",
+        "itens": "Pista espacial + carrinhos e miniaturas",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pista espacial",
+            "icone": "rocket"
+          },
+          {
+            "texto": "Carrinhos",
+            "icone": "car"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "A pista espacial com carrinhos.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! Primeira missão no espaço.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Aventura todo dia",
+      "texto": "Imaginação solta, longe das telas.",
+      "icone": "rocket"
+    }
+  ],
+  "garantia": [
+    "Brincando mais",
+    "Mais longe das telas",
+    "Imaginando aventuras",
+    "Explorando cada detalhe"
+  ],
+  "duvidas": [
+    [
+      "O que vem na caixa?",
+      "A pista com temática espacial, os carrinhos e as miniaturas."
+    ],
+    [
+      "Como a pista funciona?",
+      "Tem sistema automático com pistas e obstáculos, e elementos interativos para a criança explorar."
+    ],
+    [
+      "Qual é o tema do brinquedo?",
+      "Espacial, com design colorido, astronautas e miniaturas."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, uma missão espacial por dia e a família mais perto."
+  },
+  "ctas": {
+    "historia": "Quero a pista espacial",
+    "porque": "Quero a missão espacial",
+    "ensina": "Quero brincar sem telas",
+    "detalhes": "Escolher o meu kit",
+    "comparativo": "Quero a pista espacial",
+    "familia": "Quero aventura em família",
+    "passos": "Escolher o meu kit",
+    "garantia": "Quero a pista espacial",
+    "final": "Quero a pista espacial"
+  }
+}

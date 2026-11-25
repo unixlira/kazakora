@@ -1,0 +1,246 @@
+{
+  "titulo": "Trator de Esteira com Controle Remoto, Pá Articulada, Luz e Som",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Controle total",
+      "anda e gira"
+    ],
+    [
+      "Pá articulada",
+      "sobe e desce"
+    ],
+    [
+      "Luz e som",
+      "muito realista"
+    ],
+    [
+      "Zero telas",
+      "obra de verdade"
+    ]
+  ],
+  "letreiro": [
+    "Trator de esteira com controle remoto",
+    "Pá frontal que sobe e desce",
+    "Faróis de LED e sons de motor",
+    "Esteiras independentes para curvas",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O canteiro de obras em casa",
+    "subtitulo": "Diversão real longe das telas",
+    "texto": "Trocar o celular por uma máquina de verdade: essa é a magia. Com movimentos realistas e controle total, a criança cria seu próprio cenário de construção, desenvolvendo o foco e a imaginação fora do mundo digital.",
+    "imagem": 11
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 7,
+    "chamadas": [
+      "Movimentos reais",
+      "Luzes e sons"
+    ],
+    "cards": [
+      {
+        "titulo": "Coordenação",
+        "texto": "Controlar as esteiras e a pá treina a precisão dos movimentos.",
+        "icone": "focus"
+      },
+      {
+        "titulo": "Imaginação",
+        "texto": "Transforma a sala ou o quintal em uma obra de verdade.",
+        "icone": "construction"
+      },
+      {
+        "titulo": "Foco",
+        "texto": "Prende a atenção numa brincadeira ativa e cheia de manobras.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Realismo",
+        "texto": "Sons e luzes de LED que parecem uma máquina gigante.",
+        "icone": "volume-2"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que desenvolve de verdade",
+    "texto": "Enquanto comanda o gigante amarelo, a criança exercita habilidades valiosas para o crescimento:",
+    "imagem": 12,
+    "chamadas": [
+      "Pá articulada",
+      "Faz curvas e giros",
+      "Faróis LED",
+      "Som realista"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio lógico",
+        "icone": "brain"
+      },
+      {
+        "texto": "Foco e paciência",
+        "icone": "clock"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Percepção visual",
+        "icone": "eye"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Uma máquina completa nas mãos",
+    "texto": "Detalhes que encantam: da cabine com operador ao sistema que simula o mecanismo hidráulico.",
+    "imagem": 5,
+    "cards": [
+      {
+        "titulo": "Esteiras duplas",
+        "texto": "Curvas, giros e manobras.",
+        "icone": "rotate-cw"
+      },
+      {
+        "titulo": "Pá frontal",
+        "texto": "Sobe e desce como na obra.",
+        "icone": "arrow-up-down"
+      },
+      {
+        "titulo": "Faróis LED",
+        "texto": "Brincadeira iluminada e real.",
+        "icone": "sun"
+      },
+      {
+        "titulo": "Som de motor",
+        "texto": "Imersão total na operação.",
+        "icone": "speaker"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Trator de Esteira",
+    "intro": "Veículos simples apenas andam. Este trator opera de verdade.",
+    "rotulos": [
+      "Comum",
+      "Trator"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem controle remoto",
+        "comum": true
+      },
+      {
+        "texto": "Esteiras com giro independente",
+        "comum": false
+      },
+      {
+        "texto": "Pá frontal que sobe e desce",
+        "comum": false
+      },
+      {
+        "texto": "Simula sistema hidráulico",
+        "comum": false
+      },
+      {
+        "texto": "Faróis de LED e som de máquina",
+        "comum": false
+      },
+      {
+        "texto": "Faz curvas e giros com as esteiras",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos que ficam na memória",
+    "texto": "Menos tempo de tela antes de dormir ajuda no sono e sobra mais tempo para brincar junto. Montar o canteiro de obras no tapete vira o evento favorito do dia.",
+    "imagem": 0,
+    "citacao": "Horas de brincadeira de verdade que aproximam a família e despertam a curiosidade."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O presente perfeito para quem ama máquinas pesadas e quer brincar longe do celular.",
+    "itens": [
+      {
+        "id": 192,
+        "nome": "Kit Operador Realista",
+        "itens": "Trator de Esteira + Controle Remoto",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Trator Esteira",
+            "icone": "truck"
+          },
+          {
+            "texto": "Controle Remoto",
+            "icone": "gamepad-2"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "O trator amarelo completo para a diversão começar.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! Hora de ligar os motores e os faróis.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Obra de verdade",
+      "texto": "Horas de foco e criatividade longe do celular.",
+      "icone": "construction"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Focado na obra",
+    "Comandando a obra"
+  ],
+  "duvidas": [
+    [
+      "O que vem na embalagem?",
+      "1 Trator de Esteira de Controle Remoto, 1 controle remoto e acessórios correspondentes ao modelo."
+    ],
+    [
+      "A pá frontal se movimenta?",
+      "Sim, a lâmina frontal é articulada e pode ser elevada e abaixada para simular atividades de obra."
+    ],
+    [
+      "O brinquedo emite luz e som?",
+      "Sim, ele conta com faróis dianteiros iluminados por LED e efeitos sonoros que simulam o funcionamento de máquinas pesadas."
+    ],
+    [
+      "Como ele se movimenta?",
+      "Possui esteiras com acionamento independente que permitem andar para frente, para trás, fazer curvas, giros e manobras."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Escolha o kit e garanta horas de brincadeira de verdade com o trator que é puro realismo."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "comparativo": "Quero brincar de verdade"
+  }
+}

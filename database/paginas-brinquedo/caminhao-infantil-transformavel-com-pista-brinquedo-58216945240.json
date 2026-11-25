@@ -1,0 +1,263 @@
+{
+  "titulo": "Caminhão Unicórnio que Vira Pista de 119 cm com 6 Carrinhos",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Caminhão 2 em 1",
+      "vira super pista"
+    ],
+    [
+      "Vem 6 carrinhos",
+      "diversão completa"
+    ],
+    [
+      "Pista de 119cm",
+      "muita velocidade"
+    ],
+    [
+      "Zero telas",
+      "brincadeira real"
+    ]
+  ],
+  "letreiro": [
+    "Caminhão que vira pista de 119 cm",
+    "Acompanha 6 mini carrinhos coloridos",
+    "Com 2 lançadores para apostar corrida",
+    "Efeitos sonoros para brincar junto",
+    "8 vagas para organizar os carrinhos",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão que acelera longe das telas",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Troque o brilho do celular pela emoção das pistas. Com 119 cm de comprimento e lançadores duplos, este caminhão transforma a sala em uma arena de corrida, estimulando o foco e a imaginação de verdade.",
+    "imagem": 5
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 3,
+    "chamadas": [
+      "Pista de 119 cm",
+      "Sons realistas"
+    ],
+    "cards": [
+      {
+        "titulo": "Transformação mágica",
+        "texto": "Abre e fecha em segundos para a brincadeira não parar.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Disputas reais",
+        "texto": "Dois lançadores para apostar corrida com amigos ou família.",
+        "icone": "trophy"
+      },
+      {
+        "titulo": "Sempre organizado",
+        "texto": "8 vagas de estacionamento para guardar tudo após a corrida.",
+        "icone": "package"
+      },
+      {
+        "titulo": "Foco e atenção",
+        "texto": "Mirar, lançar e esperar a vez treina a atenção e a paciência.",
+        "icone": "target"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto lança os carrinhos e monta a pista, seu pequeno desenvolve habilidades essenciais para o crescimento:",
+    "imagem": 1,
+    "chamadas": [
+      "119 cm de pista",
+      "6 carrinhos",
+      "2 lançadores",
+      "Sons inclusos"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users-round"
+      },
+      {
+        "texto": "Foco e paciência",
+        "icone": "brain"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para a aventura",
+    "texto": "Plástico resistente, encaixes firmes e um design de unicórnio que encanta. Tudo pensado para durar muitas corridas.",
+    "imagem": 4,
+    "cards": [
+      {
+        "titulo": "Pista gigante",
+        "texto": "Cerca de 119 cm montada",
+        "icone": "ruler"
+      },
+      {
+        "titulo": "Efeitos sonoros",
+        "texto": "Brincadeira mais animada",
+        "icone": "volume-2"
+      },
+      {
+        "titulo": "Fácil de levar",
+        "texto": "Design dobrável e prático",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Diversão de verdade",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Caminhão Transformável",
+    "intro": "Carrinhos comuns ficam espalhados. O nosso é pista e garagem.",
+    "rotulos": [
+      "Comum",
+      "Caminhão"
+    ],
+    "linhas": [
+      {
+        "texto": "Dá para brincar de empurrar",
+        "comum": true
+      },
+      {
+        "texto": "Vira uma pista de 119 cm",
+        "comum": false
+      },
+      {
+        "texto": "Vem com 6 carrinhos inclusos",
+        "comum": false
+      },
+      {
+        "texto": "Tem lançadores para competição",
+        "comum": false
+      },
+      {
+        "texto": "Possui 8 vagas de estacionamento",
+        "comum": false
+      },
+      {
+        "texto": "Tem efeitos sonoros interativos",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos inesquecíveis em família",
+    "texto": "Nada supera a alegria de apostar uma corrida no chão da sala. Menos tempo de tela significa mais tempo de qualidade, risadas e conexão entre pais e filhos.",
+    "imagem": 0,
+    "citacao": "O melhor lugar do mundo é onde a imaginação corre livre, longe das telas."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit de corrida",
+    "texto": "O presente perfeito para transformar a brincadeira em uma super aventura.",
+    "itens": [
+      {
+        "id": 117,
+        "nome": "Kit Diversão Completa",
+        "itens": "Caminhão + Pista + 6 Carrinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão Pista",
+            "icone": "truck"
+          },
+          {
+            "texto": "6 Carrinhos",
+            "icone": "car-front"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Garanta o presente que vai surpreender seu pequeno.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Aventura começa",
+      "texto": "Abra a pista e veja os olhos brilharem.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Brincar de verdade",
+      "texto": "Horas de corrida e alegria longe do celular.",
+      "icone": "gamepad-2"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Apostando corridas",
+    "Criando histórias"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicado?",
+      "O brinquedo é recomendado para crianças a partir de 3 anos."
+    ],
+    [
+      "Qual o tamanho da pista?",
+      "Quando aberta, a pista atinge aproximadamente 119 cm de comprimento."
+    ],
+    [
+      "O que vem na embalagem?",
+      "01 Caminhão Transformável, 06 Mini Carrinhos, 01 Conjunto de Pistas Integradas e Manual."
+    ],
+    [
+      "Precisa de pilhas?",
+      "O sistema de som funciona com 3 baterias tipo botão, que já vêm inclusas no conjunto."
+    ],
+    [
+      "Quantos carrinhos cabem nele?",
+      "O caminhão possui 8 vagas de estacionamento para organizar os veículos."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Escolha o caminhão transformável e garanta horas de brincadeira real, criatividade e união para sua família."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "porque": "Escolher meu caminhão",
+    "ensina": "Quero brincar junto",
+    "detalhes": "Escolher agora",
+    "comparativo": "Quero a pista gigante",
+    "familia": "Quero diversão real",
+    "passos": "Quero o meu kit",
+    "garantia": "Escolher meu presente",
+    "final": "Quero o meu kit"
+  },
+  "avaliacoes_de": [
+    {
+      "slug": "caminhao-unicornio-com-pista-e-6-carrinhos-infantil-58266956764",
+      "rotulo": ""
+    }
+  ]
+}

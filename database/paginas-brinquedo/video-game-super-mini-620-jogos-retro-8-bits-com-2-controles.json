@@ -1,0 +1,261 @@
+{
+ "titulo": "620 Jogos Retrô na TV e 2 Controles para Jogar em Família",
+ "sem_telas": false,
+ "chips": [
+  [
+   "620 jogos",
+   "já no console"
+  ],
+  [
+   "2 controles",
+   "jogue em dupla"
+  ],
+  [
+   "Pronto para jogar",
+   "é só ligar"
+  ],
+  [
+   "Compacto",
+   "cabe em qualquer canto"
+  ]
+ ],
+ "letreiro": [
+  "620 jogos retrô de 8 bits",
+  "2 controles com fio",
+  "Joga direto na TV",
+  "Pais e filhos na mesma partida",
+  "Compacto e fácil de guardar",
+  "Garantia de 30 dias"
+ ],
+ "historia": {
+  "titulo": "A infância dos pais na sala",
+  "subtitulo": "Os clássicos de 8 bits voltaram",
+  "texto": "Aquele joguinho que você jogava com seu irmão agora vira partida com seu filho. Dois controles, o sofá e muita risada: diversão de verdade para a família toda junta.",
+  "imagem": 7
+ },
+ "porque": {
+  "titulo": "Por que a família inteira adora",
+  "imagem": 1,
+  "chamadas": [
+   "620 jogos clássicos",
+   "Pronto para jogar"
+  ],
+  "cards": [
+   {
+    "titulo": "Joga em dupla",
+    "texto": "Dois controles para pai, mãe, filho ou amigo entrarem no jogo.",
+    "icone": "users"
+   },
+   {
+    "titulo": "Muitos clássicos",
+    "texto": "620 jogos de 8 bits integrados, sem baixar nada.",
+    "icone": "gamepad-2"
+   },
+   {
+    "titulo": "Liga e joga",
+    "texto": "Posiciona, conecta os controles e a diversão começa.",
+    "icone": "play"
+   },
+   {
+    "titulo": "Leve e compacto",
+    "texto": "Fácil de levar da sala para o quarto.",
+    "icone": "package"
+   }
+  ]
+ },
+ "ensina": {
+  "titulo": "Jogar junto também ensina",
+  "texto": "Em cada partida em dupla, a criança treina sem nem perceber:",
+  "imagem": 2,
+  "chamadas": [
+   "Controle 1 e 2",
+   "8 bits clássicos",
+   "Jogo em dupla",
+   "620 jogos"
+  ],
+  "habilidades": [
+   {
+    "texto": "Trabalho em equipe",
+    "icone": "handshake"
+   },
+   {
+    "texto": "Reflexo",
+    "icone": "gauge"
+   },
+   {
+    "texto": "Coordenação",
+    "icone": "hand"
+   },
+   {
+    "texto": "Paciência",
+    "icone": "hourglass"
+   },
+   {
+    "texto": "Saber perder",
+    "icone": "heart"
+   },
+   {
+    "texto": "Atenção e foco",
+    "icone": "target"
+   }
+  ]
+ },
+ "detalhes": {
+  "titulo": "Pequeno no tamanho, grande na diversão",
+  "texto": "Console mini com visual clássico e dois controles com fio: é conectar na TV e jogar.",
+  "imagem": 3,
+  "cards": [
+   {
+    "titulo": "620 jogos",
+    "texto": "Clássicos de 8 bits",
+    "icone": "joystick"
+   },
+   {
+    "titulo": "2 controles",
+    "texto": "Com fio, para jogar junto",
+    "icone": "gamepad"
+   },
+   {
+    "titulo": "Na TV",
+    "texto": "Joga na tela grande",
+    "icone": "tv"
+   },
+   {
+    "titulo": "Fácil de guardar",
+    "texto": "Design leve e mini",
+    "icone": "box"
+   }
+  ]
+ },
+ "comparativo": {
+  "titulo": "Videogame comum × Super Mini",
+  "intro": "Os dois divertem. Só um já chega com tudo para jogar a dois.",
+  "rotulos": [
+   "Comum",
+   "Super Mini"
+  ],
+  "linhas": [
+   {
+    "texto": "Diverte a criançada",
+    "comum": true
+   },
+   {
+    "texto": "620 jogos já no console",
+    "comum": false
+   },
+   {
+    "texto": "2 controles na caixa",
+    "comum": false
+   },
+   {
+    "texto": "Sem baixar nem comprar jogos",
+    "comum": false
+   },
+   {
+    "texto": "Clássicos que os pais conhecem",
+    "comum": false
+   },
+   {
+    "texto": "Compacto e fácil de guardar",
+    "comum": false
+   }
+  ]
+ },
+ "familia": {
+  "titulo": "Partida boa é partida em família",
+  "texto": "Pais ensinam os clássicos que jogavam, filhos desafiam para a revanche. Um passatempo que junta todo mundo no mesmo sofá.",
+  "imagem": 6,
+  "citacao": "Um controle para você, outro para ele: a melhor partida é a que a família joga junta."
+ },
+ "kits": {
+  "titulo": "Escolha o seu kit",
+  "texto": "Console e dois controles prontos para a primeira partida em família.",
+  "itens": [
+   {
+    "id": 376,
+    "nome": "Kit Diversão em Dupla",
+    "itens": "1 console retrô + 2 controles com fio",
+    "unidades": 1,
+    "partes": [
+     {
+      "texto": "Console retrô",
+      "icone": "gamepad-2"
+     },
+     {
+      "texto": "2 controles",
+      "icone": "gamepad"
+     },
+     {
+      "texto": "620 jogos",
+      "icone": "joystick"
+     }
+    ]
+   }
+  ]
+ },
+ "passos": [
+  {
+   "titulo": "Peça o seu kit",
+   "texto": "Console e 2 controles na mesma caixa.",
+   "icone": "gift"
+  },
+  {
+   "titulo": "Enviamos com rastreio",
+   "texto": "Acompanhe cada passo em Meus Pedidos.",
+   "icone": "truck"
+  },
+  {
+   "titulo": "Conecte e ligue",
+   "texto": "Posicione o console e encaixe os controles.",
+   "icone": "plug"
+  },
+  {
+   "titulo": "Hora da partida",
+   "texto": "Pais e filhos jogando os clássicos juntos.",
+   "icone": "trophy"
+  }
+ ],
+ "garantia": [
+  "Jogando em família",
+  "Rindo com os pais",
+  "Pedindo revanche",
+  "Descobrindo clássicos"
+ ],
+ "duvidas": [
+  [
+   "Preciso baixar os jogos?",
+   "Não. O console já vem com 620 jogos clássicos de 8 bits integrados."
+  ],
+  [
+   "Quantos controles acompanham?",
+   "Acompanham 2 controles com fio, para jogar em dupla."
+  ],
+  [
+   "Onde eu jogo?",
+   "Direto na sua televisão."
+  ],
+  [
+   "O que vem na caixa?",
+   "1 console retrô Super Mini e 2 controles com fio."
+  ],
+  [
+   "É difícil de instalar?",
+   "Não. É posicionar o console, conectar os controles e começar a jogar."
+  ]
+ ],
+ "final": {
+  "titulo": "O presente que junta a família no sofá",
+  "texto": "620 clássicos, dois controles e muitas partidas para pais e filhos jogarem juntos."
+ },
+ "ctas": {
+  "historia": "Quero jogar com meu filho",
+  "porque": "Quero o Super Mini",
+  "ensina": "Quero jogar em dupla",
+  "detalhes": "Quero o meu console",
+  "comparativo": "Quero os 620 jogos",
+  "familia": "Quero jogar em família",
+  "passos": "Quero o meu kit",
+  "garantia": "Quero o Super Mini",
+  "final": "Quero o meu Super Mini"
+ }
+}

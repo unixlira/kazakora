@@ -32,7 +32,7 @@ import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
 import SomComemoracao from './brinquedo/SomComemoracao.vue';
 import Cubo from './brinquedo/Cubo.vue';
 import Icone from './brinquedo/Icone.vue';
-import { composicaoDoKit, kitRecomendado, nomeCurtoDoKit, nomeDoKit, semEmoji } from './brinquedo/kits';
+import { aplicarKits, composicaoDoKit, kitRecomendado, nomeCurtoDoKit, semEmoji } from './brinquedo/kits';
 import { ligarEntradas, tabelaDeParcelas, vigiarBotaoCompra } from './brinquedo/efeitos';
 
 const props = defineProps({
@@ -66,6 +66,8 @@ const props = defineProps({
     salesCount: { type: Number, default: 0 },
     // "brinquedo" ou "padrao" (LayoutDaPagina, 24/11/2026).
     layout: { type: String, default: 'padrao' },
+    // Conteúdo próprio da página de brinquedo (products.pagina_brinquedo, 25/11/2026) ou null.
+    paginaBrinquedo: { type: Object, default: null },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
 // Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
@@ -88,6 +90,8 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
 
+// Página de brinquedo: frete não é argumento (pedido do Lira 25/11/2026); fica só o selo pequeno.
+const faqSemFrete = () => FAQ.filter(([pergunta]) => !/frete/i.test(pergunta));
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
@@ -98,6 +102,7 @@ const FAQ = [
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x, com juros a partir de 2x, ou boleto bancário.`
         : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x, com juros a partir de 2x, ou boleto bancário.`],
 ];
+const FAQ_BRINQUEDO = faqSemFrete();
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.reviews.length));
@@ -166,6 +171,18 @@ const opcoesVariacao = computed(() => (props.variations.length
     : []));
 // Botão curto com o preço (Botrel, 2026-11-02, Árvore de Natal): "Modelo 303 · Nevada Cheia
 // (1394 galhos, Ø 134 cm)" vira "Nevada Cheia"; o nome inteiro aparece depois de escolher.
+// Kits da página de brinquedo com o nome de oferta do conteúdo da página (pagina_brinquedo.kits); sem
+// variações, o próprio produto vira o cartão da oferta única.
+const opcoesKits = computed(() => {
+    if (!brinquedo.value) return opcoesVariacao.value;
+    const base = opcoesVariacao.value.length ? opcoesVariacao.value : (props.paginaBrinquedo?.kits?.itens?.length ? [props.product] : []);
+    return aplicarKits(base, props.paginaBrinquedo?.kits);
+});
+const kitEscolhido = computed(() => {
+    if (!brinquedo.value) return null;
+    if (!props.variations.length) return opcoesKits.value[0] ?? null;
+    return opcoesKits.value.find((kit) => kit.id === escolhida.value?.id) ?? null;
+});
 const nomeCurtoDe = (variant) => String(variant.variation || variant.name).replace(/\s*\(.*\)\s*$/, '').split('·').pop().trim();
 const nomesCurtos = computed(() => {
     const nomes = opcoesVariacao.value.map(nomeCurtoDe);
@@ -862,7 +879,8 @@ const submitReview = () => {
 // Quatro "chips" coloridos abaixo das estrelas: os benefícios do anúncio (título + texto curto).
 const chipsBrinquedo = computed(() => {
     // Chips curtos próprios (comparativo.chips) quando o anúncio tiver; senão, os benefícios.
-    const fonte = anuncio.value?.comparativo?.chips?.length ? anuncio.value.comparativo.chips : (anuncio.value?.beneficios ?? []);
+    const fonte = props.paginaBrinquedo?.chips?.length ? props.paginaBrinquedo.chips
+        : (anuncio.value?.comparativo?.chips?.length ? anuncio.value.comparativo.chips : (anuncio.value?.beneficios ?? []));
     const beneficios = fonte.map((item) => [semEmoji(item[0]), semEmoji(item[1] ?? '')]);
     const base = beneficios.length ? beneficios : highlights.value.map((item) => [semEmoji(item), '']);
     return base.slice(0, 4).map(([titulo, texto]) => ({ titulo, texto: texto.length > 42 ? `${texto.slice(0, 40).replace(/\s+\S*$/, '')}…` : texto }));
@@ -1015,7 +1033,7 @@ const escolherKit = (kit, rolar = false) => {
                                 <span class="cond-texto">Novo</span>
                             </div>
 
-                            <h1>{{ selecionada.name }}</h1>
+                            <h1>{{ brinquedo && paginaBrinquedo?.titulo ? paginaBrinquedo.titulo : selecionada.name }}</h1>
 
                             <!-- Três checks logo abaixo do título, antes das estrelas e do preço (pedido 2026-10-23). -->
                             <ul v-if="!brinquedo && highlights.length" class="checks">
@@ -1097,7 +1115,7 @@ const escolherKit = (kit, rolar = false) => {
                             <!-- Página de brinquedo: as variações viram kits em cartões (selo, de/por, por brinquedo, economia). -->
                             <div v-if="brinquedo && variations.length" ref="variacoesEl" class="pb-escolha">
                                 <span class="subtitulo">Escolha seu kit</span>
-                                <KitsBrinquedo :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null" @escolher="escolherKit" />
+                                <KitsBrinquedo :opcoes="opcoesKits" :escolhida-id="escolhida?.id ?? null" @escolher="escolherKit" />
                                 <div class="pb-pagamento">
                                     <span v-if="precoPix !== null && seloPix"><i class="pb-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
                                     <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>Aceitamos</small><b>Pix</b></span>
@@ -1370,8 +1388,8 @@ const escolherKit = (kit, rolar = false) => {
                     </main>
                 </div>
 
-                <SecoesBrinquedo v-if="brinquedo" :product="product" :anuncio="anuncio" :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null"
-                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ" :parcelas="PARCELAS"
+                <SecoesBrinquedo v-if="brinquedo" :product="product" :anuncio="anuncio" :pagina="paginaBrinquedo" :opcoes="opcoesKits" :escolhida-id="escolhida?.id ?? (variations.length ? null : product.id)"
+                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ_BRINQUEDO" :parcelas="PARCELAS"
                     @escolher="escolherKit" @comprar="irParaCompra" />
 
                 <!-- AVALIAÇÕES (largura total) -->
@@ -1470,7 +1488,7 @@ const escolherKit = (kit, rolar = false) => {
                  Só no celular (pedido 2026-10-24); no computador fica escondida. -->
             <div ref="barraEl" class="barra">
                 <div class="barra-preco">
-                    <span v-if="brinquedo && escolhida && variations.length" class="pb-barra-kit">{{ nomeDoKit(escolhida) }}</span>
+                    <span v-if="kitEscolhido" class="pb-barra-kit">{{ nomeCurtoDoKit(kitEscolhido) }}</span>
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
                 </div>
@@ -1484,8 +1502,8 @@ const escolherKit = (kit, rolar = false) => {
              caixa sai da tela (celular e computador), com o kit escolhido e o preço. -->
         <div v-if="brinquedo" class="pb-barra" :class="{ 'is-on': barraBrinquedo }" :aria-hidden="!barraBrinquedo">
             <div class="pb-barra-info">
-                <b>{{ escolhida && variations.length ? nomeCurtoDoKit(escolhida) : product.name }}</b>
-                <small v-if="escolhida && variations.length">{{ composicaoDoKit(escolhida) }}</small>
+                <b>{{ kitEscolhido ? nomeCurtoDoKit(kitEscolhido) : (paginaBrinquedo?.titulo || product.name) }}</b>
+                <small v-if="kitEscolhido && composicaoDoKit(kitEscolhido) !== nomeCurtoDoKit(kitEscolhido)">{{ composicaoDoKit(kitEscolhido) }}</small>
             </div>
             <span class="pb-barra-preco">{{ formatPrice(precoPor) }}</span>
             <button type="button" class="pb-btn" data-kzm="comprar:barra-brinquedo" :tabindex="barraBrinquedo ? 0 : -1" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'Comprar agora' : 'Esgotado' }}</button>

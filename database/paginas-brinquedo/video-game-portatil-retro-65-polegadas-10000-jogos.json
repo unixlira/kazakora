@@ -1,0 +1,257 @@
+{
+  "titulo": "Video Game Portátil Retrô com 10000 Jogos Clássicos e Tela de 6.5",
+  "sem_telas": false,
+  "chips": [
+    [
+      "10000 jogos",
+      "clássicos retrô"
+    ],
+    [
+      "Tela 6.5",
+      "colorida e ampla"
+    ],
+    [
+      "Pegada firme",
+      "design ergonômico"
+    ],
+    [
+      "Som embutido",
+      "alto-falantes"
+    ]
+  ],
+  "letreiro": [
+    "10000 jogos retrô na memória",
+    "Tela colorida de 6.5 polegadas",
+    "Direcional, botões e analógicos",
+    "Alto-falantes embutidos",
+    "Clássicos para jogar em família",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Os clássicos de volta à família",
+    "subtitulo": "10000 jogos retrô na palma da mão",
+    "texto": "Os jogos que os pais jogavam na infância agora passam de mão em mão. Uma partida chama a outra, a casa toda torce junto e a diversão vai na mochila para qualquer lugar.",
+    "imagem": 2
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 5,
+    "chamadas": [
+      "10000 jogos retrô",
+      "Tela de 6.5 polegadas"
+    ],
+    "cards": [
+      {
+        "titulo": "Nunca enjoa",
+        "texto": "São 10000 jogos retrô para escolher a próxima fase.",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Tela grande",
+        "texto": "6.5 polegadas coloridas para ver cada detalhe.",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Pegada confortável",
+        "texto": "Formato de controle que encaixa firme nas mãos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Vai junto",
+        "texto": "Em casa, no carro ou na viagem, cabe na mochila.",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Diversão que reúne a família",
+    "texto": "Jogo clássico é feito para passar a vez, torcer e tentar de novo:",
+    "imagem": 3,
+    "chamadas": [
+      "Direcional digital",
+      "Alavancas analógicas",
+      "Botões de ação",
+      "Pegada confortável"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação",
+        "icone": "hand"
+      },
+      {
+        "texto": "Reflexo",
+        "icone": "timer"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Persistência",
+        "icone": "award"
+      },
+      {
+        "texto": "Atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Jogar junto",
+        "icone": "users"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para jogar",
+    "texto": "Comandos completos, tela ampla e som embutido para cada partida ficar com cara de fliperama.",
+    "imagem": 4,
+    "cards": [
+      {
+        "titulo": "Direcional",
+        "texto": "Digital e preciso",
+        "icone": "gamepad"
+      },
+      {
+        "titulo": "Analógicos",
+        "texto": "Alavancas suaves",
+        "icone": "joystick"
+      },
+      {
+        "titulo": "Tela ampla",
+        "texto": "6.5 polegadas coloridas",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Som embutido",
+        "texto": "Alto-falantes traseiros",
+        "icone": "volume-2"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Jogo no celular × Video Game Retrô",
+    "intro": "Os dois têm tela. Só um é feito para jogar de verdade.",
+    "rotulos": [
+      "Celular",
+      "Retrô"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem tela colorida",
+        "comum": true
+      },
+      {
+        "texto": "10000 jogos retrô na memória",
+        "comum": false
+      },
+      {
+        "texto": "Botões físicos e direcional",
+        "comum": false
+      },
+      {
+        "texto": "Alavancas analógicas",
+        "comum": false
+      },
+      {
+        "texto": "Pegada de controle de verdade",
+        "comum": false
+      },
+      {
+        "texto": "Sem notificação no meio do jogo",
+        "comum": false
+      },
+      {
+        "texto": "Clássicos que os pais conhecem",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Os pais ensinam o atalho da fase, os filhos batem o recorde. Jogo clássico vira conversa, disputa e risada no sofá.",
+    "imagem": 1,
+    "citacao": "Uma partida, duas gerações: o jogo da infância dos pais virando a diversão dos filhos."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Um console com 10000 jogos retrô pronto para passar de mão em mão.",
+    "itens": [
+      {
+        "id": 248,
+        "nome": "Kit Retrô Clássico",
+        "itens": "1 Video Game Portátil Retrô 6.5",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Console 6.5",
+            "icone": "gamepad-2"
+          },
+          {
+            "texto": "10000 jogos",
+            "icone": "joystick"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "O console retrô com 10000 jogos.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeira partida",
+      "texto": "Chegou! Escolha o clássico e comece.",
+      "icone": "play"
+    },
+    {
+      "titulo": "Jogo em família",
+      "texto": "Pais e filhos revezando o controle.",
+      "icone": "users"
+    }
+  ],
+  "garantia": [
+    "Jogando em família",
+    "Revivendo os clássicos",
+    "Torcendo junto",
+    "Sorrindo a cada fase"
+  ],
+  "duvidas": [
+    [
+      "Quantos jogos vêm no console?",
+      "São 10000 jogos retrô integrados na memória."
+    ],
+    [
+      "Qual é o tamanho da tela?",
+      "A tela é colorida, de 6.5 polegadas."
+    ],
+    [
+      "Quais comandos ele tem?",
+      "Direcional digital, botões de ação e alavancas analógicas, em formato de controle com empunhaduras confortáveis."
+    ],
+    [
+      "Ele tem som próprio?",
+      "Sim, tem alto-falantes embutidos na parte traseira."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que reúne a família no sofá",
+    "texto": "10000 jogos clássicos, partidas que passam de mão em mão e a família torcendo junto."
+  },
+  "ctas": {
+    "historia": "Quero o video game retrô",
+    "porque": "Quero os 10000 jogos",
+    "ensina": "Quero jogar em família",
+    "detalhes": "Escolher o meu kit",
+    "comparativo": "Quero o console de verdade",
+    "familia": "Quero os clássicos em casa",
+    "passos": "Escolher o meu kit",
+    "garantia": "Quero o video game retrô",
+    "final": "Quero o video game retrô"
+  }
+}

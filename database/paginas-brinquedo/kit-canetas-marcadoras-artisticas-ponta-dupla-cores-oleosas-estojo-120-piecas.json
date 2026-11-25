@@ -1,0 +1,246 @@
+{
+  "titulo": "Canetas de Ponta Dupla com 120 Cores e Estojo para Criar",
+  "sem_telas": true,
+  "chips": [
+    [
+      "120 cores",
+      "para soltar a imaginação"
+    ],
+    [
+      "Ponta dupla",
+      "traços e preenchimento"
+    ],
+    [
+      "Estojo prático",
+      "tudo sempre organizado"
+    ],
+    [
+      "Zero telas",
+      "diversão de verdade"
+    ]
+  ],
+  "letreiro": [
+    "120 cores vibrantes para ilustrar",
+    "Marcadores com pontas duplas",
+    "Estojo organizador com alça",
+    "Brincadeira longe do celular",
+    "Ideal para desenhos e escola",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Cores que encantam",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Trocar o brilho da tela pelo colorido do papel dá um descanso para os olhos. Com 120 cores, a criança mergulha no desenho e desenvolve foco, paciência e criatividade.",
+    "imagem": 4
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 3,
+    "chamadas": [
+      "120 cores vibrantes",
+      "Duas pontas para criar"
+    ],
+    "cards": [
+      {
+        "titulo": "Criatividade",
+        "texto": "Um mundo de cores para inventar personagens e cenários incríveis.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Foco e calma",
+        "texto": "Horas de desenho concentrado, longe das notificações do celular.",
+        "icone": "focus"
+      },
+      {
+        "titulo": "Versatilidade",
+        "texto": "Ponta fina para detalhes e ponta chanfrada para preenchimentos.",
+        "icone": "pen-tool"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "A criança se diverte sozinha criando sua própria arte.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto colore e cria, o pequeno artista exercita habilidades valiosas para o desenvolvimento:",
+    "imagem": 7,
+    "chamadas": [
+      "Uso artístico",
+      "Trabalhos escolares",
+      "Coordenação motora",
+      "120 peças"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Paciência e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "shapes"
+      },
+      {
+        "texto": "Expressão visual",
+        "icone": "image"
+      },
+      {
+        "texto": "Organização",
+        "icone": "boxes"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada marcador pensado para a arte",
+    "texto": "Um conjunto com base oleosa e cores vivas, feito para inspirar cada criação.",
+    "imagem": 8,
+    "cards": [
+      {
+        "titulo": "Ponta dupla",
+        "texto": "Traço fino e preenchimento",
+        "icone": "brush"
+      },
+      {
+        "titulo": "Base oleosa",
+        "texto": "Cores intensas e vibrantes",
+        "icone": "droplets"
+      },
+      {
+        "titulo": "Estojo com alça",
+        "texto": "Fácil de levar e guardar",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Tudo no lugar",
+        "texto": "Organização por números",
+        "icone": "list-checks"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Caneta comum × Kit Artístico",
+    "intro": "Canetas comuns limitam a criação. O kit com 120 cores solta a imaginação.",
+    "rotulos": [
+      "Comum",
+      "Kit 120"
+    ],
+    "linhas": [
+      {
+        "texto": "Serve para desenhar",
+        "comum": true
+      },
+      {
+        "texto": "120 opções de cores vibrantes",
+        "comum": false
+      },
+      {
+        "texto": "Duas pontas em cada marcador",
+        "comum": false
+      },
+      {
+        "texto": "Estojo organizador com alça",
+        "comum": false
+      },
+      {
+        "texto": "Tira o foco do celular",
+        "comum": false
+      },
+      {
+        "texto": "Ideal para artes e escola",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos de criação em família",
+    "texto": "Sentar à mesa para colorir junto é criar memórias. Sem a distração das telas, o tempo passa devagar e a conexão entre pais e filhos aumenta através da arte.",
+    "imagem": 5,
+    "citacao": "Menos tempo de tela e mais tempo de papel: a arte une a família no colorido da vida."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O conjunto completo com 120 cores para a diversão não ter fim.",
+    "itens": [
+      {
+        "id": 299,
+        "nome": "Kit Arte Completa",
+        "itens": "120 Canetas + Estojo Organizador",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "120 Canetas",
+            "icone": "paintbrush"
+          },
+          {
+            "texto": "Estojo",
+            "icone": "package"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "A diversão começa com 120 cores incríveis.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Mãos à obra",
+      "texto": "O estojo chega e a imaginação ganha vida.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Vida colorida",
+      "texto": "Desenhos lindos e longe do celular.",
+      "icone": "palette"
+    }
+  ],
+  "garantia": [
+    "Criando muito",
+    "Longe do celular",
+    "Super concentrada",
+    "Orgulhosa da arte"
+  ],
+  "duvidas": [
+    [
+      "O que vem no kit?",
+      "Acompanha 120 canetas marcadoras de ponta dupla e 1 estojo organizador preto com alça para transporte."
+    ],
+    [
+      "Como são as pontas?",
+      "Cada caneta possui duas pontas: uma fina para contornos e detalhes, e uma chanfrada para preenchimentos de áreas maiores."
+    ],
+    [
+      "Qual a base da tinta?",
+      "As canetas têm base oleosa, com cores vivas e intensas para os projetos artísticos."
+    ],
+    [
+      "O estojo é prático?",
+      "Sim, o estojo tem alça e fechamento com zíper e mantém as 120 canetas organizadas e fáceis de acessar."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "120 cores para descobrir, criar e se divertir. Proporcione horas de brincadeira de verdade para quem você ama."
+  },
+  "ctas": {
+    "historia": "Quero escolher o kit",
+    "comparativo": "Quero trocar a tela pelas cores"
+  }
+}

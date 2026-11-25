@@ -1434,7 +1434,8 @@ const escolherKit = (kit, rolar = false) => {
                     </details>
                 </section>
 
-                <section v-if="relatedProducts.length" class="relacionados">
+                <!-- Página de brinquedo sem "Você também pode gostar": nada que leve para outro produto (pedido do Lira 24/11/2026). -->
+                <section v-if="!brinquedo && relatedProducts.length" class="relacionados">
                     <h2>Você também pode gostar de</h2>
                     <CarrosselProdutos :produtos="relatedProducts" :favorite-ids="relatedFavoriteIds"
                         :reviewable-product-ids="relatedReviewableIds" :reviewed-product-ids="relatedReviewedIds" />

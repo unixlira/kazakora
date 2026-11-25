@@ -24,6 +24,13 @@ import { medirRolagem } from '@/Shared/medicaoProduto';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { carregarMedicao } from '@/Shared/medicao';
+// Página de brinquedo (pedido do Lira 24/11/2026): kits em cartões, seções coloridas e o "aeee".
+import '../../../css/fontes-brinquedo.css';
+import '../../../css/pagina-brinquedo.css';
+import KitsBrinquedo from './brinquedo/KitsBrinquedo.vue';
+import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
+import SomComemoracao from './brinquedo/SomComemoracao.vue';
+import { kitRecomendado, nomeDoKit, semEmoji } from './brinquedo/kits';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -54,7 +61,14 @@ const props = defineProps({
     quadrosPromocao: { type: Object, default: () => ({}) },
     // Unidades vendidas de verdade, todos os canais (pedido 2026-10-23).
     salesCount: { type: Number, default: 0 },
+    // "brinquedo" ou "padrao" (LayoutDaPagina, 24/11/2026).
+    layout: { type: String, default: 'padrao' },
 });
+const brinquedo = computed(() => props.layout === 'brinquedo');
+// Na página de brinquedo um kit já abre marcado, como na referência (o recomendado).
+const kitInicial = () => (props.layout === 'brinquedo' && props.variations.length
+    ? kitRecomendado([props.product, ...props.variations])
+    : null);
 
 const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
@@ -126,7 +140,7 @@ const mediaItems = computed(() => {
 // Com variações, a página abre sem nenhuma escolhida (pedido 2026-10-15): o
 // cliente precisa escolher antes de mudar a quantidade ou comprar. Até lá,
 // preço e ficha mostram o produto da página.
-const escolhida = ref(props.variations.length ? null : props.product);
+const escolhida = ref(props.variations.length ? kitInicial() : props.product);
 const selecionada = computed(() => escolhida.value ?? props.product);
 const faltaVariacao = computed(() => props.variations.length > 0 && !escolhida.value);
 const alertaVariacao = ref(0); // conta os avisos: cada clique sem variação treme o alerta de novo
@@ -276,7 +290,7 @@ watch(() => [props.product, props.variations], ([novo], [antigo]) => {
         if (escolhida.value) escolhida.value = [novo, ...props.variations].find((item) => item.id === escolhida.value.id) ?? novo;
         return;
     }
-    escolhida.value = props.variations.length ? null : props.product;
+    escolhida.value = props.variations.length ? kitInicial() : props.product;
     alertaVariacao.value = 0;
     activeIndex.value = 0;
     isLightboxOpen.value = false;
@@ -838,13 +852,41 @@ const submitReview = () => {
     });
 };
 
+// Página de brinquedo (pedido do Lira 24/11/2026) ------------------------------
+// Quatro "chips" coloridos abaixo das estrelas: os benefícios do anúncio (título + texto curto).
+const chipsBrinquedo = computed(() => {
+    const beneficios = (anuncio.value?.beneficios ?? []).map((item) => [semEmoji(item[0]), semEmoji(item[1] ?? '')]);
+    const base = beneficios.length ? beneficios : highlights.value.map((item) => [semEmoji(item), '']);
+    return base.slice(0, 4).map(([titulo, texto]) => ({ titulo, texto: texto.length > 42 ? `${texto.slice(0, 40).replace(/\s+\S*$/, '')}…` : texto }));
+});
+// Cronômetro do card de oferta (dias, horas e minutos até o fim da data "ate" da oferta).
+const agora = ref(Date.now());
+let relogio = null;
+onMounted(() => { if (brinquedo.value) relogio = setInterval(() => { agora.value = Date.now(); }, 30000); });
+onUnmounted(() => clearInterval(relogio));
+const contagem = computed(() => {
+    if (!oferta.value?.ate) return null;
+    const falta = Date.parse(`${oferta.value.ate}T23:59:59-03:00`) - agora.value;
+    if (!(falta > 0)) return null;
+    const minutos = Math.floor(falta / 60000);
+    return { dias: Math.floor(minutos / 1440), horas: String(Math.floor((minutos % 1440) / 60)).padStart(2, '0'), min: String(minutos % 60).padStart(2, '0') };
+});
+const irParaCompra = () => {
+    document.getElementById('comprar')?.scrollIntoView({ behavior: rolarSuave() ? 'smooth' : 'auto', block: 'start' });
+};
+const escolherKit = (kit, rolar = false) => {
+    escolherVariacao(kit);
+    kzmAcao(`kit:${kit.id}`);
+    if (rolar) irParaCompra();
+};
+
 </script>
 
 <template>
     <Head :title="product.seo_title || product.name" />
 
     <AppLayout>
-        <div class="pd2">
+        <div class="pd2" :class="{ 'pg-brinquedo': brinquedo }">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
                 <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></span>
@@ -922,7 +964,7 @@ const submitReview = () => {
                             <h1>{{ selecionada.name }}</h1>
 
                             <!-- Três checks logo abaixo do título, antes das estrelas e do preço (pedido 2026-10-23). -->
-                            <ul v-if="highlights.length" class="checks">
+                            <ul v-if="!brinquedo && highlights.length" class="checks">
                                 <li v-for="(item, index) in highlights" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
                             </ul>
 
@@ -933,6 +975,13 @@ const submitReview = () => {
                                 <span v-if="reviewsCount > 0" class="media">{{ ratingAvg.toFixed(1) }}</span>
                                 <span class="qtd-aval-topo">({{ reviewsCount }} {{ reviewsCount === 1 ? 'Avaliação' : 'Avaliações' }})</span>
                             </component>
+
+                            <ul v-if="brinquedo && chipsBrinquedo.length" class="pb-chips">
+                                <li v-for="(chip, index) in chipsBrinquedo" :key="index" :class="`cor-${['verde', 'azul', 'laranja', 'amarelo'][index % 4]}`">
+                                    <span class="pb-chip-cubo" aria-hidden="true"></span>
+                                    <span><strong>{{ chip.titulo }}</strong><small v-if="chip.texto">{{ chip.texto }}</small></span>
+                                </li>
+                            </ul>
 
                             <hr class="divisor">
 
@@ -945,9 +994,12 @@ const submitReview = () => {
                                     <li v-for="faixa in oferta.faixas" :key="faixa.rotulo"><span>{{ faixa.rotulo }}</span><b>{{ faixa.valor }}</b></li>
                                 </ul>
                                 <p v-if="oferta.texto">{{ oferta.texto }}</p>
+                                <div v-if="brinquedo && contagem" class="pb-relogio" aria-label="Tempo até o fim da oferta">
+                                    <span><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span>
+                                </div>
                             </div>
 
-                            <div class="preco">
+                            <div v-if="!(brinquedo && variations.length)" class="preco">
                                 <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
                                 <span v-if="precoDe" class="de">{{ formatPrice(precoDe) }}</span>
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
@@ -976,7 +1028,18 @@ const submitReview = () => {
                                 </div>
                             </div>
 
-                            <div v-if="variations.length" ref="variacoesEl" class="variacoes" :class="{ 'com-alerta': alertaVariacao }">
+                            <!-- Página de brinquedo: as variações viram kits em cartões (selo, de/por, por brinquedo, economia). -->
+                            <div v-if="brinquedo && variations.length" ref="variacoesEl" class="pb-escolha">
+                                <span class="subtitulo">Escolha seu kit</span>
+                                <KitsBrinquedo :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null" @escolher="escolherKit" />
+                                <div class="pb-pagamento">
+                                    <span v-if="precoPix !== null && seloPix"><i class="fa-brands fa-pix" aria-hidden="true"></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
+                                    <span v-else><i class="fa-brands fa-pix" aria-hidden="true"></i><small>Aceitamos</small><b>Pix</b></span>
+                                    <span><i class="far fa-credit-card" aria-hidden="true"></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b></span>
+                                </div>
+                            </div>
+
+                            <div v-else-if="variations.length" ref="variacoesEl" class="variacoes" :class="{ 'com-alerta': alertaVariacao }">
                                 <span class="subtitulo">{{ rotuloVariacao }}: <span class="valor-escolhido">{{ escolhida ? (escolhida.variation || escolhida.name) : '' }}</span>
                                     <span v-if="alertaVariacao" :key="alertaVariacao" class="alerta-variacao" role="alert"><i class="fas fa-circle-exclamation"></i> Escolha a sua variação</span>
                                 </span>
@@ -1050,7 +1113,13 @@ const submitReview = () => {
 
                             <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26).
                                  Sem "Expresso Turbo para todas as regiões do Brasil" (Botrel e Lira, 2026-11-02): Manaus e Porto Alegre só têm PAC. -->
-                            <ul class="fretefundo">
+                            <ul v-if="brinquedo" class="pb-selos">
+                                <li><span class="cor-verde"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>Garantia 30 dias</li>
+                                <li><span class="cor-azul"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>{{ isFreeShipping ? 'Frete grátis' : 'Envio com rastreio' }}</li>
+                                <li><span class="cor-laranja"><i class="fas fa-rotate" aria-hidden="true"></i></span>Troca fácil</li>
+                                <li><span class="cor-amarelo"><i class="fas fa-lock" aria-hidden="true"></i></span>Compra segura</li>
+                            </ul>
+                            <ul v-else class="fretefundo">
                                 <li>
                                     <span class="selo-icone carrinho"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>
                                     <span v-if="isFreeShipping"><b>Frete Grátis</b> para todo o Brasil.<br><span class="frete-regiao">Veja o prazo pelo seu CEP</span></span>
@@ -1066,14 +1135,14 @@ const submitReview = () => {
                                  no computador fica preso no rodapé da tela enquanto a caixa rola e encaixa aqui no fim.
                                  Sem variação escolhida o botão fica apagado, mas o clique mostra o alerta (por isso não usa disabled). -->
                             <div v-if="inStock" ref="botaoCompraEl" class="acao" :class="{ 'sem-variacao': faltaVariacao }">
-                                <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR AGORA</button>
+                                <button type="button" class="btn comprar-agora" data-kzm="comprar" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">{{ brinquedo ? 'Comprar' : 'COMPRAR AGORA' }}</button>
                             </div>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
-                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card" :class="{ recolhida: temMaisDescricao && !descricaoAberta }">
+                        <section v-if="!brinquedo && (blocosAnuncio.length || descriptionSections.length)" class="card descricao-card" :class="{ recolhida: temMaisDescricao && !descricaoAberta }">
                             <header class="desc-cabecalho">
                                 <!-- Sem "Por que esse produto merece atenção?" (pedido 2026-10-20, definitivo). -->
                                 <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
@@ -1226,6 +1295,10 @@ const submitReview = () => {
                     </main>
                 </div>
 
+                <SecoesBrinquedo v-if="brinquedo" :product="product" :anuncio="anuncio" :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null"
+                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ" :parcelas="PARCELAS"
+                    @escolher="escolherKit" @comprar="irParaCompra" />
+
                 <!-- AVALIAÇÕES (largura total) -->
                 <section v-if="showReviews" id="avaliacoes" class="card largura-total" data-kzm="avaliacoes">
                     <div class="aval-topo">
@@ -1295,8 +1368,8 @@ const submitReview = () => {
                     </div>
                 </Teleport>
 
-                <!-- PERGUNTAS FREQUENTES (largura total) -->
-                <section class="card largura-total">
+                <!-- PERGUNTAS FREQUENTES (largura total); na página de brinquedo elas entram no FAQ das seções. -->
+                <section v-if="!brinquedo" class="card largura-total">
                     <h2>Perguntas Frequentes</h2>
                     <details v-for="[pergunta, resposta] in FAQ" :key="pergunta">
                         <summary><i class="fas fa-caret-right fechado"></i><i class="fas fa-caret-up aberto"></i> {{ pergunta }}</summary>
@@ -1315,12 +1388,15 @@ const submitReview = () => {
                  Só no celular (pedido 2026-10-24); no computador fica escondida. -->
             <div ref="barraEl" class="barra">
                 <div class="barra-preco">
+                    <span v-if="brinquedo && escolhida && variations.length" class="pb-barra-kit">{{ nomeDoKit(escolhida) }}</span>
                     <strong>{{ formatPrice(precoPix ?? precoPor) }}</strong>
                     <span v-if="precoPix !== null">no Pix</span>
                 </div>
                 <button type="button" class="btn" data-kzm="comprar:barra" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
             </div>
         </div>
+
+        <SomComemoracao v-if="brinquedo" />
 
         <Modal :open="showReviewModal" max-width="max-w-[480px]" @close="showReviewModal = false">
             <h3 class="font-display text-xl font-semibold">Avaliar {{ product.name }}</h3>

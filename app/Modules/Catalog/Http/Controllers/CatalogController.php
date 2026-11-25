@@ -12,6 +12,7 @@ use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\FichaTecnica;
+use App\Modules\Catalog\Support\LayoutDaPagina;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
@@ -549,6 +550,9 @@ class CatalogController extends Controller
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
             'salesCount' => $salesCount,
+            // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
+            // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
+            'layout' => LayoutDaPagina::para($product),
         ]);
     }
 

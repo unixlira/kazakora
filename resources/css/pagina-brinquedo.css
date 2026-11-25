@@ -18,8 +18,11 @@
 .pd2.pg-brinquedo .cor-verde { --c: var(--verde); --t: #fff; --cc: #e4f6e9; }
 .pd2.pg-brinquedo .cor-vermelho, .pd2.pg-brinquedo .cor-laranja { --c: var(--vermelho); --t: #fff; --cc: #fde4e2; }
 
-/* Faixa de quadradinhos de ponta a ponta logo abaixo do cabeçalho (8 px, quadradinhos de 22 px) */
-.pd2.pg-brinquedo .pb-listra { height: 8px; width: 100%; background: repeating-linear-gradient(90deg, #ef4136 0 22px, #ffc21a 22px 44px, #2f80ed 44px 66px, #21a346 66px 88px); }
+/* Faixa de quadradinhos (8 px, quadradinhos de 22 px) colada na base do cabeçalho da loja: faz parte da
+   barra, então vai junto quando o cabeçalho fica fixo ao rolar. Posição absoluta = sem pulo de layout;
+   a página reserva os 8 px no topo para a faixa não cobrir nada. */
+.loja-topo.loja-topo-listra::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 8px; pointer-events: none; background: repeating-linear-gradient(90deg, #ef4136 0 22px, #ffc21a 22px 44px, #2f80ed 44px 66px, #21a346 66px 88px); }
+.pd2.pg-brinquedo { padding-top: 8px; }
 
 /* ---------- Dobra: galeria + caixa de compra, largura total ---------- */
 .pd2.pg-brinquedo .faixa, .pd2.pg-brinquedo .migalhas, .pd2.pg-brinquedo .barra,

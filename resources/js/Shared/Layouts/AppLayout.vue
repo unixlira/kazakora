@@ -15,7 +15,8 @@ import RodapeLoja from '@/Shared/Components/RodapeLoja.vue';
 const page = usePage();
 // semFaixaTopo: sem a faixa promocional e o letreiro do topo (página de brinquedo, 24/11/2026).
 // logoTopo: { href, alt, png, webp, largura, altura } troca o logo do cabeçalho (KoraKids nos brinquedos).
-defineProps({ semFaixaTopo: { type: Boolean, default: false }, logoTopo: { type: Object, default: null } });
+// listraTopo: faixa de quadradinhos colada na base do cabeçalho (vai junto quando ele fica fixo).
+defineProps({ semFaixaTopo: { type: Boolean, default: false }, logoTopo: { type: Object, default: null }, listraTopo: { type: Boolean, default: false } });
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
@@ -207,7 +208,7 @@ onUnmounted(() => {
         <!-- Header -->
         <div ref="marcaDoTopo" aria-hidden="true"></div>
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
-            :class="{ 'loja-topo-fume': topoFlutuando }">
+            :class="{ 'loja-topo-fume': topoFlutuando, 'loja-topo-listra': listraTopo }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
             <!-- max-lg:relative: no celular o logo fica centralizado em cima da linha (pedido do Lira 2026-10-23); no computador não, para o mega menu seguir com a largura do topo. -->
             <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 max-lg:relative md:px-6 lg:gap-8 lg:py-4">

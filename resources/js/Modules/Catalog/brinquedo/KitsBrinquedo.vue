@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
-import { economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, unidadesDoKit } from './kits';
+import { economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -37,7 +37,7 @@ const selos = computed(() => selosDosKits(props.opcoes));
                 <b>{{ formatPrice(precoDoKit(kit)) }}</b>
             </span>
             <span class="kb-pilulas">
-                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </span>
         </button>
@@ -55,7 +55,7 @@ const selos = computed(() => selosDosKits(props.opcoes));
             <p class="kb-kc-sub">{{ itensDoKit(kit) }}</p>
             <div class="kb-kc-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></div>
             <div class="kb-kc-chips">
-                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </div>
             <button type="button" class="pb-btn kb-kc-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">

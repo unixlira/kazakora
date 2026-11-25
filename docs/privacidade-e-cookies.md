@@ -19,9 +19,8 @@ visita a loja.
 ### Faixa de cookies no topo (desde 25/11/2026, substitui o pop-up abaixo)
 - **Pedido do Lira em 25/11/2026:** o pop-up no meio da tela virou uma faixa fina no topo do site
   (`AvisoCookies.vue`), sem travar a página.
-- **X** (laranja) → `POST /cookies/aceitar`: aceita todos. A faixa diz em texto "Ao fechar no X, você aceita
-  todos" para o clique valer como consentimento informado. Escolha do Lira, avisado de que o guia da ANPD
-  prefere um botão "Aceitar" explícito.
+- **Aceitar** (botão laranja em destaque, com um X num círculo ao lado do texto) → `POST /cookies/aceitar`:
+  aceita todos. O botão diz "Aceitar", então o clique é consentimento claro (guia da ANPD).
 - **Só os necessários** → `POST /cookies/recusar`: mesma recusa de antes.
 - O resto (prova gravada, cookie `kazakora_cookies` de 12 meses, "Rever minha escolha") continua igual.
 

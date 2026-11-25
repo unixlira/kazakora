@@ -1,9 +1,9 @@
 <script setup>
 // Faixa de cookies no topo do site (pedido do Lira 25/11/2026; antes era um pop-up no meio da tela,
 // de 18/11). Fina, sem travar a página, e dentro da LGPD (guia de cookies da ANPD):
-//  - "X" (escolha do Lira 25/11/2026): POST /cookies/aceitar. Grava a prova e libera o Pixel da Meta, a API
-//    de Conversões (pixelMeta.js exige `cookies.aceito`) e a tag do Google Ads (tagGoogle.js). Para o clique
-//    valer como autorização, a própria faixa diz "Ao fechar no X, você aceita todos" (consentimento informado).
+//  - "Aceitar ⊗" (botão laranja de destaque, com o X num círculo ao lado do texto; pedido do Lira 25/11/2026):
+//    POST /cookies/aceitar. Grava a prova e libera o Pixel da Meta, a API de Conversões (pixelMeta.js exige
+//    `cookies.aceito`) e a tag do Google Ads (tagGoogle.js). Está escrito "Aceitar": o clique é a autorização.
 //  - "Só os necessários": POST /cookies/recusar. Fecha a faixa e fica SÓ com os necessários (carrinho,
 //    login, pagamento); Pixel e Google Ads não rodam.
 // As duas lembram a escolha (cookie kazakora_cookies, 12 meses): a faixa some e não volta.
@@ -56,18 +56,19 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
         <div class="mx-auto flex max-w-7xl items-center gap-3 py-2 pl-4 pr-2 sm:gap-4 sm:pl-6">
             <i class="fa-solid fa-cookie-bite shrink-0 text-[16px] text-[#FD7B41]" aria-hidden="true"></i>
             <p class="min-w-0 flex-1 text-[12.5px] leading-snug sm:text-[13.5px]">
-                Usamos cookies para melhorar sua experiência. Ao fechar no <strong>X</strong>, você aceita todos.
+                Usamos cookies para melhorar sua experiência.
                 <Link href="/politica-de-cookies" class="whitespace-nowrap font-semibold underline decoration-[#FD7B41] decoration-2 underline-offset-[3px] hover:text-[#FD7B41]">Saiba mais</Link>
             </p>
             <button type="button" :disabled="enviando"
-                class="botao shrink-0 rounded-full border border-white/40 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-white/10 disabled:opacity-60 sm:px-4 sm:text-[13px]"
+                class="shrink-0 px-1 text-[11.5px] font-medium text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-60 sm:text-[12.5px]"
                 @click="soNecessarios">
                 Só os necessários
             </button>
-            <button type="button" :disabled="enviando" aria-label="Fechar e aceitar todos os cookies" title="Fechar e aceitar todos"
-                class="botao flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FD7B41] text-[#1F2225] hover:bg-[#ff8d58] disabled:opacity-60"
+            <button type="button" :disabled="enviando" aria-label="Aceitar os cookies e fechar"
+                class="botao pulsa inline-flex shrink-0 items-center gap-2 rounded-full bg-[#FD7B41] py-1.5 pl-4 pr-1.5 text-[14px] font-extrabold text-[#1F2225] shadow-[0_0_0_3px_rgba(253,123,65,0.25)] hover:bg-[#ff8d58] disabled:opacity-60 sm:text-[15px]"
                 @click="aceitar">
-                <i class="fa-solid fa-xmark text-[16px]" aria-hidden="true"></i>
+                Aceitar
+                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-[#1F2225] text-[#FD7B41]" aria-hidden="true"><i class="fa-solid fa-xmark text-[13px]"></i></span>
             </button>
         </div>
     </div>
@@ -88,11 +89,19 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
     outline: 2px solid #FD7B41;
     outline-offset: 2px;
 }
+/* Pulso leve no Aceitar para chamar o clique. */
+.pulsa {
+    animation: aviso-cookies-pulsa 2.2s ease-in-out 1s infinite;
+}
+@keyframes aviso-cookies-pulsa {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(253, 123, 65, 0.25); }
+    50% { box-shadow: 0 0 0 7px rgba(253, 123, 65, 0.12); }
+}
 @keyframes aviso-cookies-entra {
     from { transform: translateY(-100%); }
     to { transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .aviso-cookies { animation: none; }
+    .aviso-cookies, .pulsa { animation: none; }
 }
 </style>

@@ -916,6 +916,8 @@ const escolherKit = (kit, rolar = false) => {
 
     <AppLayout :sem-faixa-topo="brinquedo" :logo-topo="brinquedo ? LOGO_KORAKIDS : null">
         <div class="pd2" :class="{ 'pg-brinquedo': brinquedo }">
+            <!-- Página de brinquedo: faixa de quadradinhos coloridos logo abaixo do cabeçalho (como a referência). -->
+            <div v-if="brinquedo" class="pb-listra" aria-hidden="true"></div>
             <!-- Faixa amarela do topo -->
             <div class="faixa">
                 <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> e <span class="selo-full"><i class="fa-solid fa-bolt"></i>FLEX</span></span>

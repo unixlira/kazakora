@@ -22,7 +22,51 @@ class JornadaDoLead
     }
 
     /** @return array<string, mixed> */
-    public function montar(LinhaLead $linha): array
+    public function montar(PessoaLead $pessoa): array
+    {
+        $sessoes = array_map(fn (LinhaLead $s) => $this->sessao($s), $pessoa->sessoes);
+        $principal = $sessoes[0];
+        $pedido = $pessoa->pedido;
+        $origem = $pessoa->origem();
+
+        return [
+            'chave' => $pessoa->chave(),
+            'cliente' => [
+                'nome' => $pessoa->nome(),
+                'email' => $pessoa->email(),
+                'telefone' => $pessoa->telefone(),
+                'cpf' => $pessoa->cpf(),
+                'cep' => $pessoa->cep(),
+                'endereco' => $pedido ? collect([$pedido->shipping_city ?? null, $pedido->shipping_state ?? null])->filter()->implode(' / ') ?: null : null,
+                'loja' => SiteAtual::SITES[$pessoa->site()] ?? $pessoa->site(),
+                'sessao_criada_em' => $pessoa->criadoEm()?->toIso8601String(),
+            ],
+            // Tudo o que a pessoa digitou ou tem cadastrado, sem repetir, com a origem de cada um.
+            'contatos' => [
+                'telefones' => $pessoa->telefones(),
+                'emails' => $pessoa->valores('email'),
+                'cpfs' => $pessoa->valores('cpf'),
+                'ceps' => $pessoa->valores('cep'),
+                'nomes' => $pessoa->valores('nome'),
+            ],
+            'origem' => [
+                ...$origem,
+                'rotulo' => $this->rotulo($origem['origem']),
+            ],
+            'situacao' => $pessoa->situacao,
+            'resumo' => $principal['resumo'],
+            'pedido' => $principal['pedido'],
+            'tem_registro' => $principal['tem_registro'],
+            'sem_visitante' => $principal['sem_visitante'],
+            'passos' => $principal['passos'],
+            'tempos' => $principal['tempos'],
+            // Cada sessão com o início, onde parou, a origem e a linha do tempo dela (a principal primeiro).
+            'sessoes' => $sessoes,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function sessao(LinhaLead $linha): array
     {
         $modelo = $linha->lead ?? $linha->checkout;
         $fluxo = $modelo ? $this->fluxo->fluxo($modelo) : null;
@@ -48,28 +92,24 @@ class JornadaDoLead
 
         return [
             'chave' => $linha->chave(),
-            'cliente' => [
-                'nome' => $linha->nome(),
-                'email' => $linha->email(),
-                'telefone' => $linha->telefone(),
-                'cpf' => $linha->cpf(),
-                'cep' => $linha->cep(),
-                'endereco' => $pedido ? collect([$pedido->shipping_city ?? null, $pedido->shipping_state ?? null])->filter()->implode(' / ') ?: null : null,
-                'loja' => SiteAtual::SITES[$linha->site()] ?? $linha->site(),
-                'sessao_criada_em' => $linha->criadoEm()?->toIso8601String(),
-            ],
-            'origem' => [
-                ...$origem,
-                'rotulo' => $origem['origem'] ? (OrigemVisita::ROTULOS[$origem['origem']] ?? $origem['origem']) : null,
-            ],
+            'inicio' => $linha->criadoEm()?->toIso8601String(),
+            'ultima_atividade' => $linha->ultimaAtividade()?->toIso8601String(),
             'situacao' => $linha->situacao,
             'resumo' => $this->resumo($linha, $fluxo, $pagoEm),
+            'origem' => [...$origem, 'rotulo' => $this->rotulo($origem['origem'])],
+            'itens' => $linha->itens(),
+            'total' => $linha->total(),
             'pedido' => $pedido ? ['id' => $pedido->id, 'numero' => $pedido->external_order_id] : null,
             'tem_registro' => (bool) ($fluxo['tem_registro'] ?? false),
             'sem_visitante' => (bool) ($fluxo['sem_visitante'] ?? true),
             'passos' => $passos,
             'tempos' => $fluxo['resumo'] ?? null,
         ];
+    }
+
+    private function rotulo(?string $origem): ?string
+    {
+        return $origem ? (OrigemVisita::ROTULOS[$origem] ?? $origem) : null;
     }
 
     /** @return array{pago: bool, texto: string} */

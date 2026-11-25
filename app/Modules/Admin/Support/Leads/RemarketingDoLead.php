@@ -31,7 +31,7 @@ class RemarketingDoLead
     public const CANAIS = ['whatsapp', 'email'];
 
     /** @return array<string, mixed> */
-    public function montar(LinhaLead $linha): array
+    public function montar(PessoaLead $linha): array
     {
         $registro = $linha->registro;
 
@@ -50,11 +50,16 @@ class RemarketingDoLead
             'passos' => $this->passos($linha),
             'pode_antecipar' => $linha->podeAntecipar,
             'conversa_url' => $this->conversa($linha),
+            // Para onde a sequência manda: o contato do registro (o da pessoa, se ainda não entrou).
+            'contato' => [
+                'whatsapp' => self::semPais($registro?->telefone ?? $linha->telefone()),
+                'email' => $registro?->email ?? $linha->email(),
+            ],
         ];
     }
 
     /** @return array{estado: string, texto: string} */
-    private function estado(LinhaLead $linha): array
+    private function estado(PessoaLead $linha): array
     {
         $registro = $linha->registro;
         if ($registro && ! $registro->parado) {
@@ -70,9 +75,9 @@ class RemarketingDoLead
         return ['estado' => 'nao_inscrito', 'texto' => 'Não inscrito — '.$this->porQueNaoInscrito($linha)];
     }
 
-    private function porQueNaoInscrito(LinhaLead $linha): string
+    private function porQueNaoInscrito(PessoaLead $linha): string
     {
-        $checkout = $linha->checkout;
+        $checkout = $linha->checkout ?? collect($linha->sessoes)->map(fn (LinhaLead $s) => $s->checkout)->filter()->first();
         $ultima = $linha->ultimaAtividade();
 
         return match (true) {
@@ -88,7 +93,7 @@ class RemarketingDoLead
     }
 
     /** @return list<array<string, mixed>> */
-    private function passos(LinhaLead $linha): array
+    private function passos(PessoaLead $linha): array
     {
         $registro = $linha->registro;
         $enviados = (int) ($registro?->disparos_enviados ?? 0);
@@ -110,7 +115,10 @@ class RemarketingDoLead
 
                 $canais[$canal] = match (true) {
                     $enviado !== null => ['estado' => self::ENVIADO, 'quando' => $enviado['quando'] ?? null,
-                        'provider_id' => $canal === 'whatsapp' ? ($ids[$numero] ?? null) : null],
+                        'provider_id' => $canal === 'whatsapp' ? ($ids[$numero]['id'] ?? null) : null,
+                        // Para quem saiu: o número da conversa da mensagem; sem ela, o do registro (antes de 25/11 o
+                        // painel mostrava "enviado" sem dizer o número, mesmo com o lead sem telefone).
+                        'para' => $canal === 'whatsapp' ? (self::semPais($ids[$numero]['numero'] ?? null) ?? self::semPais($registro->telefone)) : $registro->email],
                     $falha !== null && ($numero <= $enviados || $atual) => ['estado' => self::FALHOU, 'quando' => $falha['quando'] ?? null,
                         'erro' => $falha['erro'] ?? null, 'nova_tentativa' => $atual ? $registro->proximo_disparo_em?->toIso8601String() : null],
                     $numero <= $enviados => ['estado' => self::PULADO, 'motivo' => $contato[$canal] ? 'não saiu por este canal (modelo do WhatsApp desligado?)' : $semContato[$canal]],
@@ -154,7 +162,18 @@ class RemarketingDoLead
         return $ultimoReaberto === null ? $historico : array_slice($historico, $ultimoReaberto + 1);
     }
 
-    /** @return array<int, string> número do disparo => id da mensagem na Meta (wamid) */
+    /** "5511999990000" vira "11999990000" (o painel mostra sem o país). */
+    private static function semPais(?string $telefone): ?string
+    {
+        $digitos = (string) preg_replace('/\D/', '', (string) $telefone);
+        if ($digitos === '') {
+            return null;
+        }
+
+        return strlen($digitos) >= 12 && str_starts_with($digitos, '55') ? substr($digitos, 2) : $digitos;
+    }
+
+    /** @return array<int, array{id: ?string, numero: ?string}> número do disparo => wamid e número da conversa */
     private function idsDoWhatsApp(?Registro $registro): array
     {
         if (! $registro) {
@@ -163,18 +182,21 @@ class RemarketingDoLead
 
         try {
             return WhatsAppMessage::query()
+                ->with('conversation:id,wa_id,phone')
                 ->where('payload->carrinho_sequencia_id', $registro->id)
-                ->whereNotNull('wa_message_id')
                 ->orderBy('id')
-                ->get(['wa_message_id', 'payload'])
-                ->mapWithKeys(fn (WhatsAppMessage $m) => [(int) ($m->payload['disparo'] ?? 0) => (string) $m->wa_message_id])
+                ->get(['id', 'conversation_id', 'wa_message_id', 'payload'])
+                ->mapWithKeys(fn (WhatsAppMessage $m) => [(int) ($m->payload['disparo'] ?? 0) => [
+                    'id' => $m->wa_message_id ? (string) $m->wa_message_id : null,
+                    'numero' => $m->conversation?->phone ?: $m->conversation?->wa_id,
+                ]])
                 ->all();
         } catch (Throwable) {
             return [];
         }
     }
 
-    private function conversa(LinhaLead $linha): ?string
+    private function conversa(PessoaLead $linha): ?string
     {
         $telefone = WhatsAppPhone::normalize($linha->registro?->telefone ?? $linha->telefone());
         if (! $telefone) {

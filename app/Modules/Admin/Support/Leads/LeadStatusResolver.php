@@ -39,6 +39,9 @@ class LeadStatusResolver
     /** Atividade nos últimos minutos = "no checkout agora" (o mesmo da tela Leads de hoje). */
     public const MINUTOS_AGORA = 5;
 
+    /** Da mais avançada para a menos: a situação de quem tem várias sessões é a primeira desta lista. */
+    public const PRIORIDADE = [self::PAGO, self::AGUARDANDO, self::AGORA, self::REMARKETING, self::PAROU, self::ABANDONOU];
+
     /** Situações que contam como "aberto" (card Abertos, chip Abertos e Valor em aberto). */
     public const ABERTOS = [self::AGUARDANDO, self::AGORA, self::REMARKETING, self::ABANDONOU];
 

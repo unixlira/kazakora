@@ -130,11 +130,14 @@ return Application::configure(basePath: dirname(__DIR__))
             // anônima, confere Origin/Sec-Fetch-Site e tem limite por minuto
             // (CheckoutEventosController, 2026-10-23).
             'finalizacao/eventos',
+            // Saída da newsletter com 1 clique (RFC 8058): o Gmail/Yahoo manda
+            // POST sem token; a rota só descadastra o dono do token.
+            'newsletter/sair/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || ($request->expectsJson() && ($request->is('blog/*') || $request->is('admin/editorial/*'))),
+            fn (Request $request) => $request->is('api/*') || ($request->expectsJson() && ($request->is('blog/*') || $request->is('admin/editorial/*') || $request->is('newsletter'))),
         );
 
         // Pedido 2026-10-18: visitante deslogado que bate numa página restrita

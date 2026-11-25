@@ -5,6 +5,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { imagensLiberadas } from '@/Shared/imagensDepoisDoTopo';
 import { COMPANY } from '@/Shared/company';
+import BlocoNewsletter from '@/Shared/Components/BlocoNewsletter.vue';
 
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
@@ -24,7 +25,9 @@ const REDES = [
 </script>
 
 <template>
-<footer class="mt-16 bg-[#0b0b0b] text-white">
+<!-- Newsletter logo antes do rodapé (pedido do Lira 24/11/2026). -->
+<BlocoNewsletter />
+<footer class="bg-[#0b0b0b] text-white">
     <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
         <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
             <div class="lg:max-w-xs lg:shrink-0">

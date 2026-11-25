@@ -1939,9 +1939,9 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 /* Faixa de confiança no mesmo tamanho da FerraKora (pedido do Lira 21/11/2026): círculo laranja
    da KazaKora (#F37021) com ícone preto, título laranja em negrito e texto em preto. */
 .pd2 .confianca { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: stretch; margin: 20px 0; }
-.pd2 .confianca div { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / .08); color: #000; font-size: 14px; line-height: 1.35; }
-.pd2 .confianca i { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: 0 0 48px; border-radius: 999px; background: #f37021; color: #000; font-size: 22px; }
-.dark .pd2 .confianca i { color: #000; }
+.pd2 .confianca div { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 16px 18px; border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / .08); color: #000; font-size: 14px; line-height: 1.35; }
+.pd2 .confianca i { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex: 0 0 48px; border-radius: 999px; background: #f37021; color: #fff; font-size: 22px; }
+.dark .pd2 .confianca i { color: #fff; } /* ícone branco no círculo laranja (pedido do Lira 25/11/2026) */
 .pd2 .confianca strong { display: block; font-size: 16px; font-weight: 700; line-height: 1.2; color: #f37021; margin-bottom: 2px; }
 .pd2 .confianca span { color: #000; }
 .pd2 .relacionados h2 { margin-top: 10px; }

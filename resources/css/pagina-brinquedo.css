@@ -42,9 +42,10 @@
 /* Card de oferta escuro com cronômetro */
 .pd2.pg-brinquedo .oferta-bf { position: relative; background: var(--pb-tinta); color: #fff; border: 2px solid var(--pb-borda); border-radius: 18px; box-shadow: var(--pb-sombra); padding: 16px 16px 20px; overflow: hidden; }
 .pd2.pg-brinquedo .oferta-bf::before { top: 0; bottom: auto; }
-.pd2.pg-brinquedo .oferta-bf strong { color: #fff; font-family: Fredoka, Nunito, sans-serif; font-size: 22px; font-weight: 600; }
-.pd2.pg-brinquedo .oferta-bf p { color: #d7d7e4; }
-.pd2.pg-brinquedo .oferta-bf-selo { background: var(--pb-amarelo); color: var(--pb-tinta); transform: rotate(-4deg); display: inline-flex; border-radius: 6px; }
+.pd2.pg-brinquedo .compra .oferta-bf strong { font-family: Fredoka, Nunito, sans-serif; font-size: 22px; font-weight: 600; }
+.pd2.pg-brinquedo .compra .oferta-bf p { color: #d7d7e4; }
+.pd2.pg-brinquedo .compra .oferta-bf-selo, .pd2.pg-brinquedo .compra .oferta-bf-selo i { color: var(--pb-tinta); }
+.pd2.pg-brinquedo .compra .oferta-bf-selo { background: var(--pb-amarelo); color: var(--pb-tinta); transform: rotate(-4deg); display: inline-flex; border-radius: 6px; padding: 4px 8px; }
 .pd2.pg-brinquedo .pb-relogio { display: flex; gap: 6px; margin-top: 10px; }
 .pd2.pg-brinquedo .pb-relogio span { background: #fff; color: var(--pb-tinta); border-radius: 10px; min-width: 50px; padding: 4px 6px; text-align: center; font-size: 10px; text-transform: uppercase; line-height: 1.1; border: 2px solid var(--pb-borda); }
 .pd2.pg-brinquedo .pb-relogio b { display: block; font-family: Fredoka, Nunito, sans-serif; font-size: 20px; }

@@ -134,7 +134,8 @@ const mediaItems = computed(() => {
     const naDescricao = new Set(blocosDaDescricao.value.slice(videoDescricao.value ? 1 : 0)
         .map((bloco) => (bloco.imagem === null || bloco.imagem === undefined ? null : props.product.images?.[bloco.imagem]?.url))
         .filter(Boolean));
-    const semRepetir = fotos.filter((foto, indice) => indice === 0 || foto.variant_id || !naDescricao.has(foto.url));
+    // Página de brinquedo: a galeria mostra todas as fotos, mesmo as que ilustram as seções (pedido do Lira 24/11/2026).
+    const semRepetir = props.layout === 'brinquedo' ? fotos : fotos.filter((foto, indice) => indice === 0 || foto.variant_id || !naDescricao.has(foto.url));
     return (semRepetir.length >= 2 ? semRepetir : fotos)
         .map((image) => ({ type: 'image', src: image.media_url ?? image.url, srcset: srcsetFoto(image), full: image.url, thumb: image.thumb_url, mini: image.mini_url, variantId: image.variant_id }));
 });
@@ -903,6 +904,27 @@ onMounted(async () => {
     pararBarra = vigiarBotaoCompra(() => botaoCompraEl.value, (passou) => { barraBrinquedo.value = passou; });
 });
 onUnmounted(() => { pararEntradas?.(); pararBarra?.(); });
+// Computador: a foto grande termina na mesma linha que a base dos 4 selos da caixa (como a referência);
+// a foto preenche a altura (object-fit). Acompanha quando a caixa muda de altura. No celular, empilhado.
+let observadorAltura = null;
+const alinharGaleria = () => {
+    const foto = document.querySelector('.pg-brinquedo .galeria .foto');
+    const selos = compraEl.value?.querySelector('.pb-selos');
+    if (!foto || !selos) return;
+    if (window.innerWidth <= 900) { foto.style.height = ''; foto.style.aspectRatio = ''; return; }
+    foto.style.height = '';
+    const altura = selos.getBoundingClientRect().bottom - foto.getBoundingClientRect().top;
+    if (altura > 200) { foto.style.aspectRatio = 'auto'; foto.style.height = `${Math.round(altura)}px`; }
+};
+onMounted(async () => {
+    if (!brinquedo.value) return;
+    await nextTick();
+    alinharGaleria();
+    window.addEventListener('resize', alinharGaleria, { passive: true });
+    if ('ResizeObserver' in window && compraEl.value) { observadorAltura = new ResizeObserver(alinharGaleria); observadorAltura.observe(compraEl.value); }
+    document.fonts?.ready?.then(alinharGaleria);
+});
+onUnmounted(() => { window.removeEventListener('resize', alinharGaleria); observadorAltura?.disconnect(); });
 const escolherKit = (kit, rolar = false) => {
     escolherVariacao(kit);
     kzmAcao(`kit:${kit.id}`);
@@ -1077,8 +1099,8 @@ const escolherKit = (kit, rolar = false) => {
                                 <span class="subtitulo">Escolha seu kit</span>
                                 <KitsBrinquedo :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null" @escolher="escolherKit" />
                                 <div class="pb-pagamento">
-                                    <span v-if="precoPix !== null && seloPix"><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
-                                    <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>Aceitamos</small><b>Pix</b></span>
+                                    <span v-if="precoPix !== null && seloPix"><i class="pb-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
+                                    <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>Aceitamos</small><b>Pix</b></span>
                                     <button type="button" class="pb-pag-parcelas" :aria-expanded="parcelasAbertas" aria-controls="pb-parcelas" @click="parcelasAbertas = !parcelasAbertas"><i class="pb-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="pb-pag-seta" nome="chevron-down" :tamanho="16" /></button>
                                     <div v-if="parcelasAbertas" id="pb-parcelas" class="pb-parcelas">
                                         <div v-for="linha in tabelaParcelas" :key="linha.parcelas"><span>{{ linha.parcelas }}x de {{ formatPrice(linha.valor) }}</span><span>{{ linha.juros ? `total ${formatPrice(linha.total)}` : 'sem juros' }}</span></div>

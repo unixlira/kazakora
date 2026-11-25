@@ -187,9 +187,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Selecione a opção ideal para sua arte.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",

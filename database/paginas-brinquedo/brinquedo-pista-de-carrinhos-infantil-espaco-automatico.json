@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "A pista espacial com carrinhos.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -239,10 +239,10 @@
     "historia": "Quero a pista espacial",
     "porque": "Quero a missão espacial",
     "ensina": "Quero brincar sem telas",
-    "detalhes": "Escolher o meu kit",
+    "detalhes": "Quero o meu",
     "comparativo": "Quero a pista espacial",
     "familia": "Quero aventura em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero a pista espacial",
     "final": "Quero a pista espacial"
   }

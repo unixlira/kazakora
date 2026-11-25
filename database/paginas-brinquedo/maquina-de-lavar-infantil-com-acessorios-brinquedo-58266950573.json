@@ -195,9 +195,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O conjunto completo com 30 peças para a diversão.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -244,7 +244,7 @@
     "texto": "Horas de brincadeira de verdade, coordenação motora em dia e muita imaginação na lavanderia."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pelo kit"
   }
 }

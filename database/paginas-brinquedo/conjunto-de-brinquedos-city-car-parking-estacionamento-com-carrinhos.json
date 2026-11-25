@@ -191,8 +191,8 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Garanta horas de brincadeira de verdade agora.",
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
       "icone": "shopping-bag"
     },
     {
@@ -237,7 +237,7 @@
   ],
   "final": {
     "titulo": "O presente que tira a criança do celular",
-    "texto": "Horas de brincadeira de verdade com o City Car Parking. Escolha o kit e desperte a imaginação hoje mesmo."
+    "texto": "Horas de brincadeira de verdade com o City Car Parking. Peça o seu e desperte a imaginação hoje mesmo."
   },
   "ctas": {
     "historia": "Quero brincar de verdade",

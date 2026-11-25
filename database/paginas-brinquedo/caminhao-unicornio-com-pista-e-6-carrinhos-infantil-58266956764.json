@@ -199,9 +199,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Caminhão, pista e carrinhos juntos.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -255,10 +255,10 @@
     "historia": "Quero o caminhão unicórnio",
     "porque": "Quero a pista encantada",
     "ensina": "Quero brincar de corrida",
-    "detalhes": "Escolher o meu kit",
+    "detalhes": "Quero o meu",
     "comparativo": "Quero o caminhão que vira pista",
     "familia": "Quero corrida em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero brincar sem telas",
     "final": "Quero o caminhão unicórnio"
   },

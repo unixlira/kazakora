@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O trator amarelo completo para a diversão começar.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -237,10 +237,10 @@
   ],
   "final": {
     "titulo": "O presente que tira a criança do celular",
-    "texto": "Escolha o kit e garanta horas de brincadeira de verdade com o trator que é puro realismo."
+    "texto": "Peça o seu e garanta horas de brincadeira de verdade com o trator que é puro realismo."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero brincar de verdade"
   }
 }

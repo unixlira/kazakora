@@ -195,9 +195,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O caminhão 3 em 1 com 6 carrinhos.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -246,11 +246,11 @@
   "ctas": {
     "historia": "Quero o meu caminhão",
     "porque": "Quero o caminhão 3 em 1",
-    "ensina": "Quero o meu kit",
+    "ensina": "Quero o meu",
     "detalhes": "Quero a pista com rampa",
     "comparativo": "Quero trocar a tela pela pista",
     "familia": "Quero brincar em família",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero o meu caminhão",
     "final": "Quero presentear agora"
   }

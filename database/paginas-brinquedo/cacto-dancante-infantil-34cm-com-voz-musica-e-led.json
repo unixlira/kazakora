@@ -187,9 +187,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Garanta o companheiro de pelúcia do seu pequeno.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -236,7 +236,7 @@
     "texto": "Horas de brincadeira de verdade, música, dança e muita diversão para toda a família."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pela dança"
   }
 }

@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "A diversão começa com 120 cores incríveis.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -240,7 +240,7 @@
     "texto": "120 cores para descobrir, criar e se divertir. Proporcione horas de brincadeira de verdade para quem você ama."
   },
   "ctas": {
-    "historia": "Quero escolher o kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pelas cores"
   }
 }

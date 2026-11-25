@@ -171,7 +171,8 @@ const citacao = computed(() => semEmoji(pg.value.familia?.citacao ?? props.anunc
 // Kits: seção com os cartões; com uma variação só (ou nenhuma), um cartão com a oferta única.
 const kitsTitulo = computed(() => tituloComMarcador(pg.value.kits?.titulo || 'Escolha o tamanho da diversão'));
 const kitsTexto = computed(() => semEmoji(pg.value.kits?.texto ?? ''));
-const mostrarKits = computed(() => props.opcoes.length > 1 || (props.opcoes.length === 1 && !!props.pagina));
+// Seção de kits só com 2 ou mais opções de compra; produto único vai direto para a caixa de compra.
+const mostrarKits = computed(() => props.opcoes.length > 1);
 
 const TELAS = ['smartphone', 'tv', 'gamepad-2', 'tablet'];
 const CORES_PASSO = ['vermelho', 'azul', 'amarelo', 'verde'];
@@ -205,7 +206,7 @@ const final = computed(() => ({
     texto: semEmoji(pg.value.final?.texto || 'Menos tela, mais imaginação, e um brinquedo que cresce junto com a criança.'),
 }));
 // Texto dos botões de cada seção: do conteúdo da página (ctas.<seção>); senão, o padrão.
-const cta = (chave, padrao) => semEmoji(pg.value.ctas?.[chave] ?? '') || padrao;
+const cta = (chave, padrao) => semEmoji(pg.value.ctas?.[chave] ?? '') || (props.opcoes.length > 1 ? padrao : padrao.replace(/(o )?meu kit$/i, 'o meu').replace(/^Escolher o meu$/, 'Quero o meu'));
 const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
 </script>
 

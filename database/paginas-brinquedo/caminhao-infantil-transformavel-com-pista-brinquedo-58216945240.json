@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Garanta o presente que vai surpreender seu pequeno.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -244,15 +244,15 @@
     "texto": "Escolha o caminhão transformável e garanta horas de brincadeira real, criatividade e união para sua família."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "porque": "Escolher meu caminhão",
     "ensina": "Quero brincar junto",
     "detalhes": "Escolher agora",
     "comparativo": "Quero a pista gigante",
     "familia": "Quero diversão real",
-    "passos": "Quero o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Escolher meu presente",
-    "final": "Quero o meu kit"
+    "final": "Quero o meu"
   },
   "avaliacoes_de": []
 }

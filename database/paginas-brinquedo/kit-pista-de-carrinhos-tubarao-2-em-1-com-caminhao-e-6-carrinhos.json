@@ -191,8 +191,8 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Selecione o caminhão tubarão com os 6 carrinhos.",
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
       "icone": "shopping-bag"
     },
     {
@@ -237,10 +237,10 @@
   ],
   "final": {
     "titulo": "O presente que tira a criança do celular",
-    "texto": "Escolha o kit e garanta horas de brincadeira de verdade, corridas emocionantes e muita imaginação em família."
+    "texto": "Peça o seu e garanta horas de brincadeira de verdade, corridas emocionantes e muita imaginação em família."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero a pista tubarão"
   }
 }

@@ -681,6 +681,10 @@ class CatalogController extends Controller
     {
         $rotulos = self::avaliacoesDeOutros($product);
 
+        if (LayoutDaPagina::para($product) === LayoutDaPagina::BRINQUEDO) {
+            return $this->avaliacoesDoBrinquedo($product, $rotulos, $pular, $quantidade);
+        }
+
         return Review::query()
             ->whereIn('product_id', self::idsDasAvaliacoes($product))
             ->with(['user:id,name', 'images'])
@@ -703,6 +707,91 @@ class CatalogController extends Controller
                 // tarefa 3908): o canal da avaliação não vira selo na tela.
             })
             ->values();
+    }
+
+    /**
+     * Avaliações da página de brinquedo (pedidos do Lira 25/11/2026): todas as reais, das 5 estrelas
+     * para as de nota baixa (1 e 2 sempre no fim); dentro da mesma nota, intercaladas por produto do kit
+     * (livro, lousa, quebra-cabeça, livro...) para cada linha da grade ter um de cada. A etiqueta pode
+     * vir do texto: avaliacoes_de[].texto = {"lousa": "Lousa Mágica"} marca a avaliação daquele produto
+     * que cita a palavra (sem expressão regular: o PCRE da produção é antigo).
+     *
+     * @param  array<int, string>  $rotulos
+     */
+    private function avaliacoesDoBrinquedo(Product $product, array $rotulos, int $pular, ?int $quantidade)
+    {
+        $porTexto = self::rotulosPorTexto($product);
+        // Ordem dos grupos: o próprio produto, depois cada item de avaliacoes_de seguido das etiquetas por texto dele.
+        $ordemDosGrupos = [''];
+        foreach ((array) ($product->avaliacoes_de ?: $product->parent?->avaliacoes_de) as $item) {
+            $ordemDosGrupos[] = (string) ($item['rotulo'] ?? '');
+            foreach ((array) ($item['texto'] ?? []) as $etiqueta) {
+                $ordemDosGrupos[] = (string) $etiqueta;
+            }
+        }
+        $ordemDosGrupos = array_values(array_unique($ordemDosGrupos));
+
+        $todas = Review::query()
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
+            ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByRaw('images_count > 0 desc')
+            ->latest()
+            ->orderByDesc('id')
+            ->get()
+            ->each(function (Review $review) use ($rotulos, $porTexto) {
+                if ($review->ocultar_nome) {
+                    $review->setRelation('user', null);
+                }
+                $rotulo = $rotulos[$review->product_id] ?? '';
+                foreach ($porTexto[$review->product_id] ?? [] as $palavra => $outro) {
+                    if (mb_stripos((string) $review->comment, (string) $palavra) !== false) {
+                        $rotulo = $outro;
+                        break;
+                    }
+                }
+                if ($rotulo !== '') {
+                    $review->setAttribute('produto_rotulo', $rotulo);
+                }
+            });
+
+        $ordenadas = collect();
+        foreach ([5, 4, 3, 2, 1] as $nota) {
+            $grupos = $todas->filter(fn (Review $r) => (int) round((float) $r->rating) === $nota)
+                ->groupBy(fn (Review $r) => (string) ($r->produto_rotulo ?? ''))
+                ->sortBy(fn ($itens, $grupo) => ($i = array_search($grupo, $ordemDosGrupos, true)) === false ? 99 : $i)
+                ->map(fn ($itens) => $itens->values())
+                ->values();
+            $maior = $grupos->max(fn ($itens) => $itens->count()) ?? 0;
+            for ($i = 0; $i < $maior; $i++) {
+                foreach ($grupos as $itens) {
+                    if (isset($itens[$i])) {
+                        $ordenadas->push($itens[$i]);
+                    }
+                }
+            }
+        }
+
+        return ($quantidade === null ? $ordenadas->slice($pular) : $ordenadas->slice($pular, $quantidade))->values();
+    }
+
+    /** [id do produto => [palavra => etiqueta]] de avaliacoes_de[].texto (e das variações dele). */
+    private static function rotulosPorTexto(Product $product): array
+    {
+        $lista = $product->avaliacoes_de ?: $product->parent?->avaliacoes_de;
+        $mapa = [];
+        foreach (is_array($lista) ? $lista : [] as $item) {
+            $texto = $item['texto'] ?? null;
+            $id = (int) ($item['id'] ?? 0);
+            if (! is_array($texto) || $texto === [] || $id < 1) {
+                continue;
+            }
+            foreach (Product::withTrashed()->where('id', $id)->orWhere('parent_product_id', $id)->pluck('id') as $irmao) {
+                $mapa[(int) $irmao] = $texto;
+            }
+        }
+
+        return $mapa;
     }
 
     /**

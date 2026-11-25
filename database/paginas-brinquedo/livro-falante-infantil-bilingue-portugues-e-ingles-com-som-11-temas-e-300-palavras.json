@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "O presente perfeito para um futuro sem limites.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -237,10 +237,10 @@
   ],
   "final": {
     "titulo": "O presente que tira a criança do celular",
-    "texto": "Escolha o kit e proporcione horas de brincadeira de verdade, com aprendizado bilíngue e muita conexão em família."
+    "texto": "Peça o seu e proporcione horas de brincadeira de verdade, com aprendizado bilíngue e muita conexão em família."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pelo livro"
   }
 }

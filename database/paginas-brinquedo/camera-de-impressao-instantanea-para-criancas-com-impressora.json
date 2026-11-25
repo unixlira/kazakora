@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Câmera com rolo de papel térmico.",
-      "icone": "gift"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -243,10 +243,10 @@
     "historia": "Quero a minha câmera",
     "porque": "Quero imprimir na hora",
     "ensina": "Quero estimular a criatividade",
-    "detalhes": "Quero o meu kit",
+    "detalhes": "Quero o meu",
     "comparativo": "Quero a câmera instantânea",
     "familia": "Quero guardar memórias",
-    "passos": "Escolher o meu kit",
+    "passos": "Quero o meu",
     "garantia": "Quero a minha câmera",
     "final": "Quero presentear agora"
   }

@@ -191,9 +191,9 @@
   },
   "passos": [
     {
-      "titulo": "Escolha o kit",
-      "texto": "Clique no botão para garantir a diversão sem telas.",
-      "icone": "mouse-pointer-click"
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
     },
     {
       "titulo": "Enviamos com rastreio",
@@ -244,7 +244,7 @@
     "texto": "Horas de brincadeira de verdade, aprendizado da rotina e muita imaginação com água de verdade."
   },
   "ctas": {
-    "historia": "Quero o meu kit",
+    "historia": "Quero o meu",
     "comparativo": "Quero trocar a tela pela pia"
   }
 }

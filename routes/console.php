@@ -48,7 +48,8 @@ Schedule::command('leads:limpar')->dailyAt('03:52')->withoutOverlapping(30);
 // metade do banco e deixavam o backup horário lento. Jobs falhos ficam 15 dias.
 Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');
 // Travas de frete vencidas há mais de 30 dias (pedido 2026-10-24).
-Schedule::command('model:prune', ['--model' => [\App\Modules\Checkout\Models\FreteTrava::class]])->dailyAt('03:58');
+// Inscrição da newsletter nunca confirmada sai depois de 30 dias (24/11/2026, LGPD: só o necessário).
+Schedule::command('model:prune', ['--model' => [\App\Modules\Checkout\Models\FreteTrava::class, \App\Modules\Newsletter\Models\NewsletterInscrito::class]])->dailyAt('03:58');
 Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(60);
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de
@@ -444,3 +445,14 @@ Schedule::command('comportamento:prints --todas --limite=1000 --dias=3')->dailyA
 // Lira por e-mail e no sino quando falta, uma vez até resolver. O e-mail do
 // pedido de teste tinha saído com menos livros do que a página prometia.
 Schedule::command('livros:conferir')->dailyAt('07:40')->withoutOverlapping(30);
+
+// Resumo do blog por e-mail para a newsletter (pedido do Lira 24/11/2026).
+// DESLIGADO por padrão: liga com NEWSLETTER_BLOG_AGENDADO=true no .env
+// (frequência em NEWSLETTER_BLOG_FREQUENCIA=diario|semanal, hora em
+// NEWSLETTER_BLOG_HORA). Semanal sai na sexta. Ver config/newsletter.php.
+if (config('newsletter.blog_agendado')) {
+    $resumoBlog = Schedule::command('newsletter:blog')->timezone('America/Sao_Paulo')->withoutOverlapping(30);
+    config('newsletter.blog_frequencia') === 'semanal'
+        ? $resumoBlog->weeklyOn(5, (string) config('newsletter.blog_hora', '10:00'))
+        : $resumoBlog->dailyAt((string) config('newsletter.blog_hora', '10:00'));
+}

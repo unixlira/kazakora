@@ -190,8 +190,8 @@
       },
       {
         "id": 621,
-        "nome": "Livro + Lousa",
-        "itens": "Livro + Lousa Mágica LED",
+        "nome": "Livro + Quebra-Cabeça",
+        "itens": "Livro + Quebra-Cabeça Magnético",
         "unidades": 2,
         "partes": [
           {
@@ -199,11 +199,11 @@
             "icone": "book-open"
           },
           {
-            "texto": "Lousa LED",
-            "icone": "palette"
+            "texto": "Quebra-Cabeça",
+            "icone": "puzzle"
           }
         ],
-        "acrescenta": "+ desenha com luz e apaga num toque"
+        "acrescenta": "+ monta cenas com peças de ímã"
       },
       {
         "id": 622,
@@ -224,7 +224,7 @@
             "icone": "puzzle"
           }
         ],
-        "acrescenta": "+ monta cenas com peças de ímã"
+        "acrescenta": "+ desenha com luz na lousa de LED"
       }
     ]
   },
@@ -271,7 +271,7 @@
     ],
     [
       "O que vem em cada opção?",
-      "Livro Falante: só o livro. Livro + Lousa: o livro e a Lousa Mágica LED. Kit Sem Telas: livro, lousa e Quebra-Cabeça Magnético (modelo sortido)."
+      "Livro Falante: só o livro. Livro + Quebra-Cabeça: o livro e o Quebra-Cabeça Magnético (modelo sortido). Kit Sem Telas: livro, quebra-cabeça e a Lousa Mágica LED."
     ]
   ],
   "final": {

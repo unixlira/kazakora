@@ -100,6 +100,13 @@ const letreiro = computed(() => {
 });
 const duvidas = computed(() => [...(props.anuncio?.duvidas ?? []).map((d) => [semEmoji(d[0]), semEmoji(d[1])]), ...props.faqLoja]);
 const abertaFaq = ref(0);
+// Chamadas por cima das fotos (como as etiquetas da referência), em HTML sobre as nossas fotos.
+const chamadasPorque = computed(() => (props.anuncio?.destaques ?? []).map(semEmoji).filter(Boolean).slice(0, 2));
+// Do que os kits têm: livro, lousa e quebra-cabeça (só aparece o que algum kit da página traz).
+const chamadasKit = computed(() => {
+    const todos = props.opcoes.map((o) => String(o.variation || '')).join(' ');
+    return ['Português e Inglês', /lousa/i.test(todos) ? 'Desenha com luz' : null, /quebra/i.test(todos) ? 'Peças com ímã' : null, '300+ palavras'].filter(Boolean).slice(0, 4);
+});
 const citacao = computed(() => semEmoji(props.anuncio?.chamada ?? ''));
 
 const TELAS = ['smartphone', 'tv', 'gamepad-2', 'tablet'];
@@ -159,7 +166,10 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>O segredo da brincadeira</p>
                     <h2 class="pb-h2">{{ porque.titulo.antes }} <em class="cor-azul">{{ porque.titulo.marcado }}</em></h2>
                 </div>
-                <div v-if="porque.foto" class="pb-media pb-media-560 pb-reveal"><img :src="porque.foto" :alt="porque.titulo.antes + ' ' + porque.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div v-if="porque.foto" class="pb-media-chamadas pb-media-560 pb-reveal">
+                    <div class="pb-media"><img :src="porque.foto" :alt="porque.titulo.antes + ' ' + porque.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <span v-for="(c, j) in chamadasPorque" :key="j" class="pb-chamada" :class="`pos-${j}`">{{ c }}</span>
+                </div>
                 <div v-if="beneficios.length" class="pb-why-cards pb-reveal">
                     <div v-for="(b, j) in beneficios" :key="j" class="pb-why-card">
                         <span class="pb-why-ico" :class="`cor-${b.cor}`"><Icone :nome="b.icone" :tamanho="28" :traco="2.4" /></span>
@@ -182,7 +192,10 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                 <div v-if="habilidades.length" class="pb-sk-list pb-reveal">
                     <div v-for="(h, j) in habilidades" :key="j" class="pb-sk-item"><span class="pb-sk-ico" :class="`cor-${h.cor}`"><Icone :nome="h.icone" :tamanho="22" :traco="2.4" /></span>{{ h.texto }}</div>
                 </div>
-                <div v-if="ensina.foto" class="pb-media pb-media-620 pb-reveal"><img :src="ensina.foto" :alt="ensina.titulo.antes + ' ' + ensina.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div v-if="ensina.foto" class="pb-media-chamadas pb-media-620 pb-reveal">
+                    <div class="pb-media"><img :src="ensina.foto" :alt="ensina.titulo.antes + ' ' + ensina.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <span v-for="(c, j) in chamadasKit" :key="j" class="pb-chamada" :class="`pos-${j}`">{{ c }}</span>
+                </div>
                 <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero esse presente <Icone nome="arrow-right" :tamanho="22" /></button></div>
             </div>
         </section>
@@ -195,7 +208,10 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <h2 class="pb-h2">{{ detalhe.titulo.antes }} <em class="cor-vermelho">{{ detalhe.titulo.marcado }}</em></h2>
                     <p class="pb-lead">{{ detalhe.texto }}</p>
                 </div>
-                <div v-if="detalhe.foto" class="pb-media pb-media-520 pb-reveal"><img :src="detalhe.foto" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
+                <div v-if="detalhe.foto" class="pb-media-chamadas pb-media-520 pb-reveal">
+                    <div class="pb-media"><img :src="detalhe.foto" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <span v-for="(d, j) in detalhes" :key="j" class="pb-chamada com-linha" :class="`pos-${j}`">{{ d.titulo }}</span>
+                </div>
                 <div v-if="detalhes.length" class="pb-dt-list pb-reveal">
                     <div v-for="(d, j) in detalhes" :key="j" class="pb-dt-i">
                         <span class="pb-dt-ico"><Icone :nome="d.icone" :tamanho="24" /></span>

@@ -88,10 +88,18 @@ export const selosDosKits = (opcoes) => {
 };
 
 /** Foto do kit: a marcada como da variação, senão a principal. */
-export const fotoDoKit = (variante) => {
+const imagemDoKit = (variante) => {
     const imagens = variante?.images ?? [];
-    const foto = imagens.find((i) => i.is_variant) ?? imagens.find((i) => i.is_primary) ?? imagens[0];
+    return imagens.find((i) => i.is_variant) ?? imagens.find((i) => i.is_primary) ?? imagens[0] ?? null;
+};
+export const fotoDoKit = (variante) => {
+    const foto = imagemDoKit(variante);
     return foto ? (foto.media_url ?? foto.url) : null;
+};
+/** srcset da foto do kit (512 e 1200 px) para o navegador escolher pela largura. */
+export const srcsetDoKit = (variante) => {
+    const foto = imagemDoKit(variante);
+    return foto?.thumb_url && foto.media_url && foto.thumb_url !== foto.media_url ? `${foto.thumb_url} 512w, ${foto.media_url} 1200w` : null;
 };
 
 /** Título com a(s) última(s) palavra(s) num marcador colorido, sem o emoji do fim. */

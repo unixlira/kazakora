@@ -27,7 +27,9 @@ const soltarEventos = () => EVENTOS.forEach((evento) => window.removeEventListen
 function tentar(evento) {
     // O toque no próprio botão de mudo não dispara o som.
     if (evento?.target?.closest?.('.pb-som')) return;
-    if (tocou || mudo.value || !audio) { soltarEventos(); return; }
+    if (tocou || mudo.value) { soltarEventos(); return; }
+    criarAudio();
+    if (!audio) { soltarEventos(); return; }
     const promessa = audio.play();
     if (promessa?.then) {
         promessa.then(() => { tocou = true; soltarEventos(); }).catch(() => { /* ainda bloqueado: espera o próximo gesto */ });
@@ -37,14 +39,19 @@ function tentar(evento) {
     }
 }
 
-onMounted(() => {
-    mudo.value = lerMudo();
-    if (mudo.value || typeof Audio === 'undefined') return;
+// Desempenho (24/11/2026): o arquivo de som só é baixado no primeiro toque (antes de um gesto o navegador
+// bloqueia o som de qualquer jeito). Quem já tocou na loja (veio por um clique) ouve ao abrir.
+const criarAudio = () => {
+    if (audio || typeof Audio === 'undefined') return;
     audio = new Audio(props.src);
     audio.preload = 'auto';
     audio.volume = props.volume;
+};
+onMounted(() => {
+    mudo.value = lerMudo();
+    if (mudo.value || typeof Audio === 'undefined') return;
     EVENTOS.forEach((evento) => window.addEventListener(evento, tentar, { capture: true, passive: true }));
-    tentar();
+    if (navigator.userActivation?.hasBeenActive) tentar();
 });
 onUnmounted(() => {
     soltarEventos();

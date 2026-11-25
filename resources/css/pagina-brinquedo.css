@@ -40,7 +40,7 @@
 .pd2.pg-brinquedo .foto { flex: 1 1 auto; aspect-ratio: 1; border-radius: 22px; border: 2px solid var(--ink); background: #fff; }
 .pd2.pg-brinquedo .foto img { width: 100%; height: 100%; object-fit: contain; background: #fff; transition: transform .6s ease; }
 @media (min-width: 901px) { .pd2.pg-brinquedo .galeria { align-items: flex-start; } .pd2.pg-brinquedo .miniaturas { max-height: none; align-self: stretch; overflow-y: auto; } }
-.pd2.pg-brinquedo .miniaturas { flex: 0 0 56px; gap: 10px; padding: 4px 2px 8px; scrollbar-width: none; }
+.pd2.pg-brinquedo .miniaturas { flex: 0 0 66px; gap: 10px; padding: 6px 5px 12px; scrollbar-width: none; box-sizing: border-box; }
 .pd2.pg-brinquedo .miniaturas button { width: 56px; height: 56px; border-radius: 14px; overflow: hidden; border: 2px solid var(--linha); background: #fff; padding: 0; transition: transform .2s, border-color .2s, box-shadow .2s; }
 .pd2.pg-brinquedo .miniaturas button img { width: 100%; height: 100%; object-fit: cover; }
 .pd2.pg-brinquedo .miniaturas button:hover { transform: translateY(-3px) rotate(-2deg); }
@@ -411,7 +411,7 @@
 @media (min-width: 900px) { .pb-barra { left: auto; right: 24px; bottom: 24px; width: 520px; } }
 
 /* Botão de mudo do som */
-.pb-som { position: fixed; left: 14px; bottom: 18px; z-index: 45; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #17182c; background: #fff; color: #17182c; box-shadow: 0 3px 0 #17182c; display: grid; place-items: center; cursor: pointer; opacity: .85; }
+.pb-som { position: fixed; right: 14px; bottom: 96px; z-index: 45; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #17182c; background: #fff; color: #17182c; box-shadow: 0 3px 0 #17182c; display: grid; place-items: center; cursor: pointer; opacity: .85; }
 .pb-som:hover { opacity: 1; }
 .pb-som[aria-pressed="true"] { color: #8a8a98; }
 
@@ -421,7 +421,7 @@
     .pd2.pg-brinquedo .pb-secoes { margin: 32px -24px 0; }
     .pd2.pg-brinquedo .galeria { flex-direction: column; gap: 12px; }
     .pd2.pg-brinquedo .foto { width: 100%; }
-    .pd2.pg-brinquedo .miniaturas { display: flex !important; flex: none; flex-direction: row; gap: 10px; overflow-x: auto; max-height: none; padding: 4px 2px 8px; }
+    .pd2.pg-brinquedo .miniaturas { display: flex !important; flex: none; flex-direction: row; gap: 10px; overflow-x: auto; max-height: none; padding: 6px 5px 12px; }
     .pd2.pg-brinquedo .miniaturas button { flex: 0 0 56px; }
     .pd2.pg-brinquedo .pontos { display: none !important; }
     .pd2.pg-brinquedo .compra { margin-top: 18px; }
@@ -462,7 +462,7 @@
     .pd2.pg-brinquedo .pb-snap { right: -8px; }
     .pd2.pg-brinquedo .pb-adesivo { left: -8px; font-size: 19px; }
     .pd2.pg-brinquedo .compra .pb-relogio span { width: 33px; }
-    .pb-som { bottom: 18px; }
+    .pb-som { bottom: 84px; right: 10px; }
 }
 @media (max-width: 380px) {
     .pd2.pg-brinquedo .wrap { padding: 0 16px; }

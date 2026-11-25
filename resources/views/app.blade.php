@@ -191,7 +191,10 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
     </head>
+    {{-- Sem a margem padrão do navegador antes do CSS da loja chegar (ele carrega sem travar): a página
+         inteira pulava 8 px quando o CSS aplicava (CLS 0,15 na página de brinquedo, 24/11/2026). --}}
     <body class="antialiased">
+        <style>body{margin:0}</style>
         {{-- Tela de abertura (pedido 2026-10-10): logo + carregando até a loja
              montar; some sozinha (resources/js/app.js). Fora do admin. --}}
         @unless (request()->is('admin*'))

@@ -17,6 +17,7 @@ import Icone from './Icone.vue';
 import KitsBrinquedo from './KitsBrinquedo.vue';
 import { ICONES } from './icones';
 import { semEmoji, tituloComMarcador } from './kits';
+import { somVideo } from './somVideo';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -88,7 +89,8 @@ const tocar = (v) => {
     const comSom = !mutadoPelaPessoa && !!navigator.userActivation?.hasBeenActive;
     v.muted = !comSom;
     videoMudo.value = v.muted;
-    v.play?.().catch(() => { v.muted = true; videoMudo.value = true; v.play?.().catch(() => {}); });
+    somVideo.mudo = v.muted;
+    v.play?.().catch(() => { v.muted = true; videoMudo.value = true; somVideo.mudo = true; v.play?.().catch(() => {}); });
 };
 const alternarSomVideo = () => {
     const v = videoEl.value;
@@ -96,6 +98,7 @@ const alternarSomVideo = () => {
     v.muted = !v.muted;
     mutadoPelaPessoa = v.muted;
     videoMudo.value = v.muted;
+    somVideo.mudo = v.muted;
     if (!v.muted && v.paused) { pausadoPelaPessoa = false; v.play?.().catch(() => {}); }
 };
 const alternarPlayVideo = () => {
@@ -106,6 +109,9 @@ const alternarPlayVideo = () => {
 onMounted(() => {
     const v = videoEl.value;
     if (!v) return;
+    somVideo.existe = true;
+    somVideo.mudo = v.muted;
+    somVideo.alternar = alternarSomVideo;
     v.addEventListener('play', () => { videoPausado.value = false; });
     v.addEventListener('pause', () => { videoPausado.value = true; });
     if (!('IntersectionObserver' in window)) { tocar(v); return; }
@@ -114,7 +120,7 @@ onMounted(() => {
     }, { threshold: 0.25 });
     observadorVideo.observe(v);
 });
-onUnmounted(() => observadorVideo?.disconnect());
+onUnmounted(() => { observadorVideo?.disconnect(); somVideo.existe = false; somVideo.alternar = () => {}; });
 
 const ICONES_BENEFICIO = ['sparkles', 'palette', 'lightbulb', 'smile'];
 const cartoes = (proprios, doAnuncio, reservas, deduzir) => {

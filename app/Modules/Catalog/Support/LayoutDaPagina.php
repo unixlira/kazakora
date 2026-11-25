@@ -30,8 +30,11 @@ class LayoutDaPagina
             return $escolhido;
         }
 
+        // Pela categoria só quando a página de brinquedo tem conteúdo (pagina_brinquedo): na produção
+        // (25/11/2026) os brinquedos ganham a página nova um a um, conforme o conteúdo é gravado.
         $categoria = $product->category?->slug ?? $product->parent?->category?->slug;
+        $temConteudo = ! empty($product->pagina_brinquedo) || ! empty($product->parent?->pagina_brinquedo);
 
-        return in_array($categoria, self::CATEGORIAS_BRINQUEDO, true) ? self::BRINQUEDO : self::PADRAO;
+        return $temConteudo && in_array($categoria, self::CATEGORIAS_BRINQUEDO, true) ? self::BRINQUEDO : self::PADRAO;
     }
 }

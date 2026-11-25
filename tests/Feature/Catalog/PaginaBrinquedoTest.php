@@ -21,9 +21,20 @@ class PaginaBrinquedoTest extends TestCase
         return Category::factory()->create(['slug' => $slug, 'name' => ucfirst(str_replace('-', ' ', $slug))]);
     }
 
+    public function test_brinquedo_sem_conteudo_continua_no_layout_padrao(): void
+    {
+        // Na produção a página nova liga produto a produto, quando o conteúdo é gravado (25/11/2026).
+        $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id]);
+
+        $this->get("/produtos/{$produto->slug}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('layout', 'padrao'));
+    }
+
     public function test_brinquedo_abre_com_layout_brinquedo(): void
     {
-        $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id]);
+        $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id,
+            'pagina_brinquedo' => ['titulo' => 'Diversão longe das telas']]);
 
         $this->get("/produtos/{$produto->slug}")
             ->assertOk()
@@ -101,6 +112,7 @@ class PaginaBrinquedoTest extends TestCase
         $kit = Product::factory()->create([
             'is_active' => true, 'category_id' => $categoria->id,
             'avaliacoes_de' => [['id' => $livro->id, 'rotulo' => 'Livro Falante']],
+            'pagina_brinquedo' => ['titulo' => 'Aprende brincando'],
         ]);
         \App\Modules\Catalog\Models\Review::query()->create(['product_id' => $livro->id, 'rating' => 5, 'comment' => 'Muito bom', 'reviewer_name' => 'Ana Souza']);
 

@@ -73,8 +73,27 @@ class PaginaBrinquedoImportar extends Command
 
                 continue;
             }
+            // "avaliacoes_de": [{slug, rotulo}] junta as avaliações reais de um produto irmão (o mesmo
+            // brinquedo em outro anúncio). Vai pela slug para valer igual em homologação e produção.
+            $avaliacoesDe = null;
+            if (isset($pagina['avaliacoes_de']) && is_array($pagina['avaliacoes_de'])) {
+                $avaliacoesDe = [];
+                foreach ($pagina['avaliacoes_de'] as $irmao) {
+                    $id = Product::where('slug', $irmao['slug'] ?? '')->value('id');
+                    if ($id) {
+                        $avaliacoesDe[] = ['id' => $id, 'rotulo' => (string) ($irmao['rotulo'] ?? '')];
+                    } else {
+                        $this->warn("{$slug}: irmão {$irmao['slug']} não encontrado.");
+                    }
+                }
+                unset($pagina['avaliacoes_de']);
+            }
             if (! $this->option('conferir')) {
-                $product->forceFill(['pagina_brinquedo' => $pagina])->save();
+                $dados = ['pagina_brinquedo' => $pagina];
+                if ($avaliacoesDe !== null) {
+                    $dados['avaliacoes_de'] = $avaliacoesDe ?: null;
+                }
+                $product->forceFill($dados)->save();
             }
             $gravados++;
         }

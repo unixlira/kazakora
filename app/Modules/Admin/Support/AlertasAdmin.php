@@ -43,6 +43,9 @@ class AlertasAdmin
     /** Pedido do Lira em 24/11/2026 (#4474): pedido Amazon DBA que a API não deixou agendar. */
     public const AMAZON_DBA_AGENDAMENTO = 'amazon_dba_agendamento';
 
+    /** Pedido do Lira em 25/11/2026: gestor de tráfego avisa CPA máximo batido e hora de subir 20%. */
+    public const TRAFEGO_META = 'trafego_meta';
+
     /** @var array<string, array{nome: string, descricao: string}> */
     public const TIPOS = [
         self::COLETA_FINANCEIRA => [
@@ -72,6 +75,10 @@ class AlertasAdmin
         self::AMAZON_DBA_AGENDAMENTO => [
             'nome' => 'Amazon DBA: agendar no Seller Central',
             'descricao' => 'A Amazon não deixou agendar o pedido do DBA pela API (nem listar horários de Ponto de Envio, nem agendar sem horário). Agende no Seller Central em Ponto de Envio, na data mais próxima, antes do prazo. O sistema confere a cada 30 min e some sozinho quando o pacote aparece agendado; a etiqueta é baixada sozinha.',
+        ],
+        self::TRAFEGO_META => [
+            'nome' => 'Tráfego Meta: desligar ou escalar conjunto',
+            'descricao' => 'O gestor de tráfego mede cada conjunto desde o início do ciclo: avisa quando um conjunto gastou o CPA máximo (0 a 0) sem vender (desligar), quando está fraco sem carrinho (baixar 20%) e quando está abaixo do CPA alvo por 2 dias fechados (subir 20%). Mesmo aviso vai por e-mail. Marque como resolvido depois de agir.',
         ],
         self::MELHOR_ENVIO_CONEXAO => [
             'nome' => 'Conexão do Melhor Envio caiu',

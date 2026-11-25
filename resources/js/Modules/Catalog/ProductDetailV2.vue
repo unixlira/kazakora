@@ -90,6 +90,8 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
         ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
         : '');
 
+// Página de brinquedo: frete não é argumento (pedido do Lira 25/11/2026); fica só o selo pequeno.
+const faqSemFrete = () => FAQ.filter(([pergunta]) => !/frete/i.test(pergunta));
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
@@ -100,6 +102,7 @@ const FAQ = [
         ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x, com juros a partir de 2x, ou boleto bancário.`
         : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x, com juros a partir de 2x, ou boleto bancário.`],
 ];
+const FAQ_BRINQUEDO = faqSemFrete();
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.reviews.length));
@@ -1386,7 +1389,7 @@ const escolherKit = (kit, rolar = false) => {
                 </div>
 
                 <SecoesBrinquedo v-if="brinquedo" :product="product" :anuncio="anuncio" :pagina="paginaBrinquedo" :opcoes="opcoesKits" :escolhida-id="escolhida?.id ?? (variations.length ? null : product.id)"
-                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ" :parcelas="PARCELAS"
+                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ_BRINQUEDO" :parcelas="PARCELAS"
                     @escolher="escolherKit" @comprar="irParaCompra" />
 
                 <!-- AVALIAÇÕES (largura total) -->

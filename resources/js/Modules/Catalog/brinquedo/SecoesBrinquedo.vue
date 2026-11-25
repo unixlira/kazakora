@@ -65,7 +65,7 @@ onMounted(() => {
 });
 onUnmounted(() => observadorVideo?.disconnect());
 
-const ICONES_BENEFICIO = ['sparkles', 'hand', 'smile', 'backpack'];
+const ICONES_BENEFICIO = ['sparkles', 'palette', 'lightbulb', 'smile'];
 const beneficios = computed(() => (props.anuncio?.beneficios ?? []).slice(0, 4).map((item, i) => ({
     titulo: semEmoji(item[0]), texto: semEmoji(item[1] ?? ''), cor: ['vermelho', 'azul', 'verde', 'amarelo'][i % 4], icone: ICONES_BENEFICIO[i % 4],
 })));
@@ -76,9 +76,13 @@ const ICONES_HABILIDADE = [
 ];
 const habilidades = computed(() => (props.anuncio?.comparativo?.habilidades ?? []).map(semEmoji).filter(Boolean).slice(0, 6)
     .map((texto, j) => ({ texto, cor: ['amarelo', 'vermelho', 'azul', 'verde', 'azul', 'vermelho'][j % 6], icone: ICONES_HABILIDADE.find(([r]) => r.test(texto))?.[1] ?? 'star' })));
-const ICONES_DETALHE = ['blocks', 'book-open', 'sparkles', 'backpack'];
-const detalhes = computed(() => (props.anuncio?.comparativo?.detalhes ?? []).slice(0, 4)
-    .map((d, i) => ({ titulo: semEmoji(d[0]), texto: semEmoji(d[1] ?? ''), icone: ICONES_DETALHE[i % 4] })));
+// Ícone de cada cartão pelo assunto (livro/ouvir, lousa/desenhar, ímã/montar, telas); senão, um da lista.
+const ICONES_CARTAO = [[/ouv|fala|palavra|idioma|livro/i, 'ear'], [/desenh|luz|lousa|cria/i, 'palette'], [/ím[aã]|monta|encaix|quebra/i, 'magnet'], [/tela/i, 'heart']];
+const ICONES_DETALHE = ['ear', 'palette', 'magnet', 'heart'];
+const detalhes = computed(() => (props.anuncio?.comparativo?.detalhes ?? []).slice(0, 4).map((d, i) => ({
+    titulo: semEmoji(d[0]), texto: semEmoji(d[1] ?? ''), cor: ['vermelho', 'azul', 'verde', 'amarelo'][i % 4],
+    icone: ICONES_CARTAO.find(([r]) => r.test(`${d[0]} ${d[1] ?? ''}`))?.[1] ?? ICONES_DETALHE[i % 4],
+})));
 
 const comparativo = computed(() => {
     const c = props.anuncio?.comparativo;
@@ -212,9 +216,10 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <div class="pb-media"><img :src="detalhe.foto" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
                     <span v-for="(d, j) in detalhes" :key="j" class="pb-chamada com-linha" :class="`pos-${j}`">{{ d.titulo }}</span>
                 </div>
-                <div v-if="detalhes.length" class="pb-dt-list pb-reveal">
-                    <div v-for="(d, j) in detalhes" :key="j" class="pb-dt-i">
-                        <span class="pb-dt-ico"><Icone :nome="d.icone" :tamanho="24" /></span>
+                <!-- Mesmo cartão centralizado da referência (quadrado colorido com borda e sombra, ícone branco). -->
+                <div v-if="detalhes.length" class="pb-why-cards pb-reveal">
+                    <div v-for="(d, j) in detalhes" :key="j" class="pb-why-card">
+                        <span class="pb-why-ico" :class="`cor-${d.cor}`"><Icone :nome="d.icone" :tamanho="28" :traco="2.4" /></span>
                         <h3 class="pb-h3">{{ d.titulo }}</h3>
                         <p>{{ d.texto }}</p>
                     </div>

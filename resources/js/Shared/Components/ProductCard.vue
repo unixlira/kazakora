@@ -439,7 +439,7 @@ const parcela = computed(() => parcelaMaxima(preco.value.final_price, page.props
                          Laranja vivo #ff9500 (pedido 2026-10-22): o #c2450c era opaco e
                          avermelhado. Texto branco (pedido 2026-10-22, depois do grafite). -->
                     <button v-if="escolher" type="button" :disabled="product.stock <= 0"
-                        class="-my-[2px] inline-flex h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] disabled:opacity-50"
+                        class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes md:inline-flex rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] disabled:opacity-50"
                         @click.stop="emit('escolher')">
                         {{ selecionado ? 'Escolhido' : 'Escolher' }}
                     </button>

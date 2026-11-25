@@ -31,15 +31,15 @@
     "titulo": "Diversão sem telas",
     "subtitulo": "Português e inglês na ponta do dedo",
     "texto": "Ouvir e falar no livro, desenhar na lousa, montar o quebra-cabeça: brincadeira de verdade, longe do celular e da TV. Menos tela também é mais descanso para os olhos e uma hora de dormir mais tranquila.",
-    "imagem": 5,
+    "imagem": 4,
     "capa": "products/620/video/kit-livro-falante-diversao-sem-telas-9x16-poster.webp"
   },
   "porque": {
     "titulo": "Por que a criançada adora",
-    "imagem": 4,
+    "imagem": 3,
     "chamadas": [
-      "Ouve e fala em 2 idiomas",
-      "Desenha com luz"
+      "Fala 2 idiomas",
+      "300+ palavras"
     ],
     "cards": [
       {
@@ -67,7 +67,7 @@
   "ensina": {
     "titulo": "Brincadeira que também ensina",
     "texto": "Enquanto aperta e escuta, a criança treina sem nem perceber:",
-    "imagem": 6,
+    "imagem": 5,
     "chamadas": [
       "Português e Inglês",
       "Desenha com luz",
@@ -104,7 +104,7 @@
   "detalhes": {
     "titulo": "Cada brinquedo pensado para a criança",
     "texto": "Livro que fala, lousa que acende e peças que grudam: feitos para mãos pequenas.",
-    "imagem": 12,
+    "imagem": 11,
     "cards": [
       {
         "titulo": "Ouve e repete",
@@ -169,7 +169,7 @@
   "familia": {
     "titulo": "Queridinho de pais e filhos",
     "texto": "Livro, lousa e quebra-cabeça juntos: três jeitos de brincar para a criança trocar a tela pela diversão, com a família por perto.",
-    "imagem": 7,
+    "imagem": 6,
     "citacao": "Menos tela, mais conversa: a família toda aprendendo inglês junto, no chão da sala."
   },
   "kits": {

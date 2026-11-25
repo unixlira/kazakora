@@ -155,7 +155,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <div class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="42" /><Cubo cor="azul" :tamanho="42" /></div>
                     <div class="pb-media pb-media-video">
                         <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="historia.foto || capa" muted loop playsinline preload="none" :aria-label="product.name"></video>
-                        <img v-else :src="historia.foto || capa" :alt="product.name" loading="lazy" decoding="async">
+                        <img v-else :src="historia.foto || capa" :alt="product.name" decoding="async">
                     </div>
                     <span class="pb-adesivo" aria-hidden="true">Uau!</span>
                 </div>

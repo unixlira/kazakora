@@ -19,6 +19,7 @@ class ReguaCpaTest extends TestCase
     public function test_entrega_produtos_com_custo_e_taxas_da_loja(): void
     {
         config([
+            'inertia.testing.ensure_pages_exist' => false,
             'ofertas.taxa_cartao' => 4.98,
             'ofertas.taxa_pix' => 0.99,
             'ofertas.frete_estimado' => 25,

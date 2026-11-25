@@ -64,7 +64,7 @@ onBeforeUnmount(() => window.removeEventListener(ABRIR, reabrir));
                     <Link href="/politica-de-cookies" class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343]">Saiba mais</Link>
                     <span class="mx-1 text-white/40" aria-hidden="true">·</span>
                     <button type="button" :disabled="enviando"
-                        class="font-medium text-white/65 underline underline-offset-2 hover:text-white disabled:opacity-60"
+                        class="font-semibold underline decoration-[#f27a2a] decoration-2 underline-offset-[3px] hover:text-[#f6c343] disabled:opacity-60"
                         @click="soNecessarios">Só os necessários</button>
                 </span>
             </p>

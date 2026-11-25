@@ -2,25 +2,39 @@
 // cartão de kit com selo, preço "de/por", preço por brinquedo e economia.
 // Nada aqui é inventado: os números saem do preço cadastrado de cada variação.
 
-/** Quantos brinquedos vêm no kit: "Livro Falante + Lousa Mágica LED" = 2. */
+/** Quantos brinquedos vêm no kit: "Livro Falante + Lousa Mágica LED" = 2 (conta a composição). */
 export const unidadesDoKit = (variante) => {
-    const nome = String(variante?.variation || variante?.name || '');
+    const nome = composicaoDoKit(variante);
     const partes = nome.split(/\s\+\s/).map((parte) => parte.trim()).filter(Boolean);
     return Math.max(1, partes.length);
 };
 
 export const nomeDoKit = (variante) => String(variante?.variation || variante?.name || '').trim();
-/** Nome sem o "(modelo sortido)": o aviso vai na linha de baixo. */
-export const nomeCurtoDoKit = (variante) => nomeDoKit(variante).replace(/\s*\(modelo sortido\)\s*$/i, '');
+/**
+ * Variação no formato "Kit Sem Telas (Livro + Lousa + Quebra-Cabeça)" (pedido do Lira 24/11/2026):
+ * o nome do kit é a parte de fora dos parênteses e o que vem no kit, a de dentro. Sem parênteses,
+ * o nome inteiro serve para os dois (e "(modelo sortido)" no fim não conta como composição).
+ */
+const PARENTESES = /\s*\(([^()]*)\)\s*$/;
+export const nomeCurtoDoKit = (variante) => {
+    const nome = nomeDoKit(variante).replace(/\s*\(modelo sortido\)\s*$/i, '');
+    return nome.replace(PARENTESES, '').trim() || nome;
+};
+export function composicaoDoKit(variante) {
+    const nome = nomeDoKit(variante).replace(/\s*\(modelo sortido\)\s*$/i, '');
+    const m = nome.match(PARENTESES);
+    return (m ? m[1] : nome).trim();
+}
 
 /** "1 livro falante + 1 lousa mágica LED" vira a linha de baixo do cartão. */
 export const itensDoKit = (variante) => {
     const n = unidadesDoKit(variante);
-    // 3 ou mais brinquedos: o argumento do kit completo (pedido do Lira 24/11/2026, "os 3 deixam a criança sem tela").
-    const base = n >= 3 ? `${n} brincadeiras para trocar a tela por diversão` : (n > 1 ? `${n} brinquedos no kit` : '1 brinquedo');
+    // Linha de baixo do cartão: o que vem no kit (como "200 peças + 10 bonecos" na referência).
+    const composicao = composicaoDoKit(variante);
+    const base = composicao !== nomeCurtoDoKit(variante) ? composicao : (n > 1 ? `${n} brinquedos no kit` : '1 brinquedo');
     // Kit com modelo sortido (cor "Sortido" ou "(modelo sortido)" no nome): avisa, sem prometer a cor da foto.
     const sortido = /sortid/i.test(nomeDoKit(variante)) || /sortid/i.test(String(variante?.color ?? ''));
-    return sortido ? `${base} · modelo sortido conforme estoque` : base;
+    return sortido ? `${base} · modelo sortido` : base;
 };
 
 export const precoDoKit = (variante) => Number(variante?.final_price ?? 0);
@@ -93,3 +107,6 @@ export const tituloComMarcador = (titulo) => {
 };
 
 export const semEmoji = (texto) => String(texto ?? '').replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+
+/** Argumento do kit com 3 ou mais brinquedos (pedido do Lira: "os 3 deixam a criança sem tela"). */
+export const argumentoDoKit = (variante) => (unidadesDoKit(variante) >= 3 ? `${unidadesDoKit(variante)} brincadeiras para trocar a tela por diversão` : '');

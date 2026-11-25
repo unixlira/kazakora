@@ -38,6 +38,7 @@ class Product extends Model
         'color',
         'variation',
         'layout_pagina',
+        'avaliacoes_de',
         'grupo_modelos',
         'rotulo_modelo',
         'video_path',
@@ -61,7 +62,7 @@ class Product extends Model
     protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
 
     /** Só serve para calcular o preco_vitrine; não vai no JSON. */
-    protected $hidden = ['variacoesAtivas'];
+    protected $hidden = ['variacoesAtivas', 'avaliacoes_de'];
 
     protected function casts(): array
     {
@@ -80,6 +81,7 @@ class Product extends Model
             'is_new_release' => 'boolean',
             'video_duration_seconds' => 'integer',
             'tags' => 'array',
+            'avaliacoes_de' => 'array',
         ];
     }
 

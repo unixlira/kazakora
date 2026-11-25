@@ -260,7 +260,14 @@
 /* Kits em cartões (3 colunas, 22 de espaço; cartão 367; foto 1:1; botão 51) */
 .pd2.pg-brinquedo .kb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; text-align: left; }
 .pd2.pg-brinquedo .kb-kc { position: relative; display: flex; flex-direction: column; background: #fff; border: 2px solid var(--linha); border-radius: 26px; padding: 14px 14px 20px; transition: transform .25s, box-shadow .25s, border-color .25s; }
-.pd2.pg-brinquedo .kb-kc:hover, .pd2.pg-brinquedo .kb-kc.is-sel { border-color: var(--ink); box-shadow: 0 8px 0 var(--ink); }
+.pd2.pg-brinquedo .kb-kc:hover { border-color: var(--ink); box-shadow: 0 8px 0 var(--ink); }
+/* O recomendado (do meio) com borda grossa e sombra sólida, como na referência; no celular vem primeiro. */
+.pd2.pg-brinquedo .kb-kc.is-hot { border: 3px solid var(--ink); box-shadow: 0 9px 0 var(--ink); }
+.pd2.pg-brinquedo .kb-kc.is-hot .kb-kc-selo { border: 2px solid var(--ink); }
+.pd2.pg-brinquedo .kb-kc-img { position: relative; }
+.pd2.pg-brinquedo .kb-kc-faixa { position: absolute; left: 8px; right: 8px; top: 8px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 6px; background: rgba(255, 255, 255, .94); border-radius: 12px; padding: 7px 8px; font: 700 12.5px/1.15 var(--display); color: var(--ink); box-shadow: 0 2px 6px rgba(23, 24, 44, .12); }
+.pd2.pg-brinquedo .kb-kc-faixa span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pd2.pg-brinquedo .kb-kc-mais { font: 700 15px/1 var(--display); }
 .pd2.pg-brinquedo .kb-kc:hover { transform: translateY(-6px) rotate(-.8deg); }
 .pd2.pg-brinquedo .kb-kc-selo { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; font: 800 11.5px/1 var(--corpo); letter-spacing: .07em; text-transform: uppercase; padding: 8px 13px; border-radius: 9px; z-index: 2; }
 .pd2.pg-brinquedo .kb-kc-img { border-radius: 18px; overflow: hidden; margin: 0 0 14px; background: var(--creme); }
@@ -269,12 +276,12 @@
 .pd2.pg-brinquedo .kb-kc-nome { font: 600 23px/1.2 var(--display); margin: 0; color: var(--ink); }
 .pd2.pg-brinquedo .kb-kc-arg { font: 800 13px/1.3 var(--corpo); color: var(--verde-d); margin: -8px 0 12px; }
 .pd2.pg-brinquedo .kb-kc-sub { font: 800 14.5px/1.35 var(--corpo); color: var(--muted); margin: 2px 0 12px; }
-.pd2.pg-brinquedo .kb-kc-preco { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; }
+.pd2.pg-brinquedo .kb-kc-preco { display: flex; align-items: baseline; gap: 8px; margin: auto 0 8px; }
 .pd2.pg-brinquedo .kb-kc-preco b { font: 600 30px/1 var(--display); color: var(--ink); }
 .pd2.pg-brinquedo .kb-kc-preco s { font: 700 14px/1 var(--corpo); color: #9a9aa8; }
 .pd2.pg-brinquedo .kb-kc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
 .pd2.pg-brinquedo .kb-kc-chips .kb-pilula { font-size: 12px; padding: 7px 9px; }
-.pd2.pg-brinquedo .kb-kc .kb-kc-btn { width: 100%; margin-top: auto; padding: 17px 16px; font-size: 17px; }
+.pd2.pg-brinquedo .kb-kc .kb-kc-btn { width: 100%; margin-top: 0; padding: 17px 16px; font-size: 17px; }
 .pd2.pg-brinquedo .kb-grid.is-in .kb-kc { animation: pbpop .55s both; }
 .pd2.pg-brinquedo .kb-grid.is-in .kb-kc:nth-child(2) { animation-delay: .12s; } .pd2.pg-brinquedo .kb-grid.is-in .kb-kc:nth-child(3) { animation-delay: .24s; }
 
@@ -393,6 +400,8 @@
     .pd2.pg-brinquedo .pb-st { display: grid; grid-template-columns: 46px 1fr; gap: 0 14px; padding: 16px; }
     .pd2.pg-brinquedo .pb-st-n { flex-direction: column; margin: 0; gap: 8px; }
     .pd2.pg-brinquedo .kb-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; gap: 30px; }
+    .pd2.pg-brinquedo .kb-kc.is-hot { order: -1; }
+    .pd2.pg-brinquedo .kb-kc:hover { transform: none; }
     .pd2.pg-brinquedo .pb-gt-ps { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 767px) {

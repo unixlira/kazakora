@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
-import { argumentoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
+import { argumentoDoKit, composicaoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -17,6 +17,9 @@ const emit = defineEmits(['escolher']);
 
 const kits = computed(() => ordenarKits(props.opcoes));
 const selos = computed(() => selosDosKits(props.opcoes));
+// Partes do kit para a faixa da foto: "Livro + Lousa Mágica LED" → ["Livro", "Lousa Mágica LED"].
+const partesDoKit = (kit) => composicaoDoKit(kit).split(/\s\+\s/).map((p) => p.trim()).filter(Boolean);
+const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|desenh/i.test(parte) ? 'palette' : /quebra|puzzle|cabe/i.test(parte) ? 'puzzle' : 'gift');
 </script>
 
 <template>
@@ -44,12 +47,16 @@ const selos = computed(() => selosDosKits(props.opcoes));
     </div>
 
     <div v-else class="kb-grid pb-reveal">
-        <article v-for="kit in kits" :key="kit.id" class="kb-kc" :class="{ 'is-sel': kit.id === escolhidaId }">
+        <article v-for="kit in kits" :key="kit.id" class="kb-kc" :class="{ 'is-hot': selos[kit.id]?.tom === 'amarelo', 'is-best': selos[kit.id]?.tom === 'verde' }">
             <span v-if="selos[kit.id]" class="kb-kc-selo" :class="`tom-${selos[kit.id].tom}`">
                 <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="12" :traco="2.4" />{{ selos[kit.id].texto }}
             </span>
             <div class="kb-kc-img">
                 <img v-if="fotoDoKit(kit)" :src="fotoDoKit(kit)" :alt="nomeCurtoDoKit(kit)" loading="lazy" decoding="async">
+                <!-- Faixa "o que vem" no alto da foto, com um ícone por brinquedo (como a referência). -->
+                <span class="kb-kc-faixa" aria-hidden="true">
+                    <template v-for="(item, j) in partesDoKit(kit)" :key="j"><b v-if="j" class="kb-kc-mais">+</b><span><Icone :nome="iconeDaParte(item)" :tamanho="18" :traco="2.4" />{{ item }}</span></template>
+                </span>
             </div>
             <h3 class="kb-kc-nome">{{ nomeCurtoDoKit(kit) }}</h3>
             <p class="kb-kc-sub">{{ itensDoKit(kit) }}</p>
@@ -60,7 +67,7 @@ const selos = computed(() => selosDosKits(props.opcoes));
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </div>
             <button type="button" class="pb-btn kb-kc-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">
-                {{ kit.stock < 1 ? 'Esgotado' : 'Quero este kit' }}
+                {{ kit.stock < 1 ? 'Esgotado' : `Quero o ${nomeCurtoDoKit(kit)}` }}
             </button>
         </article>
     </div>

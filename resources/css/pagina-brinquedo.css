@@ -170,6 +170,30 @@
 .pd2.pg-brinquedo .pb-media-560 img, .pd2.pg-brinquedo .pb-media-520 img { aspect-ratio: 1; object-fit: cover; }
 .pd2.pg-brinquedo .pb-cta { text-align: center; margin-top: 38px; }
 
+/* Chamadas por cima das fotos (etiquetas com borda escura e sombra sólida, nos cantos) */
+.pd2.pg-brinquedo .pb-media-chamadas { position: relative; margin: 0 auto; }
+.pd2.pg-brinquedo .pb-media-chamadas.pb-media-560 { max-width: 560px; }
+.pd2.pg-brinquedo .pb-media-chamadas.pb-media-520 { max-width: 520px; }
+.pd2.pg-brinquedo .pb-media-chamadas.pb-media-620 { max-width: 414px; }
+.pd2.pg-brinquedo .pb-media-chamadas > .pb-media { max-width: none; }
+.pd2.pg-brinquedo .pb-media-chamadas.pb-media-560 img, .pd2.pg-brinquedo .pb-media-chamadas.pb-media-520 img { aspect-ratio: 1; object-fit: cover; }
+.pd2.pg-brinquedo .pb-media-chamadas.pb-media-620 img { aspect-ratio: 414 / 544; object-fit: cover; }
+.pd2.pg-brinquedo .pb-chamada { position: absolute; z-index: 2; background: #fff; color: var(--ink); font: 700 14px/1.1 var(--display); padding: 8px 12px; border-radius: 12px; border: 2px solid var(--ink); box-shadow: 0 3px 0 var(--ink); white-space: nowrap; animation: pbpop .5s both; }
+.pd2.pg-brinquedo .pb-chamada.pos-0 { top: 16px; left: -10px; transform: rotate(-3deg); background: var(--amarelo); }
+.pd2.pg-brinquedo .pb-chamada.pos-1 { top: 16px; right: -10px; transform: rotate(3deg); }
+.pd2.pg-brinquedo .pb-chamada.pos-2 { bottom: 22px; left: -10px; transform: rotate(2deg); }
+.pd2.pg-brinquedo .pb-chamada.pos-3 { bottom: 22px; right: -10px; transform: rotate(-2deg); background: #e4f6e9; }
+.pd2.pg-brinquedo .pb-chamada.com-linha::after { content: ''; position: absolute; top: 50%; width: 26px; height: 2px; background: var(--ink); }
+.pd2.pg-brinquedo .pb-chamada.com-linha.pos-0::after, .pd2.pg-brinquedo .pb-chamada.com-linha.pos-2::after { left: 100%; }
+.pd2.pg-brinquedo .pb-chamada.com-linha.pos-1::after, .pd2.pg-brinquedo .pb-chamada.com-linha.pos-3::after { right: 100%; }
+.pd2.pg-brinquedo .pb-chamada:nth-of-type(2) { animation-delay: .1s; } .pd2.pg-brinquedo .pb-chamada:nth-of-type(3) { animation-delay: .2s; } .pd2.pg-brinquedo .pb-chamada:nth-of-type(4) { animation-delay: .3s; }
+@media (max-width: 767px) {
+    .pd2.pg-brinquedo .pb-chamada { font-size: 12.5px; padding: 6px 9px; }
+    .pd2.pg-brinquedo .pb-chamada.pos-0, .pd2.pg-brinquedo .pb-chamada.pos-2 { left: -4px; }
+    .pd2.pg-brinquedo .pb-chamada.pos-1, .pd2.pg-brinquedo .pb-chamada.pos-3 { right: -4px; }
+    .pd2.pg-brinquedo .pb-chamada.com-linha::after { width: 14px; }
+}
+
 /* Botão verde (19 px, 20 x 38, sombra 6) com brilho passando */
 .pd2.pg-brinquedo .pb-btn, .pb-barra .pb-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 10px; font: 600 19px/1 var(--display); letter-spacing: .01em; background: var(--verde, #21a346); color: #fff !important; border: 0; border-radius: 999px; padding: 20px 38px; box-shadow: 0 6px 0 var(--verde-d, #157a32); cursor: pointer; text-decoration: none; transition: transform .15s, box-shadow .15s; }
 .pd2.pg-brinquedo .pb-btn::after, .pb-barra .pb-btn::after, .pd2.pg-brinquedo .compra .comprar-agora::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent); transform: translateX(-150%) skewX(-20deg); animation: pbshine 3.2s ease-in-out infinite; }

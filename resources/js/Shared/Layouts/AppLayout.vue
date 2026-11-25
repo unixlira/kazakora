@@ -14,7 +14,8 @@ import RodapeLoja from '@/Shared/Components/RodapeLoja.vue';
 
 const page = usePage();
 // semFaixaTopo: sem a faixa promocional e o letreiro do topo (página de brinquedo, 24/11/2026).
-defineProps({ semFaixaTopo: { type: Boolean, default: false } });
+// logoTopo: { href, alt, png, webp, largura, altura } troca o logo do cabeçalho (KoraKids nos brinquedos).
+defineProps({ semFaixaTopo: { type: Boolean, default: false }, logoTopo: { type: Object, default: null } });
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
@@ -216,7 +217,14 @@ onUnmounted(() => {
                 </button>
 
                 <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. Centralizado no celular (2026-10-23). -->
-                <Link href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
+                <!-- Logo próprio da página (página de brinquedo: KoraKids, 24/11/2026). -->
+                <Link v-if="logoTopo" :href="logoTopo.href" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" :aria-label="`${logoTopo.alt} — início`">
+                    <picture>
+                        <source :srcset="logoTopo.webp" type="image/webp">
+                        <img :src="logoTopo.png" :alt="logoTopo.alt" class="h-9 w-auto md:h-11" :width="logoTopo.largura" :height="logoTopo.altura" fetchpriority="high">
+                    </picture>
+                </Link>
+                <Link v-else href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
                     <picture>
                         <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
                         <img :src="marca.logoNav" alt="KazaKora" class="h-6 w-auto md:h-8" width="160" height="28" fetchpriority="high">

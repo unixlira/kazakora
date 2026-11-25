@@ -609,10 +609,45 @@ class CatalogController extends Controller
      *
      * @return array{total: int, media: float|null, estrelas: array<int, int>}
      */
+    /**
+     * Produtos cujas avaliações a página junta (products.avaliacoes_de, no produto ou no pai;
+     * pedido do Lira 24/11/2026): [id => rótulo] de cada produto listado e das variações dele.
+     *
+     * @return array<int, string>
+     */
+    private static function avaliacoesDeOutros(Product $product): array
+    {
+        $lista = $product->avaliacoes_de ?: $product->parent?->avaliacoes_de;
+        if (! is_array($lista) || ! $lista) {
+            return [];
+        }
+        $rotulos = [];
+        foreach ($lista as $item) {
+            $id = (int) ($item['id'] ?? 0);
+            if ($id < 1) {
+                continue;
+            }
+            foreach (Product::withTrashed()->where('id', $id)->orWhere('parent_product_id', $id)->pluck('id') as $irmao) {
+                $rotulos[(int) $irmao] ??= (string) ($item['rotulo'] ?? '');
+            }
+        }
+
+        return $rotulos;
+    }
+
+    /** Ids das avaliações da página: o grupo do produto e os produtos de avaliacoes_de. */
+    private static function idsDasAvaliacoes(Product $product): array
+    {
+        return array_values(array_unique(array_merge(
+            self::idsDoGrupo($product)->pluck('id')->all(),
+            array_keys(self::avaliacoesDeOutros($product)),
+        )));
+    }
+
     private function resumoDasAvaliacoes(Product $product): array
     {
         $porNota = Review::query()
-            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
             ->selectRaw('rating, count(*) as total')
             ->groupBy('rating')
             ->pluck('total', 'rating');
@@ -639,8 +674,10 @@ class CatalogController extends Controller
      */
     private function paginaDeAvaliacoes(Product $product, int $pular, ?int $quantidade)
     {
+        $rotulos = self::avaliacoesDeOutros($product);
+
         return Review::query()
-            ->whereIn('product_id', self::idsDoGrupo($product))
+            ->whereIn('product_id', self::idsDasAvaliacoes($product))
             ->with(['user:id,name', 'images'])
             ->withCount('images')
             ->orderByRaw('images_count > 0 desc')
@@ -649,9 +686,13 @@ class CatalogController extends Controller
             ->when($quantidade !== null, fn ($query) => $query->skip($pular)->take($quantidade))
             ->get()
             // Nome oculto: o usuário não vai no JSON da página.
-            ->each(function (Review $review) {
+            ->each(function (Review $review) use ($rotulos) {
                 if ($review->ocultar_nome) {
                     $review->setRelation('user', null);
+                }
+                // Etiqueta do produto avaliado quando a página junta avaliações de outros produtos.
+                if (isset($rotulos[$review->product_id]) && $rotulos[$review->product_id] !== '') {
+                    $review->setAttribute('produto_rotulo', $rotulos[$review->product_id]);
                 }
                 // Sem selo "Comprado em outra loja" na página (pedido do Lira 07/11,
                 // tarefa 3908): o canal da avaliação não vira selo na tela.

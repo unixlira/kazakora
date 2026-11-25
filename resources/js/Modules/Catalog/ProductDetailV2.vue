@@ -32,7 +32,7 @@ import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
 import SomComemoracao from './brinquedo/SomComemoracao.vue';
 import Cubo from './brinquedo/Cubo.vue';
 import Icone from './brinquedo/Icone.vue';
-import { kitRecomendado, nomeDoKit, semEmoji } from './brinquedo/kits';
+import { composicaoDoKit, kitRecomendado, nomeCurtoDoKit, nomeDoKit, semEmoji } from './brinquedo/kits';
 import { ligarEntradas, tabelaDeParcelas, vigiarBotaoCompra } from './brinquedo/efeitos';
 
 const props = defineProps({
@@ -68,6 +68,8 @@ const props = defineProps({
     layout: { type: String, default: 'padrao' },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
+// Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
+const LOGO_KORAKIDS = { href: '/?categoria=brinquedos-e-games#produtos', alt: 'KoraKids by KazaKora', png: '/images/marca/logo-korakids.png?v=1', webp: '/images/marca/logo-korakids.webp?v=1', largura: 164, altura: 96 };
 // Na página de brinquedo um kit já abre marcado, como na referência (o recomendado).
 const kitInicial = () => (props.layout === 'brinquedo' && props.variations.length
     ? kitRecomendado([props.product, ...props.variations])
@@ -912,7 +914,7 @@ const escolherKit = (kit, rolar = false) => {
 <template>
     <Head :title="product.seo_title || product.name" />
 
-    <AppLayout :sem-faixa-topo="brinquedo">
+    <AppLayout :sem-faixa-topo="brinquedo" :logo-topo="brinquedo ? LOGO_KORAKIDS : null">
         <div class="pd2" :class="{ 'pg-brinquedo': brinquedo }">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
@@ -1350,6 +1352,11 @@ const escolherKit = (kit, rolar = false) => {
 
                 <!-- AVALIAÇÕES (largura total) -->
                 <section v-if="showReviews" id="avaliacoes" class="card largura-total" data-kzm="avaliacoes">
+                    <!-- Página de brinquedo: cabeçalho da seção como na referência; os cartões são os da loja. -->
+                    <header v-if="brinquedo" class="pb-aval-cab">
+                        <p class="pb-eyebrow">Avaliações reais de clientes</p>
+                        <h2 class="pb-h2">Quem comprou, <em class="cor-verde">aprovou</em></h2>
+                    </header>
                     <div class="aval-topo">
                         <div class="aval-resumo">
                             <h2>Avaliações de Clientes</h2>
@@ -1373,6 +1380,7 @@ const escolherKit = (kit, rolar = false) => {
 
                     <div v-if="reviews.length" class="aval-grade">
                         <div v-for="review in reviewsNaTela" :key="review.id" class="aval-item">
+                            <span v-if="brinquedo && review.produto_rotulo" class="pb-aval-produto">{{ review.produto_rotulo }}</span>
                             <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}
                                 <!-- Avaliação do mesmo modelo trazida de outro marketplace (outra_loja = 1 no banco):
                                      linha de origem para não parecer compra na KazaKora (OK do Lira 19/11, tarefa 4215). -->
@@ -1451,9 +1459,10 @@ const escolherKit = (kit, rolar = false) => {
              caixa sai da tela (celular e computador), com o kit escolhido e o preço. -->
         <div v-if="brinquedo" class="pb-barra" :class="{ 'is-on': barraBrinquedo }" :aria-hidden="!barraBrinquedo">
             <div class="pb-barra-info">
-                <small>{{ escolhida && variations.length ? nomeDoKit(escolhida) : product.name }}</small>
-                <b>{{ formatPrice(precoPor) }}</b>
+                <b>{{ escolhida && variations.length ? nomeCurtoDoKit(escolhida) : product.name }}</b>
+                <small v-if="escolhida && variations.length">{{ composicaoDoKit(escolhida) }}</small>
             </div>
+            <span class="pb-barra-preco">{{ formatPrice(precoPor) }}</span>
             <button type="button" class="pb-btn" data-kzm="comprar:barra-brinquedo" :tabindex="barraBrinquedo ? 0 : -1" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'Comprar agora' : 'Esgotado' }}</button>
         </div>
 

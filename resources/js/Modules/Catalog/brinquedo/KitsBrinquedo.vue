@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
-import { economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
+import { argumentoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -53,6 +53,7 @@ const selos = computed(() => selosDosKits(props.opcoes));
             </div>
             <h3 class="kb-kc-nome">{{ nomeCurtoDoKit(kit) }}</h3>
             <p class="kb-kc-sub">{{ itensDoKit(kit) }}</p>
+            <p v-if="argumentoDoKit(kit)" class="kb-kc-arg">{{ argumentoDoKit(kit) }}</p>
             <div class="kb-kc-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></div>
             <div class="kb-kc-chips">
                 <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>

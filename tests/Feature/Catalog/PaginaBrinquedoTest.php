@@ -93,4 +93,21 @@ class PaginaBrinquedoTest extends TestCase
         $this->assertFileExists($arquivo);
         $this->assertLessThan(60 * 1024, filesize($arquivo));
     }
+
+    public function test_avaliacoes_de_outros_produtos_entram_com_etiqueta(): void
+    {
+        $categoria = $this->categoria('brinquedos-e-games');
+        $livro = Product::factory()->create(['is_active' => true, 'category_id' => $categoria->id]);
+        $kit = Product::factory()->create([
+            'is_active' => true, 'category_id' => $categoria->id,
+            'avaliacoes_de' => [['id' => $livro->id, 'rotulo' => 'Livro Falante']],
+        ]);
+        \App\Modules\Catalog\Models\Review::query()->create(['product_id' => $livro->id, 'rating' => 5, 'comment' => 'Muito bom', 'reviewer_name' => 'Ana Souza']);
+
+        $this->get("/produtos/{$kit->slug}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('reviewsResumo.total', 1)
+                ->where('reviews.0.produto_rotulo', 'Livro Falante')
+                ->missing('product.avaliacoes_de'));
+    }
 }

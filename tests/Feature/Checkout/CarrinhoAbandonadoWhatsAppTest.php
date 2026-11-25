@@ -82,8 +82,9 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
         $this->lead(['whatsapp_enviado_em' => now()]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->get('/admin/carrinhos-abandonados')
-            ->assertInertia(fn ($page) => $page->where('resumo.para_disparar', 1));
+        // Tela única de Leads (25/11/2026): o mesmo contador, agora "Antecipar para todos".
+        $this->actingAs($admin)->get('/admin/leads')
+            ->assertInertia(fn ($page) => $page->where('resumo.antecipar', 1));
 
         $this->actingAs($admin)->post('/admin/carrinhos-abandonados/whatsapp-todos')->assertSessionHas('success');
 

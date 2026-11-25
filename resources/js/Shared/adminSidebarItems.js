@@ -203,12 +203,10 @@ export const sidebarSections = [
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
             // Clientes dos sites (2026-11-16): contas criadas na KazaKora e na FerraKora, só leitura.
             { label: 'Clientes dos sites', href: '/admin/clientes-dos-sites', icon: 'fas fa-id-card', cor: 'azul', permission: 'pedidos.view' },
-            { label: 'Carrinhos abandonados', href: '/admin/carrinhos-abandonados', icon: 'fas fa-cart-arrow-down', cor: 'laranja', permission: 'pedidos.view' },
-            // Sequência de carrinho abandonado (2026-11-21): WhatsApp e e-mail, sem desconto.
-            { label: 'Sequência de carrinho', href: '/admin/carrinhos-abandonados/sequencia', icon: 'fas fa-paper-plane', cor: 'laranja', permission: 'pedidos.view' },
             // Newsletter (2026-11-24): inscritos do bloco antes do rodapé e o resumo do blog por e-mail.
             { label: 'Newsletter', href: '/admin/newsletter', icon: 'fas fa-envelope-open-text', cor: 'azul', permission: 'pedidos.view' },
             // Leads (2026-11-06): o que o cliente digita no checkout, campo a campo, em tempo real.
+            // Desde 25/11/2026 é a tela única: também os carrinhos abandonados e a sequência de remarketing.
             { label: 'Leads', href: '/admin/leads', icon: 'fas fa-user-clock', cor: 'laranja', permission: 'pedidos.view' },
         ],
     },

@@ -10,8 +10,10 @@ use App\Modules\WhatsApp\Support\WhatsAppPhone;
 
 /**
  * Quando a sequência de carrinho abandonado para (pedido do Lira 21/11/2026):
- * - comprou: pedido do mesmo e-mail, telefone ou usuário depois do abandono,
- *   ou o lead do checkout virou "convertido";
+ * - comprou: pedido PAGO (pago, enviado ou entregue) do mesmo e-mail, telefone
+ *   ou usuário depois do abandono, ou o lead do checkout virou "convertido".
+ *   Pedido só gerado (Pix/boleto esperando) ou cancelado não para: a sequência
+ *   segue até o pagamento (decisão do Lira em 25/11/2026);
  * - pediu_parar: respondeu "parar"/"sair" no WhatsApp ou clicou no
  *   descadastro do e-mail;
  * - sem_promocoes: o cliente desmarcou receber promoções (`recebe_promocoes`);
@@ -22,6 +24,9 @@ class ParadasSequencia
 {
     /** Dias depois do início em que a sequência acaba mesmo sem ter mandado tudo. */
     public const DIAS_VALIDADE = 32;
+
+    /** Pedido que conta como compra para parar a sequência (o mesmo de LeadsDigitados::pago). */
+    public const STATUS_PAGOS = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
     /** Motivo de parada, ou null quando a sequência segue. */
     public function motivo(Registro $registro): ?string
@@ -111,6 +116,7 @@ class ParadasSequencia
         $userId = $registro->user_id;
 
         if (($email || $userId) && Order::query()
+            ->whereIn('status', self::STATUS_PAGOS)
             ->where('created_at', '>=', $desde)
             ->where(fn ($q) => $q
                 ->when($email, fn ($q) => $q->orWhere('shipping_email', $email))
@@ -127,6 +133,7 @@ class ParadasSequencia
         }
 
         return Order::query()
+            ->whereIn('status', self::STATUS_PAGOS)
             ->where('created_at', '>=', $desde)
             ->where(fn ($q) => $q->where('shipping_phone', 'like', '%'.$final)->orWhere('shipping_whatsapp', 'like', '%'.$final))
             ->limit(50)

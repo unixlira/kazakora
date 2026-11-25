@@ -89,6 +89,13 @@ class LinhaLead
             }
         }
 
+        // Sem itens guardados (carrinho antigo): o valor que a fonte tiver.
+        foreach ([$this->lead, $this->checkout, $this->registro] as $fonte) {
+            if ($fonte && (float) $fonte->subtotal > 0) {
+                return (float) $fonte->subtotal;
+            }
+        }
+
         return 0.0;
     }
 

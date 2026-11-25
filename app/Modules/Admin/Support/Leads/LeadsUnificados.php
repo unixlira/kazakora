@@ -2,12 +2,15 @@
 
 namespace App\Modules\Admin\Support\Leads;
 
+use App\Models\User;
 use App\Modules\Cart\Models\CarrinhoAbandonadoSequencia as Registro;
 use App\Modules\Cart\Support\RecuperacaoCarrinhoWhatsApp;
 use App\Modules\Cart\Support\Sequencia\ImportadorSequencia;
 use App\Modules\Checkout\Models\Lead;
 use App\Modules\Checkout\Models\LeadCheckout;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Cart\Support\Sequencia\ParadasSequencia;
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -27,7 +30,9 @@ use Illuminate\Support\Collection;
  *    carrinho de origem (origem = lead_checkout, origem_id). Origem cart_snapshot
  *    ou carrinho já apagado: a linha mais recente do mesmo e-mail ou usuário
  *    ainda sem sequência; sem nenhuma, linha própria ("s{id}").
- * Não junta duas sessões diferentes da mesma pessoa (pergunta em aberto, §9).
+ * 4. Sessões diferentes da MESMA PESSOA (mesma loja e mesmo e-mail, CPF ou
+ *    telefone normalizado, inclusive de forma encadeada) viram uma linha só
+ *    (PessoaLead, decisão do Lira em 25/11/2026), com "N sessões".
  *
  * Os volumes são pequenos (os leads somem em 90 dias, LimparLeadsDoCheckout),
  * então a junção é feita em memória, numa consulta por tabela.
@@ -43,8 +48,20 @@ class LeadsUnificados
     ) {
     }
 
-    /** @return Collection<int, LinhaLead> mais recente primeiro */
+    /** @return Collection<int, PessoaLead> uma por pessoa, mais recente primeiro */
     public function linhas(?string $site = null): Collection
+    {
+        $sessoes = $this->sessoes($site);
+        $usuarios = $this->usuarios($sessoes);
+
+        return collect($this->agrupar($sessoes, $usuarios))
+            ->map(fn (array $grupo) => new PessoaLead($grupo, $usuarios))
+            ->sortByDesc(fn (PessoaLead $p) => $p->ultimaAtividade()?->getTimestamp() ?? 0)
+            ->values();
+    }
+
+    /** @return Collection<int, LinhaLead> uma por sessão de checkout, mais recente primeiro */
+    public function sessoes(?string $site = null): Collection
     {
         $corte = now()->subDays(max(1, (int) config('loja.lead_checkout_dias_guarda', 90)));
 
@@ -108,15 +125,93 @@ class LeadsUnificados
             ->values();
     }
 
-    public function achar(string $chave): ?LinhaLead
+    /** A pessoa de qualquer uma das chaves de sessão dela. */
+    public function achar(string $chave): ?PessoaLead
     {
-        return $this->linhas()->first(fn (LinhaLead $l) => $l->chave() === $chave);
+        return $this->linhas()->first(fn (PessoaLead $p) => in_array($chave, $p->chaves(), true));
+    }
+
+    /**
+     * Junta as sessões da mesma pessoa: mesma loja e mesmo e-mail, CPF ou
+     * telefone (normalizado, sem o 55 e o nono dígito), de forma encadeada.
+     *
+     * @param  Collection<int, LinhaLead>  $sessoes
+     * @param  array<int, User>  $usuarios
+     * @return list<list<LinhaLead>>
+     */
+    private function agrupar(Collection $sessoes, array $usuarios): array
+    {
+        $lista = $sessoes->values()->all();
+        $pai = array_keys($lista);
+        $raiz = function (int $i) use (&$pai, &$raiz): int {
+            return $pai[$i] === $i ? $i : ($pai[$i] = $raiz($pai[$i]));
+        };
+        $dono = [];
+        foreach ($lista as $i => $s) {
+            foreach ($this->identidades($s, $usuarios) as $id) {
+                $id = $s->site().'|'.$id;
+                if (isset($dono[$id])) {
+                    $pai[$raiz($i)] = $raiz($dono[$id]);
+                } else {
+                    $dono[$id] = $i;
+                }
+            }
+        }
+
+        $grupos = [];
+        foreach ($lista as $i => $s) {
+            $grupos[$raiz($i)][] = $s;
+        }
+
+        return array_values($grupos);
+    }
+
+    /** @return list<string> */
+    private function identidades(LinhaLead $s, array $usuarios): array
+    {
+        $ids = [];
+        $usuario = null;
+        foreach ([$s->lead?->user_id, $s->checkout?->user_id, $s->registro?->user_id] as $uid) {
+            $usuario ??= $uid ? ($usuarios[$uid] ?? null) : null;
+        }
+        foreach ([$s->lead?->email, $s->checkout?->email, $s->registro?->email, $usuario?->email] as $email) {
+            $email = mb_strtolower(trim((string) $email));
+            // E-mail pela metade (digitando) não junta ninguém.
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $ids[] = 'email:'.$email;
+            }
+        }
+        foreach ([$s->lead?->cpf, $s->checkout?->cpf, $usuario?->cpf] as $cpf) {
+            $cpf = (string) preg_replace('/\D/', '', (string) $cpf);
+            if (strlen($cpf) === 11) {
+                $ids[] = 'cpf:'.$cpf;
+            }
+        }
+        foreach ([$s->lead?->telefone, $s->checkout?->telefone, $s->registro?->telefone, $usuario?->phone] as $telefone) {
+            if ($normal = WhatsAppPhone::normalize($telefone)) {
+                $ids[] = 'tel:'.WhatsAppPhone::chave($normal);
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param  Collection<int, LinhaLead>  $sessoes
+     * @return array<int, User>
+     */
+    private function usuarios(Collection $sessoes): array
+    {
+        $ids = $sessoes->flatMap(fn (LinhaLead $s) => [$s->lead?->user_id, $s->checkout?->user_id, $s->registro?->user_id, $s->pedido?->user_id])
+            ->filter()->unique()->values();
+
+        return $ids->isEmpty() ? [] : User::query()->whereIn('id', $ids)->get(['id', 'name', 'email', 'phone', 'cpf'])->keyBy('id')->all();
     }
 
     /**
      * Filtro dos chips (todos, agora, abertos, remarketing, pagos, parados) e da busca.
      *
-     * @param  Collection<int, LinhaLead>  $linhas
+     * @param  Collection<int, PessoaLead>  $linhas
      */
     public static function filtrar(Collection $linhas, ?string $status, string $busca = ''): Collection
     {
@@ -124,14 +219,14 @@ class LeadsUnificados
         $digitos = (string) preg_replace('/\D/', '', $busca);
 
         return $linhas
-            ->filter(fn (LinhaLead $l) => self::noChip($l, $status))
-            ->filter(fn (LinhaLead $l) => $termo === ''
+            ->filter(fn (PessoaLead $l) => self::noChip($l, $status))
+            ->filter(fn (PessoaLead $l) => $termo === ''
                 || str_contains($l->textoDeBusca(), $termo)
                 || (strlen($digitos) >= 4 && collect($l->digitosDeBusca())->contains(fn ($n) => str_contains($n, $digitos))))
             ->values();
     }
 
-    public static function noChip(LinhaLead $l, ?string $status): bool
+    public static function noChip(PessoaLead $l, ?string $status): bool
     {
         $codigo = $l->situacao['codigo'];
 
@@ -148,7 +243,7 @@ class LeadsUnificados
     /**
      * Cards do topo: as mesmas regras dos chips, sobre a lista já filtrada pela loja.
      *
-     * @param  Collection<int, LinhaLead>  $linhas
+     * @param  Collection<int, PessoaLead>  $linhas
      */
     public static function cards(Collection $linhas): array
     {
@@ -157,7 +252,7 @@ class LeadsUnificados
         return [
             'agora' => self::filtrar($linhas, 'agora')->count(),
             'abertos' => $abertos->count(),
-            'valor_aberto' => round($abertos->sum(fn (LinhaLead $l) => $l->total()), 2),
+            'valor_aberto' => round($abertos->sum(fn (PessoaLead $l) => $l->total()), 2),
             'remarketing' => self::filtrar($linhas, 'remarketing')->count(),
             'pagos' => self::filtrar($linhas, 'pagos')->count(),
             'parados' => self::filtrar($linhas, 'parados')->count(),
@@ -238,6 +333,7 @@ class LeadsUnificados
         }
 
         return Order::query()
+            ->whereIn('status', ParadasSequencia::STATUS_PAGOS)
             ->where('created_at', '>=', $registro->abandonado_em ?? $registro->created_at ?? Carbon::create(2000))
             ->where(fn ($q) => $q
                 ->when($registro->email, fn ($q) => $q->orWhere('shipping_email', $registro->email))

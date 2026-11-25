@@ -172,13 +172,15 @@ class LeadsDigitadosTest extends TestCase
         $this->actingAs($admin)->get('/admin/leads')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/Leads/Index', false)
+                ->component('Admin/LeadsUnicos/Index', false)
                 ->where('leads.data.0.email', 'maria@exemplo.com')
-                ->where('leads.data.0.cep', '03187040')
-                ->where('leads.data.0.agora', true)
+                ->where('leads.data.0.situacao.codigo', 'agora')
                 ->where('resumo.abertos', 1)
                 ->where('resumo.agora', 1)
                 ->where('resumo.valor_aberto', 99.9));
+        // O CEP fica na janela Jornada (tela única, 25/11/2026).
+        $chave = 'l'.Lead::query()->value('id');
+        $this->actingAs($admin)->getJson("/admin/leads/{$chave}/jornada")->assertOk()->assertJsonPath('cliente.cep', '03187040');
     }
 
     public function test_limpeza_apaga_lead_vencido(): void

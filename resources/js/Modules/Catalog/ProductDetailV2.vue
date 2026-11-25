@@ -1288,7 +1288,8 @@ const escolherKit = (kit, rolar = false) => {
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
                              Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). Logo depois
                              da descrição, antes de Garantia, Pagamento Seguro e Informação adicional (teste pedido 2026-10-21). -->
-                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo" data-kzm="brinde">
+                        <!-- Página de brinquedo: sem quadros de brinde/PDF (os PDFs aparecem só no checkout, regra do Lira 24/11/2026). -->
+                        <section v-for="sorteio in (brinquedo ? [] : sorteios)" :key="`sorteio-${sorteio.id}`" class="card promo" data-kzm="brinde">
                             <div class="promo-texto">
                                 <h2>{{ quadrosPromocao.airfryer?.titulo || sorteio.titulo }}</h2>
                                 <!-- Texto do quadro (admin › Promoções, 2026-10-21) no lugar dos parágrafos do sorteio. -->
@@ -1310,7 +1311,7 @@ const escolherKit = (kit, rolar = false) => {
                         <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
                              com os 3 tablets e capas estilo revista coloridas (entregas/capas-revista-livros-2026-10-21 do Homer) à esquerda, oferta à
                              direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
-                        <section v-if="livrosDigitais.length" class="card promo-livros">
+                        <section v-if="!brinquedo && livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
                                 <h2 v-if="quadrosPromocao.pdfs?.titulo">{{ quadrosPromocao.pdfs.titulo }}</h2>
                                 <h2 v-else>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>

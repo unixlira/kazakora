@@ -7,7 +7,7 @@ import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
 import { ICONES } from './icones';
-import { argumentoDoKit, composicaoDoKit, economia, unidadesDoKit, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, srcsetDoKit } from './kits';
+import { acrescimoDoKit, argumentoDoKit, composicaoDoKit, economia, unidadesDoKit, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, srcsetDoKit } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -39,13 +39,15 @@ const partesDoKit = (kit) => (kit.kit_partes?.length
             <span class="kb-info">
                 <span class="kb-nome">{{ nomeCurtoDoKit(kit) }}</span>
                 <span class="kb-itens">{{ kit.stock < 1 ? 'Esgotado' : itensDoKit(kit) }}</span>
+                <span v-if="kit.kit_acrescenta && kit.stock > 0" class="kb-acresc">{{ kit.kit_acrescenta }}</span>
             </span>
             <span class="kb-precos">
                 <s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s>
                 <b>{{ formatPrice(precoDoKit(kit)) }}</b>
             </span>
             <span class="kb-pilulas">
-                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="kit.kit_acrescenta && acrescimoDoKit(kit, opcoes)" class="kb-pilula azul">só + {{ formatPrice(acrescimoDoKit(kit, opcoes)) }}</span>
+                <span v-else-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </span>
         </button>
@@ -68,7 +70,8 @@ const partesDoKit = (kit) => (kit.kit_partes?.length
             <p v-if="argumentoDoKit(kit)" class="kb-kc-arg">{{ argumentoDoKit(kit) }}</p>
             <div class="kb-kc-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></div>
             <div class="kb-kc-chips">
-                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="kit.kit_acrescenta && acrescimoDoKit(kit, opcoes)" class="kb-pilula azul">só + {{ formatPrice(acrescimoDoKit(kit, opcoes)) }}</span>
+                <span v-else-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </div>
             <button type="button" class="pb-btn kb-kc-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">

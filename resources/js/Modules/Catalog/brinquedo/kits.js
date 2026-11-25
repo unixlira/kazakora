@@ -123,7 +123,7 @@ export const tituloComMarcador = (titulo) => {
 export const semEmoji = (texto) => String(texto ?? '').replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
 
 /** Argumento do kit com 3 ou mais brinquedos (pedido do Lira: "os 3 deixam a criança sem tela"). */
-export const argumentoDoKit = (variante) => (unidadesDoKit(variante) >= 3 ? `${unidadesDoKit(variante)} brincadeiras para trocar a tela por diversão` : '');
+export const argumentoDoKit = (variante) => (variante?.kit_acrescenta ? variante.kit_acrescenta : unidadesDoKit(variante) >= 3 ? `${unidadesDoKit(variante)} brincadeiras para trocar a tela por diversão` : '');
 
 /**
  * Junta às opções (variações ou o produto sozinho) o nome de oferta, os itens e as partes de cada kit do
@@ -145,7 +145,15 @@ export const aplicarKits = (opcoes, conteudo) => {
             kit_nome: semEmoji(kit.nome ?? '') || null,
             kit_itens: semEmoji(kit.itens ?? '') || null,
             kit_unidades: Number(kit.unidades) > 0 ? Number(kit.unidades) : null,
+            // Escada de oferta (pedido do Lira 25/11/2026): o que este kit acrescenta ao anterior, numa frase.
+            kit_acrescenta: semEmoji(kit.acrescenta ?? '') || null,
             kit_partes: Array.isArray(kit.partes) ? kit.partes.filter((p) => p?.texto).slice(0, 4) : null,
         };
     });
+};
+
+/** Quanto o kit custa a mais que o primeiro degrau (o mais barato); 0 no primeiro. */
+export const acrescimoDoKit = (variante, opcoes) => {
+    const base = ordenarKits(opcoes)[0];
+    return base && base.id !== variante.id ? Math.round((precoDoKit(variante) - precoDoKit(base)) * 100) / 100 : 0;
 };

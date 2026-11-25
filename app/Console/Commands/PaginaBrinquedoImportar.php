@@ -81,7 +81,7 @@ class PaginaBrinquedoImportar extends Command
                 foreach ($pagina['avaliacoes_de'] as $irmao) {
                     $id = Product::where('slug', $irmao['slug'] ?? '')->value('id');
                     if ($id) {
-                        $avaliacoesDe[] = ['id' => $id, 'rotulo' => (string) ($irmao['rotulo'] ?? '')];
+                        $avaliacoesDe[] = array_filter(['id' => $id, 'rotulo' => (string) ($irmao['rotulo'] ?? ''), 'texto' => $irmao['texto'] ?? null], fn ($v) => $v !== null);
                     } else {
                         $this->warn("{$slug}: irmão {$irmao['slug']} não encontrado.");
                     }

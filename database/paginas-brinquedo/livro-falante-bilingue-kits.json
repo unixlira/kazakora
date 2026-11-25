@@ -283,5 +283,18 @@
   "ctas": {
     "historia": "Quero o meu kit",
     "comparativo": "Quero trocar a tela pelo livro"
-  }
+  },
+  "avaliacoes_de": [
+    {
+      "slug": "livro-falante-infantil-bilingue-portugues-e-ingles-com-som-11-temas-e-300-palavras",
+      "rotulo": "Livro Falante",
+      "texto": {
+        "lousa": "Lousa Mágica"
+      }
+    },
+    {
+      "slug": "quebra-cabeca-magnetico-montessori-3d-de-rostos-educativo-para-criancas",
+      "rotulo": "Quebra-Cabeça"
+    }
+  ]
 }

@@ -22,6 +22,7 @@ const lerMudo = () => { try { return window.localStorage.getItem(CHAVE) === '1';
 const mudo = ref(false);
 let audio = null;
 let tocou = false;
+let tentando = false; // um gesto dispara vários eventos (pointerdown, mousedown, click…): uma tentativa por vez
 // O navegador só libera som depois de um gesto de verdade; no celular o toque para rolar (touchend/pointerup)
 // já conta, então o "Aeeee!" entra logo no primeiro toque na tela, mesmo sem clicar em nada.
 const EVENTOS = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'keydown', 'scroll', 'click'];
@@ -33,11 +34,13 @@ function tentar(evento) {
     if (evento?.target?.closest?.('.pb-som, .pb-video-ctrl, .pb-media-video')) return;
     // Vídeo já tocando com som: o "Aeeee!" não entra por cima.
     if (tocou || mudo.value || !somVideo.mudo) { soltarEventos(); return; }
+    if (tentando) return;
     criarAudio();
     if (!audio) { soltarEventos(); return; }
+    tentando = true;
     const promessa = audio.play();
     if (promessa?.then) {
-        promessa.then(() => { tocou = true; soltarEventos(); }).catch(() => { /* ainda bloqueado: espera o próximo gesto */ });
+        promessa.then(() => { tocou = true; soltarEventos(); }).catch(() => { /* ainda bloqueado: espera o próximo gesto */ }).finally(() => { tentando = false; });
     } else {
         tocou = true;
         soltarEventos();

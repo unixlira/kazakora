@@ -60,6 +60,16 @@ const usoProibido = [
                     </p>
                 </LegalCard>
 
+                <!-- Newsletter para quem compra (pedido do Lira 25/11/2026). -->
+                <LegalCard id="newsletter" title="Caderno KazaKora (newsletter)" class="scroll-mt-28">
+                    <p>
+                        Ao concluir a sua primeira compra na KazaKora, você passa a receber por e-mail o <strong>Caderno KazaKora</strong>,
+                        com as matérias do nosso blog, novidades e ofertas, por legítimo interesse (LGPD, art. 7º, IX).
+                        Todo e-mail traz o link para sair com 1 clique, e quem sai não é inscrito de novo. Detalhes na
+                        <Link href="/politica-de-privacidade" class="font-medium text-store-accent hover:underline">Política de Privacidade</Link>.
+                    </p>
+                </LegalCard>
+
                 <LegalCard title="Definições">
                     <dl class="flex flex-col gap-2.5">
                         <div v-for="item in definicoes" :key="item.termo" class="flex flex-wrap gap-1.5">

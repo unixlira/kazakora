@@ -1340,6 +1340,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <p class="mt-3 text-center text-xs text-slate-500">
                                 Ao prosseguir com a compra, você concorda com as
                                 <Link href="/politica-de-privacidade" target="_blank" class="font-bold text-slate-700 hover:underline">Políticas de Privacidade</Link>
+                                e passa a receber o <Link href="/termos-de-uso#newsletter" target="_blank" class="font-bold text-slate-700 hover:underline">Caderno KazaKora</Link> por e-mail (sai quando quiser)
                             </p>
                         </template>
 

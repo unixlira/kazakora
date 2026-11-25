@@ -97,14 +97,24 @@ class NewsletterAdminController extends Controller
 
     public function teste(Request $request): RedirectResponse
     {
-        $email = (string) $request->user()?->email;
+        // E-mail de teste vai para o endereço fixo de testes (NEWSLETTER_EMAIL_TESTE, pedido do Lira 25/11/2026);
+        // sem ele, para o e-mail de quem está logado.
+        $email = (string) (config('newsletter.email_teste') ?: $request->user()?->email);
         $resumo = $this->resumoParaTeste($request);
 
         if ($email === '' || $resumo->vazio()) {
             return back()->with('error', $resumo->vazio() ? 'Ainda não há matéria publicada no blog para montar o e-mail.' : 'Seu usuário não tem e-mail.');
         }
 
-        Mail::to($email)->send(new BlogPorEmail($resumo->assunto(), $resumo->itens(), url('/newsletter/sair/exemplo-de-link-de-saida'), $request->user()->name, teste: true));
+        // O SMTP da Hostinger às vezes fecha a conexão no meio (500 em 25/11/2026): tenta de novo
+        // uma vez e, se ainda falhar, avisa na tela em vez de estourar a página.
+        try {
+            retry(2, fn () => Mail::to($email)->send(new BlogPorEmail($resumo->assunto(), $resumo->itens(), url('/newsletter/sair/exemplo-de-link-de-saida'), $request->user()->name, teste: true)), 3000);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'O servidor de e-mail não respondeu agora. Tente de novo em 1 minuto.');
+        }
 
         return back()->with('success', "E-mail de teste enviado para {$email}.");
     }

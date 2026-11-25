@@ -93,6 +93,10 @@ class OrderPaymentFinalizer
             app(LeadsDoCheckout::class)->converter($order);
         }
 
+        // Newsletter (pedido do Lira 25/11/2026): cliente que compra no site KazaKora passa a receber
+        // o Caderno KazaKora por e-mail (Termos e Política de Privacidade); quem saiu não volta. Nunca lança.
+        rescue(fn () => app(\App\Modules\Newsletter\Support\InscreverCliente::class)->doPedido($order), null, false);
+
         // Emissão da nota + envio do e-mail de recibo acontecem de forma
         // assíncrona, numa fila — o webhook do Stripe (chamador mais comum
         // deste método) precisa responder rápido, sem esperar SEFAZ/SMTP.

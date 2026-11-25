@@ -40,4 +40,6 @@ return [
     // Texto do consentimento mostrado no bloco. Mudou o texto? Troque a versão.
     'consentimento_versao' => '2026-11-24',
     'consentimento_texto' => 'Quero receber e-mails da KazaKora com novidades, ofertas e as matérias do blog. Posso sair quando quiser, com 1 clique.',
+    // Destinatário do botão "Enviar teste" no admin (pedido do Lira 25/11/2026). Vazio = e-mail de quem está logado.
+    'email_teste' => env('NEWSLETTER_EMAIL_TESTE'),
 ];

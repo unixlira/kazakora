@@ -97,7 +97,9 @@ class NewsletterAdminController extends Controller
 
     public function teste(Request $request): RedirectResponse
     {
-        $email = (string) $request->user()?->email;
+        // E-mail de teste vai para o endereço fixo de testes (NEWSLETTER_EMAIL_TESTE, pedido do Lira 25/11/2026);
+        // sem ele, para o e-mail de quem está logado.
+        $email = (string) (config('newsletter.email_teste') ?: $request->user()?->email);
         $resumo = $this->resumoParaTeste($request);
 
         if ($email === '' || $resumo->vazio()) {

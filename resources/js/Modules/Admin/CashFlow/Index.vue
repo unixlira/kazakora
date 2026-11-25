@@ -23,6 +23,7 @@ import KpiResultado from './KpiResultado.vue';
 import LucroPorCanal from './LucroPorCanal.vue';
 import ProximosDias from './ProximosDias.vue';
 import QualidadeDados from './QualidadeDados.vue';
+import UltimosPedidos from './UltimosPedidos.vue';
 
 const props = defineProps({
     filtro: { type: Object, required: true },
@@ -35,6 +36,8 @@ const props = defineProps({
     previsao: { type: Object, default: null },
     qualidade: { type: Object, default: null },
     alertas: { type: Array, default: null },
+    // Só no painel de E-commerces (LucroPorPedido, 25/11/2026).
+    ultimosPedidos: { type: Object, default: null },
     // Vendas
     sales: { type: Object, default: null },
     salesTotals: { type: Object, default: null },
@@ -204,6 +207,10 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
                     :apoio="[`Simples ${aliquota}% · DAS de ${das.mes} vence ${das.vence}`]"
                     :ajuda="AJUDA.imposto" :atual="atual.imposto" :anterior="comp?.imposto ?? null" bom="baixo" :rotulo-comparacao="rotuloComp" />
             </section>
+
+            <div v-if="ultimosPedidos" class="mb-4">
+                <UltimosPedidos :pedidos="ultimosPedidos.pedidos" :ver-todos="ultimosPedidos.verTodos" />
+            </div>
 
             <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <CascataResultado class="lg:col-span-2" :conta="atual" />

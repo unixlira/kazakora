@@ -12,6 +12,7 @@ use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
+use App\Modules\Marketplace\Support\LucroPorPedido;
 use App\Support\Http\TableSort;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -250,7 +251,7 @@ class CashFlowController extends Controller
         $pendencias = fn () => $uma('pendencias', fn () => $this->pendencias($f['de'], $f['fim'], $escopo));
         $das = fn () => $uma('das', fn () => app(PrevisaoDeCaixa::class)->das());
 
-        return [
+        $props = [
             'resumo' => $resumo,
             'canais' => function () use ($porCanal, $qualidade, $canal, $soEscopo, $f) {
                 $linhas = $soEscopo($porCanal());
@@ -321,6 +322,23 @@ class CashFlowController extends Controller
                 ]);
             },
         ];
+
+        // Últimos pedidos dos sites com o lucro líquido de cada um (pedido do
+        // Lira em 25/11/2026). Só no painel de E-commerces: marketplace tem
+        // a aba Vendas.
+        if ($f['grupo'] === 'ecommerces') {
+            $props['ultimosPedidos'] = fn () => [
+                'pedidos' => app(LucroPorPedido::class)->ultimos($f['de'], $f['fim'], (array) $escopo),
+                'verTodos' => '/admin/pedidos?'.http_build_query(array_filter([
+                    'marketplace' => $canal,
+                    'grupo' => $canal ? null : $f['grupo'],
+                    'de' => $f['de']->toDateString(),
+                    'ate' => $f['ate']->toDateString(),
+                ])),
+            ];
+        }
+
+        return $props;
     }
 
     /**

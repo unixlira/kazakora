@@ -16,6 +16,9 @@ return [
     // Custos usados na conta de lucro (pior caso).
     'taxa_cartao' => (float) env('OFERTAS_TAXA_CARTAO', 4.98),
     'taxa_pix' => (float) env('OFERTAS_TAXA_PIX', 0.99),
+    // Tarifa fixa do boleto (R$), usada no lucro estimado do pedido do site
+    // enquanto a taxa real do Mercado Pago não chega (LucroPorPedido).
+    'taxa_boleto' => (float) env('OFERTAS_TAXA_BOLETO', 3.49),
     'frete_estimado' => (float) env('OFERTAS_FRETE_ESTIMADO', 25),
     // Lucro mínimo que tem que sobrar, em % do preço da oferta.
     'margem_minima' => (float) env('OFERTAS_MARGEM_MINIMA', 10),

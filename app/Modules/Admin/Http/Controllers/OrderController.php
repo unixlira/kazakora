@@ -15,6 +15,7 @@ use App\Modules\Checkout\Support\EnderecoDoPedido;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 use App\Modules\Checkout\Support\SituacaoDoPagamento;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -83,6 +84,9 @@ class OrderController extends Controller
             $marketplace = '';
         }
 
+        $grupo = (string) $request->query('grupo', '');
+        $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : '';
+
         $de = $this->dataDoFiltro($request->query('de'));
         $ate = $this->dataDoFiltro($request->query('ate'));
         $busca = BuscaDePedidos::normalizar(is_string($request->query('search')) ? $request->query('search') : '');
@@ -111,6 +115,9 @@ class OrderController extends Controller
             // 'loja' = só kazakora.com; FerraKora/Beauty Kora pelo site_origem;
             // marketplaces pelo origin (TikTok Shop e Amazon via Bling inclusive).
             ->when($marketplace !== '', fn ($query) => Order::filtrarCanal($query, $marketplace))
+            // "Ver todos" do card de últimos pedidos (25/11/2026): o grupo
+            // inteiro (ex.: ?grupo=ecommerces = os três sites).
+            ->when($marketplace === '' && $grupo !== '', fn ($query) => Order::filtrarCanal($query, GruposDeCanais::canais($grupo)))
             ->when(in_array($request->query('status'), self::STATUSES, true), fn ($query) => $query->whereIn('status', self::statusDoFiltro($request->query('status'))))
             ->when($de, fn ($query) => $query->where('created_at', '>=', $de->copy()->startOfDay()))
             ->when($ate, fn ($query) => $query->where('created_at', '<=', $ate->copy()->endOfDay()))
@@ -145,6 +152,7 @@ class OrderController extends Controller
                 'search' => $busca,
                 'de' => $de?->toDateString(),
                 'ate' => $ate?->toDateString(),
+                'grupo' => $grupo,
             ],
         ]);
     }

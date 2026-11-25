@@ -146,3 +146,19 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
 - **Devolução concluída sai da venda** (`semDevolucao()` e `Order::vendaEfetiva()`): caso `devolucao` com produto de volta (situação conferida/entregue ou `return_status = delivered`, salvo veredito "não recebemos") ou NF-e de devolução de venda autorizada referenciando a chave da nota do pedido. Simplificação: vale para o pedido inteiro; a taxa do canal sai junto (Shopee/ML devolvem a comissão no reembolso total); o frete pago pela loja continua custo (via `cobrancasSemPedido`).
 - **Meta da FerraKora:** `ads:sync-spend` grava a conta `FERRAKORA_META_ADS_AD_ACCOUNT_ID` (config `services.meta_ads.ferrakora_ad_account_id`) com canal `ferrakora`, que é o canal dos pedidos da FerraKora no `porCanal()`.
 - **Custo do produto pela compra real (tela Financeiro › Compras, só admin):** reaproveita `purchase_orders`/`purchase_order_items` com `origem = compra`. Custo efetivo por unidade = valor pago + frete e outros custos da compra rateados pelo valor de cada item (`CustoDaCompra::ratear`). `products.cost_price` só muda pelo botão "Atualizar custo do produto" (item pai leva o custo às variações); o item guarda custo anterior, quando e quem aplicou. Entrada no estoque é opcional (desligada por padrão, usa o `StockManager` do "Receber" dos pedidos de compra). XML da NF-e de compra pré-preenche fornecedor (CNPJ/nome) e itens (GTIN, SKU = cProd, nome).
+
+## Lucro por pedido dos sites (25/11/2026)
+
+Card "Últimos pedidos dos sites" no Resultado do painel de E-commerces
+(`LucroPorPedido`, só com `financeiro.view`). Mesmas peças da `ContributionMargin`,
+olhando um pedido: receita (`receitaSql`) − produto (`custoSql`) − frete
+(Correios + Melhor Envio pago − TURBO) − taxa (`order_channel_fees`; sem linha,
+estimada: Pix 0,99%, cartão 4,98%, boleto R$ 3,49 — `config/ofertas.php`) −
+imposto (alíquota × nota, ou receita) − insumos (R$ por pedido + parte dos
+lançamentos da tela Insumos) − anúncio do dia da loja (`channel_ad_spends`,
+Meta da KazaKora como `loja`) ÷ pedidos pagos da loja no dia.
+
+Soma dos pedidos × painel: igual, exceto (1) taxa estimada, que o painel só conta
+quando a linha existe; (2) anúncio de dia sem pedido pago, que não cai em pedido;
+(3) `cobrancasSemPedido` (etiqueta de pedido cancelado); (4) centavos de
+arredondamento do imposto.

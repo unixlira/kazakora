@@ -48,7 +48,9 @@ const siteBadge = {
 };
 
 const filterState = reactive({
-    marketplace: props.filters.marketplace ?? '',
+    // "Sites próprios" (?grupo=ecommerces, link "ver todos" do card de
+    // últimos pedidos do painel, 25/11/2026) vai no mesmo select.
+    marketplace: props.filters.marketplace || (props.filters.grupo ? `grupo:${props.filters.grupo}` : ''),
     status: props.filters.status ?? '',
     de: props.filters.de ?? '',
     ate: props.filters.ate ?? '',
@@ -76,6 +78,10 @@ const applyFilters = () => {
             .map(([key, value]) => [key, value === null ? '' : String(value).trim()])
             .filter(([, value]) => value !== '')
     );
+    if (params.marketplace?.startsWith('grupo:')) {
+        params.grupo = params.marketplace.slice(6);
+        delete params.marketplace;
+    }
 
     router.get('/admin/pedidos', params, { preserveState: true, preserveScroll: true, replace: true });
 };
@@ -272,6 +278,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
                         <option value="">Todos</option>
+                        <option value="grupo:ecommerces">Sites próprios</option>
                         <option v-for="option in props.marketplaces" :key="option.value" :value="option.value">
                             {{ option.label }}
                         </option>

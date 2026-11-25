@@ -7,6 +7,7 @@
 // - botão discreto de mudo; o mudo fica guardado no aparelho (localStorage) e,
 //   com ele ligado, a página não toca nada nas próximas visitas.
 import { onMounted, onUnmounted, ref } from 'vue';
+import Icone from './Icone.vue';
 
 const props = defineProps({
     src: { type: String, default: '/sons/aeee.mp3' },
@@ -64,6 +65,6 @@ const alternar = () => {
 <template>
     <button type="button" class="pb-som" :aria-pressed="mudo" :aria-label="mudo ? 'Som da página desligado. Ligar som' : 'Desligar o som da página'"
         :title="mudo ? 'Ligar som' : 'Sem som'" data-kzm="som-brinquedo" @click.stop="alternar">
-        <i class="fas" :class="mudo ? 'fa-volume-xmark' : 'fa-volume-high'" aria-hidden="true"></i>
+        <Icone :nome="mudo ? 'volume-x' : 'volume-2'" :tamanho="18" />
     </button>
 </template>

@@ -16,9 +16,11 @@ export const nomeCurtoDoKit = (variante) => nomeDoKit(variante).replace(/\s*\(mo
 /** "1 livro falante + 1 lousa mágica LED" vira a linha de baixo do cartão. */
 export const itensDoKit = (variante) => {
     const n = unidadesDoKit(variante);
-    const base = n > 1 ? `${n} brinquedos no kit` : '1 brinquedo';
-    // Kit com modelo sortido (ex.: quebra-cabeça em cores diferentes): avisa, sem prometer a cor da foto.
-    return /sortid/i.test(nomeDoKit(variante)) ? `${base} · modelo sortido conforme estoque` : base;
+    // 3 ou mais brinquedos: o argumento do kit completo (pedido do Lira 24/11/2026, "os 3 deixam a criança sem tela").
+    const base = n >= 3 ? `${n} brincadeiras para trocar a tela por diversão` : (n > 1 ? `${n} brinquedos no kit` : '1 brinquedo');
+    // Kit com modelo sortido (cor "Sortido" ou "(modelo sortido)" no nome): avisa, sem prometer a cor da foto.
+    const sortido = /sortid/i.test(nomeDoKit(variante)) || /sortid/i.test(String(variante?.color ?? ''));
+    return sortido ? `${base} · modelo sortido conforme estoque` : base;
 };
 
 export const precoDoKit = (variante) => Number(variante?.final_price ?? 0);

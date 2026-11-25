@@ -10,7 +10,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import Icone from './Icone.vue';
 
 const props = defineProps({
-    src: { type: String, default: '/sons/aeee.mp3' },
+    src: { type: String, default: '/sons/aeee.mp3?v=2' },
     volume: { type: Number, default: 0.55 },
 });
 

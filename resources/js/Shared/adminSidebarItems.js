@@ -174,6 +174,8 @@ export const sidebarSections = [
             // da Meta, abrindo o gerenciamento de campanhas. O resumo de gasto
             // (/admin/publicidade/meta-ads) fica no botão "Gasto e resultados".
             { label: 'Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fab fa-meta', marca: 'meta', permission: 'financeiro.view' },
+            // Leitura das campanhas (2026-11-25): conjunto a conjunto, semáforo e "O que fazer".
+            { label: 'Leitura das campanhas', href: '/admin/publicidade/meta-ads/leitura', icon: 'fas fa-traffic-light', cor: 'verde', permission: 'financeiro.view' },
             // Criativos, Infoprodutos e Comportamento (2026-11-19): anúncio a anúncio, funil e mapa de cliques.
             { label: 'Criativos', href: '/admin/publicidade/criativos', icon: 'fas fa-photo-film', cor: 'violeta', permission: 'financeiro.view' },
             { label: 'Infoprodutos', href: '/admin/publicidade/infoprodutos', icon: 'fas fa-filter-circle-dollar', cor: 'verde', permission: 'financeiro.view' },

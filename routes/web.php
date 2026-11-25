@@ -930,6 +930,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     });
     // Editar e excluir campanha, conjunto e anúncio pelo id da Meta (Lira
     // 2026-10-20), inclusive os criados direto no Gerenciador.
+    // Leitura das campanhas (Lira 2026-11-25): conjunto a conjunto, semáforo e
+    // "O que fazer". Só lê a Meta; salva no banco o ciclo e o CPA por produto.
+    Route::prefix('publicidade/meta-ads/leitura')->name('publicidade.meta-ads.leitura.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\LeituraCampanhasMetaController::class, 'index'])->name('ver')->middleware('permission:financeiro.view');
+        Route::post('ciclo', [\App\Modules\Admin\Http\Controllers\LeituraCampanhasMetaController::class, 'ciclo'])->name('ciclo')->middleware(['permission:financeiro.create', 'throttle:30,1']);
+        Route::post('cpa', [\App\Modules\Admin\Http\Controllers\LeituraCampanhasMetaController::class, 'cpa'])->name('cpa')->middleware(['permission:financeiro.create', 'throttle:30,1']);
+    });
     Route::prefix('publicidade/meta-ads/gerenciar')->name('publicidade.meta-ads.gerenciar.')->group(function () {
         Route::get('status', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'status'])->name('status')->middleware(['permission:financeiro.view', 'throttle:60,1']);
         Route::post('anuncio/{metaId}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'pausar'])->whereNumber('metaId')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:20,1']);

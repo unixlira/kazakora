@@ -1,0 +1,253 @@
+{
+  "titulo": "Lanchonete de Faz de Conta para Montar e Cortar o Hambúrguer",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Monta e corta",
+      "hambúrguer"
+    ],
+    [
+      "Faz de conta",
+      "lanchonete em casa"
+    ],
+    [
+      "Coordenação",
+      "mãos ocupadas"
+    ],
+    [
+      "Zero telas",
+      "imaginação solta"
+    ]
+  ],
+  "letreiro": [
+    "Monta e corta o hambúrguer",
+    "Lanchonete de faz de conta em casa",
+    "Estimula a coordenação motora",
+    "Desperta criatividade e imaginação",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "A lanchonete abriu em casa",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Montar o lanche, cortar, servir na bandeja e anotar o pedido da família: faz de conta de verdade, longe da tela. Menos celular antes de dormir também ajuda num sono mais tranquilo.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Monta e corta",
+      "Lanchonete em casa"
+    ],
+    "cards": [
+      {
+        "titulo": "Chef do lanche",
+        "texto": "Monta o hambúrguer camada por camada e serve com capricho.",
+        "icone": "chef-hat"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Encaixar, cortar e montar treina as mãos pequenas.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Imaginação",
+        "texto": "Hoje é lanchonete, amanhã é festa: a história quem inventa é ela.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Brincar junto",
+        "texto": "Pais viram clientes e a mesa vira restaurante.",
+        "icone": "users"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto monta e corta o lanche, a criança treina sem nem perceber:",
+    "imagem": 2,
+    "chamadas": [
+      "Camadas para montar",
+      "Corta e serve",
+      "Faz de conta",
+      "Lanchonete"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Linguagem",
+        "icone": "languages"
+      },
+      {
+        "texto": "Sequência",
+        "icone": "list-checks"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada pecinha pensada para a criança",
+    "texto": "Hambúrguer em camadas para montar e cortar, com o tema de lanchonete que a criançada ama.",
+    "imagem": 1,
+    "cards": [
+      {
+        "titulo": "Monta em camadas",
+        "texto": "Pão, recheio e salada",
+        "icone": "layers"
+      },
+      {
+        "titulo": "Corta de mentirinha",
+        "texto": "Faz de conta seguro",
+        "icone": "utensils"
+      },
+      {
+        "titulo": "Tema lanchonete",
+        "texto": "Hambúrguer para servir",
+        "icone": "sandwich"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Sem celular nem TV",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Brinquedo comum × Lanchonete Kids",
+    "intro": "Os dois divertem. Só um vira lanchonete com a criança no comando.",
+    "rotulos": [
+      "Comum",
+      "Lanchonete"
+    ],
+    "linhas": [
+      {
+        "texto": "É colorido e divertido",
+        "comum": true
+      },
+      {
+        "texto": "Hambúrguer para montar e cortar",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a coordenação motora",
+        "comum": false
+      },
+      {
+        "texto": "Faz de conta de lanchonete",
+        "comum": false
+      },
+      {
+        "texto": "Desperta criatividade e imaginação",
+        "comum": false
+      },
+      {
+        "texto": "Junta a família na brincadeira",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "A criança vira chef, a família faz o pedido e a sala vira lanchonete: muita conversa e risada, sem tela por perto.",
+    "imagem": 0,
+    "citacao": "Menos tela, mais faz de conta: a família toda fazendo pedido na lanchonete da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Tudo para abrir a lanchonete de faz de conta e brincar longe das telas.",
+    "itens": [
+      {
+        "id": 566,
+        "nome": "Kit Lanchonete Kids",
+        "itens": "Conjunto de cortar tema hambúrguer",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Hambúrguer",
+            "icone": "sandwich"
+          },
+          {
+            "texto": "Faz de conta",
+            "icone": "chef-hat"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Lanchonete aberta",
+      "texto": "Chegou! Primeiro pedido já sai da cozinha.",
+      "icone": "chef-hat"
+    },
+    {
+      "titulo": "Faz de conta",
+      "texto": "Imaginação e coordenação, longe das telas.",
+      "icone": "sparkles"
+    }
+  ],
+  "garantia": [
+    "Montando o lanche",
+    "Mais longe das telas",
+    "Inventando histórias",
+    "Brincando em família"
+  ],
+  "duvidas": [
+    [
+      "Para quem é indicado?",
+      "Foi desenvolvido para o público infantil, para brincadeiras de faz de conta."
+    ],
+    [
+      "O que o brinquedo estimula?",
+      "Estimula a coordenação motora, a criatividade e a imaginação."
+    ],
+    [
+      "Qual é o tema?",
+      "Tema de hambúrguer para montar e cortar."
+    ],
+    [
+      "Qual o tamanho do hambúrguer montado?",
+      "Cerca de 8 cm de largura e 6 cm de altura."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Uma lanchonete de faz de conta em casa: horas de brincadeira de verdade e a família à mesa."
+  },
+  "ctas": {
+    "historia": "Quero abrir a lanchonete",
+    "porque": "Quero o meu",
+    "ensina": "Quero estimular a coordenação",
+    "detalhes": "Quero montar o hambúrguer",
+    "comparativo": "Quero trocar a tela pelo lanche",
+    "familia": "Quero brincar em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero a lanchonete",
+    "final": "Quero presentear agora"
+  }
+}

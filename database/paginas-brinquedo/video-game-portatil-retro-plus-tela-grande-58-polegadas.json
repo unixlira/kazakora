@@ -1,0 +1,242 @@
+{
+  "titulo": "Video Game Portátil Retrô com Tela Grande de 5.8 Polegadas",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Tela de 5.8\"",
+      "visão ampla"
+    ],
+    [
+      "Design ergonômico",
+      "mais conforto"
+    ],
+    [
+      "Jogos clássicos",
+      "nostalgia pura"
+    ],
+    [
+      "Cores vibrantes",
+      "estilo único"
+    ]
+  ],
+  "letreiro": [
+    "Tela ampla de 5.8 polegadas",
+    "Design ergonômico e confortável",
+    "Leve para qualquer lugar",
+    "Visual colorido e retrô",
+    "Reviva os jogos clássicos",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Nostalgia em qualquer lugar",
+    "subtitulo": "Diversão clássica na palma da mão",
+    "texto": "Relembre a era de ouro dos games com conforto. A tela de 5.8 polegadas deixa cada detalhe à vista e transforma viagens e momentos de lazer em diversão para jogar em família.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 1,
+    "chamadas": [
+      "Tela de 5.8 polegadas",
+      "Design ergonômico"
+    ],
+    "cards": [
+      {
+        "titulo": "Visão ampla",
+        "texto": "Tela de 5.8 polegadas para mergulhar nos jogos clássicos.",
+        "icone": "monitor"
+      },
+      {
+        "titulo": "Conforto total",
+        "texto": "Design ergonômico estilo console para horas de diversão.",
+        "icone": "armchair"
+      },
+      {
+        "titulo": "Portátil",
+        "texto": "Compacto para levar na mochila e jogar onde quiser.",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Estilo",
+        "texto": "Visual colorido e retrô que chama a atenção da criança.",
+        "icone": "palette"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Diversão que desafia o foco",
+    "texto": "Além da nostalgia, os jogos clássicos ajudam a desenvolver habilidades importantes de forma leve e muito divertida:",
+    "imagem": 8,
+    "chamadas": [
+      "Comandos precisos",
+      "Tela ampla",
+      "Jogos clássicos",
+      "Design confortável"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio rápido",
+        "icone": "brain"
+      },
+      {
+        "texto": "Paciência e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção espacial",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Percepção visual",
+        "icone": "eye"
+      },
+      {
+        "texto": "Persistência",
+        "icone": "award"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Feito para mãos que amam jogar",
+    "texto": "Um console compacto, com controles em estilo console e uma tela ampla que faz diferença na experiência visual.",
+    "imagem": 10,
+    "cards": [
+      {
+        "titulo": "Tela Grande",
+        "texto": "5.8 polegadas de imagem",
+        "icone": "tv-minimal"
+      },
+      {
+        "titulo": "Pegada Firme",
+        "texto": "Controles estilo console",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Sempre Junto",
+        "texto": "Compacto para levar",
+        "icone": "package"
+      },
+      {
+        "titulo": "Cores Vivas",
+        "texto": "Visual retrô moderno",
+        "icone": "sparkles"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Portátil Comum × Retro Plus",
+    "intro": "Telas pequenas e controles ruins ficaram no passado.",
+    "rotulos": [
+      "Comum",
+      "Retro Plus"
+    ],
+    "linhas": [
+      {
+        "texto": "Roda jogos clássicos",
+        "comum": true
+      },
+      {
+        "texto": "Tela ampla de 5.8 polegadas",
+        "comum": false
+      },
+      {
+        "texto": "Design ergonômico de console",
+        "comum": false
+      },
+      {
+        "texto": "Controles confortáveis para as mãos",
+        "comum": false
+      },
+      {
+        "texto": "Visual colorido e retrô",
+        "comum": false
+      },
+      {
+        "texto": "Fácil de levar para qualquer lugar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "O presente que une gerações",
+    "texto": "Pais e filhos se divertem juntos com os clássicos que marcaram época. É o entretenimento ideal para compartilhar histórias, desafios e muitas risadas.",
+    "imagem": 4,
+    "citacao": "A era de ouro dos games agora na palma da mão para unir pais e filhos na hora de brincar."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Garanta o console que vai acompanhar a diversão em todos os lugares.",
+    "itens": [
+      {
+        "id": 349,
+        "nome": "Kit Diversão Retrô",
+        "itens": "1 Video Game Portátil Retro Plus",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Video Game",
+            "icone": "gamepad-2"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o seu",
+      "texto": "Selecione o console Retro Plus para começar.",
+      "icone": "mouse-pointer-click"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Nostalgia pura",
+      "texto": "Ligue e mergulhe nos seus jogos favoritos.",
+      "icone": "flame"
+    },
+    {
+      "titulo": "Brincar junto",
+      "texto": "Divida a diversão com toda a família.",
+      "icone": "users-round"
+    }
+  ],
+  "garantia": [
+    "Jogando muito",
+    "Revivendo clássicos",
+    "Com total conforto",
+    "Sempre entretido"
+  ],
+  "duvidas": [
+    [
+      "Qual o tamanho da tela?",
+      "Ele possui uma tela ampla de 5.8 polegadas que proporciona uma ótima experiência visual."
+    ],
+    [
+      "Os controles são confortáveis?",
+      "Sim, ele tem design ergonômico e controles confortáveis em estilo console."
+    ],
+    [
+      "O console é fácil de transportar?",
+      "Sim! Por ser um produto compacto, ele é ideal para levar na mochila ou bolsa para qualquer lugar."
+    ],
+    [
+      "O que vem na caixa?",
+      "Vem 1 Video Game Portátil Retro Plus com tela de 5.8 polegadas."
+    ]
+  ],
+  "final": {
+    "titulo": "Horas de diversão de verdade com os clássicos",
+    "texto": "O presente ideal para reviver a nostalgia e criar novas memórias em família, com todo o conforto da tela grande."
+  },
+  "ctas": {
+    "historia": "Quero diversão retrô",
+    "comparativo": "Quero esse para jogar junto"
+  }
+}

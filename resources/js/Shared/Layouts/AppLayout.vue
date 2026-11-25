@@ -11,6 +11,10 @@ import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 import RodapeLoja from '@/Shared/Components/RodapeLoja.vue';
 
 const page = usePage();
+// semFaixaTopo: sem a faixa promocional e o letreiro do topo (página de brinquedo, 24/11/2026).
+// logoTopo: { href, alt, png, webp, largura, altura } troca o logo do cabeçalho (KoraKids nos brinquedos).
+// listraTopo: faixa de quadradinhos colada na base do cabeçalho (vai junto quando ele fica fixo).
+defineProps({ semFaixaTopo: { type: Boolean, default: false }, logoTopo: { type: Object, default: null }, listraTopo: { type: Boolean, default: false } });
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
@@ -186,6 +190,9 @@ onUnmounted(() => {
              mostrou que as pessoas só fechavam a faixa. O componente fica no projeto para voltar se precisar. -->
         <TrocarSenhaModal />
         <ModalAvaliacao />
+        <!-- Página de brinquedo (pedido do Lira 24/11/2026): sem o letreiro do topo; o cabeçalho e o
+             rodapé continuam os da loja. -->
+        <template v-if="!semFaixaTopo">
         <!-- Marquee. -->
         <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
@@ -205,10 +212,12 @@ onUnmounted(() => {
             </div>
         </div>
 
+        </template>
+
         <!-- Header -->
         <div ref="marcaDoTopo" aria-hidden="true"></div>
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
-            :class="{ 'loja-topo-fume': topoFlutuando }">
+            :class="{ 'loja-topo-fume': topoFlutuando, 'loja-topo-listra': listraTopo }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
             <!-- max-lg:relative: no celular o logo fica centralizado em cima da linha (pedido do Lira 2026-10-23); no computador não, para o mega menu seguir com a largura do topo. -->
             <div class="mx-auto flex max-w-[1320px] items-center gap-2 px-3 py-2 max-lg:relative md:px-6 lg:gap-8 lg:py-4">
@@ -218,7 +227,14 @@ onUnmounted(() => {
                 </button>
 
                 <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. Centralizado no celular (2026-10-23). -->
-                <Link href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
+                <!-- Logo próprio da página (página de brinquedo: KoraKids, 24/11/2026). -->
+                <Link v-if="logoTopo" :href="logoTopo.href" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" :aria-label="`${logoTopo.alt} — início`">
+                    <picture>
+                        <source :srcset="logoTopo.webp" type="image/webp">
+                        <img :src="logoTopo.png" :alt="logoTopo.alt" :class="logoTopo.classe || 'h-9 w-auto md:h-11'" :width="logoTopo.largura" :height="logoTopo.altura" fetchpriority="high">
+                    </picture>
+                </Link>
+                <Link v-else href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">
                     <picture>
                         <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
                         <img :src="marca.logoNav" alt="KazaKora" class="h-6 w-auto md:h-8" width="160" height="28" fetchpriority="high">

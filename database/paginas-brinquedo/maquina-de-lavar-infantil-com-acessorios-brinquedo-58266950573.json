@@ -1,0 +1,250 @@
+{
+  "titulo": "Máquina de Lavar de Brinquedo com 30 Peças para a Casinha",
+  "sem_telas": true,
+  "chips": [
+    [
+      "30 peças",
+      "kit completo"
+    ],
+    [
+      "Faz de conta",
+      "longe do celular"
+    ],
+    [
+      "Coordenação",
+      "mãos em ação"
+    ],
+    [
+      "Zero telas",
+      "brincar de verdade"
+    ]
+  ],
+  "letreiro": [
+    "Kit completo com 30 peças",
+    "Brincadeira longe do celular",
+    "Estimula a coordenação motora",
+    "Máquina, varal e ferro de passar",
+    "Desenvolve a imaginação",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão longe das telas",
+    "subtitulo": "A rotina de casa vira pura imaginação",
+    "texto": "Lavar, estender e passar: tarefas do dia a dia viram uma aventura real. Longe do celular, a criança foca no agora, desenvolve a paciência e cria suas próprias histórias com um kit completo de 30 peças.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "30 peças para criar",
+      "Brincadeira de verdade"
+    ],
+    "cards": [
+      {
+        "titulo": "Imaginação",
+        "texto": "Cria histórias cuidando da casinha e das roupinhas.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Pendura no varal e usa o ferro com precisão.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Organização",
+        "texto": "Aprende a cuidar das coisas brincando.",
+        "icone": "list-checks"
+      },
+      {
+        "titulo": "Foco total",
+        "texto": "Horas de diversão concentrada, sem luz de tela.",
+        "icone": "focus"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto imita os adultos, a criança treina habilidades para a vida:",
+    "imagem": 5,
+    "chamadas": [
+      "30 peças",
+      "Plástico ABS",
+      "Faz de conta",
+      "Coordenação"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "brain"
+      },
+      {
+        "texto": "Organização",
+        "icone": "list-checks"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada peça feita para imaginar",
+    "texto": "Um kit completo com máquina, tábua, ferro e até roupinhas e cabides para mãos pequenas.",
+    "imagem": 6,
+    "cards": [
+      {
+        "titulo": "30 peças",
+        "texto": "Tudo para uma lavanderia real",
+        "icone": "boxes"
+      },
+      {
+        "titulo": "Plástico ABS",
+        "texto": "Plástico ABS resistente",
+        "icone": "shield-check"
+      },
+      {
+        "titulo": "Acessórios",
+        "icone": "heart",
+        "texto": "Vem com cabides e varal"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Menos celular, mais foco",
+        "icone": "eye-off"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Brinquedo comum × Kit Lavanderia",
+    "intro": "Muitos brinquedos perdem a graça rápido. O nosso kit tem 30 peças para a história nunca acabar.",
+    "rotulos": [
+      "Comum",
+      "Lavanderia"
+    ],
+    "linhas": [
+      {
+        "texto": "Estimula o faz de conta",
+        "comum": true
+      },
+      {
+        "texto": "Vem com 30 peças variadas",
+        "comum": false
+      },
+      {
+        "texto": "Inclui máquina, ferro e varal",
+        "comum": false
+      },
+      {
+        "texto": "Tira a atenção do celular",
+        "comum": false
+      },
+      {
+        "texto": "Desenvolve a coordenação motora",
+        "comum": false
+      },
+      {
+        "texto": "Material em plástico ABS resistente",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos reais em família",
+    "texto": "A criança adora imitar quem ela ama. Com este kit, ela participa da rotina da casa de um jeito leve e cheio de carinho.",
+    "imagem": 7,
+    "citacao": "Brincar de casinha é o primeiro passo para a criança entender o mundo, com olhos longe das telas."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O presente ideal para transformar a tarde em uma grande aventura.",
+    "itens": [
+      {
+        "id": 120,
+        "nome": "Kit Lavanderia Completa",
+        "unidades": 1,
+        "itens": "Máquina e acessórios: 30 peças",
+        "partes": [
+          {
+            "texto": "Máquina e tábua",
+            "icone": "washing-machine"
+          },
+          {
+            "texto": "Ferro e varal",
+            "icone": "hand"
+          },
+          {
+            "texto": "30 peças no total",
+            "icone": "boxes"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! A hora de montar a própria lavanderia.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Brincar de verdade",
+      "texto": "Criando histórias e aprendendo longe do celular.",
+      "icone": "blocks"
+    }
+  ],
+  "garantia": [
+    "Criando histórias",
+    "Longe do celular",
+    "Brincando de verdade",
+    "Focada e feliz"
+  ],
+  "duvidas": [
+    [
+      "Qual a idade recomendada?",
+      "Indicado para crianças a partir de 3 anos de idade."
+    ],
+    [
+      "O que vem no kit?",
+      "São 30 peças: máquina de lavar, tábua, ferro, varal, cabides, roupinhas, balde, bacia, esfregão, pá e outros acessórios."
+    ],
+    [
+      "Qual o tamanho da máquina?",
+      "As dimensões informadas são de cerca de 21,8 x 11 x 22,7 cm."
+    ],
+    [
+      "De que material é feito?",
+      "O conjunto é produzido em plástico ABS."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, coordenação motora em dia e muita imaginação na lavanderia."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero trocar a tela pelo kit"
+  }
+}

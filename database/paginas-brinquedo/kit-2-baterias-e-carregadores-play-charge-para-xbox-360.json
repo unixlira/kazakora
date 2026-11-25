@@ -1,0 +1,246 @@
+{
+  "titulo": "Kit 2 Baterias com Carregador para Controle de Xbox 360",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Jogue e carregue",
+      "diversão sem fim"
+    ],
+    [
+      "Kit com 2",
+      "baterias recarregáveis"
+    ],
+    [
+      "Para Xbox 360",
+      "totalmente compatível"
+    ],
+    [
+      "Diversão clássica",
+      "momentos em família"
+    ]
+  ],
+  "letreiro": [
+    "Jogue enquanto carrega o controle",
+    "Kit com 2 baterias e 2 cabos",
+    "Compatível com console Xbox 360",
+    "Diversão de verdade com jogos clássicos",
+    "Momentos de lazer com toda a família",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão que não para",
+    "subtitulo": "Mais tempo para jogar junto",
+    "texto": "Nada de interromper a partida no melhor momento. Com o kit de baterias, a diversão com os jogos clássicos do Xbox 360 continua enquanto o controle carrega. É o presente ideal para reunir a família na sala.",
+    "imagem": 1
+  },
+  "porque": {
+    "titulo": "Por que a família adora",
+    "imagem": 8,
+    "chamadas": [
+      "Jogue e carregue",
+      "Kit completo"
+    ],
+    "cards": [
+      {
+        "titulo": "Sempre pronto",
+        "texto": "Carregue enquanto joga e nunca perca o ritmo da partida.",
+        "icone": "battery-charging"
+      },
+      {
+        "titulo": "Kit em dobro",
+        "texto": "Duas baterias para dois controles prontos para jogar.",
+        "icone": "users-round"
+      },
+      {
+        "titulo": "Fácil de usar",
+        "texto": "Encaixe o cabo no controle e ligue na entrada USB.",
+        "icone": "plug"
+      },
+      {
+        "titulo": "Jogos clássicos",
+        "texto": "Relembre os melhores momentos com os pequenos.",
+        "icone": "gamepad-2"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Momentos de conexão real",
+    "texto": "Jogar junto cria memórias, treina o foco e a estratégia e é um ótimo motivo para reunir pais e filhos.",
+    "imagem": 4,
+    "chamadas": [
+      "Foco e estratégia",
+      "Tempo em família",
+      "Jogos clássicos",
+      "Praticidade"
+    ],
+    "habilidades": [
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Raciocínio",
+        "icone": "brain"
+      },
+      {
+        "texto": "Coordenação",
+        "icone": "hand"
+      },
+      {
+        "texto": "Estratégia",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Socialização",
+        "icone": "users"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Praticidade para o lazer em casa",
+    "texto": "Um kit pensado para facilitar a vida dos pais e manter os controles prontos para jogar.",
+    "imagem": 9,
+    "cards": [
+      {
+        "titulo": "Carregamento prático",
+        "texto": "Jogue com conforto",
+        "icone": "cable"
+      },
+      {
+        "titulo": "Recarregável",
+        "texto": "Recarrega pelo cabo",
+        "icone": "battery-full"
+      },
+      {
+        "titulo": "Compatível",
+        "texto": "Para controles de Xbox 360",
+        "icone": "check"
+      },
+      {
+        "titulo": "Diversão em grupo",
+        "texto": "Para jogar de dois",
+        "icone": "gamepad"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pilhas comuns × Kit Play & Charge",
+    "intro": "Esqueça a troca constante de pilhas no meio do jogo.",
+    "rotulos": [
+      "Pilhas",
+      "Kit 2 Bat."
+    ],
+    "linhas": [
+      {
+        "texto": "Permite jogar sem fios",
+        "comum": true
+      },
+      {
+        "texto": "Carrega enquanto você joga",
+        "comum": false
+      },
+      {
+        "texto": "Vem com 2 baterias no kit",
+        "comum": false
+      },
+      {
+        "texto": "Economia de tempo para os pais",
+        "comum": false
+      },
+      {
+        "texto": "Evita pilhas espalhadas pela casa",
+        "comum": false
+      },
+      {
+        "texto": "Pronto para a próxima partida",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "O lazer que une gerações",
+    "texto": "Transforme a tarde de chuva em um campeonato em família. Com os controles carregados, o foco fica na risada e na competição saudável.",
+    "imagem": 10,
+    "citacao": "Controle carregado, família no sofá: o videogame fica melhor quando todo mundo joga junto."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Energia para as maratonas de jogos em família.",
+    "itens": [
+      {
+        "id": 270,
+        "nome": "Kit Diversão em Dobro",
+        "itens": "2 Baterias + 2 Cabos Carregadores",
+        "unidades": 2,
+        "partes": [
+          {
+            "texto": "2 Baterias",
+            "icone": "battery-full"
+          },
+          {
+            "texto": "2 Cabos",
+            "icone": "cable"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Preparar, carregar",
+      "texto": "Encaixe a bateria, ligue o cabo e jogue.",
+      "icone": "plug"
+    },
+    {
+      "titulo": "Partida iniciada",
+      "texto": "Horas de diversão de verdade em família.",
+      "icone": "gamepad-2"
+    }
+  ],
+  "garantia": [
+    "Jogando sem parar",
+    "Controles carregados",
+    "Família reunida",
+    "Diversão de verdade"
+  ],
+  "duvidas": [
+    [
+      "O que vem na caixa?",
+      "O kit acompanha 2 baterias recarregáveis e 2 cabos carregadores para Xbox 360."
+    ],
+    [
+      "Posso jogar enquanto carrega?",
+      "Sim, o sistema Play & Charge permite carregar a bateria enquanto você joga."
+    ],
+    [
+      "É compatível com qual console?",
+      "É compatível com os controles do console Xbox 360."
+    ],
+    [
+      "As baterias são recarregáveis?",
+      "Sim, as duas baterias que acompanham o kit são recarregáveis."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que traz a diversão real",
+    "texto": "Chega de pilhas descarregadas. Peça o seu e garanta horas de jogos clássicos e sorrisos com quem você ama."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero jogar sem parar"
+  }
+}

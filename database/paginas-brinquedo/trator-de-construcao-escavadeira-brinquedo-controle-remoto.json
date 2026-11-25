@@ -1,0 +1,257 @@
+{
+  "titulo": "Escavadeira de Controle Remoto Realista com Operador na Cabine",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Controle remoto",
+      "comando na mão"
+    ],
+    [
+      "Visual realista",
+      "máquina de obra"
+    ],
+    [
+      "Operador incluso",
+      "boneco na cabine"
+    ],
+    [
+      "Zero telas",
+      "obra na sala"
+    ]
+  ],
+  "letreiro": [
+    "Funciona com controle remoto",
+    "Visual detalhado e realista",
+    "Boneco operador na cabine",
+    "Indicado a partir de 8 anos",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "A obra agora é na sala",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Controle na mão e uma máquina de obra de verdade em miniatura: a criança comanda, planeja o caminho e inventa a próxima missão. Menos tela também é mais descanso para os olhos.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Controle remoto",
+      "Operador na cabine"
+    ],
+    "cards": [
+      {
+        "titulo": "No comando",
+        "texto": "Pelo controle remoto, a criança decide para onde a máquina vai.",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Realista",
+        "texto": "Design detalhado de trator de construção, do jeito das obras.",
+        "icone": "construction"
+      },
+      {
+        "titulo": "Imaginação",
+        "texto": "Com o operador na cabine, cada brincadeira vira uma missão.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Diversão de verdade, no chão da sala, sem celular.",
+        "icone": "heart"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto guia a escavadeira pelo controle, a criança treina sem nem perceber:",
+    "imagem": 0,
+    "chamadas": [
+      "Controle remoto",
+      "Visual realista",
+      "Operador incluso",
+      "8+ anos"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Planejamento",
+        "icone": "map"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe parece de obra de verdade",
+    "texto": "Retroescavadeira com design detalhado, cabine com operador e comando pelo controle remoto.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Controle remoto",
+        "texto": "Comando prático na mão",
+        "icone": "gamepad-2"
+      },
+      {
+        "titulo": "Operador",
+        "texto": "Boneco na cabine",
+        "icone": "user"
+      },
+      {
+        "titulo": "Design realista",
+        "texto": "Detalhes de máquina de obra",
+        "icone": "construction"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Sem celular nem TV",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × Escavadeira RC",
+    "intro": "Os dois têm rodas. Só um obedece ao comando da criança.",
+    "rotulos": [
+      "Comum",
+      "Escavadeira"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem rodas para andar",
+        "comum": true
+      },
+      {
+        "texto": "Funciona com controle remoto",
+        "comum": false
+      },
+      {
+        "texto": "Design de máquina de obra",
+        "comum": false
+      },
+      {
+        "texto": "Boneco operador na cabine",
+        "comum": false
+      },
+      {
+        "texto": "Detalhes realistas",
+        "comum": false
+      },
+      {
+        "texto": "Vira missão de construção",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinha de pais e filhos",
+    "texto": "Monte um canteiro de obras no chão da sala e entre na brincadeira: a criança comanda, a família vira equipe.",
+    "imagem": 0,
+    "citacao": "Menos tela, mais obra: a família inteira trabalhando junto no canteiro da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Máquina, controle e operador prontos para a primeira obra longe das telas.",
+    "itens": [
+      {
+        "id": 539,
+        "nome": "Kit Mestre de Obras",
+        "itens": "Escavadeira com boneco operador",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Escavadeira",
+            "icone": "construction"
+          },
+          {
+            "texto": "Controle remoto",
+            "icone": "gamepad-2"
+          },
+          {
+            "texto": "Operador",
+            "icone": "user"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Obra liberada",
+      "texto": "Chegou! Controle na mão e máquina em ação.",
+      "icone": "construction"
+    },
+    {
+      "titulo": "Diversão real",
+      "texto": "Missões de construção longe das telas.",
+      "icone": "trophy"
+    }
+  ],
+  "garantia": [
+    "No comando da obra",
+    "Mais longe das telas",
+    "Inventando missões",
+    "Brincando em família"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicado?",
+      "Indicado para crianças a partir de 8 anos."
+    ],
+    [
+      "Como funciona?",
+      "O trator de construção funciona com controle remoto."
+    ],
+    [
+      "O boneco vem junto?",
+      "Sim, acompanha o boneco operador na cabine."
+    ],
+    [
+      "Como é o visual?",
+      "Modelo de trator de construção e retroescavadeira, com design detalhado e realista."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Controle na mão, obra na sala e horas de brincadeira de verdade com a família por perto."
+  },
+  "ctas": {
+    "historia": "Quero a minha escavadeira",
+    "porque": "Quero o controle na mão",
+    "ensina": "Quero o meu",
+    "detalhes": "Quero a máquina realista",
+    "comparativo": "Quero trocar a tela pela obra",
+    "familia": "Quero brincar em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero a minha escavadeira",
+    "final": "Quero presentear agora"
+  }
+}

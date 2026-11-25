@@ -1,0 +1,253 @@
+{
+  "titulo": "Kit 168 Cores de Canetas com Ponta Dupla para Desenhar e Criar",
+  "sem_telas": true,
+  "chips": [
+    [
+      "168 cores",
+      "num só kit"
+    ],
+    [
+      "Ponta dupla",
+      "traço e preenchimento"
+    ],
+    [
+      "Bolsa organizadora",
+      "com zíper"
+    ],
+    [
+      "Zero telas",
+      "só criatividade"
+    ]
+  ],
+  "letreiro": [
+    "168 cores para colorir",
+    "Ponta dupla em cada caneta",
+    "Marcador oleoso para pintura",
+    "Bolsa com zíper e alça",
+    "Desenho longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Criatividade longe das telas",
+    "subtitulo": "Uma folha em branco e 168 cores",
+    "texto": "Desenhar, pintar, inventar cores novas: a criança troca a rolagem do celular pelo papel. Menos tela também é mais descanso para os olhos e uma hora de dormir mais tranquila.",
+    "imagem": 1
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 2,
+    "chamadas": [
+      "168 cores",
+      "Ponta dupla"
+    ],
+    "cards": [
+      {
+        "titulo": "Cor que não acaba",
+        "texto": "São 168 tons para cada ideia que aparecer.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Duas pontas",
+        "texto": "Uma para traçar, outra para preencher.",
+        "icone": "pen-tool"
+      },
+      {
+        "titulo": "Tudo organizado",
+        "texto": "Bolsa com zíper para achar a cor certa.",
+        "icone": "layout-grid"
+      },
+      {
+        "titulo": "Leva para onde for",
+        "texto": "Com alça, vai para a casa da avó e na viagem.",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Desenho que também ensina",
+    "texto": "Enquanto escolhe a cor e pinta, a criança treina sem nem perceber:",
+    "imagem": 3,
+    "chamadas": [
+      "Traços finos",
+      "Preenchimento",
+      "168 cores",
+      "Ponta dupla"
+    ],
+    "habilidades": [
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Noção de cores",
+        "icone": "rainbow"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para criar",
+    "texto": "Marcadores de ponta dupla, organizados numa bolsa preta com zíper e alça, prontos para a próxima arte.",
+    "imagem": 4,
+    "cards": [
+      {
+        "titulo": "168 cores",
+        "texto": "Muitas tonalidades",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Ponta dupla",
+        "texto": "Traço e preenchimento",
+        "icone": "pen-tool"
+      },
+      {
+        "titulo": "Marcador oleoso",
+        "texto": "Para pintura artística",
+        "icone": "brush"
+      },
+      {
+        "titulo": "Bolsa com zíper",
+        "texto": "Guarda e transporta",
+        "icone": "shopping-bag"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Estojo comum × Kit 168 Cores",
+    "intro": "Os dois pintam. Só um tem cor para toda ideia.",
+    "rotulos": [
+      "Comum",
+      "168 Cores"
+    ],
+    "linhas": [
+      {
+        "texto": "Canetas para colorir",
+        "comum": true
+      },
+      {
+        "texto": "168 cores num só kit",
+        "comum": false
+      },
+      {
+        "texto": "Ponta dupla em cada caneta",
+        "comum": false
+      },
+      {
+        "texto": "Traço fino e preenchimento",
+        "comum": false
+      },
+      {
+        "texto": "Bolsa organizadora com zíper",
+        "comum": false
+      },
+      {
+        "texto": "Alça para levar a qualquer lugar",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Mesa da cozinha, papel e 168 cores: um desenho puxa o outro e a família inteira acaba pintando junto, sem celular por perto.",
+    "imagem": 9,
+    "citacao": "Menos tela, mais cor: a família toda desenhando junto na mesa da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "168 canetas de ponta dupla e uma bolsa para guardar toda a criatividade.",
+    "itens": [
+      {
+        "id": 253,
+        "nome": "Kit Arte Completa",
+        "itens": "168 canetas + bolsa organizadora",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "168 canetas",
+            "icone": "pen-tool"
+          },
+          {
+            "texto": "Bolsa com zíper",
+            "icone": "shopping-bag"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeira arte",
+      "texto": "Chegou! Abra a bolsa e escolha a cor.",
+      "icone": "palette"
+    },
+    {
+      "titulo": "Criar todo dia",
+      "texto": "Desenho e pintura longe do celular.",
+      "icone": "paintbrush"
+    }
+  ],
+  "garantia": [
+    "Desenhando mais",
+    "Mais longe das telas",
+    "Inventando cores",
+    "Criando sem parar"
+  ],
+  "duvidas": [
+    [
+      "O que vem no kit?",
+      "168 canetas marcadoras de cabeça dupla e 1 bolsa organizadora preta com zíper e alça."
+    ],
+    [
+      "Que tipo de caneta é?",
+      "Marcador oleoso de cabeça dupla, ideal para pintura artística e trabalhos criativos."
+    ],
+    [
+      "Para que serve a ponta dupla?",
+      "Cada caneta tem duas pontas: uma para traços e outra para preenchimentos."
+    ],
+    [
+      "As canetas vêm organizadas?",
+      "Sim, ficam na bolsa organizadora, que facilita guardar e transportar todas as cores."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de desenho de verdade, 168 cores para inventar e a família mais perto."
+  },
+  "ctas": {
+    "historia": "Quero as 168 cores",
+    "porque": "Quero o kit de canetas",
+    "ensina": "Quero desenhar sem telas",
+    "detalhes": "Quero o meu",
+    "comparativo": "Quero o kit 168 cores",
+    "familia": "Quero colorir em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero as 168 cores",
+    "final": "Quero as 168 cores"
+  }
+}

@@ -1,0 +1,246 @@
+{
+  "titulo": "Churrasqueira de Brinquedo com Efeito Spray e Comidinhas",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Efeito spray",
+      "fumaça de mentira"
+    ],
+    [
+      "Kit completo",
+      "com acessórios"
+    ],
+    [
+      "Vira maleta",
+      "fácil de levar"
+    ],
+    [
+      "Zero telas",
+      "diversão real"
+    ]
+  ],
+  "letreiro": [
+    "Simula fumaça com efeito de spray",
+    "Vem com utensílios e comidinhas",
+    "Vira uma maleta prática",
+    "Brincadeira longe do celular",
+    "Estimula a imaginação",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O churrasco da família",
+    "subtitulo": "Imaginação que sai fumaça",
+    "texto": "Preparar o churrasco de mentirinha com efeito spray é o convite perfeito para largar o celular. Menos tela dá um descanso para os olhos e deixa a rotina mais criativa.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Efeito spray realista",
+      "Vira maleta prática"
+    ],
+    "cards": [
+      {
+        "titulo": "Faz de conta",
+        "texto": "Cria pratos deliciosos com acessórios que imitam a realidade.",
+        "icone": "chef-hat"
+      },
+      {
+        "titulo": "Efeito especial",
+        "texto": "O spray imita a fumacinha da churrasqueira na brincadeira.",
+        "icone": "flame"
+      },
+      {
+        "titulo": "Organização",
+        "texto": "Tudo vira uma maleta para guardar e levar para qualquer lugar.",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Foco e atenção",
+        "texto": "Horas de brincadeira de verdade que desenvolvem a paciência.",
+        "icone": "target"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto brinca de cozinhar, a criança exercita habilidades importantes para a vida:",
+    "imagem": 0,
+    "chamadas": [
+      "Cozinha realista",
+      "Acessórios inclusos",
+      "Efeito spray",
+      "Maleta portátil"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Faz de conta",
+        "icone": "chef-hat"
+      },
+      {
+        "texto": "Foco e paciência",
+        "icone": "timer"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users-round"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para o pequeno chef",
+    "texto": "Comidinhas, panelas e utensílios: um kit completo para transformar a sala em um restaurante.",
+    "imagem": 0,
+    "cards": [
+      {
+        "titulo": "Kit completo",
+        "texto": "Panelas, pratos e talheres",
+        "icone": "utensils"
+      },
+      {
+        "titulo": "Efeito spray",
+        "texto": "Fumacinha de mentirinha",
+        "icone": "droplets"
+      },
+      {
+        "titulo": "Portátil",
+        "texto": "Vira maleta com alça",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Sem celular",
+        "texto": "Foco na brincadeira real",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Cozinha comum × Churrasqueira Realista",
+    "intro": "Brincar de casinha é clássico. Com efeito de fumaça, é inesquecível.",
+    "rotulos": [
+      "Comum",
+      "Realista"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem acessórios de cozinha",
+        "comum": true
+      },
+      {
+        "texto": "Efeito de spray que simula fumaça",
+        "comum": false
+      },
+      {
+        "texto": "Vira maleta para transporte",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a coordenação motora",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção longe do celular",
+        "comum": false
+      },
+      {
+        "texto": "Kit completo com panelas e talheres",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos que ficam na memória",
+    "texto": "Sentar no chão e aceitar um prato de mentirinha feito pelo seu filho é o melhor jeito de se conectar. Brincadeira em família que substitui as telas por sorrisos.",
+    "imagem": 0,
+    "citacao": "O melhor tempero da brincadeira é o tempo junto, longe das telas."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O presente que tira a criança do celular e desperta o pequeno chef.",
+    "itens": [
+      {
+        "id": 524,
+        "nome": "Kit Churrasco Real",
+        "itens": "Churrasqueira Spray + Acessórios",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Churrasqueira",
+            "icone": "flame"
+          },
+          {
+            "texto": "Acessórios",
+            "icone": "utensils"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Hora de montar",
+      "texto": "Abra a maleta e prepare o banquete.",
+      "icone": "cooking-pot"
+    },
+    {
+      "titulo": "Longe das telas",
+      "texto": "Diversão de verdade para toda a família.",
+      "icone": "smile"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Criando histórias",
+    "Sendo um chef"
+  ],
+  "duvidas": [
+    [
+      "Como é o efeito spray?",
+      "A churrasqueira tem efeito de spray que simula uma cozinha de verdade e deixa o churrasco de mentirinha mais realista."
+    ],
+    [
+      "Quais acessórios acompanham?",
+      "O brinquedo acompanha comidinhas de mentira, utensílios de cozinha, panelas, pratos e garfos para completar a diversão."
+    ],
+    [
+      "É fácil de guardar?",
+      "Sim, o modelo imita uma maleta prática para guardar e transportar todos os itens com facilidade."
+    ],
+    [
+      "O brinquedo ajuda no desenvolvimento?",
+      "Sim, ele estimula a imaginação e a coordenação enquanto a criança prepara pratos de brinquedo longe do celular."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Peça o seu e transforme a tarde em um churrasco inesquecível, com muita imaginação e longe das telas."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Escolher churrasqueira realista"
+  }
+}

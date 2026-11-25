@@ -58,7 +58,7 @@ const regioes = computed(() => {
                             </span>
                         </li>
                     </ul>
-                    <p>Quando chega para o seu CEP ("Chega até qui., 27/11", por exemplo) aparece na página do produto (campo "Calcular o prazo de entrega") e no checkout, em cada opção de entrega.</p>
+                    <p>Quando chega para o seu CEP ("Chega até qui., 27/11", por exemplo) aparece no checkout, em cada opção de entrega, assim que você informa o CEP.</p>
                 </LegalCard>
 
                 <LegalCard title="Entrega Rápida ⚡">

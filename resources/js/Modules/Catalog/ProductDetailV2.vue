@@ -861,7 +861,9 @@ const submitReview = () => {
 // Página de brinquedo (pedido do Lira 24/11/2026) ------------------------------
 // Quatro "chips" coloridos abaixo das estrelas: os benefícios do anúncio (título + texto curto).
 const chipsBrinquedo = computed(() => {
-    const beneficios = (anuncio.value?.beneficios ?? []).map((item) => [semEmoji(item[0]), semEmoji(item[1] ?? '')]);
+    // Chips curtos próprios (comparativo.chips) quando o anúncio tiver; senão, os benefícios.
+    const fonte = anuncio.value?.comparativo?.chips?.length ? anuncio.value.comparativo.chips : (anuncio.value?.beneficios ?? []);
+    const beneficios = fonte.map((item) => [semEmoji(item[0]), semEmoji(item[1] ?? '')]);
     const base = beneficios.length ? beneficios : highlights.value.map((item) => [semEmoji(item), '']);
     return base.slice(0, 4).map(([titulo, texto]) => ({ titulo, texto: texto.length > 42 ? `${texto.slice(0, 40).replace(/\s+\S*$/, '')}…` : texto }));
 });

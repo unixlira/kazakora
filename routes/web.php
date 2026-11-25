@@ -754,6 +754,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
     Route::get('leads/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('leads.fluxo');
+    // Leads, tela única (plano do Lira 25/11/2026): Leads + Carrinhos abandonados + Sequência numa lista só.
+    // Rota temporária para comparar; as três telas antigas continuam como estão até a troca.
+    Route::prefix('leads-v2')->name('leads-v2.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'index'])->middleware('permission:pedidos.view')->name('listar');
+        Route::post('antecipar-todos', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'anteciparTodos'])->middleware(['permission:pedidos.edit', 'throttle:6,1'])->name('antecipar-todos');
+        Route::get('{chave}/remarketing', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'remarketing'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('remarketing');
+        Route::get('{chave}/jornada', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'jornada'])->middleware('permission:pedidos.view')->where('chave', '[lcs][0-9]+')->name('jornada');
+        Route::post('{chave}/antecipar', [\App\Modules\Admin\Http\Controllers\LeadsUnicosController::class, 'antecipar'])->middleware(['permission:pedidos.edit', 'throttle:30,1'])->where('chave', '[lcs][0-9]+')->name('antecipar');
+    });
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
     // Clientes dos sites (pedido do Lira 2026-11-16): contas criadas na KazaKora e na FerraKora. Só leitura.
     Route::middleware('permission:pedidos.view')->prefix('clientes-dos-sites')->name('clientes-dos-sites.')->group(function () {

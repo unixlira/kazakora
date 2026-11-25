@@ -30,6 +30,8 @@ export const TONE_CLASSES = {
     red: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
     purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
     gray: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    // Tela única de Leads (25/11/2026): "Em remarketing" em laranja.
+    orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
 };
 
 // Apelidos de tom, pra quem quiser passar a cor direto (tone="success").

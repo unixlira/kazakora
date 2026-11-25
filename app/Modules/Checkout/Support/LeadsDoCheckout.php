@@ -63,22 +63,27 @@ class LeadsDoCheckout
             // Leads digitados (2026-11-06): o mesmo pedido converte a tela Leads.
             app(LeadsDigitados::class)->converter($order, $sessionId, $email, $cpf);
 
-            if (! $sessionId && ! $email && ! $cpf) {
-                return 0;
-            }
+            // Sem sessão, e-mail nem CPF ainda vale o lead já ligado ao pedido (order_id).
 
             return LeadCheckout::query()
                 ->where('site', $order->site_origem ?: SiteAtual::KAZAKORA)
                 ->where('status', LeadCheckout::STATUS_ABERTO)
                 ->where(fn ($q) => $q
+                    ->where('order_id', $order->id)
                     ->when($sessionId, fn ($q) => $q->orWhere('session_id', $sessionId))
                     ->when($email, fn ($q) => $q->orWhere('email', $email))
                     ->when($cpf, fn ($q) => $q->orWhere('cpf', $cpf)))
-                ->update([
+                // Só pedido PAGO converte (pedido do Lira 25/11/2026: Pix gerado e não pago aparecia
+                // como convertido). Antes do pagamento o lead fica aberto, já ligado ao pedido.
+                ->update(\App\Modules\Checkout\Support\LeadsDigitados::pago($order) ? [
                     'status' => LeadCheckout::STATUS_CONVERTIDO,
                     'order_id' => $order->id,
                     'user_id' => $order->user_id,
                     'convertido_em' => now(),
+                    'updated_at' => now(),
+                ] : [
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
                     'updated_at' => now(),
                 ]);
         } catch (Throwable $e) {

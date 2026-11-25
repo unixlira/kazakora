@@ -66,26 +66,37 @@ class LeadsDigitados
         }
     }
 
-    /** Pedido saiu: leads abertos da mesma sessão, e-mail ou CPF viram "convertido". */
+    /** Pedido conta como venda (convertido) só depois de pago. */
+    public static function pago(Order $order): bool
+    {
+        return in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+    }
+
+    /** Pedido saiu: leads abertos da mesma sessão, e-mail ou CPF ficam ligados a ele e viram "convertido" quando ele é pago. */
     public function converter(Order $order, ?string $sessionId, ?string $email, ?string $cpf): int
     {
         try {
-            if (! $sessionId && ! $email && ! $cpf) {
-                return 0;
-            }
+            // Sem sessão, e-mail nem CPF ainda vale o lead já ligado ao pedido (order_id).
 
             return Lead::query()
                 ->where('site', $order->site_origem ?: SiteAtual::KAZAKORA)
                 ->where('status', Lead::STATUS_ABERTO)
                 ->where(fn ($q) => $q
+                    ->where('order_id', $order->id)
                     ->when($sessionId, fn ($q) => $q->orWhere('session_id', $sessionId))
                     ->when($email, fn ($q) => $q->orWhere('email', $email))
                     ->when($cpf, fn ($q) => $q->orWhere('cpf', $cpf)))
-                ->update([
+                // Só pedido PAGO converte (pedido do Lira 25/11/2026: Pix gerado e não pago aparecia
+                // como convertido). Antes do pagamento o lead fica aberto, já ligado ao pedido.
+                ->update(\App\Modules\Checkout\Support\LeadsDigitados::pago($order) ? [
                     'status' => Lead::STATUS_CONVERTIDO,
                     'order_id' => $order->id,
                     'user_id' => $order->user_id,
                     'convertido_em' => now(),
+                    'updated_at' => now(),
+                ] : [
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
                     'updated_at' => now(),
                 ]);
         } catch (Throwable $e) {

@@ -110,7 +110,7 @@ class LeadsDigitadosTest extends TestCase
         $this->assertSame(0, Lead::count());
     }
 
-    public function test_pedido_criado_converte_o_lead(): void
+    public function test_pedido_criado_liga_o_lead_e_so_converte_quando_pago(): void
     {
         Mail::fake();
         $frete = ShippingMethod::factory()->create(['price' => 0, 'is_active' => true]);
@@ -134,9 +134,18 @@ class LeadsDigitadosTest extends TestCase
         ])->assertOk();
         $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
 
+        // Pix gerado e não pago: o lead fica aberto, já ligado ao pedido (pedido do Lira 25/11/2026).
         $lead = Lead::sole();
-        $this->assertSame(Lead::STATUS_CONVERTIDO, $lead->status);
+        $this->assertSame(Lead::STATUS_ABERTO, $lead->status);
         $this->assertSame(Order::sole()->id, $lead->order_id);
+        $this->assertNull($lead->convertido_em);
+
+        $order = Order::sole();
+        $order->update(['status' => Order::STATUS_PAID]);
+        app(\App\Modules\Checkout\Support\LeadsDoCheckout::class)->converter($order);
+
+        $lead->refresh();
+        $this->assertSame(Lead::STATUS_CONVERTIDO, $lead->status);
         $this->assertNotNull($lead->convertido_em);
     }
 

@@ -164,7 +164,7 @@ class LeadCheckoutTest extends TestCase
         $this->assertSame('12345678909', $lead->cpf);
     }
 
-    public function test_pedido_criado_converte_o_lead_e_liga_o_order_id(): void
+    public function test_pedido_criado_liga_o_order_id_e_so_converte_quando_pago(): void
     {
         Mail::fake();
         $this->noCarrinho(105);
@@ -192,9 +192,16 @@ class LeadCheckoutTest extends TestCase
 
         $order = Order::sole();
         $lead = LeadCheckout::sole();
-        $this->assertSame(LeadCheckout::STATUS_CONVERTIDO, $lead->status);
+        $this->assertSame(LeadCheckout::STATUS_ABERTO, $lead->status);
         $this->assertSame($order->id, $lead->order_id);
         $this->assertSame($order->user_id, $lead->user_id);
+        $this->assertNull($lead->convertido_em);
+
+        $order->update(['status' => Order::STATUS_PAID]);
+        app(LeadsDoCheckout::class)->converter($order);
+
+        $lead->refresh();
+        $this->assertSame(LeadCheckout::STATUS_CONVERTIDO, $lead->status);
         $this->assertNotNull($lead->convertido_em);
     }
 

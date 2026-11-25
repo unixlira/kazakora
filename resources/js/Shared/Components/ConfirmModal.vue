@@ -40,6 +40,12 @@ const props = defineProps({
         type: String,
         default: 'max-w-lg',
     },
+    // Janelas de detalhe da tela única de Leads (25/11/2026): até 85% da
+    // altura com rolagem interna e tela cheia no celular.
+    detalhe: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['close', 'confirm']);
@@ -77,11 +83,11 @@ watch(
         <!-- admin-shell: o Teleport tira o modal de dentro do AdminLayout, e as
              cores do admin (--surface etc.) só valem dentro dessa classe; sem
              ela o modal ficava transparente (visto em 12/10/2026). -->
-        <div v-if="open" class="admin-shell fixed inset-0 z-[100] flex items-center justify-center p-4 text-[var(--surface-foreground)]">
+        <div v-if="open" class="admin-shell fixed inset-0 z-[100] flex items-center justify-center text-[var(--surface-foreground)]" :class="detalhe ? 'p-0 sm:p-4' : 'p-4'">
             <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="!loading && emit('close')"></div>
             <div ref="painel" role="dialog" aria-modal="true" :aria-labelledby="tituloId" tabindex="-1"
-                class="relative w-full overflow-y-auto rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-6 shadow-xl focus:outline-none"
-                :class="width" style="max-height: 90vh;">
+                class="relative w-full overflow-y-auto border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl focus:outline-none"
+                :class="[width, detalhe ? 'h-full p-4 sm:h-auto sm:max-h-[85vh] sm:rounded-2xl sm:p-6' : 'rounded-2xl p-6']" :style="detalhe ? null : 'max-height: 90vh;'">
                 <button type="button" :disabled="loading"
                     class="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-[var(--surface-muted)] disabled:opacity-50"
                     aria-label="Fechar" @click="emit('close')">

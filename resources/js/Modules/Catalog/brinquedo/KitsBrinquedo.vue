@@ -4,6 +4,7 @@
 // "cartoes" na seção "Escolha o seu kit" mais abaixo (foto, preço e botão).
 import { computed } from 'vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
+import Icone from './Icone.vue';
 import { formatPrice } from '@/Shared/productCard';
 import { economia, itensDoKit, nomeDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, unidadesDoKit } from './kits';
 
@@ -24,9 +25,9 @@ const selos = computed(() => selosDosKits(props.opcoes));
             :class="{ 'is-sel': kit.id === escolhidaId, 'is-hot': selos[kit.id]?.tom === 'amarelo', esgotado: kit.stock < 1 }"
             :aria-checked="kit.id === escolhidaId" :data-kzm="`kit:${kit.id}`" @click="emit('escolher', kit)">
             <span v-if="selos[kit.id]" class="kb-selo" :class="`tom-${selos[kit.id].tom}`">
-                <i v-if="selos[kit.id].estrela" class="fas fa-star" aria-hidden="true"></i>{{ selos[kit.id].texto }}
+                <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="13" />{{ selos[kit.id].texto }}
             </span>
-            <span class="kb-marca" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <span class="kb-marca" aria-hidden="true"><Icone nome="check" :tamanho="18" :traco="3" /></span>
             <span class="kb-info">
                 <strong class="kb-nome">{{ nomeDoKit(kit) }}</strong>
                 <span class="kb-itens">{{ kit.stock < 1 ? 'Esgotado' : itensDoKit(kit) }}</span>

@@ -30,6 +30,8 @@ import '../../../css/pagina-brinquedo.css';
 import KitsBrinquedo from './brinquedo/KitsBrinquedo.vue';
 import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
 import SomComemoracao from './brinquedo/SomComemoracao.vue';
+import Cubo from './brinquedo/Cubo.vue';
+import Icone from './brinquedo/Icone.vue';
 import { kitRecomendado, nomeDoKit, semEmoji } from './brinquedo/kits';
 
 const props = defineProps({
@@ -978,7 +980,7 @@ const escolherKit = (kit, rolar = false) => {
 
                             <ul v-if="brinquedo && chipsBrinquedo.length" class="pb-chips">
                                 <li v-for="(chip, index) in chipsBrinquedo" :key="index" :class="`cor-${['verde', 'azul', 'laranja', 'amarelo'][index % 4]}`">
-                                    <span class="pb-chip-cubo" aria-hidden="true"></span>
+                                    <Cubo class="pb-chip-cubo" :cor="['verde', 'azul', 'laranja', 'amarelo'][index % 4]" :tamanho="26" />
                                     <span><strong>{{ chip.titulo }}</strong><small v-if="chip.texto">{{ chip.texto }}</small></span>
                                 </li>
                             </ul>
@@ -1033,9 +1035,9 @@ const escolherKit = (kit, rolar = false) => {
                                 <span class="subtitulo">Escolha seu kit</span>
                                 <KitsBrinquedo :opcoes="opcoesVariacao" :escolhida-id="escolhida?.id ?? null" @escolher="escolherKit" />
                                 <div class="pb-pagamento">
-                                    <span v-if="precoPix !== null && seloPix"><i class="fa-brands fa-pix" aria-hidden="true"></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
-                                    <span v-else><i class="fa-brands fa-pix" aria-hidden="true"></i><small>Aceitamos</small><b>Pix</b></span>
-                                    <span><i class="far fa-credit-card" aria-hidden="true"></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b></span>
+                                    <span v-if="precoPix !== null && seloPix"><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
+                                    <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>Aceitamos</small><b>Pix</b></span>
+                                    <span><i class="pb-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="pb-pag-seta" nome="chevron-down" :tamanho="16" /></span>
                                 </div>
                             </div>
 
@@ -1114,10 +1116,10 @@ const escolherKit = (kit, rolar = false) => {
                             <!-- Só dois quadros, Frete e Devoluções, no lugar dos quatro selos (pedido do Lira 2026-10-26).
                                  Sem "Expresso Turbo para todas as regiões do Brasil" (Botrel e Lira, 2026-11-02): Manaus e Porto Alegre só têm PAC. -->
                             <ul v-if="brinquedo" class="pb-selos">
-                                <li><span class="cor-verde"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>Garantia 30 dias</li>
-                                <li><span class="cor-azul"><i class="fas fa-truck-fast" aria-hidden="true"></i></span>{{ isFreeShipping ? 'Frete grátis' : 'Envio com rastreio' }}</li>
-                                <li><span class="cor-laranja"><i class="fas fa-rotate" aria-hidden="true"></i></span>Troca fácil</li>
-                                <li><span class="cor-amarelo"><i class="fas fa-lock" aria-hidden="true"></i></span>Compra segura</li>
+                                <li><span class="cor-verde"><Icone nome="shield-check" :tamanho="22" /></span>Garantia 30 dias</li>
+                                <li><span class="cor-azul"><Icone nome="truck" :tamanho="22" /></span>{{ isFreeShipping ? 'Frete grátis' : 'Envio com rastreio' }}</li>
+                                <li><span class="cor-laranja"><Icone nome="arrow-left-right" :tamanho="22" /></span>Troca fácil</li>
+                                <li><span class="cor-amarelo"><Icone nome="lock" :tamanho="22" /></span>Compra segura</li>
                             </ul>
                             <ul v-else class="fretefundo">
                                 <li>

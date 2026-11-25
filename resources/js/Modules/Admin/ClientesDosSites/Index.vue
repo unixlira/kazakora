@@ -98,7 +98,18 @@ const columns = [
             ? h('span', { class: 'text-xs text-slate-400', title: 'O cadastro da FerraKora não tem essa opção' }, '-')
             : h('span', { class: row.original.recebe_promocoes ? 'text-green-700' : 'text-slate-500' }, row.original.recebe_promocoes ? 'Aceita' : 'Não aceita')),
     },
-    { id: 'pedidos', header: 'Pedidos pagos', enableSorting: false, meta: { cellClass: 'text-center' }, cell: ({ row }) => row.original.pedidos_pagos },
+    {
+        // Selo em vez do número solto (pedido do Lira 25/11/2026): verde com pedido pago, cinza sem nenhum.
+        id: 'pedidos', header: 'Pedidos pagos', enableSorting: false, meta: { cellClass: 'text-center' },
+        cell: ({ row }) => {
+            const n = Number(row.original.pedidos_pagos) || 0;
+            return h('span', {
+                class: ['inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                    n > 0 ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'],
+                title: n > 0 ? `${n} pedido(s) pago(s)` : 'Nenhum pedido pago',
+            }, n > 0 ? `${n} ${n === 1 ? 'pago' : 'pagos'}` : 'Sem compra');
+        },
+    },
     { id: 'gasto', header: 'Total gasto', enableSorting: false, meta: { cellClass: 'whitespace-nowrap' }, cell: ({ row }) => formatPrice(row.original.total_gasto) },
     { id: 'ultimo', header: 'Último pedido', enableSorting: false, meta: { cellClass: 'whitespace-nowrap' }, cell: ({ row }) => formatDate(row.original.ultimo_pedido_em) },
 ];

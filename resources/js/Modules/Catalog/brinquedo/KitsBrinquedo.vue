@@ -53,7 +53,7 @@ const partesDoKit = (kit) => (kit.kit_partes?.length
         </button>
     </div>
 
-    <div v-else class="kb-grid pb-reveal">
+    <div v-else class="kb-grid pb-reveal" :class="{ escada: kits.some((k) => k.kit_acrescenta) }">
         <article v-for="kit in kits" :key="kit.id" class="kb-kc" :class="{ 'is-hot': selos[kit.id]?.tom === 'amarelo', 'is-best': selos[kit.id]?.tom === 'verde' }">
             <span v-if="selos[kit.id]" class="kb-kc-selo" :class="`tom-${selos[kit.id].tom}`">
                 <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="12" :traco="2.4" />{{ selos[kit.id].texto }}

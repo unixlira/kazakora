@@ -434,6 +434,8 @@
     .pd2.pg-brinquedo .pb-st-n { flex-direction: column; margin: 0; gap: 8px; }
     .pd2.pg-brinquedo .kb-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; gap: 30px; }
     .pd2.pg-brinquedo .kb-kc.is-hot { order: -1; }
+    /* Escada de oferta: no celular fica a ordem dos degraus (livro → +lousa → completo). */
+    .pd2.pg-brinquedo .kb-grid.escada .kb-kc.is-hot { order: 0; }
     .pd2.pg-brinquedo .kb-kc:hover { transform: none; }
     .pd2.pg-brinquedo .pb-gt-ps { grid-template-columns: 1fr 1fr; }
 }

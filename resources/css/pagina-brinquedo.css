@@ -253,3 +253,223 @@
     .pd2.pg-brinquedo .pb-letreiro-faixa, .pd2.pg-brinquedo .pb-garantia-anel { animation: none; }
     .pd2.pg-brinquedo .pb-btn, .pd2.pg-brinquedo .kb-kit { transition: none; }
 }
+
+/* ======================================================================================
+   Largura total, topo próprio e efeitos (pedido do Lira 24/11/2026: "igual à referência,
+   container-fluid, com as mesmas funcionalidades de efeito"). Código e nomes nossos.
+   ====================================================================================== */
+
+/* Largura total: a página ocupa a tela toda (sem a caixa de 1320 px da loja), com respiro lateral;
+   as seções têm fundo de ponta a ponta e o conteúdo com as larguras máximas de cada bloco. */
+.pd2.pg-brinquedo { overflow-x: clip; padding-bottom: 0; }
+.pd2.pg-brinquedo .wrap { max-width: none; padding: 0 clamp(16px, 2.4vw, 46px); }
+.pd2.pg-brinquedo .faixa, .pd2.pg-brinquedo .migalhas, .pd2.pg-brinquedo .barra { display: none !important; }
+.pd2.pg-brinquedo .grade { padding-top: 34px; }
+.pd2.pg-brinquedo .col-principal { grid-template-columns: minmax(0, 57fr) minmax(0, 43fr); gap: 32px; }
+.pd2.pg-brinquedo .pb-centro.largo { max-width: 1180px; padding: 0 18px; box-sizing: content-box; }
+.pd2.pg-brinquedo .pb-sec { padding: 76px 18px; }
+.pd2.pg-brinquedo .pb-secoes { margin-top: 40px; }
+.pd2.pg-brinquedo #avaliacoes, .pd2.pg-brinquedo .relacionados { max-width: 1180px; margin-left: auto; margin-right: auto; }
+.pd2.pg-brinquedo .relacionados { padding: 40px 0 56px; }
+
+/* Entrada ao rolar */
+.pd2.pg-brinquedo .pb-reveal { transition: opacity .7s ease, transform .7s cubic-bezier(.2, .7, .2, 1); }
+.pd2.pg-brinquedo .pb-reveal.pb-pre { opacity: 0; transform: translateY(26px); }
+
+@keyframes pbpop { 0% { opacity: 0; transform: translateY(14px) scale(.92); } 60% { opacity: 1; transform: translateY(-3px) scale(1.03); } 100% { opacity: 1; transform: none; } }
+@keyframes pbbounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes pbwiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+@keyframes pbfloat { 0%, 100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-12px) rotate(8deg); } }
+@keyframes pbspin { to { transform: rotate(360deg); } }
+@keyframes pbshine { 0% { transform: translateX(-150%) skewX(-20deg); } 60%, 100% { transform: translateX(325%) skewX(-20deg); } }
+@keyframes pbstrike { to { transform: rotate(-45deg) scaleX(1); } }
+@keyframes pbsticker { 0%, 70%, 100% { transform: rotate(-8deg) scale(1); } 78% { transform: rotate(-4deg) scale(1.18); } 86% { transform: rotate(-10deg) scale(.95); } }
+@keyframes pbsnapl { 0%, 20% { transform: translateX(-14px); } 55%, 100% { transform: translateX(2px); } }
+@keyframes pbsnapr { 0%, 20% { transform: translateX(14px); } 55%, 100% { transform: translateX(-2px); } }
+@keyframes pbrow { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes pbstamp { 0% { transform: scale(0) rotate(-30deg); } 70% { transform: scale(1.25) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+
+/* Itens que entram um depois do outro quando a lista chega na tela */
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades, .pb-passos, .pb-garantia-itens, .pb-faixa-confianca).is-in > li,
+.pd2.pg-brinquedo .kb-cartoes-vitrine.is-in > .kb-cartao-vitrine { animation: pbpop .55s both; }
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades, .pb-passos, .pb-garantia-itens, .pb-faixa-confianca).is-in > li:nth-child(2),
+.pd2.pg-brinquedo .kb-cartoes-vitrine.is-in > :nth-child(2) { animation-delay: .12s; }
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades, .pb-passos, .pb-garantia-itens, .pb-faixa-confianca).is-in > li:nth-child(3),
+.pd2.pg-brinquedo .kb-cartoes-vitrine.is-in > :nth-child(3) { animation-delay: .24s; }
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades, .pb-passos, .pb-garantia-itens, .pb-faixa-confianca).is-in > li:nth-child(4),
+.pd2.pg-brinquedo .kb-cartoes-vitrine.is-in > :nth-child(4) { animation-delay: .36s; }
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades).is-in > li:nth-child(5) { animation-delay: .44s; }
+.pd2.pg-brinquedo :is(.pb-cartoes-icone, .pb-habilidades).is-in > li:nth-child(n+6) { animation-delay: .52s; }
+.pd2.pg-brinquedo .pb-cartoes-icone.is-in .pb-icone { animation: pbbounce .7s ease .5s 2; }
+.pd2.pg-brinquedo .pb-tabela.is-in .pb-tabela-linha { animation: pbrow .5s both; animation-delay: calc(var(--i, 0) * 110ms); }
+.pd2.pg-brinquedo .pb-tabela.is-in .pb-marca { animation: pbstamp .45s both; animation-delay: calc(var(--i, 0) * 110ms + 250ms); }
+.pd2.pg-brinquedo .pb-sem-telas li { animation: pbpop .5s both; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(2) { animation-delay: .1s; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(3) { animation-delay: .2s; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(4) { animation-delay: .3s; }
+.pd2.pg-brinquedo .pb-sem-telas li::after { left: 50%; right: auto; width: 46px; margin-left: -23px; transform: rotate(-45deg) scaleX(0); animation: pbstrike .45s ease forwards; animation-delay: .6s; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(2)::after { animation-delay: .7s; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(3)::after { animation-delay: .8s; }
+.pd2.pg-brinquedo .pb-sem-telas li:nth-child(4)::after { animation-delay: .9s; }
+
+/* Caixa de compra: chips entram pulando, selos, kits */
+.pd2.pg-brinquedo .pb-chips li { animation: pbpop .6s both; transition: transform .2s; }
+.pd2.pg-brinquedo .pb-chips li:nth-child(2) { animation-delay: .08s; }
+.pd2.pg-brinquedo .pb-chips li:nth-child(3) { animation-delay: .16s; }
+.pd2.pg-brinquedo .pb-chips li:nth-child(4) { animation-delay: .24s; }
+.pd2.pg-brinquedo .pb-chips li:hover .pb-chip-cubo { animation: pbbounce .6s ease; }
+.pd2.pg-brinquedo .compra .oferta-bf-selo { animation: pbwiggle 2.5s ease-in-out infinite; }
+.pd2.pg-brinquedo .pb-selos li { transition: transform .2s; }
+.pd2.pg-brinquedo .pb-selos li:hover { transform: translateY(-3px); }
+.pd2.pg-brinquedo .pb-selos li > span { animation: pbpop .5s both; }
+.pd2.pg-brinquedo .pb-selos li:nth-child(2) > span { animation-delay: .1s; }
+.pd2.pg-brinquedo .pb-selos li:nth-child(3) > span { animation-delay: .2s; }
+.pd2.pg-brinquedo .pb-selos li:nth-child(4) > span { animation-delay: .3s; }
+.pd2.pg-brinquedo .pb-selos li:hover > span { animation: pbwiggle .5s ease; }
+.pd2.pg-brinquedo .kb-kit:hover { border-color: #cdb68e; transform: translateY(-1px); }
+.pd2.pg-brinquedo .kb-kit.is-sel .kb-marca { animation: pbpop .35s both; }
+.pd2.pg-brinquedo .kb-precos b { transition: color .2s; }
+.pd2.pg-brinquedo .comprar-agora { position: relative; overflow: hidden; transition: transform .15s, box-shadow .15s; box-shadow: 0 6px 0 #0f7a35; }
+.pd2.pg-brinquedo .comprar-agora:hover { transform: translateY(2px); box-shadow: 0 4px 0 #0f7a35; }
+.pd2.pg-brinquedo .comprar-agora:active { transform: translateY(6px); box-shadow: 0 0 0 #0f7a35; }
+.pd2.pg-brinquedo .compra .acao { position: static !important; display: flex !important; margin: 14px 0 0; padding: 0; background: none; }
+
+/* Botões verdes: brilho passando e "afunda" ao passar o mouse / clicar */
+.pd2.pg-brinquedo .pb-btn, .pb-barra .pb-btn, .pd2.pg-brinquedo .comprar-agora { position: relative; overflow: hidden; }
+.pd2.pg-brinquedo .pb-btn::after, .pb-barra .pb-btn::after, .pd2.pg-brinquedo .comprar-agora::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
+    transform: translateX(-150%) skewX(-20deg); animation: pbshine 3.2s ease-in-out infinite;
+}
+.pd2.pg-brinquedo .pb-btn { box-shadow: 0 6px 0 #0f7a35; border-color: transparent; padding: 18px 34px; }
+.pd2.pg-brinquedo .pb-btn:hover { transform: translateY(2px); box-shadow: 0 4px 0 #0f7a35; }
+.pd2.pg-brinquedo .pb-btn:active { transform: translateY(6px); box-shadow: 0 0 0 #0f7a35; }
+
+/* Cartões: sobem, giram de leve e ganham borda e sombra sólida */
+.pd2.pg-brinquedo .pb-cartoes-icone li { transition: transform .25s, border-color .25s, box-shadow .25s; }
+.pd2.pg-brinquedo .pb-cartoes-icone li:hover { transform: translateY(-6px) rotate(-1.5deg); border-color: var(--pb-borda); box-shadow: 0 7px 0 var(--pb-borda); }
+.pd2.pg-brinquedo .pb-cartoes-icone li:hover .pb-icone { animation: pbwiggle .5s ease; }
+.pd2.pg-brinquedo .pb-habilidades li { transition: transform .2s; }
+.pd2.pg-brinquedo .pb-habilidades li:hover { transform: translateY(-3px) rotate(-1deg); }
+.pd2.pg-brinquedo .pb-tabela-linha { border-radius: 16px; transition: background .2s; padding-left: 10px; padding-right: 10px; }
+.pd2.pg-brinquedo .pb-tabela-linha:hover { background: rgba(255, 255, 255, .05); }
+.pd2.pg-brinquedo .pb-passos li { transition: transform .25s, box-shadow .25s, border-color .25s; }
+.pd2.pg-brinquedo .pb-passos li:hover { transform: translateY(-5px); border-color: var(--pb-borda); box-shadow: 0 6px 0 var(--pb-borda); }
+.pd2.pg-brinquedo .pb-passos li:hover .pb-num { animation: pbbounce .6s ease; }
+.pd2.pg-brinquedo .pb-garantia-itens li:hover .pb-cubo { animation: pbbounce .6s ease; }
+.pd2.pg-brinquedo .pb-faq details, .pd2.pg-brinquedo .pb-detalhes { transition: transform .2s; }
+.pd2.pg-brinquedo .pb-faq details:hover, .pd2.pg-brinquedo .pb-detalhes:hover { transform: translateY(-2px); }
+.pd2.pg-brinquedo .pb-faq details[open] p { animation: pbpop .3s both; }
+.pd2.pg-brinquedo .pb-faixa-confianca li { transition: transform .2s, border-color .2s; }
+.pd2.pg-brinquedo .pb-faixa-confianca li:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, .3); }
+.pd2.pg-brinquedo .kb-cartao-vitrine .card-produto img { transition: transform .5s, opacity .5s; }
+.pd2.pg-brinquedo .kb-cartao-vitrine .card-produto:hover img { transform: scale(1.05); }
+.pd2.pg-brinquedo :is(.kb-cartao-vitrine, .relacionados) .card-produto:hover { transform: translateY(-5px) rotate(-.6deg); border-color: var(--pb-borda); box-shadow: 0 8px 0 var(--pb-borda); }
+
+/* Letreiro para ao passar o mouse; selo da garantia gira; confetes flutuam; coração balança */
+.pd2.pg-brinquedo .pb-letreiro:hover .pb-letreiro-faixa { animation-play-state: paused; }
+.pd2.pg-brinquedo .pb-garantia-anel { animation-duration: 14s; }
+.pd2.pg-brinquedo .pb-confete { animation: pbfloat 7s ease-in-out infinite; }
+.pd2.pg-brinquedo .pb-confete.c2 { animation-delay: -2s; }
+.pd2.pg-brinquedo .pb-confete.c3 { animation-delay: -4s; }
+.pd2.pg-brinquedo .pb-confete.c4 { animation-delay: -1s; }
+.pd2.pg-brinquedo .com-coracao .pb-coracao { animation: pbwiggle 2.6s ease-in-out infinite; }
+.pd2.pg-brinquedo .pb-moldura img { transition: transform .6s ease; }
+.pd2.pg-brinquedo .pb-moldura:hover img { transform: scale(1.03); }
+.pd2.pg-brinquedo .pb-moldura { overflow: visible; }
+.pd2.pg-brinquedo .pb-moldura > img { overflow: hidden; }
+.pd2.pg-brinquedo .pb-snap { position: absolute; top: -20px; right: 14px; display: flex; gap: 0; z-index: 2; }
+.pd2.pg-brinquedo .pb-snap .pb-cubo:first-child { animation: pbsnapl 1.8s ease-in-out infinite; }
+.pd2.pg-brinquedo .pb-snap .pb-cubo:last-child { animation: pbsnapr 1.8s ease-in-out infinite; }
+.pd2.pg-brinquedo .pb-adesivo { position: absolute; left: -14px; bottom: 34px; z-index: 2; background: var(--pb-amarelo); color: var(--pb-tinta); font: 700 22px/1 Fredoka, Nunito, sans-serif; padding: 12px 16px; border-radius: 16px; border: 3px solid var(--pb-borda); box-shadow: 0 5px 0 var(--pb-borda); transform: rotate(-8deg); animation: pbsticker 2.6s ease-in-out infinite; }
+
+/* Galeria: miniaturas que sobem ao passar o mouse, a escolhida com borda e sombra; setas quadradas; contador */
+.pd2.pg-brinquedo .galeria-card { padding: 14px; }
+.pd2.pg-brinquedo .miniaturas button { border-radius: 14px; overflow: hidden; border: 2px solid #eadcc6; transition: transform .2s, border-color .2s, box-shadow .2s; background: #fff; }
+.pd2.pg-brinquedo .miniaturas button:hover { transform: translateY(-3px) rotate(-2deg); }
+.pd2.pg-brinquedo .miniaturas button[aria-current=true] { border-color: var(--pb-borda); box-shadow: 0 4px 0 var(--pb-borda); transform: translateY(-3px); }
+.pd2.pg-brinquedo .foto { border-radius: 18px; }
+.pd2.pg-brinquedo .foto img { transition: transform .6s ease; }
+.pd2.pg-brinquedo .seta { width: 42px; height: 42px; border-radius: 14px; background: #fff; border: 2px solid var(--pb-borda); box-shadow: 0 3px 0 var(--pb-borda); color: var(--pb-ink); transition: transform .15s; }
+.pd2.pg-brinquedo .seta:hover { transform: translateY(calc(-50% - 2px)); }
+.pd2.pg-brinquedo .pb-contador { position: absolute; right: 14px; bottom: 14px; z-index: 5; background: #fff; color: var(--pb-ink); font: 600 14px/1 Fredoka, Nunito, sans-serif; padding: 8px 13px; border-radius: 999px; border: 2px solid var(--pb-borda); box-shadow: 0 3px 0 var(--pb-borda); }
+
+/* "Parcele em até": abre a tabela de parcelas */
+.pd2.pg-brinquedo .pb-pag-parcelas { position: relative; display: grid; grid-template-columns: 30px 1fr; column-gap: 10px; align-items: center; border: 1.6px solid #e9dcc8; border-radius: 16px; padding: 9px 30px 9px 12px; color: var(--pb-ink); background: var(--pb-branco); text-align: left; font: inherit; cursor: pointer; transition: border-color .2s; }
+.pd2.pg-brinquedo .pb-pag-parcelas:hover, .pd2.pg-brinquedo .pb-pag-parcelas[aria-expanded=true] { border-color: var(--pb-borda); }
+.pd2.pg-brinquedo .pb-pag-parcelas small { font-size: 11.5px; color: var(--pb-texto); line-height: 1.1; }
+.pd2.pg-brinquedo .pb-pag-parcelas b { font-size: 14.5px; line-height: 1.2; }
+.pd2.pg-brinquedo .pb-pag-parcelas .pb-pag-seta { transition: transform .2s; }
+.pd2.pg-brinquedo .pb-pag-parcelas[aria-expanded=true] .pb-pag-seta { transform: translateY(-50%) rotate(180deg); }
+.pd2.pg-brinquedo .pb-parcelas { grid-column: 1 / -1; background: var(--pb-branco); border: 1.6px solid #e9dcc8; border-radius: 14px; padding: 6px 12px; animation: pbpop .3s both; }
+.pd2.pg-brinquedo .pb-parcelas div { display: flex; justify-content: space-between; gap: 6px; padding: 5px 0; border-bottom: 1px dashed #e9dcc8; font-size: 12.5px; font-weight: 700; color: var(--pb-texto); white-space: nowrap; }
+.pd2.pg-brinquedo .pb-parcelas div:last-child { border-bottom: 0; }
+
+/* Barra escura de compra (fora do .pd2: estilos soltos) */
+.pb-barra { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; display: flex; align-items: center; gap: 12px; max-width: 560px; margin: 0 auto; background: #1b1b2f; color: #fff; border-radius: 20px; padding: 10px 10px 10px 16px; box-shadow: 0 12px 40px rgba(23, 24, 44, .35); transform: translateY(150%); transition: transform .45s cubic-bezier(.2, .9, .3, 1.2); font-family: Nunito, system-ui, sans-serif; }
+.pb-barra.is-on { transform: none; }
+.pb-barra-info { flex: 1; min-width: 0; line-height: 1.2; }
+.pb-barra-info small { display: block; font-size: 12px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pb-barra-info b { font: 600 19px/1.2 Fredoka, Nunito, sans-serif; }
+.pb-barra .pb-btn { display: inline-flex; align-items: center; border: 0; border-radius: 999px; background: #16a34a; color: #fff; font: 600 16px/1 Fredoka, Nunito, sans-serif; padding: 15px 22px; box-shadow: 0 4px 0 #0f7a35; cursor: pointer; white-space: nowrap; }
+.pb-barra .pb-btn:hover { transform: translateY(2px); box-shadow: 0 2px 0 #0f7a35; }
+@media (min-width: 900px) { .pb-barra { left: auto; right: 24px; bottom: 24px; } }
+
+/* Topo da página de brinquedo */
+.pbt { position: relative; z-index: 50; background: #fff6ea; font-family: Fredoka, Nunito, system-ui, sans-serif; transition: box-shadow .3s; }
+.pbt::after { content: ''; position: absolute; left: 0; right: 0; bottom: -8px; height: 8px; z-index: 2; background: repeating-linear-gradient(90deg, #f37021 0 22px, #fcbd10 22px 44px, #16a34a 44px 66px, #2563eb 66px 88px); }
+.pbt.pbt-rolou { box-shadow: 0 10px 30px rgba(23, 24, 44, .12); }
+.pbt-linha { display: flex; align-items: center; gap: 16px; padding: 14px clamp(16px, 2.6vw, 50px); min-height: 84px; }
+.pbt-logo { flex: 0 0 auto; display: inline-flex; }
+.pbt-logo img { height: 48px; width: auto; transition: transform .3s; }
+.pbt-logo:hover img { animation: pbwiggle .5s ease; }
+.pbt-nav { flex: 1; display: flex; justify-content: center; gap: clamp(4px, 1.6vw, 30px); }
+.pbt-nav-link { font-weight: 600; font-size: 17px; letter-spacing: .01em; color: #1b1b2f !important; text-decoration: none !important; border-radius: 14px; padding: 10px 18px; border: 2px solid transparent; transition: transform .2s, background .2s, box-shadow .2s, border-color .2s; }
+.pbt-nav-link:nth-child(4n+1):hover { background: #ffe1d1; }
+.pbt-nav-link:nth-child(4n+2):hover { background: #fff1c7; }
+.pbt-nav-link:nth-child(4n+3):hover { background: #d9f2e0; }
+.pbt-nav-link:nth-child(4n+4):hover { background: #dde9fc; }
+.pbt-nav-link:hover { border-color: #1b1b2f; box-shadow: 0 4px 0 #1b1b2f; transform: translateY(-2px); }
+.pbt-icones { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.pbt-ico { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border: 0; background: none; color: #1b1b2f; cursor: pointer; border-radius: 12px; }
+.pbt-ico:hover .pb-ico { animation: pbwiggle .45s ease; }
+.pbt-qtd { position: absolute; top: 2px; right: 0; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 7px; background: #ef4136; color: #fff; font: 600 12px/16px Fredoka, Nunito, sans-serif; border: 2px solid #fff6ea; text-align: center; }
+.pbt-busca { display: flex; gap: 8px; max-width: 640px; margin: 0 auto; padding: 0 16px 16px; animation: pbpop .3s both; }
+.pbt-busca input { flex: 1; min-width: 0; border: 2px solid #1b1b2f; border-radius: 14px; padding: 12px 14px; font: 600 16px Nunito, sans-serif; box-shadow: 0 3px 0 #1b1b2f; background: #fff; }
+.pbt-busca-btn { border: 2px solid #1b1b2f; border-radius: 14px; background: #fcbd10; padding: 0 14px; box-shadow: 0 3px 0 #1b1b2f; cursor: pointer; }
+.pbt-so-celular { display: none; }
+.pbt-gaveta-fundo { position: fixed; inset: 0; z-index: 120; background: rgba(23, 24, 44, .5); }
+.pbt-gaveta { position: fixed; inset: 0 auto 0 0; z-index: 121; width: min(320px, 86vw); background: #fff6ea; padding: 64px 18px 24px; display: flex; flex-direction: column; gap: 6px; animation: pbgaveta .3s ease both; font-family: Fredoka, Nunito, sans-serif; }
+@keyframes pbgaveta { from { transform: translateX(-100%); } to { transform: none; } }
+.pbt-gaveta-link { font-weight: 600; font-size: 19px; color: #1b1b2f !important; text-decoration: none !important; padding: 12px 14px; border-radius: 14px; border: 2px solid transparent; }
+.pbt-gaveta-link:hover { border-color: #1b1b2f; background: #fff1c7; }
+.pbt-fechar { position: absolute; top: 12px; right: 12px; }
+@media (max-width: 1024px) {
+    .pbt-nav { display: none; }
+    .pbt-so-celular { display: grid; }
+    .pbt-so-computador { display: none; }
+    .pbt-linha { min-height: 64px; padding: 8px 12px; gap: 4px; position: relative; }
+    .pbt-logo { position: absolute; left: 50%; transform: translateX(-50%); }
+    .pbt-logo img { height: 40px; }
+}
+
+/* Celular: ordem da caixa como na referência, miniaturas em linha no lugar dos pontos */
+@media (max-width: 767px) {
+    .pd2.pg-brinquedo .wrap { padding: 0 16px; }
+    .pd2.pg-brinquedo .grade { padding-top: 16px; }
+    .pd2.pg-brinquedo .compra > .pb-chips { order: 3; }
+    .pd2.pg-brinquedo .compra > .oferta-bf { order: 4; }
+    .pd2.pg-brinquedo .miniaturas { display: flex !important; }
+    .pd2.pg-brinquedo .pontos { display: none !important; }
+    .pd2.pg-brinquedo .miniaturas button { flex: 0 0 64px; }
+    .pd2.pg-brinquedo .pb-sec { padding: 56px 16px; }
+    .pd2.pg-brinquedo .pb-adesivo { font-size: 18px; left: -8px; }
+    .pb-barra { left: 10px; right: 10px; bottom: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pd2.pg-brinquedo *, .pd2.pg-brinquedo *::before, .pd2.pg-brinquedo *::after, .pbt *, .pb-barra, .pb-barra * {
+        animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important;
+    }
+    .pd2.pg-brinquedo .pb-reveal.pb-pre { opacity: 1; transform: none; }
+}

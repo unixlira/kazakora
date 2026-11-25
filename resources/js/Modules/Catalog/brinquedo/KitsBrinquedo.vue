@@ -45,7 +45,7 @@ const selos = computed(() => selosDosKits(props.opcoes));
 
     <!-- Cartões da seção "Escolha o tamanho da diversão": o MESMO card do "Você também pode gostar"
          (pedido do Lira 24/11/2026), com nome, selo e economia do kit; o clique escolhe o kit. -->
-    <div v-else class="kb-cartoes-vitrine">
+    <div v-else class="kb-cartoes-vitrine pb-reveal">
         <div v-for="kit in kits" :key="kit.id" class="kb-cartao-vitrine">
             <ProductCard :product="kit" :nome="nomeDoKit(kit)" :selo="selos[kit.id] ?? null" escolher
                 :selecionado="kit.id === escolhidaId" @escolher="emit('escolher', kit)">

@@ -93,4 +93,11 @@ class PaginaBrinquedoTest extends TestCase
         $this->assertFileExists($arquivo);
         $this->assertLessThan(60 * 1024, filesize($arquivo));
     }
+
+    public function test_logo_provisorio_do_topo_de_brinquedo_existe(): void
+    {
+        // Topo próprio da página de brinquedo (24/11/2026): o logo fica num arquivo só, fácil de trocar.
+        $this->assertFileExists(public_path('brinquedo/logo.svg'));
+        $this->assertStringContainsString('/brinquedo/logo.svg', file_get_contents(resource_path('js/Modules/Catalog/brinquedo/marca.js')));
+    }
 }

@@ -237,11 +237,13 @@ class LeadCheckoutTest extends TestCase
 
         $this->get('/admin/carrinhos-abandonados')->assertRedirect();
 
+        // Desde 25/11/2026 os carrinhos aparecem na tela única de Leads, chip Abertos.
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $this->actingAs($admin)->get('/admin/carrinhos-abandonados')
+        $this->actingAs($admin)->get('/admin/carrinhos-abandonados')->assertRedirect('/admin/leads?status=abertos');
+        $this->actingAs($admin)->get('/admin/leads?status=abertos')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/LeadsCheckout/Index', false)
+                ->component('Admin/LeadsUnicos/Index', false)
                 ->where('leads.data.0.email', 'maria@exemplo.com')
                 ->where('resumo.abertos', 1)
                 ->where('resumo.valor_aberto', 99.9));

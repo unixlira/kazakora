@@ -137,13 +137,13 @@ class FluxoDoCheckoutTest extends TestCase
     {
         $this->carrinhoQueParouNoPagamento();
 
-        $this->actingAs($this->admin())->get('/admin/carrinhos-abandonados')
+        // Tela única de Leads (25/11/2026): o "parou em" é o subtexto da situação.
+        $this->actingAs($this->admin())->get('/admin/leads')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/LeadsCheckout/Index', false)
-                ->where('leads.data.0.parou.etapa', 'pagamento')
-                ->where('leads.data.0.parou.texto', 'Parou no pagamento (escolheu cartão)')
-                ->where('leads.data.0.parou.tem_registro', true));
+                ->component('Admin/LeadsUnicos/Index', false)
+                ->where('leads.data.0.situacao.etapa', 'pagamento')
+                ->where('leads.data.0.situacao.detalhe', 'Parou no pagamento (escolheu cartão)'));
     }
 
     public function test_lead_que_parou_na_entrega_aparece_na_tela_de_leads(): void
@@ -171,8 +171,8 @@ class FluxoDoCheckoutTest extends TestCase
         $this->actingAs($admin)->get('/admin/leads')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/Leads/Index', false)
-                ->where('leads.data.0.parou.texto', 'Parou na entrega (CEP preenchido)'));
+                ->component('Admin/LeadsUnicos/Index', false)
+                ->where('leads.data.0.situacao.detalhe', 'Parou na entrega (CEP preenchido)'));
     }
 
     public function test_lead_sem_visitante_fica_sem_registro_de_passos(): void

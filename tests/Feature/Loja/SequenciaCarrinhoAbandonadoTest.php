@@ -510,13 +510,15 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
 
         $this->get('/admin/carrinhos-abandonados/sequencia')->assertRedirect();
 
+        // Desde 25/11/2026 a sequência aparece na tela única de Leads, chip Em remarketing.
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $this->actingAs($admin)->get('/admin/carrinhos-abandonados/sequencia')
+        $this->actingAs($admin)->get('/admin/carrinhos-abandonados/sequencia')->assertRedirect('/admin/leads?status=remarketing');
+        $this->actingAs($admin)->get('/admin/leads?status=remarketing')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Admin/CarrinhoSequencia/Index', false)
-                ->where('registros.data.0.email', 'maria@exemplo.com')
-                ->where('registros.data.0.disparos', 1)
-                ->where('resumo.ativos', 1));
+                ->component('Admin/LeadsUnicos/Index', false)
+                ->where('leads.data.0.email', 'maria@exemplo.com')
+                ->where('leads.data.0.disparos', 1)
+                ->where('resumo.remarketing', 1));
     }
 }

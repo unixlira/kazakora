@@ -584,11 +584,37 @@ class OrderController extends Controller
             return back()->with('error', 'TikTok Shop: etiqueta é tratada manualmente direto no painel do TikTok (geração automática via Bling exige plano pago). Esse botão fica desligado pra esse canal pra não duplicar etiqueta.');
         }
 
+        // Venda do site (pedido do Lira 25/11/2026): a etiqueta não vem de marketplace, é comprada
+        // pela loja no Melhor Envio. Se a compra falhou antes (ex.: sem saldo na carteira), o botão
+        // tenta comprar de novo agora, em vez de só procurar uma etiqueta que ainda não existe.
+        if ($shipment->channel === Order::ORIGIN_STORE) {
+            $melhorEnvio = app(\App\Modules\Marketplace\Support\MelhorEnvioAutoShipping::class);
+            $envio = $melhorEnvio->doPedido($order);
+            if ($envio && ! $melhorEnvio->geradaPara($order)) {
+                try {
+                    $melhorEnvio->confirm($order);
+                } catch (\Throwable $e) {
+                    return back()->with('error', 'Melhor Envio recusou a compra da etiqueta: '.\Illuminate\Support\Str::limit($e->getMessage(), 200).' O sistema continua tentando sozinho.');
+                }
+            }
+        }
+
         $ready = app(LabelFetchService::class)->attempt($shipment);
 
-        return $ready
-            ? back()->with('success', 'Etiqueta ficou pronta agora e está guardada — imprime quando a separação for concluída no KoraSync.')
-            : back()->with('error', "O {$shipment->channel} ainda não liberou a etiqueta desse envio. Isso é decidido do lado do canal (Shopee/Mercado Livre), não é algo que dá pra forçar — o sistema continua tentando sozinho automaticamente.");
+        if ($ready) {
+            return back()->with('success', 'Etiqueta ficou pronta agora e está guardada — imprime quando a separação for concluída no KoraSync.');
+        }
+
+        if ($shipment->channel === Order::ORIGIN_STORE) {
+            return back()->with('error', 'A etiqueta desta venda do site ainda não ficou pronta (Melhor Envio, Correios ou J3, conforme o envio do pedido). O sistema continua tentando sozinho a cada poucos minutos.');
+        }
+
+        $canal = [
+            MarketplaceAccount::CHANNEL_SHOPEE => 'Shopee',
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE => 'Mercado Livre',
+        ][$shipment->channel] ?? ucfirst(str_replace('_', ' ', $shipment->channel));
+
+        return back()->with('error', "A {$canal} ainda não liberou a etiqueta desse envio. Isso é decidido do lado do canal, não dá pra forçar — o sistema continua tentando sozinho automaticamente.");
     }
 
     /**

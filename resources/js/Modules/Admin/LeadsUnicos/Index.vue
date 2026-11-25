@@ -4,7 +4,9 @@
 // em duas janelas por linha: Remarketing (envios WhatsApp/e-mail) e Jornada
 // (passo a passo do checkout até o pagamento). Atualiza a lista a cada 5 s
 // sem fechar a janela aberta. Só consulta + as duas ações que já existiam
-// (antecipar a 1ª mensagem, um ou todos). Rota temporária /admin/leads-v2.
+// (antecipar a 1ª mensagem, um ou todos). Desde 25/11/2026 é /admin/leads, uma
+// linha por pessoa ("N sessões" quando juntou mais de uma), e substitui as telas
+// Carrinhos abandonados e Sequência (as rotas antigas redirecionam para cá).
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
@@ -22,7 +24,7 @@ const props = defineProps({
     resumo: { type: Object, default: () => ({}) },
     sites: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
-    base: { type: String, default: '/admin/leads-v2' },
+    base: { type: String, default: '/admin/leads' },
 });
 
 const { visit } = useServerTable(props.base, {
@@ -134,7 +136,11 @@ const columns = [
                     chipLoja(l.site),
                 ]),
                 h('div', { class: 'truncate text-xs text-slate-600', title: l.email ?? '' }, l.email ?? '—'),
-                h('div', { class: 'truncate text-xs text-slate-500' }, l.telefone ? maskPhone(l.telefone) : '—'),
+                h('div', { class: 'flex min-w-0 items-center gap-1.5 text-xs text-slate-500' }, [
+                    h('span', { class: 'truncate' }, l.telefone ? maskPhone(l.telefone) : '—'),
+                    l.telefones_extra ? h('span', { class: 'shrink-0 text-[10px] font-semibold text-slate-400', title: 'Outros números na Jornada' }, `+${l.telefones_extra}`) : null,
+                    l.sessoes > 1 ? h('span', { class: 'shrink-0 rounded bg-sky-50 px-1 text-[10px] font-semibold text-sky-700', title: 'Sessões de checkout desta pessoa (veja na Jornada)' }, `${l.sessoes} sessões`) : null,
+                ]),
             ]);
         },
     },
@@ -205,13 +211,10 @@ const columns = [
     <Head title="Leads" />
 
     <AdminLayout>
-        <div class="mb-1 flex flex-wrap items-baseline gap-2">
-            <h1 class="text-2xl font-bold">Leads</h1>
-            <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">versão nova, em teste</span>
-        </div>
+        <h1 class="mb-1 text-2xl font-bold">Leads</h1>
         <p class="mb-4 text-sm text-slate-500">
-            Todos os checkouts numa lista só: o que o cliente preencheu, o carrinho, a situação e a sequência de
-            remarketing. Atualiza sozinho a cada 5 segundos (última às {{ dataHora(resumo.atualizado_em, true) }}).
+            Todos os checkouts numa lista só, uma linha por pessoa (as sessões do mesmo e-mail, CPF ou telefone ficam
+            juntas): o que o cliente preencheu, o carrinho, a situação e a sequência de remarketing. Atualiza sozinho a cada 5 segundos (última às {{ dataHora(resumo.atualizado_em, true) }}).
             Os ícones abrem o Remarketing e a Jornada de cada lead.
         </p>
 
@@ -275,7 +278,10 @@ const columns = [
                             <span class="shrink-0 rounded px-1.5 py-px text-[10px] font-semibold" :class="COR_LOJA[l.site] ?? 'bg-slate-100'">{{ nomeDaLoja(l.site) }}</span>
                         </div>
                         <div class="truncate text-xs text-slate-600">{{ l.email ?? '—' }}</div>
-                        <div class="text-xs text-slate-500">{{ l.telefone ? maskPhone(l.telefone) : '—' }}</div>
+                        <div class="text-xs text-slate-500">
+                            {{ l.telefone ? maskPhone(l.telefone) : '—' }}<span v-if="l.telefones_extra" class="ml-1 text-[10px] font-semibold text-slate-400">+{{ l.telefones_extra }}</span>
+                            <span v-if="l.sessoes > 1" class="ml-1 rounded bg-sky-50 px-1 text-[10px] font-semibold text-sky-700">{{ l.sessoes }} sessões</span>
+                        </div>
                     </div>
                     <div class="flex shrink-0 gap-1">
                         <button type="button" title="Remarketing" aria-label="Remarketing" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-orange-600" @click="abrirRemarketing(l)"><i class="fas fa-bullhorn text-xs" aria-hidden="true"></i></button>

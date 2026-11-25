@@ -4,6 +4,7 @@
 // canal. Só consulta + o botão de antecipar que já existia.
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
+import { maskPhone } from '@/Shared/useMasks';
 import { dataHora, dinheiro } from './formato';
 import { useDetalhe } from './useDetalhe';
 
@@ -40,6 +41,11 @@ const COR_SEQUENCIA = { andamento: 'bg-orange-50 text-orange-800', comprou: 'bg-
                 <div class="space-y-1">
                     <div><span class="text-xs text-slate-500">Loja</span> · {{ estado.dados.loja }}</div>
                     <div><span class="text-xs text-slate-500">Abandonado em</span> · {{ dataHora(estado.dados.abandonado_em) }}</div>
+                    <div class="truncate text-xs" :title="estado.dados.contato.email ?? ''">
+                        <span class="text-slate-500">Envia para</span>
+                        <i class="fab fa-whatsapp ml-1 text-emerald-600" aria-hidden="true"></i> {{ estado.dados.contato.whatsapp ? maskPhone(estado.dados.contato.whatsapp) : 'sem celular' }}
+                        <i class="fas fa-envelope ml-1 text-sky-600" aria-hidden="true"></i> {{ estado.dados.contato.email ?? 'sem e-mail' }}
+                    </div>
                     <div class="inline-block rounded-md px-2 py-1 text-xs font-semibold" :class="COR_SEQUENCIA[estado.dados.sequencia.estado]">
                         {{ estado.dados.sequencia.texto }}
                         <template v-if="estado.dados.sequencia.estado === 'andamento'"> · {{ estado.dados.disparos }}/{{ estado.dados.total_disparos }} enviados</template>
@@ -63,7 +69,7 @@ const COR_SEQUENCIA = { andamento: 'bg-orange-50 text-orange-800', comprou: 'bg-
                                 <StatusBadge :status="c.estado" :tone="ESTADO[c.estado].tom" :label="ESTADO[c.estado].rotulo" />
                             </div>
                             <div class="mt-0.5 truncate text-slate-500">
-                                <template v-if="c.estado === 'enviado'">{{ dataHora(c.quando) }}<span v-if="c.provider_id" class="font-mono" :title="c.provider_id"> · {{ c.provider_id }}</span></template>
+                                <template v-if="c.estado === 'enviado'">{{ dataHora(c.quando) }}<span v-if="c.para"> · para {{ canal === 'whatsapp' ? maskPhone(c.para) : c.para }}</span><span v-if="c.provider_id" class="font-mono" :title="c.provider_id"> · {{ c.provider_id }}</span></template>
                                 <template v-else-if="c.estado === 'agendado'">previsto {{ dataHora(c.quando) }}</template>
                                 <template v-else-if="c.estado === 'falhou'"><span :title="c.erro">{{ c.erro ?? 'erro' }}</span><template v-if="c.nova_tentativa"> · tenta de novo {{ dataHora(c.nova_tentativa) }}</template></template>
                                 <template v-else>{{ c.motivo }}</template>

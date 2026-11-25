@@ -91,11 +91,12 @@ const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
         : '');
 
 // Página de brinquedo: frete não é argumento (pedido do Lira 25/11/2026); fica só o selo pequeno.
-const faqSemFrete = () => FAQ.filter(([pergunta]) => !/frete/i.test(pergunta));
+// FAQ curto (até ~8 perguntas com as do produto): fica prazo, troca e pagamento.
+const faqSemFrete = () => FAQ.filter(([pergunta]) => !/frete|acompanho/i.test(pergunta));
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
     ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
-    ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP: digite no campo "Calcular o prazo de entrega" aqui na página. Ele aparece de novo no checkout, antes de você finalizar a compra.'],
+    ['Qual é o prazo de entrega?', 'O prazo aparece no checkout, assim que você informa o CEP, antes de finalizar a compra.'],
     ['O frete é grátis?', 'Sim. Frete grátis para todo o Brasil, com o prazo que aparece no cálculo pelo seu CEP. Algumas localidades podem sofrer alteração de valor perante a disponibilidade do estoque no estado.'],
     ['Posso trocar ou devolver?', 'Sim. Estorno de 100% do seu dinheiro 30 dias após o recebimento do produto.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX

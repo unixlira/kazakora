@@ -411,7 +411,8 @@
 @media (min-width: 900px) { .pb-barra { left: auto; right: 24px; bottom: 24px; width: 520px; } }
 
 /* Botão de mudo do som */
-.pb-som { position: fixed; right: 14px; bottom: 96px; z-index: 45; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #17182c; background: #fff; color: #17182c; box-shadow: 0 3px 0 #17182c; display: grid; place-items: center; cursor: pointer; opacity: .85; }
+/* Botão de som no canto inferior ESQUERDO, acima da barra de compra (pedido do Lira 25/11/2026). */
+.pb-som { position: fixed; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 45; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #17182c; background: #fff; color: #17182c; box-shadow: 0 3px 0 #17182c; display: grid; place-items: center; cursor: pointer; opacity: .85; }
 .pb-som:hover { opacity: 1; }
 .pb-som[aria-pressed="true"] { color: #8a8a98; }
 
@@ -462,7 +463,7 @@
     .pd2.pg-brinquedo .pb-snap { right: -8px; }
     .pd2.pg-brinquedo .pb-adesivo { left: -8px; font-size: 19px; }
     .pd2.pg-brinquedo .compra .pb-relogio span { width: 33px; }
-    .pb-som { bottom: 84px; right: 10px; }
+    .pb-som { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); }
 }
 @media (max-width: 380px) {
     .pd2.pg-brinquedo .wrap { padding: 0 16px; }

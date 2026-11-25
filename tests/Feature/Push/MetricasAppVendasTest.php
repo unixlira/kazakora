@@ -281,6 +281,101 @@ class MetricasAppVendasTest extends TestCase
             ->assertOk()->assertJsonPath('periodo', 'mes');
     }
 
+    // ---------- Setas do app: voltar no tempo com &fim= (2026-11-24) ----------
+
+    public function test_mes_com_fim_mostra_os_30_dias_ate_a_data_e_compara_com_os_30_anteriores(): void
+    {
+        $this->cenario();
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 40.00, '2026-11-12 23:00');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 15.00, '2026-10-14 00:30');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 700.00, '2026-11-13 08:00'); // depois do fim: fora
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 30.00, '2026-10-13 22:00'); // anterior
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 20.00, '2026-09-14 10:00'); // anterior
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 900.00, '2026-09-13 10:00'); // antes do anterior: fora
+        $this->visita('kazakora', 'kz-out', '2026-11-01 10:00');
+        $this->visita('kazakora', 'kz-set', '2026-09-20 10:00');
+        $admin = $this->admin();
+
+        // O atual continua o mesmo e não se mistura com a janela deslocada no cache.
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=mes')->assertOk()
+            ->assertJsonPath('deslocado', false)->assertJsonPath('fim', '2026-11-19')->assertJsonCount(19, 'serie');
+
+        $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=mes&fim=2026-11-12')->assertOk()
+            ->assertJsonPath('periodo', 'mes')
+            ->assertJsonPath('deslocado', true)
+            ->assertJsonPath('fim', '2026-11-12')
+            ->assertJsonPath('de', '2026-10-14T00:00:00-03:00')
+            ->assertJsonPath('ate', '2026-11-12T23:59:59-03:00')
+            ->assertJsonPath('faturamento.valor', 55)
+            ->assertJsonPath('pedidos.valor', 2)
+            ->assertJsonPath('faturamento.anterior', 50)
+            ->assertJsonPath('faturamento.variacao', 10)
+            ->assertJsonPath('visitas.valor', 1)
+            ->assertJsonPath('visitas.anterior', 1)
+            ->assertJsonCount(30, 'serie')
+            ->assertJsonPath('serie.0.rotulo', '14/10')
+            ->assertJsonPath('serie.29.rotulo', '12/11')
+            ->assertJsonPath('serie.29.pedidos', 1);
+    }
+
+    public function test_semana_e_hoje_com_fim_comparam_janelas_inteiras_de_mesmo_tamanho(): void
+    {
+        $this->cenario();
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 60.00, '2026-11-06 00:10');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 30.00, '2026-10-30 12:00');
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_PAID, 50.00, '2026-11-17 12:00');
+        $admin = $this->admin();
+
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d&fim=2026-11-12')->assertOk()
+            ->assertJsonPath('de', '2026-11-06T00:00:00-03:00')
+            ->assertJsonPath('faturamento.valor', 60)
+            ->assertJsonPath('faturamento.anterior', 30)
+            ->assertJsonCount(7, 'serie')
+            ->assertJsonPath('serie.6.rotulo', '12/11');
+
+        // Ontem inteiro (inclusive o pedido das 16h, que o "hoje" até as 15h não pega) × anteontem inteiro.
+        $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=hoje&fim=2026-11-18')->assertOk()
+            ->assertJsonPath('deslocado', true)
+            ->assertJsonPath('faturamento.valor', 1080)
+            ->assertJsonPath('pedidos.valor', 2)
+            ->assertJsonPath('faturamento.anterior', 50)
+            ->assertJsonPath('visitas.valor', 1)
+            ->assertJsonCount(24, 'serie')
+            ->assertJsonPath('serie.23.rotulo', '23h');
+    }
+
+    public function test_fim_valida_data_e_hoje_e_o_mesmo_que_sem_fim(): void
+    {
+        $this->cenario();
+        $admin = $this->admin();
+
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d&fim=2026-11-20')
+            ->assertStatus(422)->assertJsonValidationErrors('fim');
+        $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d&fim=ontem')->assertStatus(422);
+        $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d&fim=2026-02-30')->assertStatus(422);
+
+        $sem = $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d')->assertOk()->json();
+        $hoje = $this->getJson('/api-apps-vendas/kazakora/metricas?periodo=7d&fim=2026-11-19')->assertOk()->json();
+        $this->assertSame($sem, $hoje);
+        $this->assertFalse($hoje['deslocado']);
+        $this->assertSame('2026-11-19T15:00:00-03:00', $hoje['ate']);
+    }
+
+    public function test_primeiro_registro_e_o_primeiro_pedido_ou_visita_da_propria_loja(): void
+    {
+        $this->cenario();
+        $this->pedido(Order::ORIGIN_MERCADO_LIVRE, null, Order::STATUS_PAID, 10.00, '2025-01-05 10:00'); // marketplace: não conta
+        $this->pedido(Order::ORIGIN_STORE, null, Order::STATUS_CANCELLED, 10.00, '2026-04-10 10:00');
+        $this->visita('kazakora', 'kz-antigo', '2026-03-02 09:00');
+        $this->pedido(Order::ORIGIN_STORE, Order::SITE_FERRAKORA, Order::STATUS_PAID, 10.00, '2026-08-20 10:00');
+        $admin = $this->admin();
+
+        $this->api($admin, 'kazakora')->getJson('/api-apps-vendas/kazakora/metricas')->assertOk()
+            ->assertJsonPath('primeiro_registro', '2026-03-02');
+        $this->api($admin, 'ferrakora')->getJson('/api-apps-vendas/ferrakora/metricas?periodo=7d&fim=2026-10-01')->assertOk()
+            ->assertJsonPath('primeiro_registro', '2026-08-20');
+    }
+
     public function test_cors_so_para_os_sites_dos_apps(): void
     {
         $this->call('OPTIONS', '/api-apps-vendas/kazakora/metricas', [], [], [], [

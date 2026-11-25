@@ -39,6 +39,14 @@ use Throwable;
  * intervalo do mês anterior). Lucro e Meta são por dia inteiro: comparam com
  * os dias anteriores completos e, em "hoje", não comparam (dia pela metade
  * contra dia inteiro).
+ *
+ * Setas do app (pedido do Lira em 2026-11-24): com $fim (um dia já
+ * passado), a janela termina no fim desse dia e anda para trás: hoje = o
+ * dia $fim, 7d = os 7 dias até $fim, mês = os 30 dias até $fim (fora do mês
+ * corrente o "dia 1 até agora" não faz sentido). A comparação é com a
+ * janela de mesmo tamanho logo antes, e com dia inteiro em tudo. Sem $fim
+ * (ou $fim = hoje), nada muda. 'primeiro_registro' diz até onde o app pode
+ * voltar: o dia do primeiro pedido ou visita da loja.
  */
 class MetricasDaLoja
 {
@@ -46,6 +54,9 @@ class MetricasDaLoja
     public const PERIODOS = ['hoje' => 1, '7d' => 7, 'mes' => null, '30d' => 30];
 
     public const PERIODO_PADRAO = 'mes';
+
+    /** Tamanho da janela do "mês" quando o app volta no tempo (setas). */
+    public const DIAS_MES_DESLOCADO = 30;
 
     public const CANAL = [
         AppsDeVendas::KAZAKORA => Order::ORIGIN_STORE,
@@ -78,16 +89,31 @@ class MetricasDaLoja
         return array_key_exists((string) $pedido, self::PERIODOS) ? (string) $pedido : self::PERIODO_PADRAO;
     }
 
-    /** Guardado 60 s: o app atualiza a cada 60 s com a tela aberta. */
-    public function montar(string $app, string $periodo): array
+    /**
+     * Guardado 60 s: o app atualiza a cada 60 s com a tela aberta. Janela
+     * já fechada (fim antes de hoje) muda pouco: 10 minutos.
+     */
+    public function montar(string $app, string $periodo, ?Carbon $fim = null): array
     {
-        return Cache::remember(self::CACHE.$app.':'.$periodo, 60, fn () => $this->calcular($app, $periodo));
+        $passado = $fim !== null && $fim->toDateString() < now()->toDateString();
+        $chave = self::CACHE.$app.':'.$periodo.($passado ? ':'.$fim->toDateString() : '');
+
+        return Cache::remember($chave, $passado ? 600 : 60, fn () => $this->calcular($app, $periodo, null, $passado ? $fim : null));
     }
 
-    public function calcular(string $app, string $periodo, ?Carbon $agora = null): array
+    public function calcular(string $app, string $periodo, ?Carbon $agora = null, ?Carbon $fim = null): array
     {
         $agora ??= now();
-        if ($periodo === 'mes') {
+        $deslocado = $fim !== null && $fim->toDateString() < $agora->toDateString();
+        // $ate = fim da janela: agora, ou o fim do dia escolhido nas setas.
+        $ate = $deslocado ? $fim->copy()->setTimezone($agora->getTimezone())->endOfDay() : $agora;
+        if ($deslocado) {
+            // Janela fechada: N dias inteiros até $fim × os N dias antes.
+            $dias = $periodo === 'mes' ? self::DIAS_MES_DESLOCADO : self::PERIODOS[$periodo];
+            $inicio = $ate->copy()->startOfDay()->subDays($dias - 1);
+            $inicioAnt = $inicio->copy()->subDays($dias);
+            $fimAnt = $inicio->copy()->subSecond();
+        } elseif ($periodo === 'mes') {
             // Mês corrente × mesmo intervalo do mês anterior (1 a 19/10 × 1 a 19/11).
             $inicio = $agora->copy()->startOfMonth();
             $inicioAnt = $inicio->copy()->subMonthNoOverflow();
@@ -102,15 +128,15 @@ class MetricasDaLoja
         $fimAntDia = $fimAnt->copy()->startOfDay()->addDay();
         $canal = self::CANAL[$app];
 
-        $atual = $this->vendas($canal, $inicio, $agora);
+        $atual = $this->vendas($canal, $inicio, $ate);
         $anterior = $this->vendas($canal, $inicioAnt, $fimAnt);
-        $visitas = $this->visitas($app, $inicio, $agora);
+        $visitas = $this->visitas($app, $inicio, $ate);
         $visitasAnt = $this->visitas($app, $inicioAnt, $fimAnt);
         $conversao = $visitas > 0 ? round($atual['pedidos'] / $visitas * 100, 2) : null;
         $conversaoAnt = $visitasAnt > 0 ? round($anterior['pedidos'] / $visitasAnt * 100, 2) : null;
 
-        $comparaDiaInteiro = $periodo !== 'hoje';
-        $meta = $this->meta($app, $inicioAnt, $fimAntDia, $inicio, $agora);
+        $comparaDiaInteiro = $periodo !== 'hoje' || $deslocado;
+        $meta = $this->meta($app, $inicioAnt, $fimAntDia, $inicio, $ate);
         $roas = ($meta['gasto'] ?? 0) > 0 ? round($atual['faturamento'] / $meta['gasto'], 2) : null;
         $roasAnt = ($meta['gasto_anterior'] ?? 0) > 0 ? round($this->vendas($canal, $inicioAnt, $fimAntDia->copy()->subSecond())['faturamento'] / $meta['gasto_anterior'], 2) : null;
 
@@ -119,13 +145,16 @@ class MetricasDaLoja
             'loja' => $app === AppsDeVendas::FERRAKORA ? 'ferrakora.com' : 'kazakora.com',
             'periodo' => $periodo,
             'de' => $inicio->toIso8601String(),
-            'ate' => $agora->toIso8601String(),
+            'ate' => $ate->toIso8601String(),
             'gerado_em' => $agora->toIso8601String(),
+            'fim' => $ate->toDateString(),
+            'deslocado' => $deslocado,
+            'primeiro_registro' => $this->primeiroRegistro($app),
             'faturamento' => self::numero($atual['faturamento'], $anterior['faturamento']),
             'pedidos' => self::numero($atual['pedidos'], $anterior['pedidos']),
             'ticket_medio' => self::numero($atual['ticket'], $anterior['ticket']),
-            'lucro' => $this->lucro($app, $canal, $inicio, $inicioAnt, $fimAntDia, $agora, $comparaDiaInteiro),
-            'aguardando_pagamento' => $this->aguardando($canal, $inicio, $agora),
+            'lucro' => $this->lucro($app, $canal, $inicio, $inicioAnt, $fimAntDia, $ate, $comparaDiaInteiro),
+            'aguardando_pagamento' => $this->aguardando($canal, $inicio, $ate),
             'visitas' => self::numero($visitas, $visitasAnt),
             'conversao' => self::numero($conversao, $conversaoAnt),
             'meta' => isset($meta['erro'])
@@ -137,12 +166,30 @@ class MetricasDaLoja
                     'roas' => self::numero($roas, $comparaDiaInteiro ? $roasAnt : null),
                     'vendas_atribuidas' => $meta['vendas'],
                 ],
-            'top_produtos' => $this->topProdutos($canal, $inicio, $agora),
+            'top_produtos' => $this->topProdutos($canal, $inicio, $ate),
             'ultimos_pedidos' => $this->ultimosPedidos($canal),
-            'serie' => $this->serie($app, $canal, $periodo, $inicio, $agora),
+            'serie' => $this->serie($app, $canal, $periodo, $inicio, $ate),
             // Aba Mais do app KazaKora (2026-11-19): infoprodutos de hoje, sempre "hoje".
             'infoprodutos_hoje' => $app === AppsDeVendas::KAZAKORA ? \App\Modules\Infoprodutos\Support\FunilInfoprodutos::resumoDeHoje() : null,
         ];
+    }
+
+    /**
+     * Dia do primeiro registro da loja (pedido ou visita), até onde as setas
+     * do app voltam. Guardado 1 hora.
+     */
+    public function primeiroRegistro(string $app): ?string
+    {
+        $data = Cache::remember(self::CACHE.'primeiro:'.$app, 3600, function () use ($app) {
+            $datas = array_filter([
+                Order::filtrarCanal(Order::query(), self::CANAL[$app])->min('orders.created_at'),
+                SiteVisit::query()->where('site', self::SITE_VISITAS[$app])->min('created_at'),
+            ]);
+
+            return $datas ? Carbon::parse(min($datas))->toDateString() : '';
+        });
+
+        return $data !== '' ? $data : null;
     }
 
     /** @return array{valor: int|float|null, anterior: int|float|null, variacao: float|null} */

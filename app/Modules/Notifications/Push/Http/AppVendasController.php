@@ -12,8 +12,10 @@ use App\Modules\Notifications\Push\Models\PushInscricao;
 use App\Modules\Notifications\Push\WebPush;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -102,7 +104,19 @@ class AppVendasController extends Controller
      */
     public function metricas(Request $request, string $app, MetricasDaLoja $metricas): JsonResponse
     {
-        return response()->json($metricas->montar($app, MetricasDaLoja::periodo($request->query('periodo'))))
+        // Setas do app (2026-11-24): &fim=AAAA-MM-DD volta a janela no tempo; sem futuro.
+        // (/api-apps-vendas fica fora de api/*: o erro de validação volta em JSON por aqui.)
+        $validacao = Validator::make($request->query(), [
+            'fim' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today', 'after_or_equal:2020-01-01'],
+        ], [
+            'fim.before_or_equal' => 'Essa data ainda não chegou.',
+        ]);
+        if ($validacao->fails()) {
+            return response()->json(['message' => $validacao->errors()->first(), 'errors' => $validacao->errors()], 422);
+        }
+        $fim = $request->filled('fim') ? Carbon::createFromFormat('!Y-m-d', (string) $request->query('fim'), config('app.timezone')) : null;
+
+        return response()->json($metricas->montar($app, MetricasDaLoja::periodo($request->query('periodo')), $fim))
             ->header('Cache-Control', 'private, no-store');
     }
 

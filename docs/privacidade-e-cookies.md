@@ -431,3 +431,34 @@ elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
 - **Testes de ponta a ponta:** visita com `utm_source=teste-medicao` fica marcada
   (`teste = 1`) e fora do painel; apagar com
   `DELETE FROM infoproduto_eventos WHERE teste = 1`.
+
+## Newsletter (24/11/2026, pedido do Lira na aula de e-commerce)
+
+- **Onde:** bloco antes do rodapé de todas as páginas da loja e do blog
+  (`BlocoNewsletter.vue`, dentro do `RodapeLoja.vue`). Admin > Atendimento >
+  Newsletter (`/admin/newsletter`): contagem, lista, CSV (registrado na
+  Auditoria), prévia e "Enviar teste para mim".
+- **Base legal:** consentimento (art. 7º I). Caixinha obrigatória e **duplo
+  opt-in**: a pessoa só entra na lista (status `ativo`) depois de clicar no
+  link do e-mail de confirmação. Prova guardada em `newsletter_inscritos`:
+  versão e texto do aceite (`config/newsletter.php`), IP, navegador e
+  data/hora. Mudou o texto do aceite? Troque `consentimento_versao`.
+- **Só o necessário:** e-mail e nome opcional. Inscrição nunca confirmada é
+  apagada em 30 dias (`model:prune` das 03:58).
+- **Sair:** todo e-mail tem o link de 1 clique (`/newsletter/sair/{token}`) e
+  os cabeçalhos `List-Unsubscribe` / `List-Unsubscribe-Post` (RFC 8058, botão
+  "Cancelar inscrição" do Gmail). Sair não apaga o registro: fica como
+  `descadastrado` para provar a revogação e não mandar mais nada.
+- **Contra robô:** campo escondido (`website`), limite de 5 inscrições por IP a
+  cada 10 min e reenvio da confirmação no máximo a cada 10 min. A resposta é a
+  mesma para e-mail novo ou já inscrito (não revela quem está na lista).
+- **Resumo do blog por e-mail:** `php artisan newsletter:blog [--dry-run]
+  [--data=AAAA-MM-DD] [--frequencia=diario|semanal]`. Um e-mail por período
+  com as matérias do blog KazaKora (nunca um por matéria), em lotes pela fila
+  (`NEWSLETTER_LOTE_TAMANHO`, `NEWSLETTER_SEGUNDOS_ENTRE_LOTES`); o mesmo
+  resumo nunca sai duas vezes (`newsletter_envios`).
+- **Agendamento DESLIGADO.** Para ligar: `NEWSLETTER_BLOG_AGENDADO=true` no
+  `.env` do servidor (opcional `NEWSLETTER_BLOG_FREQUENCIA=diario|semanal`,
+  `NEWSLETTER_BLOG_HORA=10:00`; semanal sai na sexta), `php artisan
+  config:cache` e conferir com `php artisan schedule:list | grep newsletter`.
+

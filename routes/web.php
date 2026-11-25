@@ -248,6 +248,12 @@ Route::get('/promocoes/sair/{user}', function (\App\Models\User $user) {
 Route::get('/fale-conosco', [ContatoController::class, 'index'])->name('contato');
 Route::post('/fale-conosco', [ContatoController::class, 'store'])->middleware('throttle:5,10')->name('contato.enviar');
 
+// Newsletter (pedido do Lira 24/11/2026): bloco antes do rodapé, duplo opt-in e saída com 1 clique.
+Route::post('/newsletter', [\App\Modules\Newsletter\Http\Controllers\NewsletterController::class, 'inscrever'])->middleware('throttle:5,10')->name('newsletter.inscrever');
+Route::get('/newsletter/confirmar/{token}', [\App\Modules\Newsletter\Http\Controllers\NewsletterController::class, 'confirmar'])->where('token', '[A-Za-z0-9]{20,64}')->middleware('throttle:30,1')->name('newsletter.confirmar');
+Route::get('/newsletter/sair/{token}', [\App\Modules\Newsletter\Http\Controllers\NewsletterController::class, 'sair'])->where('token', '[A-Za-z0-9]{20,64}')->middleware('throttle:30,1')->name('newsletter.sair');
+Route::post('/newsletter/sair/{token}', [\App\Modules\Newsletter\Http\Controllers\NewsletterController::class, 'sairUmClique'])->where('token', '[A-Za-z0-9]{20,64}')->middleware('throttle:30,1')->name('newsletter.sair.um-clique');
+
 // Rastreio só com login (pedido 2026-10-17): o dono do pedido ou um admin.
 // Visitante cai no login e volta para o mesmo link depois de entrar.
 Route::middleware('auth')->group(function () {
@@ -738,6 +744,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('carrinhos-abandonados/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadCheckoutController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('carrinhos-abandonados.fluxo');
     // Sequência de carrinho abandonado (pedido 2026-11-21): só leitura, quem manda é o comando.
     Route::get('carrinhos-abandonados/sequencia', [\App\Modules\Admin\Http\Controllers\CarrinhoSequenciaController::class, 'index'])->middleware('permission:pedidos.view')->name('carrinhos-abandonados.sequencia');
+    // Newsletter (pedido do Lira 24/11/2026): inscritos, CSV, prévia e teste do resumo do blog só para quem clicou.
+    Route::middleware('permission:pedidos.view')->prefix('newsletter')->name('newsletter.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'index'])->name('listar');
+        Route::get('exportar', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'exportar'])->middleware('throttle:10,1')->name('exportar');
+        Route::get('previa', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'previa'])->name('previa');
+        Route::post('teste', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'teste'])->middleware('throttle:5,1')->name('teste');
+    });
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     Route::get('leads', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'index'])->middleware('permission:pedidos.view')->name('leads.listar');
     Route::get('leads/{lead}/fluxo', [\App\Modules\Admin\Http\Controllers\LeadsController::class, 'fluxo'])->middleware('permission:pedidos.view')->whereNumber('lead')->name('leads.fluxo');

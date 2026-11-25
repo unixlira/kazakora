@@ -1130,6 +1130,95 @@ class MetaAdsService
     }
 
     /**
+     * Conjuntos da conta para a Leitura das campanhas (Lira 2026-11-25), com
+     * o nome, status, orçamento e início da campanha e os links de destino
+     * dos anúncios (o produto sai do link). Só leitura.
+     *
+     * @return list<array{id: string, nome: string, status: string, orcamento_diario: ?float, campanha_id: string, campanha: string, campanha_status: string, campanha_orcamento_diario: ?float, campanha_inicio: ?string, links: list<string>, gerenciador: ?string}>
+     *
+     * @throws MetaAdsException
+     */
+    public function conjuntosParaLeitura(bool $soAtivos): array
+    {
+        $status = ['effective_status' => json_encode($soAtivos ? ['ACTIVE'] : self::STATUS_LISTAVEIS)];
+
+        $conjuntos = $this->getPaginado($this->conta().'/adsets', $status + [
+            'fields' => 'id,name,campaign_id,effective_status,daily_budget,campaign{name,effective_status,daily_budget,start_time}',
+            'limit' => 200,
+        ]);
+        $links = [];
+        foreach ($this->getPaginado($this->conta().'/ads', $status + [
+            'fields' => 'id,adset_id,creative{object_story_spec,asset_feed_spec{link_urls}}',
+            'limit' => 200,
+        ]) as $a) {
+            $link = self::textoDoCriativo($a['creative'] ?? [])['link'];
+            if ($link !== null) {
+                $links[(string) $a['adset_id']][$link] = true;
+            }
+        }
+
+        return array_map(fn (array $c) => [
+            'id' => (string) $c['id'],
+            'nome' => (string) ($c['name'] ?? ''),
+            'status' => (string) ($c['effective_status'] ?? ''),
+            'orcamento_diario' => $this->centavosEmReais($c['daily_budget'] ?? null),
+            'campanha_id' => (string) ($c['campaign_id'] ?? ''),
+            'campanha' => (string) ($c['campaign']['name'] ?? ''),
+            'campanha_status' => (string) ($c['campaign']['effective_status'] ?? ''),
+            'campanha_orcamento_diario' => $this->centavosEmReais($c['campaign']['daily_budget'] ?? null),
+            'campanha_inicio' => isset($c['campaign']['start_time'])
+                ? Carbon::parse($c['campaign']['start_time'])->setTimezone(self::FUSO)->toDateTimeString() : null,
+            'links' => array_keys($links[(string) $c['id']] ?? []),
+            'gerenciador' => $this->linkConjuntoGerenciador((string) $c['id']),
+        ], $conjuntos);
+    }
+
+    /**
+     * Insights por conjunto (Leitura das campanhas): as métricas de sempre
+     * (metricas()), mais frequência, CPM e as visualizações de 3 s do vídeo
+     * (action video_view; null quando o conjunto não tem vídeo). Com
+     * $diario, uma linha por conjunto e dia (time_increment=1), com 'data'.
+     *
+     * @param  string|array{since: string, until: string}  $periodo  date_preset ou intervalo
+     * @param  list<string>|null  $conjuntos  só estes conjuntos (null = todos)
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    public function insightsPorConjunto(string|array $periodo, ?array $conjuntos = null, bool $diario = false): array
+    {
+        $filtro = [['field' => 'adset.effective_status', 'operator' => 'IN', 'value' => [...self::STATUS_LISTAVEIS, 'DELETED']]];
+        if ($conjuntos !== null) {
+            if ($conjuntos === []) {
+                return [];
+            }
+            $filtro[] = ['field' => 'adset.id', 'operator' => 'IN', 'value' => array_values($conjuntos)];
+        }
+
+        $linhas = $this->getPaginado($this->conta().'/insights', (is_array($periodo)
+            ? ['time_range' => json_encode($periodo)]
+            : ['date_preset' => $periodo]) + ($diario ? ['time_increment' => 1] : []) + [
+                'level' => 'adset',
+                'filtering' => json_encode($filtro),
+                'fields' => $diario
+                    ? 'adset_id,campaign_id,spend,impressions,clicks,actions,action_values'
+                    : 'adset_id,campaign_id,'.self::INSIGHTS_BASE.self::INSIGHTS_EXTRAS,
+                'limit' => 500,
+            ]);
+
+        return array_map(function (array $linha) {
+            $temVideo = collect($linha['actions'] ?? [])->contains(fn ($a) => ($a['action_type'] ?? '') === 'video_view');
+
+            return [
+                'conjunto_id' => (string) ($linha['adset_id'] ?? ''),
+                'campanha_id' => (string) ($linha['campaign_id'] ?? ''),
+                'data' => isset($linha['date_start']) ? (string) $linha['date_start'] : null,
+                'video_3s' => $temVideo ? (int) round($this->valorDaAcao($linha['actions'], ['video_view'])) : null,
+            ] + $this->metricas($linha);
+        }, $linhas);
+    }
+
+    /**
      * Anúncio a anúncio para a tela Criativos (Lira 2026-11-19): as métricas
      * de sempre (metricas(), mesmo critério de compra/carrinho/checkout) mais
      * as de vídeo — views de 3 s (action video_view), plays, p25/p50/p75/p100,

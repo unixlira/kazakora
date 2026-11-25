@@ -28,6 +28,9 @@ const props = defineProps({
     // Coluna pode ainda pedir classe própria em meta.cellClass (ex.:
     // 'whitespace-nowrap'), aplicada no th e no td dela.
     dense: { type: Boolean, default: false },
+    // Largura fixa (pedido do Lira 25/11/2026, tela Leads): table-layout fixed, sem rolagem lateral;
+    // cada coluna diz a largura em meta.width (ex.: '30%') e o texto quebra linha.
+    fixed: { type: Boolean, default: false },
     // Modo servidor — quando vem um paginator do Laravel (paginate()), a
     // busca, a ordenação e a paginação deixam de ser feitas no navegador
     // sobre a lista inteira e viram query param tratado no backend. Criado
@@ -55,7 +58,7 @@ let searchTimer = null;
 onBeforeUnmount(() => clearTimeout(searchTimer));
 const rowSelection = ref({});
 const activeTab = ref(props.initialActiveTab || 'all');
-const cellPadding = computed(() => (props.dense ? 'px-3 py-3' : 'px-4 py-3'));
+const cellPadding = computed(() => (props.fixed ? 'px-2 py-3 break-words' : props.dense ? 'px-3 py-3' : 'px-4 py-3'));
 
 const showToolbar = computed(() => !props.hideSearch || Boolean(props.createLabel && props.createHref) || props.filterTabs.length > 0);
 
@@ -136,11 +139,11 @@ const setActiveTab = (value) => {
             :hide-search="hideSearch"
             @update:active-tab="setActiveTab" />
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+        <div :class="fixed ? '' : 'overflow-x-auto'">
+            <table class="w-full text-left text-sm" :class="{ 'table-fixed': fixed }">
                 <thead class="border-b border-[var(--surface-border)]">
                     <tr v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-                        <th v-for="header in headerGroup.headers" :key="header.id" :class="[cellPadding, header.column.columnDef.meta?.cellClass]">
+                        <th v-for="header in headerGroup.headers" :key="header.id" :class="[cellPadding, header.column.columnDef.meta?.cellClass]" :style="header.column.columnDef.meta?.width ? { width: header.column.columnDef.meta.width } : null">
                             <input v-if="header.column.columnDef.meta?.isSelectionColumn" type="checkbox"
                                 class="h-4 w-4 rounded border-[var(--surface-border)]"
                                 :checked="table.getIsAllPageRowsSelected()"

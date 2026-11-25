@@ -49,7 +49,7 @@ export const kitRecomendado = (opcoes) => {
 
 /**
  * Selo de cada kit: o mais barato "Para começar", o recomendado "Recomendado" e,
- * com 3 ou mais, o mais caro "Mais completo". Só com 1 kit, nenhum selo.
+ * com 3 ou mais, o(s) mais caro(s) "Mais completo". Só com 1 kit, nenhum selo.
  */
 export const selosDosKits = (opcoes) => {
     const lista = ordenarKits(opcoes);
@@ -57,7 +57,12 @@ export const selosDosKits = (opcoes) => {
     if (lista.length < 2) return selos;
     const recomendado = kitRecomendado(lista);
     selos[lista[0].id] = { texto: 'Para começar', tom: 'escuro' };
-    if (lista.length >= 3) selos[lista[lista.length - 1].id] = { texto: 'Mais completo', tom: 'verde' };
+    // Com 3 ou mais, os de maior preço (pode ser mais de um: o mesmo kit em duas cores) são "Mais completo".
+    if (lista.length >= 3) {
+        const maior = precoDoKit(lista[lista.length - 1]);
+        lista.filter((variante) => precoDoKit(variante) === maior && variante.id !== lista[0].id)
+            .forEach((variante) => { selos[variante.id] = { texto: 'Mais completo', tom: 'verde' }; });
+    }
     if (recomendado) selos[recomendado.id] = { texto: 'Recomendado', tom: 'amarelo', estrela: true };
     return selos;
 };

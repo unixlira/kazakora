@@ -69,6 +69,12 @@ const semTelas = computed(() => pg.value.sem_telas !== false);
 // Vídeo da história: o vídeo do produto (admin › Produto › Vídeo). Toca mudo, em loop, só quando
 // aparece na tela (como na referência); sem vídeo, fica a foto no mesmo quadro 9:16 (celular em pé).
 const videoUrl = computed(() => props.product.video_url || null);
+// Capa do vídeo: a do conteúdo da página (historia.capa, caminho no storage ou URL); senão, a foto da seção.
+const capaVideo = computed(() => {
+    const c = pg.value.historia?.capa;
+    if (c) return /^(https?:)?\//.test(c) ? c : `/storage/${c}`;
+    return historia.value?.foto || capa.value;
+});
 const videoEl = ref(null);
 let observadorVideo = null;
 onMounted(() => {
@@ -228,7 +234,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                 <div class="pb-historia-midia pb-reveal">
                     <div class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="42" /><Cubo cor="azul" :tamanho="42" /></div>
                     <div class="pb-media pb-media-video">
-                        <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="historia.foto || capa" muted loop playsinline preload="none" :aria-label="product.name"></video>
+                        <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="capaVideo" muted loop playsinline preload="none" :aria-label="product.name"></video>
                         <img v-else :src="historia.foto || capa" :srcset="srcsetDe(historia.foto || capa)" sizes="(max-width: 767px) 340px, 360px" width="720" height="1280" :alt="product.name" loading="lazy" decoding="async">
                     </div>
                     <span class="pb-adesivo" aria-hidden="true">Uau!</span>

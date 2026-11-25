@@ -168,7 +168,7 @@
   "familia": {
     "titulo": "Queridinho de pais e filhos",
     "texto": "Uma pista que se monta no chão da sala chama irmãos, amigos e quem mais quiser apostar corrida, longe das telas.",
-    "imagem": 5,
+    "imagem": 3,
     "citacao": "Menos tela, mais risada: a família inteira torcendo pelo carrinho que chega primeiro."
   },
   "kits": {
@@ -262,10 +262,5 @@
     "garantia": "Quero brincar sem telas",
     "final": "Quero o caminhão unicórnio"
   },
-  "avaliacoes_de": [
-    {
-      "slug": "caminhao-infantil-transformavel-com-pista-brinquedo-58216945240",
-      "rotulo": ""
-    }
-  ]
+  "avaliacoes_de": []
 }

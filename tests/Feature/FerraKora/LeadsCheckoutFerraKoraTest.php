@@ -94,9 +94,15 @@ class LeadsCheckoutFerraKoraTest extends TestCase
             'pagamento' => ['metodo' => 'pix'],
         ])->assertCreated();
 
+        // Pix ainda não pago: aberto e ligado ao pedido; pago, vira convertido (pedido do Lira 25/11/2026).
         $lead = Lead::query()->sole();
-        $this->assertSame(Lead::STATUS_CONVERTIDO, $lead->status);
+        $this->assertSame(Lead::STATUS_ABERTO, $lead->status);
         $this->assertSame($resposta->json('pedido.id'), $lead->order_id);
+
+        $order = \App\Modules\Checkout\Models\Order::query()->findOrFail($resposta->json('pedido.id'));
+        $order->update(['status' => \App\Modules\Checkout\Models\Order::STATUS_PAID]);
+        app(\App\Modules\Checkout\Support\LeadsDigitados::class)->converter($order, null, null, null);
+        $this->assertSame(Lead::STATUS_CONVERTIDO, $lead->fresh()->status);
     }
 
     /** FerraKora manda "abriu" ao abrir o checkout, sem nenhum campo (15/11/2026). */

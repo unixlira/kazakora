@@ -1,0 +1,246 @@
+{
+  "titulo": "Pistola de Água Elétrica com Luz LED para Piscina e Quintal",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Disparo elétrico",
+      "toque e brinque"
+    ],
+    [
+      "Luzes LED",
+      "visual que brilha"
+    ],
+    [
+      "Efeitos sonoros",
+      "mais imersão"
+    ],
+    [
+      "Zero telas",
+      "diversão ao sol"
+    ]
+  ],
+  "letreiro": [
+    "Disparo elétrico automático",
+    "Luzes LED para visual moderno",
+    "Efeitos sonoros de ação",
+    "Reservatório interno prático",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O presente que tira a criança do celular",
+    "subtitulo": "Batalhas aquáticas e muita ação ao sol",
+    "texto": "Trocar o sofá pela piscina e o celular pela pistola de água. Brincar ao ar livre ajuda a gastar energia, e menos tela antes de dormir ajuda no sono. É diversão de verdade, com a família junta.",
+    "imagem": 7
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Disparo automático",
+      "Luzes e sons"
+    ],
+    "cards": [
+      {
+        "titulo": "Ação contínua",
+        "texto": "Disparo elétrico sem o esforço dos modelos manuais.",
+        "icone": "flame"
+      },
+      {
+        "titulo": "Visual futurista",
+        "texto": "Luzes LED que encantam e deixam a brincadeira mais viva.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Sons de verdade",
+        "texto": "Mais emoção em cada jato com efeitos sonoros realistas.",
+        "icone": "volume-2"
+      },
+      {
+        "titulo": "Fácil de segurar",
+        "texto": "Design ergonômico feito para mãos pequenas.",
+        "icone": "hand"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Longe das telas, a criança se movimenta e desenvolve habilidades essenciais enquanto se refresca:",
+    "imagem": 1,
+    "chamadas": [
+      "Coordenação motora",
+      "Interação social",
+      "Noção de espaço",
+      "Ação ao ar livre"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "move"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "map"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Atividade física",
+        "icone": "bike"
+      },
+      {
+        "texto": "Foco e mira",
+        "icone": "target"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Tecnologia feita para o verão",
+    "texto": "Um lançador moderno, com bateria que carrega no cabo e luzes que deixam a tarde de sol mais divertida.",
+    "imagem": 3,
+    "cards": [
+      {
+        "titulo": "Fácil de abastecer",
+        "texto": "Reservatório interno, enche na própria pistola.",
+        "icone": "droplet"
+      },
+      {
+        "titulo": "Carrega no cabo",
+        "texto": "Acompanha cabo USB para carregar a bateria.",
+        "icone": "usb"
+      },
+      {
+        "titulo": "Material forte",
+        "texto": "Plástico resistente para as batalhas de água.",
+        "icone": "shield-check"
+      },
+      {
+        "titulo": "Sem telas",
+        "texto": "Diversão real ao ar livre.",
+        "icone": "sun"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pistola comum × Pistola Elétrica LED",
+    "intro": "As duas molham. Só uma tem tecnologia e luzes.",
+    "rotulos": [
+      "Comum",
+      "Elétrica"
+    ],
+    "linhas": [
+      {
+        "texto": "Diverte nos dias de sol",
+        "comum": true
+      },
+      {
+        "texto": "Disparo elétrico automático",
+        "comum": false
+      },
+      {
+        "texto": "Luzes LED integradas",
+        "comum": false
+      },
+      {
+        "texto": "Efeitos sonoros de ação",
+        "comum": false
+      },
+      {
+        "texto": "Bateria que carrega no cabo",
+        "comum": false
+      },
+      {
+        "texto": "Tira a criança do celular",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos inesquecíveis em família",
+    "texto": "Nada supera o riso solto na piscina. A pistola elétrica aproxima pais e filhos em batalhas de água, criando memórias longe da internet.",
+    "imagem": 7,
+    "citacao": "O sol brilha mais forte quando a família brinca junta, com os pés na água e o celular bem longe."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit de ação",
+    "texto": "A diversão completa para a família toda brincar junto.",
+    "itens": [
+      {
+        "id": 119,
+        "nome": "Kit Diversão Aquática",
+        "itens": "1 Pistola Elétrica LED + cabo",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pistola Elétrica",
+            "icone": "droplets"
+          },
+          {
+            "texto": "Cabo de carga",
+            "icone": "usb"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Escolha a pistola e prepare-se para a ação.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Abasteça com água",
+      "texto": "Encha o reservatório direto na pistola.",
+      "icone": "droplet"
+    },
+    {
+      "titulo": "Ação sem telas",
+      "texto": "Diversão de verdade longe do celular.",
+      "icone": "sun"
+    }
+  ],
+  "garantia": [
+    "Brincando ao sol",
+    "Longe do celular",
+    "Gastando energia",
+    "Rindo com a família"
+  ],
+  "duvidas": [
+    [
+      "Qual a idade indicada?",
+      "O brinquedo é recomendado para crianças de 5 a 7 anos."
+    ],
+    [
+      "Precisa de pilhas?",
+      "Não, ela acompanha cabo para carregar a bateria."
+    ],
+    [
+      "Como abastecer?",
+      "Possui reservatório interno com enchimento prático diretamente na própria pistola."
+    ],
+    [
+      "O que vem na caixa?",
+      "Vem 1 Pistola de Água Elétrica com luzes LED e sons e 1 cabo para carregar a bateria."
+    ]
+  ],
+  "final": {
+    "titulo": "Horas de brincadeira de verdade",
+    "texto": "O presente que tira a criança do celular e transforma o quintal no melhor lugar do mundo."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "comparativo": "Quero trocar a tela pela água"
+  }
+}

@@ -1,0 +1,250 @@
+{
+  "titulo": "Pia de Brinquedo com Água de Verdade para Lavar a Louça",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Água de verdade",
+      "torneira funcional"
+    ],
+    [
+      "30 acessórios",
+      "kit completo"
+    ],
+    [
+      "Zero telas",
+      "faz de conta"
+    ],
+    [
+      "Uso versátil",
+      "com ou sem pernas"
+    ]
+  ],
+  "letreiro": [
+    "Torneira que sai água de verdade",
+    "Kit completo com 30 acessórios",
+    "Brincadeira que imita a rotina",
+    "Desenvolve a coordenação motora",
+    "Longe das telas e do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Cozinha de verdade, longe das telas",
+    "subtitulo": "A rotina da casa vira uma grande aventura",
+    "texto": "Lavar a louça, organizar os legumes e preparar o jantar: o faz de conta ganha vida com água de verdade. É o estímulo que faltava para trocar o celular por horas de criatividade e aprendizado prático.",
+    "imagem": 4
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 2,
+    "chamadas": [
+      "Água de verdade",
+      "30 peças"
+    ],
+    "cards": [
+      {
+        "titulo": "Interação real",
+        "texto": "A torneira funciona com água para lavar a louça de verdade.",
+        "icone": "droplets"
+      },
+      {
+        "titulo": "Criatividade",
+        "texto": "Cria histórias e receitas com panelinhas e mini legumes.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Encaixar, lavar e organizar treina os pequenos movimentos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Foco e atenção",
+        "texto": "Prende a atenção na tarefa, longe da agitação dos vídeos.",
+        "icone": "target"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto brinca de casinha, seu filho desenvolve habilidades essenciais para a vida:",
+    "imagem": 5,
+    "chamadas": [
+      "Imitação do dia a dia",
+      "30 acessórios",
+      "Faz de conta",
+      "Coordenação"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users"
+      },
+      {
+        "texto": "Noção de rotina",
+        "icone": "clock"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "eye"
+      },
+      {
+        "texto": "Cuidado e zelo",
+        "icone": "heart"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para os pequenos",
+    "texto": "Material resistente e tamanho ideal para as mãos das crianças levarem a diversão para qualquer lugar.",
+    "imagem": 6,
+    "cards": [
+      {
+        "titulo": "Portátil",
+        "texto": "Leve para viagens e passeios",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "2 modos de uso",
+        "texto": "Com ou sem as pernas",
+        "icone": "arrow-up-down"
+      },
+      {
+        "titulo": "Seguro",
+        "texto": "Feito em plástico resistente",
+        "icone": "shield-check"
+      },
+      {
+        "titulo": "Fácil de montar",
+        "texto": "Pronta para brincar rápido",
+        "icone": "wrench"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pia Comum × Nossa Pia",
+    "intro": "Muitas pias são apenas plástico. A nossa tem vida e movimento.",
+    "rotulos": [
+      "Pia Comum",
+      "Nossa Pia"
+    ],
+    "linhas": [
+      {
+        "texto": "Tem acessórios coloridos",
+        "comum": true
+      },
+      {
+        "texto": "Torneira com água de verdade",
+        "comum": false
+      },
+      {
+        "texto": "Kit completo com 30 peças",
+        "comum": false
+      },
+      {
+        "texto": "Pernas removíveis para 2 modos",
+        "comum": false
+      },
+      {
+        "texto": "Inclui mini legumes e panelinhas",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a autonomia e rotina",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos especiais em família",
+    "texto": "Enquanto você prepara o almoço, a criança ajuda ao seu lado. É o presente que aproxima pais e filhos em uma brincadeira saudável e educativa.",
+    "imagem": 7,
+    "citacao": "Brincar de casinha é o primeiro passo para a criança entender o mundo e se sentir parte da rotina da casa."
+  },
+  "kits": {
+    "titulo": "Escolha o kit da diversão",
+    "texto": "Garanta a pia completa com todos os acessórios para a brincadeira começar agora.",
+    "itens": [
+      {
+        "id": 116,
+        "nome": "Kit Cozinha Completa",
+        "itens": "Pia + 30 acessórios",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Pia Lava-Louças",
+            "icone": "droplets"
+          },
+          {
+            "texto": "30 Acessórios",
+            "icone": "boxes"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Clique no botão para garantir a diversão sem telas.",
+      "icone": "mouse-pointer-click"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Chegou a hora!",
+      "texto": "Abra a caixa e monte a pia: é fácil e rápido.",
+      "icone": "package"
+    },
+    {
+      "titulo": "Água e ação",
+      "texto": "Coloque água e veja a mágica da torneira começar.",
+      "icone": "droplets"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Aprendendo a rotina",
+    "Criando histórias"
+  ],
+  "duvidas": [
+    [
+      "A torneira sai água mesmo?",
+      "Sim! Basta adicionar água para a torneira funcionar e a louça ser lavada na brincadeira."
+    ],
+    [
+      "Qual a idade recomendada?",
+      "Este brinquedo é indicado para crianças a partir de 3 anos de idade."
+    ],
+    [
+      "O que vem na embalagem?",
+      "01 Brinquedo Cozinha Pia Lava-Louças e 30 acessórios variados entre panelinhas, legumes e utensílios."
+    ],
+    [
+      "Quais as medidas da pia?",
+      "A pia possui aproximadamente 20 cm de altura, 20 cm de largura e 10 cm de comprimento."
+    ],
+    [
+      "Dá para usar sem as pernas?",
+      "Sim, o produto possui pernas removíveis para você escolher usar com suporte ou direto na mesa."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, aprendizado da rotina e muita imaginação com água de verdade."
+  },
+  "ctas": {
+    "historia": "Quero o meu kit",
+    "comparativo": "Quero trocar a tela pela pia"
+  }
+}

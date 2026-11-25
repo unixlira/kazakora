@@ -1,0 +1,246 @@
+{
+  "titulo": "Estacionamento com Elevador, Rampas e Carrinhos para Brincar",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Múltiplos níveis",
+      "diversão em camadas"
+    ],
+    [
+      "Elevador de carros",
+      "sobe e desce"
+    ],
+    [
+      "Pista interativa",
+      "curvas e rampas"
+    ],
+    [
+      "Zero telas",
+      "foco na brincadeira"
+    ]
+  ],
+  "letreiro": [
+    "Estacionamento com múltiplos níveis",
+    "Elevador de carros interativo",
+    "Acompanha carrinhos coloridos",
+    "Rampas e pistas conectadas",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Aventura longe das telas",
+    "subtitulo": "Imaginação em alta velocidade",
+    "texto": "Trocar o celular por pistas e rampas ajuda a criança a focar no mundo real. Com o City Car Parking, cada curva treina a noção de espaço e a paciência, e menos tela antes de dormir ajuda no sono.",
+    "imagem": 6
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 8,
+    "chamadas": [
+      "Elevador de carros",
+      "Rampas divertidas"
+    ],
+    "cards": [
+      {
+        "titulo": "Mundo de fantasia",
+        "texto": "Cria histórias urbanas com os carrinhos e o cenário completo.",
+        "icone": "castle"
+      },
+      {
+        "titulo": "Ação nas mãos",
+        "texto": "Subir os carros no elevador e soltar na rampa prende a atenção.",
+        "icone": "rotate-cw"
+      },
+      {
+        "titulo": "Cores vibrantes",
+        "texto": "Design detalhado que estimula o olhar e a alegria de brincar.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Desafio motor",
+        "texto": "Manobrar entre os níveis treina a precisão das mãos pequenas.",
+        "icone": "hand"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto os carrinhos deslizam, pequenos motoristas desenvolvem habilidades essenciais para a vida:",
+    "imagem": 7,
+    "chamadas": [
+      "Noção de espaço",
+      "Coordenação",
+      "Imaginação",
+      "Foco manual"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio lógico",
+        "icone": "brain"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção espacial",
+        "icone": "move-3d"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para brincar de verdade",
+    "texto": "Estrutura completa com elevador, rampas e acessórios que transformam o quarto em uma cidade viva.",
+    "imagem": 2,
+    "cards": [
+      {
+        "titulo": "Elevador de carros",
+        "texto": "Leva os carros ao topo",
+        "icone": "arrow-up-down"
+      },
+      {
+        "titulo": "Pista suave",
+        "texto": "Carrinhos deslizam fácil",
+        "icone": "car"
+      },
+      {
+        "titulo": "Vários andares",
+        "texto": "Múltiplos níveis de ação",
+        "icone": "layers"
+      },
+      {
+        "titulo": "Sem telas",
+        "texto": "Diversão com as mãos",
+        "icone": "eye-off"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Carrinho comum × City Car Parking",
+    "intro": "Um carrinho sozinho é legal. Uma cidade inteira é inesquecível.",
+    "rotulos": [
+      "Comum",
+      "City Car"
+    ],
+    "linhas": [
+      {
+        "texto": "Feito para brincar",
+        "comum": true
+      },
+      {
+        "texto": "Estacionamento de múltiplos níveis",
+        "comum": false
+      },
+      {
+        "texto": "Elevador de carros interativo",
+        "comum": false
+      },
+      {
+        "texto": "Pistas e rampas conectadas",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a noção de espaço",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção sem celular",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos reais em família",
+    "texto": "Sentar no chão e organizar o trânsito da cidade cria memórias que nenhuma tela consegue substituir. É tempo de qualidade e muita risada.",
+    "imagem": 1,
+    "citacao": "Menos tempo de tela e mais tempo de chão de sala, construindo cidades e histórias juntos."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "O presente perfeito para tirar a criança do celular e começar a aventura.",
+    "itens": [
+      {
+        "id": 405,
+        "nome": "Kit Estacionamento City",
+        "itens": "Estrutura City Car Parking + Carrinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Estacionamento",
+            "icone": "warehouse"
+          },
+          {
+            "texto": "Carrinhos",
+            "icone": "car-front"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Garanta horas de brincadeira de verdade agora.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Pista montada",
+      "texto": "Abra a caixa e monte o cenário urbano.",
+      "icone": "construction"
+    },
+    {
+      "titulo": "Diversão real",
+      "texto": "Carrinhos na pista e celular guardado.",
+      "icone": "smile-plus"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe do celular",
+    "Criando histórias",
+    "Focado na pista"
+  ],
+  "duvidas": [
+    [
+      "O que vem no conjunto?",
+      "Acompanha a estrutura do estacionamento com múltiplos níveis, pistas, rampas, elevador e carrinhos sortidos."
+    ],
+    [
+      "Como funciona o elevador?",
+      "O elevador de carros leva os carrinhos entre os níveis do estacionamento e deixa a brincadeira mais dinâmica."
+    ],
+    [
+      "Os carrinhos são de que cor?",
+      "Acompanha carrinhos coloridos sortidos, prontos para descer as rampas e a pista."
+    ],
+    [
+      "O brinquedo estimula o quê?",
+      "Ajuda a estimular a coordenação motora, o raciocínio e a criatividade através de cenários urbanos completos."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade com o City Car Parking. Escolha o kit e desperte a imaginação hoje mesmo."
+  },
+  "ctas": {
+    "historia": "Quero brincar de verdade",
+    "comparativo": "Quero o City Car Parking"
+  }
+}

@@ -1,0 +1,257 @@
+{
+ "titulo": "Pulseira de Passeio que Mantém a Criança Perto com Liberdade",
+ "sem_telas": true,
+ "chips": [
+  [
+   "Mais perto",
+   "no passeio"
+  ],
+  [
+   "Cabo espiralado",
+   "estica e acompanha"
+  ],
+  [
+   "Ajustável",
+   "adulto e criança"
+  ],
+  [
+   "Mais tranquilidade",
+   "em locais cheios"
+  ]
+ ],
+ "letreiro": [
+  "Criança por perto no passeio",
+  "Cabo espiralado e flexível",
+  "Ajusta no adulto e na criança",
+  "Shopping, parque e aeroporto",
+  "Passeio com mais tranquilidade",
+  "Garantia de 30 dias"
+ ],
+ "historia": {
+  "titulo": "Passeio com mais tranquilidade",
+  "subtitulo": "A mão livre, a criança por perto",
+  "texto": "Shopping cheio, aeroporto, rua movimentada: a pulseira liga o seu pulso ao da criança. Ela anda, olha tudo e se mexe à vontade, e você aproveita o passeio com o coração mais leve.",
+  "imagem": 1
+ },
+ "porque": {
+  "titulo": "Por que os pais adoram",
+  "imagem": 3,
+  "chamadas": [
+   "Cabo flexível",
+   "Pulso com pulso"
+  ],
+  "cards": [
+   {
+    "titulo": "Mais por perto",
+    "texto": "Ajuda a evitar que a criança se afaste no meio do povo.",
+    "icone": "users"
+   },
+   {
+    "titulo": "Liberdade",
+    "texto": "O cabo espiralado estica e acompanha cada passo.",
+    "icone": "footprints"
+   },
+   {
+    "titulo": "Ajuste firme",
+    "texto": "Pulseiras ajustáveis para o adulto e para a criança.",
+    "icone": "lock"
+   },
+   {
+    "titulo": "Vai a todo lugar",
+    "texto": "Shopping, parque, aeroporto e rua movimentada.",
+    "icone": "map-pin"
+   }
+  ]
+ },
+ "ensina": {
+  "titulo": "Liberdade com mais segurança",
+  "texto": "No passeio, a pulseira ajuda a família a curtir com mais calma:",
+  "imagem": 5,
+  "chamadas": [
+   "Shopping",
+   "Parque",
+   "Aeroporto",
+   "Rua movimentada"
+  ],
+  "habilidades": [
+   {
+    "texto": "Passeio tranquilo",
+    "icone": "smile"
+   },
+   {
+    "texto": "Criança por perto",
+    "icone": "hand-heart"
+   },
+   {
+    "texto": "Liberdade de andar",
+    "icone": "person-standing"
+   },
+   {
+    "texto": "Mãos dadas",
+    "icone": "hand"
+   },
+   {
+    "texto": "Explorar o mundo",
+    "icone": "compass"
+   },
+   {
+    "texto": "Passeio em família",
+    "icone": "users-round"
+   }
+  ]
+ },
+ "detalhes": {
+  "titulo": "Cada detalhe pensado para o passeio",
+  "texto": "Pulseiras macias e ajustáveis, cabo espiralado flexível e fechamento prático.",
+  "imagem": 2,
+  "cards": [
+   {
+    "titulo": "Ajuste firme",
+    "texto": "Para o pulso do adulto e da criança",
+    "icone": "lock"
+   },
+   {
+    "titulo": "Fecho prático",
+    "texto": "Coloca e tira com facilidade",
+    "icone": "check"
+   },
+   {
+    "titulo": "Cabo espiralado",
+    "texto": "Flexível e acompanha o movimento",
+    "icone": "repeat"
+   },
+   {
+    "titulo": "Toque macio",
+    "texto": "Confortável durante o passeio",
+    "icone": "hand-heart"
+   }
+  ]
+ },
+ "comparativo": {
+  "titulo": "Só de mãos dadas × Com a pulseira",
+  "intro": "Segurar a mão é sempre bom. A pulseira ajuda quando a mão escapa.",
+  "rotulos": [
+   "Mãos dadas",
+   "Pulseira"
+  ],
+  "linhas": [
+   {
+    "texto": "Criança pertinho de você",
+    "comum": true
+   },
+   {
+    "texto": "Continua ligada se a mão soltar",
+    "comum": false
+   },
+   {
+    "texto": "Cabo que estica e acompanha",
+    "comum": false
+   },
+   {
+    "texto": "Suas mãos livres para a sacola",
+    "comum": false
+   },
+   {
+    "texto": "Ajuste no adulto e na criança",
+    "comum": false
+   },
+   {
+    "texto": "Mais tranquilidade em locais cheios",
+    "comum": false
+   }
+  ]
+ },
+ "familia": {
+  "titulo": "Passeio bom é passeio tranquilo",
+  "texto": "Menos sustos e mais olhar para o que importa: a criança explorando o mundo, a família curtindo junto e você mais tranquilo.",
+  "imagem": 9,
+  "citacao": "Ela livre para descobrir, você tranquilo para aproveitar: passeio em família do jeito que tem que ser."
+ },
+ "kits": {
+  "titulo": "Escolha a sua pulseira",
+  "texto": "Uma pulseira para o adulto, outra para a criança, ligadas pelo cabo espiralado.",
+  "itens": [
+   {
+    "id": 387,
+    "nome": "Kit Passeio Tranquilo",
+    "itens": "Pulseiras adulto e criança + cabo",
+    "unidades": 1,
+    "partes": [
+     {
+      "texto": "Pulseira adulto",
+      "icone": "user"
+     },
+     {
+      "texto": "Pulseira criança",
+      "icone": "baby"
+     },
+     {
+      "texto": "Cabo espiralado",
+      "icone": "repeat"
+     }
+    ]
+   }
+  ]
+ },
+ "passos": [
+  {
+   "titulo": "Peça a sua pulseira",
+   "texto": "Pronta para o próximo passeio da família.",
+   "icone": "gift"
+  },
+  {
+   "titulo": "Enviamos com rastreio",
+   "texto": "Acompanhe cada passo em Meus Pedidos.",
+   "icone": "truck"
+  },
+  {
+   "titulo": "Ajuste nos pulsos",
+   "texto": "Primeiro no adulto, depois na criança.",
+   "icone": "hand"
+  },
+  {
+   "titulo": "Bom passeio",
+   "texto": "Shopping, parque ou viagem com mais calma.",
+   "icone": "map"
+  }
+ ],
+ "garantia": [
+  "Pertinho de você",
+  "Livre para explorar",
+  "Passeando com calma",
+  "Curtindo em família"
+ ],
+ "duvidas": [
+  [
+   "Como usar?",
+   "Ajuste uma pulseira no pulso do adulto, a outra no pulso da criança, e pronto. O cabo espiralado liga as duas."
+  ],
+  [
+   "Serve em qualquer pulso?",
+   "As pulseiras são ajustáveis, tanto para o adulto quanto para a criança."
+  ],
+  [
+   "Onde posso usar?",
+   "Em locais movimentados como shoppings, parques, aeroportos e ruas."
+  ],
+  [
+   "Ela substitui a atenção dos pais?",
+   "Não. É um apoio para o passeio; a supervisão de um adulto continua sempre importante."
+  ]
+ ],
+ "final": {
+  "titulo": "O passeio em família mais tranquilo",
+  "texto": "A criança por perto, livre para explorar, e você aproveitando cada momento fora de casa."
+ },
+ "ctas": {
+  "historia": "Quero passear tranquilo",
+  "porque": "Quero a minha pulseira",
+  "ensina": "Quero mais tranquilidade",
+  "detalhes": "Quero a minha pulseira",
+  "comparativo": "Quero a pulseira de passeio",
+  "familia": "Quero passear em família",
+  "passos": "Quero a minha pulseira",
+  "garantia": "Quero passear tranquilo",
+  "final": "Quero a minha pulseira"
+ }
+}

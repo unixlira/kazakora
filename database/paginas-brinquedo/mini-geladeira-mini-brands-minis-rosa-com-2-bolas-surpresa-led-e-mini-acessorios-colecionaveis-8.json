@@ -1,0 +1,261 @@
+{
+  "titulo": "Mini Geladeira Rosa com Luz LED e 2 Bolas Surpresa para Colecionar",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Luz de LED",
+      "acende por dentro"
+    ],
+    [
+      "2 bolas surpresa",
+      "mini alimentos"
+    ],
+    [
+      "Porta magnética",
+      "abre e fecha"
+    ],
+    [
+      "Zero telas",
+      "coleção de verdade"
+    ]
+  ],
+  "letreiro": [
+    "Mini geladeira rosa de visual retrô",
+    "Luz interna de LED",
+    "Porta que abre e fecha com ímã",
+    "2 bolas surpresa com mini alimentos",
+    "Para crianças a partir de 8 anos",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Uma surpresa a cada bolinha",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Abrir as bolas surpresa, descobrir os mini alimentos e arrumar tudo na geladeira com a luz acesa: coleção e faz de conta de verdade, longe da tela. Menos celular também é mais descanso para os olhos.",
+    "imagem": 0
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 2,
+    "chamadas": [
+      "Luz interna de LED",
+      "Porta que abre"
+    ],
+    "cards": [
+      {
+        "titulo": "Surpresa",
+        "texto": "2 bolas surpresa com mini alimentos e acessórios para descobrir.",
+        "icone": "gift"
+      },
+      {
+        "titulo": "Acende de verdade",
+        "texto": "Luz interna de LED que deixa a mini cozinha ainda mais real.",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Coleção",
+        "texto": "Organiza as miniaturas e monta a geladeira do seu jeito.",
+        "icone": "refrigerator"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Horas montando, arrumando e inventando histórias, sem celular.",
+        "icone": "heart"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto abre as surpresas e arruma as miniaturas, a criança treina sem nem perceber:",
+    "imagem": 4,
+    "chamadas": [
+      "Luz de LED",
+      "Porta magnética",
+      "2 bolas surpresa",
+      "8+"
+    ],
+    "habilidades": [
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Organização",
+        "icone": "layout-grid"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Atenção aos detalhes",
+        "icone": "search"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Detalhes pequenos que encantam",
+    "texto": "Geladeira rosa de visual retrô, com luz interna de LED, porta magnética e pilhas inclusas.",
+    "imagem": 3,
+    "cards": [
+      {
+        "titulo": "Visual retrô",
+        "texto": "Mini geladeira rosa",
+        "icone": "refrigerator"
+      },
+      {
+        "titulo": "Luz de LED",
+        "texto": "Ilumina por dentro",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Porta magnética",
+        "texto": "Abre e fecha com ímã",
+        "icone": "magnet"
+      },
+      {
+        "titulo": "Pilhas inclusas",
+        "texto": "Já vem pronta",
+        "icone": "battery-full"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Miniatura comum × Mini Geladeira",
+    "intro": "As duas são fofas. Só uma acende, guarda e surpreende.",
+    "rotulos": [
+      "Comum",
+      "Geladeira"
+    ],
+    "linhas": [
+      {
+        "texto": "Visual fofo e colorido",
+        "comum": true
+      },
+      {
+        "texto": "Luz interna de LED",
+        "comum": false
+      },
+      {
+        "texto": "Porta magnética que abre e fecha",
+        "comum": false
+      },
+      {
+        "texto": "2 bolas surpresa inclusas",
+        "comum": false
+      },
+      {
+        "texto": "Mini alimentos colecionáveis",
+        "comum": false
+      },
+      {
+        "texto": "Pilhas já inclusas",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinha de pais e filhos",
+    "texto": "Abrir as bolas surpresa junto é parte da festa: cada mini alimento vira assunto, história e lugar novo na geladeira.",
+    "imagem": 7,
+    "citacao": "Menos tela, mais surpresa: a família toda descobrindo cada miniatura junto, na mesa da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Geladeira, bolas surpresa e mini acessórios para começar a coleção longe das telas.",
+    "itens": [
+      {
+        "id": 603,
+        "nome": "Kit Coleção Rosa",
+        "itens": "Mini Geladeira + 2 bolas surpresa",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Mini Geladeira",
+            "icone": "refrigerator"
+          },
+          {
+            "texto": "2 bolas surpresa",
+            "icone": "gift"
+          },
+          {
+            "texto": "Mini acessórios",
+            "icone": "sparkles"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "A mini geladeira rosa com as bolas surpresa.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Hora da surpresa",
+      "texto": "Chegou! Abre as bolas e descobre as miniaturas.",
+      "icone": "party-popper"
+    },
+    {
+      "titulo": "Coleção montada",
+      "texto": "Tudo arrumado na geladeira, longe das telas.",
+      "icone": "star"
+    }
+  ],
+  "garantia": [
+    "Colecionando miniaturas",
+    "Mais longe das telas",
+    "Abrindo surpresas",
+    "Criando histórias"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicada?",
+      "Para crianças acima de 8 anos."
+    ],
+    [
+      "O que vem na embalagem?",
+      "1 Mini Geladeira rosa, 2 bolas surpresa, mini alimentos colecionáveis e mini acessórios variados."
+    ],
+    [
+      "Precisa de pilhas?",
+      "As pilhas já vêm inclusas para a luz interna de LED."
+    ],
+    [
+      "Qual o material e a cor?",
+      "Plástico resistente, na cor rosa."
+    ],
+    [
+      "A porta abre de verdade?",
+      "Sim, a porta abre e fecha com sistema magnético."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Surpresas para abrir, miniaturas para colecionar e horas de brincadeira de verdade."
+  },
+  "ctas": {
+    "historia": "Quero a minha geladeira",
+    "porque": "Quero abrir as surpresas",
+    "ensina": "Quero o meu kit",
+    "detalhes": "Quero a geladeira rosa",
+    "comparativo": "Quero trocar a tela pela coleção",
+    "familia": "Quero brincar em família",
+    "passos": "Escolher o meu kit",
+    "garantia": "Quero a minha geladeira",
+    "final": "Quero presentear agora"
+  }
+}

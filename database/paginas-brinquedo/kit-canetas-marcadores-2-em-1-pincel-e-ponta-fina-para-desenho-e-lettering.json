@@ -1,0 +1,242 @@
+{
+  "titulo": "Canetas 2 em 1 com Pincel e Ponta Fina para Desenhar e Escrever",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Ponta dupla",
+      "pincel e fina"
+    ],
+    [
+      "Cores vivas",
+      "para colorir"
+    ],
+    [
+      "Zero telas",
+      "criatividade pura"
+    ],
+    [
+      "Fácil de guardar",
+      "caixa organizadora"
+    ]
+  ],
+  "letreiro": [
+    "Ponta dupla para mais versatilidade",
+    "Ideal para lettering e desenho",
+    "Cores vibrantes que encantam",
+    "Brincadeira longe do celular",
+    "Estimula a criatividade",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O mundo colorido fora das telas",
+    "subtitulo": "Desenhar é criar sem limites",
+    "texto": "Trocar o brilho do celular pelo papel ajuda a criança a focar na imaginação. Com pontas duplas, cada traço é uma descoberta, e menos tela antes de dormir ajuda no sono.",
+    "imagem": 7
+  },
+  "porque": {
+    "titulo": "Por que os pequenos amam criar",
+    "imagem": 3,
+    "chamadas": [
+      "Cores vibrantes",
+      "Ponta dupla"
+    ],
+    "cards": [
+      {
+        "titulo": "Versatilidade",
+        "texto": "Uma ponta para colorir e outra para detalhes finos.",
+        "icone": "brush"
+      },
+      {
+        "titulo": "Foco total",
+        "texto": "Horas de diversão concentrada longe dos vídeos.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Expressão",
+        "texto": "Perfeito para lettering e desenhos artísticos.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Organização",
+        "texto": "Tudo sempre à mão na caixa organizadora.",
+        "icone": "box"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto escolhe as cores e faz os traços, a criança exercita habilidades essenciais para a vida:",
+    "imagem": 2,
+    "chamadas": [
+      "Ponta pincel",
+      "Ponta fina",
+      "Traços suaves",
+      "Cores vivas"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Paciência e foco",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Expressão artística",
+        "icone": "brush"
+      },
+      {
+        "texto": "Relaxamento",
+        "icone": "moon"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Duas pontas para cada detalhe",
+    "texto": "O design 2 em 1 oferece a liberdade de pintar grandes áreas ou fazer contornos precisos com a mesma caneta.",
+    "imagem": 4,
+    "cards": [
+      {
+        "titulo": "Ponta Pincel",
+        "texto": "Para preenchimento e traços",
+        "icone": "brush"
+      },
+      {
+        "titulo": "Ponta Fina",
+        "texto": "Para contornos e detalhes",
+        "icone": "pen-tool"
+      },
+      {
+        "titulo": "Design 2 em 1",
+        "texto": "Mais funções em uma caneta",
+        "icone": "repeat"
+      },
+      {
+        "titulo": "Longe das telas",
+        "texto": "Diversão de verdade no papel",
+        "icone": "heart"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Caneta comum × Marcador 2 em 1",
+    "intro": "Canetas comuns só fazem um traço. As nossas fazem arte.",
+    "rotulos": [
+      "Comum",
+      "Marcador"
+    ],
+    "linhas": [
+      {
+        "texto": "Cores para colorir",
+        "comum": true
+      },
+      {
+        "texto": "Ponta dupla (pincel e fina)",
+        "comum": false
+      },
+      {
+        "texto": "Ideal para lettering artístico",
+        "comum": false
+      },
+      {
+        "texto": "Traços suaves e precisos",
+        "comum": false
+      },
+      {
+        "texto": "Caixa organizadora para guardar",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção longe do celular",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos de arte em família",
+    "texto": "Sentar à mesa para colorir junto cria memórias e tira a tensão do dia a dia. É o presente que aproxima pais e filhos através das cores.",
+    "imagem": 6,
+    "citacao": "Menos brilho de tela e mais cores no papel: a família toda criando artes incríveis junta na mesa da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Selecione a opção ideal para soltar a criatividade longe das telas.",
+    "itens": [
+      {
+        "id": 341,
+        "nome": "Kit Criatividade 2 em 1",
+        "itens": "Conjunto de Marcadores Ponta Dupla",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Marcadores 2 em 1",
+            "icone": "brush"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Selecione a opção ideal para sua arte.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Cores em mãos",
+      "texto": "Abra a caixa e escolha a primeira cor.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Hora de criar",
+      "texto": "Desenhos e letterings longe das telas.",
+      "icone": "palette"
+    }
+  ],
+  "garantia": [
+    "Criando artes lindas",
+    "Longe do celular",
+    "Focada no desenho",
+    "Explorando as cores"
+  ],
+  "duvidas": [
+    [
+      "Como são as pontas?",
+      "Cada caneta tem duas pontas: uma tipo pincel para preenchimentos e uma ponta fina para detalhes e contornos."
+    ],
+    [
+      "O que vem no produto?",
+      "Um conjunto de canetas marcadoras 2 em 1, com ponta pincel e ponta fina, em caixa organizadora."
+    ],
+    [
+      "Para que servem?",
+      "São perfeitas para atividades de colorir, desenho artístico e lettering com maior versatilidade."
+    ],
+    [
+      "Como guardar?",
+      "As canetas ficam numa caixa organizadora transparente, fácil de guardar e com tudo à mão."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que desperta o artista interior",
+    "texto": "Horas de brincadeira de verdade, desenhos vibrantes e a criança focada no que realmente importa: a criatividade."
+  },
+  "ctas": {
+    "historia": "Quero criar com cores",
+    "comparativo": "Quero trocar a tela pelo desenho"
+  }
+}

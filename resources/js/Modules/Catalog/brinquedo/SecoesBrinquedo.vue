@@ -31,6 +31,12 @@ const foto = (indice) => {
     const imagem = props.product.images?.[indice];
     return imagem ? (imagem.media_url ?? imagem.url) : null;
 };
+// Desempenho (pedido do Lira 24/11/2026): cada foto com a versão de 512 px e a de 1200 px; o navegador
+// escolhe pela largura da tela (no celular quase sempre a de 512 px, que pesa um terço).
+const srcsetDe = (src) => {
+    const imagem = (props.product.images ?? []).find((i) => (i.media_url ?? i.url) === src);
+    return imagem?.thumb_url && imagem.media_url && imagem.thumb_url !== imagem.media_url ? `${imagem.thumb_url} 512w, ${imagem.media_url} 1200w` : null;
+};
 const capa = computed(() => foto(0));
 const bloco = (i) => {
     const b = props.anuncio?.blocos?.[i];
@@ -155,7 +161,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <div class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="42" /><Cubo cor="azul" :tamanho="42" /></div>
                     <div class="pb-media pb-media-video">
                         <video v-if="videoUrl" ref="videoEl" :src="videoUrl" :poster="historia.foto || capa" muted loop playsinline preload="none" :aria-label="product.name"></video>
-                        <img v-else :src="historia.foto || capa" :alt="product.name" decoding="async">
+                        <img v-else :src="historia.foto || capa" :srcset="srcsetDe(historia.foto || capa)" sizes="(max-width: 767px) 340px, 360px" width="720" height="1280" :alt="product.name" loading="lazy" decoding="async">
                     </div>
                     <span class="pb-adesivo" aria-hidden="true">Uau!</span>
                 </div>
@@ -171,7 +177,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <h2 class="pb-h2">{{ porque.titulo.antes }} <em class="cor-azul">{{ porque.titulo.marcado }}</em></h2>
                 </div>
                 <div v-if="porque.foto" class="pb-media-chamadas pb-media-560 pb-reveal">
-                    <div class="pb-media"><img :src="porque.foto" :alt="porque.titulo.antes + ' ' + porque.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <div class="pb-media"><img :src="porque.foto" :srcset="srcsetDe(porque.foto)" sizes="(max-width: 767px) 92vw, 560px" width="1200" height="1200" :alt="porque.titulo.antes + ' ' + porque.titulo.marcado" loading="lazy" decoding="async"></div>
                     <span v-for="(c, j) in chamadasPorque" :key="j" class="pb-chamada" :class="`pos-${j}`">{{ c }}</span>
                 </div>
                 <div v-if="beneficios.length" class="pb-why-cards pb-reveal">
@@ -197,7 +203,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <div v-for="(h, j) in habilidades" :key="j" class="pb-sk-item"><span class="pb-sk-ico" :class="`cor-${h.cor}`"><Icone :nome="h.icone" :tamanho="22" :traco="2.4" /></span>{{ h.texto }}</div>
                 </div>
                 <div v-if="ensina.foto" class="pb-media-chamadas pb-media-620 pb-reveal">
-                    <div class="pb-media"><img :src="ensina.foto" :alt="ensina.titulo.antes + ' ' + ensina.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <div class="pb-media"><img :src="ensina.foto" :srcset="srcsetDe(ensina.foto)" sizes="(max-width: 767px) 92vw, 414px" width="828" height="1088" :alt="ensina.titulo.antes + ' ' + ensina.titulo.marcado" loading="lazy" decoding="async"></div>
                     <span v-for="(c, j) in chamadasKit" :key="j" class="pb-chamada" :class="`pos-${j}`">{{ c }}</span>
                 </div>
                 <div class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">Quero esse presente <Icone nome="arrow-right" :tamanho="22" /></button></div>
@@ -213,7 +219,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <p class="pb-lead">{{ detalhe.texto }}</p>
                 </div>
                 <div v-if="detalhe.foto" class="pb-media-chamadas pb-media-520 pb-reveal">
-                    <div class="pb-media"><img :src="detalhe.foto" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <div class="pb-media"><img :src="detalhe.foto" :srcset="srcsetDe(detalhe.foto)" sizes="(max-width: 767px) 92vw, 520px" width="1200" height="1200" :alt="detalhe.titulo.antes + ' ' + detalhe.titulo.marcado" loading="lazy" decoding="async"></div>
                     <span v-for="(d, j) in detalhes" :key="j" class="pb-chamada com-linha" :class="`pos-${j}`">{{ d.titulo }}</span>
                 </div>
                 <!-- Mesmo cartão centralizado da referência (quadrado colorido com borda e sombra, ícone branco). -->
@@ -257,8 +263,8 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                     <p class="pb-lead">{{ familia.texto }}</p>
                 </div>
                 <div class="pb-fm-collage pb-reveal">
-                    <div class="pb-fm-a"><img :src="familia.foto || capa" :alt="familia.titulo.antes + ' ' + familia.titulo.marcado" loading="lazy" decoding="async"></div>
-                    <div class="pb-fm-b"><img :src="fotoExtra" alt="" loading="lazy" decoding="async"></div>
+                    <div class="pb-fm-a"><img :src="familia.foto || capa" :srcset="srcsetDe(familia.foto || capa)" sizes="(max-width: 767px) 85vw, 446px" width="1200" height="1200" :alt="familia.titulo.antes + ' ' + familia.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <div class="pb-fm-b"><img :src="fotoExtra" :srcset="srcsetDe(fotoExtra)" sizes="220px" width="512" height="512" alt="" loading="lazy" decoding="async"></div>
                     <span class="pb-fm-heart" aria-hidden="true"><Icone nome="heart" :tamanho="28" :traco="2.4" /></span>
                 </div>
                 <p v-if="citacao" class="pb-fm-quote pb-reveal">{{ citacao }}</p>

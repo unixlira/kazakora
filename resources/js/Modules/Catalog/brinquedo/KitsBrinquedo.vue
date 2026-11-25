@@ -6,7 +6,7 @@
 import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
-import { argumentoDoKit, composicaoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits } from './kits';
+import { argumentoDoKit, composicaoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, srcsetDoKit } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -52,7 +52,7 @@ const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|des
                 <Icone v-if="selos[kit.id].estrela" nome="star" :tamanho="12" :traco="2.4" />{{ selos[kit.id].texto }}
             </span>
             <div class="kb-kc-img">
-                <img v-if="fotoDoKit(kit)" :src="fotoDoKit(kit)" :alt="nomeCurtoDoKit(kit)" loading="lazy" decoding="async">
+                <img v-if="fotoDoKit(kit)" :src="fotoDoKit(kit)" :srcset="srcsetDoKit(kit)" sizes="(max-width: 900px) 92vw, 340px" width="1200" height="1200" :alt="nomeCurtoDoKit(kit)" loading="lazy" decoding="async">
                 <!-- Faixa "o que vem" no alto da foto, com um ícone por brinquedo (como a referência). -->
                 <span class="kb-kc-faixa" aria-hidden="true">
                     <template v-for="(item, j) in partesDoKit(kit)" :key="j"><b v-if="j" class="kb-kc-mais">+</b><span><Icone :nome="iconeDaParte(item)" :tamanho="18" :traco="2.4" />{{ item }}</span></template>

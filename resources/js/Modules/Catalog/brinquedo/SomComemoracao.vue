@@ -4,10 +4,9 @@
 // - toca UMA vez por visita da página (não repete a cada clique);
 // - o navegador bloqueia som antes de a pessoa mexer na página: tenta ao abrir e,
 //   se for barrado, toca no primeiro toque, clique, tecla ou rolagem;
-// - desde 25/11/2026 o botão fixo é do som do VÍDEO (somVideo.js); o "Aeeee!" não tem botão.
+// - desde 25/11/2026 não há botão fixo: o som do vídeo fica no adesivo do vídeo (somVideo.js) e o "Aeeee!" não tem botão.
 //   O mudo antigo guardado no aparelho (localStorage) continua valendo para o "Aeeee!".
 import { onMounted, onUnmounted, ref } from 'vue';
-import Icone from './Icone.vue';
 import { somVideo } from './somVideo';
 
 const props = defineProps({
@@ -70,9 +69,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <!-- Botão fixo: som do VÍDEO da página (o "Aeeee!" é separado e não tem botão). -->
-    <button v-if="somVideo.existe" type="button" class="pb-som" :aria-pressed="somVideo.mudo" :aria-label="somVideo.mudo ? 'Ligar o som do vídeo' : 'Desligar o som do vídeo'"
-        :title="somVideo.mudo ? 'Ligar som do vídeo' : 'Sem som no vídeo'" data-kzm="som-video" @click.stop="somVideo.alternar(); somVideo.mudo || audio?.pause()">
-        <Icone :nome="somVideo.mudo ? 'volume-x' : 'volume-2'" :tamanho="18" />
-    </button>
+    <!-- Sem botão fixo no canto (pedido do Lira 25/11/2026): o som do vídeo fica só no adesivo ao lado
+         do vídeo, junto do play/pause. O "Aeeee!" toca sozinho uma vez e não tem botão. -->
+    <span hidden></span>
 </template>

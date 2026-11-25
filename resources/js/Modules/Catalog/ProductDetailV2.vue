@@ -69,7 +69,7 @@ const props = defineProps({
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
 // Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
-const LOGO_KORAKIDS = { href: '/?categoria=brinquedos-e-games#produtos', alt: 'KoraKids by KazaKora', png: '/images/marca/logo-korakids-largo.png?v=1', webp: '/images/marca/logo-korakids-largo.webp?v=1', largura: 788, altura: 120, classe: 'h-10 w-auto max-w-[66vw] object-contain lg:h-[52px] lg:max-w-none' };
+const LOGO_KORAKIDS = { href: '/?categoria=brinquedos-e-games#produtos', alt: 'KoraKids by KazaKora', png: '/images/marca/logo-korakids-arco.png?v=1', webp: '/images/marca/logo-korakids-arco.webp?v=1', largura: 335, altura: 144, classe: 'h-[52px] w-auto object-contain lg:h-[72px]' };
 // Na página de brinquedo um kit já abre marcado, como na referência (o recomendado).
 const kitInicial = () => (props.layout === 'brinquedo' && props.variations.length
     ? kitRecomendado([props.product, ...props.variations])

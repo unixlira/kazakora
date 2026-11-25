@@ -59,65 +59,67 @@ const enviar = async () => {
     }
 };
 
-const campo = 'w-full rounded-lg border border-store-border-strong bg-store-bg-raised px-3.5 py-3 text-[15px] text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none';
+const campo = 'w-full min-w-0 rounded-xl border-0 bg-white px-4 py-3.5 text-[15px] text-[#1b1714] placeholder:text-[#8a7f77] shadow-sm focus:outline-none focus:ring-4 focus:ring-white/40';
 </script>
 
 <template>
-<section class="mt-16 border-t border-store-border bg-store-bg-sunken" aria-labelledby="newsletter-titulo">
-    <div class="mx-auto grid max-w-[1320px] gap-6 px-4 py-10 md:px-6 lg:grid-cols-[1fr_minmax(0,560px)] lg:items-center lg:gap-12 lg:py-12">
-        <div>
-            <p class="font-store-mono text-xs uppercase tracking-wider text-store-fg-muted">
-                <i class="fa-regular fa-envelope mr-1.5" aria-hidden="true"></i>Newsletter KazaKora
-            </p>
-            <h2 id="newsletter-titulo" class="font-display mt-2 text-2xl font-semibold leading-tight md:text-3xl">
-                Novidades da KazaKora no seu e-mail
-            </h2>
-            <p class="mt-2 max-w-[46ch] text-sm text-store-fg-muted md:text-base">
-                Lançamentos, ofertas e as matérias do nosso blog, sem encher sua caixa de entrada.
-            </p>
-        </div>
+<!-- Modelo 8 "Pôr do sol" escolhido pelo Lira (24/11/2026): cartão em degradê laranja→âmbar,
+     solto do rodapé (com espaço em volta), texto de notícias populares e ofertas. -->
+<section class="mx-auto mt-16 mb-12 max-w-[1320px] px-4 md:px-6" aria-labelledby="newsletter-titulo">
+    <div class="relative overflow-hidden rounded-3xl bg-[linear-gradient(120deg,#F44D00_0%,#FF7A1A_55%,#FFB443_100%)] px-6 py-9 text-white shadow-[0_18px_40px_-20px_rgba(244,77,0,0.55)] md:px-12 md:py-12">
+        <span class="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/15" aria-hidden="true"></span>
+        <span class="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full bg-white/10" aria-hidden="true"></span>
 
-        <div v-if="sucesso" class="rounded-2xl border border-green-200 bg-green-50 p-5 text-green-800" role="status" aria-live="polite">
-            <p class="font-semibold"><i class="fa-solid fa-circle-check mr-1.5" aria-hidden="true"></i>{{ sucesso }}</p>
-            <p class="mt-1 text-sm">Abra o e-mail e toque em "Confirmar inscrição". Não chegou? Olhe a caixa de spam ou promoções.</p>
-        </div>
-
-        <form v-else class="relative flex flex-col gap-3" novalidate @submit.prevent="enviar">
-            <!-- E-mail primeiro no celular (é o que importa); no computador, nome à esquerda. -->
-            <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-                <div class="sm:order-2">
-                    <label class="sr-only" for="newsletter-email">Seu e-mail</label>
-                    <input id="newsletter-email" v-model="email" type="email" inputmode="email" autocomplete="email" maxlength="160" required placeholder="Seu melhor e-mail"
-                        :class="campo" :aria-invalid="!!erros.email" aria-describedby="newsletter-erro-email">
-                    <p v-if="erros.email" id="newsletter-erro-email" class="mt-1 text-xs text-red-600">{{ erros.email }}</p>
-                </div>
-                <div class="sm:order-1">
-                    <label class="sr-only" for="newsletter-nome">Seu nome (opcional)</label>
-                    <input id="newsletter-nome" v-model="nome" type="text" autocomplete="given-name" maxlength="120" placeholder="Seu nome (opcional)" :class="campo">
-                </div>
+        <div class="relative grid gap-6 lg:grid-cols-[1fr_minmax(0,540px)] lg:items-center lg:gap-12">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[0.14em] text-white/85">
+                    <i class="fa-regular fa-envelope mr-1.5" aria-hidden="true"></i>Newsletter KazaKora
+                </p>
+                <h2 id="newsletter-titulo" class="font-display mt-2 text-[1.7rem] font-extrabold leading-[1.08] [text-wrap:balance] md:text-4xl">
+                    Notícias populares e ofertas no seu e-mail
+                </h2>
+                <p class="mt-3 max-w-[46ch] text-sm text-white/95 md:text-base">
+                    Toda semana: as matérias mais lidas do blog e as melhores ofertas da loja, antes de todo mundo.
+                </p>
             </div>
 
-            <label class="flex items-start gap-2.5 text-xs leading-relaxed text-store-fg-muted">
-                <input v-model="consentimento" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-[#111111]" :aria-invalid="!!erros.consentimento">
-                <span>
-                    Quero receber e-mails da KazaKora com novidades, ofertas e as matérias do blog. Posso sair quando quiser, com 1 clique.
-                    Veja a <Link href="/politica-de-privacidade" class="underline hover:text-store-fg">Política de Privacidade</Link>.
-                </span>
-            </label>
-            <p v-if="erros.consentimento" class="-mt-1 text-xs text-red-600">{{ erros.consentimento }}</p>
-
-            <!-- Armadilha pra robô: invisível pra quem usa o site. -->
-            <div class="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden="true">
-                <label>Seu site <input v-model="website" type="text" name="website" tabindex="-1" autocomplete="off"></label>
+            <div v-if="sucesso" class="rounded-2xl bg-white/95 p-5 text-[#1b1714]" role="status" aria-live="polite">
+                <p class="font-semibold text-[#1F8A4C]"><i class="fa-solid fa-circle-check mr-1.5" aria-hidden="true"></i>{{ sucesso }}</p>
+                <p class="mt-1 text-sm">Abra o e-mail e toque em "Confirmar inscrição". Não chegou? Olhe a caixa de spam ou promoções.</p>
             </div>
 
-            <button type="submit" :disabled="enviando"
-                class="rounded-lg bg-store-accent px-5 py-3 text-[15px] font-semibold text-store-accent-contrast transition hover:opacity-90 disabled:opacity-50 sm:self-start">
-                <i v-if="enviando" class="fa-solid fa-spinner mr-1.5 animate-spin" aria-hidden="true"></i>
-                Quero receber
-            </button>
-            <p v-if="erros.geral" class="text-xs text-red-600" role="alert">{{ erros.geral }}</p>
-        </form>
+            <form v-else class="relative flex flex-col gap-3" novalidate @submit.prevent="enviar">
+                <div class="flex flex-col gap-2.5 sm:flex-row">
+                    <div class="min-w-0 flex-1">
+                        <label class="sr-only" for="newsletter-email">Seu e-mail</label>
+                        <input id="newsletter-email" v-model="email" type="email" inputmode="email" autocomplete="email" maxlength="160" required placeholder="Seu melhor e-mail"
+                            :class="campo" :aria-invalid="!!erros.email" aria-describedby="newsletter-erro-email">
+                    </div>
+                    <button type="submit" :disabled="enviando"
+                        class="shrink-0 rounded-xl bg-white px-6 py-3.5 text-[15px] font-extrabold text-[#F44D00] shadow-sm transition hover:bg-[#FFF1E8] disabled:opacity-60">
+                        <i v-if="enviando" class="fa-solid fa-spinner mr-1.5 animate-spin" aria-hidden="true"></i>
+                        Quero receber
+                    </button>
+                </div>
+                <p v-if="erros.email" id="newsletter-erro-email" class="rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-red-700">{{ erros.email }}</p>
+
+                <label class="flex items-start gap-2.5 text-xs leading-relaxed text-white/90">
+                    <input v-model="consentimento" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-white" :aria-invalid="!!erros.consentimento">
+                    <span>
+                        Quero receber e-mails da KazaKora com notícias, ofertas e as matérias do blog. Posso sair quando quiser, com 1 clique.
+                        Veja a <Link href="/politica-de-privacidade" class="underline hover:text-white">Política de Privacidade</Link>.
+                    </span>
+                </label>
+                <p v-if="erros.consentimento" class="-mt-1 rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-red-700">{{ erros.consentimento }}</p>
+
+                <!-- Armadilha pra robô: invisível pra quem usa o site. -->
+                <div class="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden="true">
+                    <label>Seu site <input v-model="website" type="text" name="website" tabindex="-1" autocomplete="off"></label>
+                </div>
+
+                <p v-if="erros.geral" class="rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-red-700" role="alert">{{ erros.geral }}</p>
+            </form>
+        </div>
     </div>
 </section>
 </template>

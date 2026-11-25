@@ -160,6 +160,8 @@ class AmazonTaxasSpApiTest extends TestCase
 
     public function test_substitui_a_linha_da_cora_box_sem_somar_em_dobro_e_nao_mexe_na_taxa_manual(): void
     {
+        // Relógio parado: o assertDatabaseHas abaixo compara computed_at com now() (falhava quando o segundo virava).
+        $this->freezeTime();
         $cora = $this->pedido('701-0000000-0000001');
         $manual = $this->pedido('702-0000000-0000002');
         // Linha gravada pela coleta antiga (tela da Seller Central), mesma chave.

@@ -196,10 +196,11 @@ onUnmounted(() => {
                 <span v-for="n in 6" :key="n" class="contents">
                     <!-- Black Friday automática (pedido do Lira 2026-11-24): a frase da BF vem primeiro e as
                          outras continuam depois dela; passou a data (loja.blackfriday_ate) o servidor manda null. -->
-                    <span v-if="$page.props.blackfriday" class="font-store-mono px-5 text-[0.68rem] font-bold uppercase tracking-wider after:ml-5 after:content-['|']" data-faixa-blackfriday><i class="fa-solid fa-tag mr-1"></i>Black Friday: {{ $page.props.blackfriday.rotulo }} em todo o site, já aplicado no carrinho</span>
+                    <span v-if="$page.props.blackfriday" class="font-store-mono px-5 text-[0.68rem] font-bold uppercase tracking-wider after:ml-5 after:content-['|']" data-faixa-blackfriday><i class="fa-solid fa-tag mr-1 text-white" aria-hidden="true"></i>Black Friday: {{ $page.props.blackfriday.rotulo }} em todo o site, já aplicado no carrinho</span>
+                    <!-- Todas em negrito e ícones brancos como a tag da BF (pedido do Lira 2026-11-24). -->
                     <!-- Frases da faixa (FaixaDoTopo.php, pedido do Lira 2026-11-24): na página de produto, os
                          benefícios daquele produto; no resto da loja, as gerais. Sem raio (fa-bolt). -->
-                    <span v-for="(frase, i) in frasesDaFaixa" :key="i" class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['|']" data-faixa-frase><i v-if="frase.icone" :class="[frase.icone, 'mr-1']" aria-hidden="true"></i>{{ frase.texto }}</span>
+                    <span v-for="(frase, i) in frasesDaFaixa" :key="i" class="font-store-mono px-5 text-[0.68rem] font-bold uppercase tracking-wider after:ml-5 after:content-['|']" data-faixa-frase><i v-if="frase.icone" :class="[frase.icone, 'mr-1 text-white']" aria-hidden="true"></i>{{ frase.texto }}</span>
                 </span>
             </div>
         </div>

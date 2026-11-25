@@ -121,17 +121,17 @@
 /* Quantidade + Comprar (62 px de altura) */
 .pd2.pg-brinquedo .compra .acao { position: static !important; display: flex !important; gap: 10px; margin: 0; padding: 0; background: none; }
 .pd2.pg-brinquedo .pb-qtd { flex: 0 0 auto; display: flex; align-items: center; height: 62px; border: 2px solid var(--ink); border-radius: 18px; box-shadow: 0 4px 0 var(--ink); background: #fff; }
-.pd2.pg-brinquedo .pb-qtd button { width: 36px; height: 36px; margin: 6px; border: 0; border-radius: 12px; background: var(--creme); display: grid; place-items: center; color: var(--ink); cursor: pointer; transition: transform .15s, background .15s; }
+.pd2.pg-brinquedo .pb-qtd button { width: 36px; height: 36px; margin: 4px; border: 0; border-radius: 12px; background: var(--creme); display: grid; place-items: center; color: var(--ink); cursor: pointer; transition: transform .15s, background .15s; }
 .pd2.pg-brinquedo .pb-qtd button:hover { background: var(--amarelo); transform: scale(1.08); }
 .pd2.pg-brinquedo .pb-qtd button:active { transform: scale(.92); }
-.pd2.pg-brinquedo .pb-qtd span { min-width: 22px; text-align: center; font: 600 20px/1 var(--display); }
+.pd2.pg-brinquedo .pb-qtd span { min-width: 24px; text-align: center; font: 600 20px/1 var(--display); }
 .pd2.pg-brinquedo .compra .comprar-agora { flex: 1; min-height: 62px; border-radius: 999px; background: var(--verde); color: #fff; font: 600 20px/1 var(--display); text-transform: none; letter-spacing: .02em; padding: 14px 28px; box-shadow: 0 5px 0 var(--verde-d); position: relative; overflow: hidden; transition: transform .15s, box-shadow .15s; }
 .pd2.pg-brinquedo .compra .comprar-agora:hover { background: var(--verde); transform: translateY(2px); box-shadow: 0 3px 0 var(--verde-d); }
 .pd2.pg-brinquedo .compra .comprar-agora:active { transform: translateY(5px); box-shadow: 0 0 0 var(--verde-d); }
 
 /* 4 selos (126 x 100; ícone 38) */
 .pd2.pg-brinquedo .pb-selos { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 18px 0 6px; padding: 0; }
-.pd2.pg-brinquedo .pb-selos li { display: flex; flex-direction: column; align-items: center; gap: 7px; background: #fff; border: 2px solid var(--ink); border-radius: 16px; padding: 12px 4px 10px; box-shadow: 0 4px 0 var(--ink); text-align: center; font: 600 12.5px/1.2 var(--display); color: var(--ink); transition: transform .2s; }
+.pd2.pg-brinquedo .pb-selos li { min-height: 100px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 7px; background: #fff; border: 2px solid var(--ink); border-radius: 16px; padding: 12px 4px 10px; box-shadow: 0 4px 0 var(--ink); text-align: center; font: 600 12.5px/1.2 var(--display); color: var(--ink); transition: transform .2s; }
 .pd2.pg-brinquedo .pb-selos li:hover { transform: translateY(-3px); }
 .pd2.pg-brinquedo .pb-selos li > span { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--c); color: #fff; animation: pbpop .5s both; }
 .pd2.pg-brinquedo .pb-selos li > span.cor-amarelo { color: var(--ink); }
@@ -163,6 +163,9 @@
 .pd2.pg-brinquedo .pb-media { max-width: 620px; margin: 0 auto; border-radius: 26px; overflow: hidden; border: 3px solid var(--ink); box-shadow: 0 9px 0 var(--ink); background: var(--areia); }
 .pd2.pg-brinquedo .pb-media img, .pd2.pg-brinquedo .pb-media video { display: block; width: 100%; height: auto; }
 .pd2.pg-brinquedo .pb-media-560 { max-width: 560px; }
+/* foto da seção das habilidades em pé, como na referência (414 x 544) */
+.pd2.pg-brinquedo .pb-media-620 { max-width: 414px; }
+.pd2.pg-brinquedo .pb-media-620 img { aspect-ratio: 414 / 544; object-fit: cover; }
 .pd2.pg-brinquedo .pb-media-520 { max-width: 520px; background: #f3f3f1; }
 .pd2.pg-brinquedo .pb-media-560 img, .pd2.pg-brinquedo .pb-media-520 img { aspect-ratio: 1; object-fit: cover; }
 .pd2.pg-brinquedo .pb-cta { text-align: center; margin-top: 38px; }
@@ -270,7 +273,7 @@
 .pd2.pg-brinquedo .kb-kc-preco s { font: 700 14px/1 var(--corpo); color: #9a9aa8; }
 .pd2.pg-brinquedo .kb-kc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
 .pd2.pg-brinquedo .kb-kc-chips .kb-pilula { font-size: 12px; padding: 7px 9px; }
-.pd2.pg-brinquedo .kb-kc-btn { width: 100%; margin-top: auto; padding: 17px 16px; font-size: 17px; }
+.pd2.pg-brinquedo .kb-kc .kb-kc-btn { width: 100%; margin-top: auto; padding: 17px 16px; font-size: 17px; }
 .pd2.pg-brinquedo .kb-grid.is-in .kb-kc { animation: pbpop .55s both; }
 .pd2.pg-brinquedo .kb-grid.is-in .kb-kc:nth-child(2) { animation-delay: .12s; } .pd2.pg-brinquedo .kb-grid.is-in .kb-kc:nth-child(3) { animation-delay: .24s; }
 
@@ -382,7 +385,6 @@
 @media (max-width: 767px) {
     .pd2.pg-brinquedo .grade { padding-top: 16px; }
     .pd2.pg-brinquedo .pb-h2 { font-size: clamp(24px, 6.61vw, 30px); }
-    .pd2.pg-brinquedo .pb-lead { font-size: 16px; }
     .pd2.pg-brinquedo .pb-sec { padding: 60px 0; }
     .pd2.pg-brinquedo .pb-sec-colada { padding-top: 0; }
     .pd2.pg-brinquedo .pb-why-card { padding: 18px 12px 16px; }
@@ -401,7 +403,6 @@
     .pd2.pg-brinquedo .pb-faq-body { padding: 0 16px 16px; }
     .pd2.pg-brinquedo .pb-fm-quote { font-size: 17px; }
     .pd2.pg-brinquedo .pb-fn-cubes span { transform: scale(.7); }
-    .pd2.pg-brinquedo .pb-btn { padding: 20px 30px; font-size: 18px; }
     .pd2.pg-brinquedo .pb-snap { right: -8px; }
     .pd2.pg-brinquedo .pb-adesivo { left: -8px; font-size: 19px; }
     .pd2.pg-brinquedo .compra .pb-relogio span { width: 33px; }

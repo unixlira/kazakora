@@ -71,7 +71,7 @@ const beneficios = computed(() => (props.anuncio?.beneficios ?? []).slice(0, 4).
 })));
 const ICONES_HABILIDADE = [
     [/ingl|idioma|bil[ií]ng/i, 'languages'], [/portugu|vocabul|palavra|leitura/i, 'book-open'], [/mem[oó]ria|associa/i, 'brain'],
-    [/sonor|ouvi|audi|som/i, 'ear'], [/coordena|motor/i, 'hand'], [/curios|descobr/i, 'search'],
+    [/pron[uú]ncia|sonor|ouvi|audi|som/i, 'ear'], [/coordena|motor/i, 'hand'], [/curios|descobr/i, 'search'],
     [/racioc|l[oó]gic|problema/i, 'lightbulb'], [/criativ|imagina/i, 'palette'], [/concentra|aten/i, 'target'],
 ];
 const habilidades = computed(() => (props.anuncio?.comparativo?.habilidades ?? []).map(semEmoji).filter(Boolean).slice(0, 6)
@@ -104,16 +104,16 @@ const citacao = computed(() => semEmoji(props.anuncio?.chamada ?? ''));
 
 const TELAS = ['smartphone', 'tv', 'gamepad-2', 'tablet'];
 const PASSOS = [
-    { icone: 'gift', cor: 'vermelho', titulo: 'Escolha o kit', texto: 'Do kit para começar ao mais completo: é só escolher o tamanho da diversão.' },
-    { icone: 'truck', cor: 'azul', titulo: 'Enviamos com rastreio', texto: 'Você acompanha cada passo do pedido em Meus Pedidos.' },
-    { icone: 'sparkles', cor: 'amarelo', titulo: 'Olhos brilhando', texto: 'A caixa chega e a criança descobre o brinquedo novo.' },
-    { icone: 'blocks', cor: 'verde', titulo: 'Hora de brincar', texto: 'Aprender, criar e se divertir todos os dias, longe das telas.' },
+    { icone: 'gift', cor: 'vermelho', titulo: 'Escolha o kit', texto: 'Só o livro ou com mais um brinquedo: você decide.' },
+    { icone: 'truck', cor: 'azul', titulo: 'Enviamos com rastreio', texto: 'Acompanhe cada passo em Meus Pedidos.' },
+    { icone: 'sparkles', cor: 'amarelo', titulo: 'Olhos brilhando', texto: 'Chegou! Primeiro toque, primeira palavra.' },
+    { icone: 'blocks', cor: 'verde', titulo: 'Aprender brincando', texto: 'Português e inglês todo dia, longe das telas.' },
 ];
 const GARANTIA = [
-    { cor: 'vermelho', texto: 'Mais feliz' },
+    { cor: 'vermelho', texto: 'Falando palavras novas' },
     { cor: 'azul', texto: 'Mais longe das telas' },
     { cor: 'amarelo', texto: 'Brincando e aprendendo' },
-    { cor: 'verde', texto: 'Se desenvolvendo mais' },
+    { cor: 'verde', texto: 'Arriscando o inglês' },
 ];
 const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
 </script>

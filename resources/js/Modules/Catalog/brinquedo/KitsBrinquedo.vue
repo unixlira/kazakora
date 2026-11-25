@@ -6,7 +6,8 @@
 import { computed } from 'vue';
 import { formatPrice } from '@/Shared/productCard';
 import Icone from './Icone.vue';
-import { argumentoDoKit, composicaoDoKit, economia, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, srcsetDoKit } from './kits';
+import { ICONES } from './icones';
+import { argumentoDoKit, composicaoDoKit, economia, unidadesDoKit, fotoDoKit, itensDoKit, nomeCurtoDoKit, ordenarKits, porUnidade, precoDeDoKit, precoDoKit, selosDosKits, srcsetDoKit } from './kits';
 
 const props = defineProps({
     opcoes: { type: Array, required: true },
@@ -18,8 +19,12 @@ const emit = defineEmits(['escolher']);
 const kits = computed(() => ordenarKits(props.opcoes));
 const selos = computed(() => selosDosKits(props.opcoes));
 // Partes do kit para a faixa da foto: "Livro + Lousa Mágica LED" → ["Livro", "Lousa Mágica LED"].
-const partesDoKit = (kit) => composicaoDoKit(kit).split(/\s\+\s/).map((p) => p.trim()).filter(Boolean);
+// Com partes no conteúdo da página (kit_partes), cada uma traz o próprio ícone.
 const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|desenh/i.test(parte) ? 'palette' : /quebra|puzzle|cabe/i.test(parte) ? 'puzzle' : 'gift');
+const partesDoKit = (kit) => (kit.kit_partes?.length
+    ? kit.kit_partes.map((p) => ({ texto: p.texto, icone: ICONES[p.icone] ? p.icone : 'gift' }))
+    : composicaoDoKit(kit).split(/\s\+\s/).map((p) => p.trim()).filter(Boolean).map((texto) => ({ texto, icone: iconeDaParte(texto) })));
+// "R$ X por brinquedo" só faz sentido com 2 ou mais brinquedos no kit (com 1 repetiria o preço).
 </script>
 
 <template>
@@ -40,7 +45,7 @@ const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|des
                 <b>{{ formatPrice(precoDoKit(kit)) }}</b>
             </span>
             <span class="kb-pilulas">
-                <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </span>
         </button>
@@ -55,7 +60,7 @@ const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|des
                 <img v-if="fotoDoKit(kit)" :src="fotoDoKit(kit)" :srcset="srcsetDoKit(kit)" sizes="(max-width: 900px) 92vw, 340px" width="1200" height="1200" :alt="nomeCurtoDoKit(kit)" loading="lazy" decoding="async">
                 <!-- Faixa "o que vem" no alto da foto, com um ícone por brinquedo (como a referência). -->
                 <span class="kb-kc-faixa" aria-hidden="true">
-                    <template v-for="(item, j) in partesDoKit(kit)" :key="j"><b v-if="j" class="kb-kc-mais">+</b><span><Icone :nome="iconeDaParte(item)" :tamanho="18" :traco="2.4" />{{ item }}</span></template>
+                    <template v-for="(item, j) in partesDoKit(kit)" :key="j"><b v-if="j" class="kb-kc-mais">+</b><span><Icone :nome="item.icone" :tamanho="18" :traco="2.4" />{{ item.texto }}</span></template>
                 </span>
             </div>
             <h3 class="kb-kc-nome">{{ nomeCurtoDoKit(kit) }}</h3>
@@ -63,7 +68,7 @@ const iconeDaParte = (parte) => (/livro/i.test(parte) ? 'book-open' : /lousa|des
             <p v-if="argumentoDoKit(kit)" class="kb-kc-arg">{{ argumentoDoKit(kit) }}</p>
             <div class="kb-kc-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></div>
             <div class="kb-kc-chips">
-                <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
+                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </div>
             <button type="button" class="pb-btn kb-kc-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">

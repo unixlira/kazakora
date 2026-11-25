@@ -1,9 +1,13 @@
 // Kits da página de brinquedo (pedido do Lira 24/11/2026): cada variação vira um
 // cartão de kit com selo, preço "de/por", preço por brinquedo e economia.
 // Nada aqui é inventado: os números saem do preço cadastrado de cada variação.
+// Desde 25/11/2026 o conteúdo da página (pagina_brinquedo.kits) pode dar a cada kit um nome de oferta
+// (kit_nome), o que vem nele (kit_itens), quantos brinquedos (kit_unidades) e as partes com ícone
+// (kit_partes); ver aplicarKits.
 
 /** Quantos brinquedos vêm no kit: "Livro Falante + Lousa Mágica LED" = 2 (conta a composição). */
 export const unidadesDoKit = (variante) => {
+    if (Number(variante?.kit_unidades) > 0) return Number(variante.kit_unidades);
     const nome = composicaoDoKit(variante);
     const partes = nome.split(/\s\+\s/).map((parte) => parte.trim()).filter(Boolean);
     return Math.max(1, partes.length);
@@ -17,10 +21,12 @@ export const nomeDoKit = (variante) => String(variante?.variation || variante?.n
  */
 const PARENTESES = /\s*\(([^()]*)\)\s*$/;
 export const nomeCurtoDoKit = (variante) => {
+    if (variante?.kit_nome) return variante.kit_nome;
     const nome = nomeDoKit(variante).replace(/\s*\(modelo sortido\)\s*$/i, '');
     return nome.replace(PARENTESES, '').trim() || nome;
 };
 export function composicaoDoKit(variante) {
+    if (variante?.kit_itens) return variante.kit_itens;
     const nome = nomeDoKit(variante).replace(/\s*\(modelo sortido\)\s*$/i, '');
     const m = nome.match(PARENTESES);
     return (m ? m[1] : nome).trim();
@@ -118,3 +124,28 @@ export const semEmoji = (texto) => String(texto ?? '').replace(/[\p{Extended_Pic
 
 /** Argumento do kit com 3 ou mais brinquedos (pedido do Lira: "os 3 deixam a criança sem tela"). */
 export const argumentoDoKit = (variante) => (unidadesDoKit(variante) >= 3 ? `${unidadesDoKit(variante)} brincadeiras para trocar a tela por diversão` : '');
+
+/**
+ * Junta às opções (variações ou o produto sozinho) o nome de oferta, os itens e as partes de cada kit do
+ * conteúdo da página (pagina_brinquedo.kits.itens, na ordem do mais barato ao mais caro). Se o número de
+ * kits do conteúdo não bate com o de opções (variação nova ou desligada), fica o nome cadastrado.
+ */
+export const aplicarKits = (opcoes, conteudo) => {
+    const itens = Array.isArray(conteudo?.itens) ? conteudo.itens : [];
+    const ordem = ordenarKits(opcoes);
+    if (!itens.length || itens.length !== ordem.length) return opcoes;
+    // Cada kit pode dizer o id do produto/variação ("id"); se todos batem, vale o id; senão, a ordem de preço.
+    const ids = new Set(ordem.map((opcao) => opcao.id));
+    const peloId = itens.every((kit) => ids.has(Number(kit?.id)));
+    const porId = new Map(peloId ? itens.map((kit) => [Number(kit.id), kit]) : ordem.map((opcao, i) => [opcao.id, itens[i]]));
+    return opcoes.map((opcao) => {
+        const kit = porId.get(opcao.id) ?? {};
+        return {
+            ...opcao,
+            kit_nome: semEmoji(kit.nome ?? '') || null,
+            kit_itens: semEmoji(kit.itens ?? '') || null,
+            kit_unidades: Number(kit.unidades) > 0 ? Number(kit.unidades) : null,
+            kit_partes: Array.isArray(kit.partes) ? kit.partes.filter((p) => p?.texto).slice(0, 4) : null,
+        };
+    });
+};

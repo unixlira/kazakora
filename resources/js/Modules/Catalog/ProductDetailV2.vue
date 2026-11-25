@@ -33,6 +33,8 @@ import SomComemoracao from './brinquedo/SomComemoracao.vue';
 import Cubo from './brinquedo/Cubo.vue';
 import Icone from './brinquedo/Icone.vue';
 import { kitRecomendado, nomeDoKit, semEmoji } from './brinquedo/kits';
+import CabecalhoBrinquedo from './brinquedo/CabecalhoBrinquedo.vue';
+import { ligarEntradas, tabelaDeParcelas, vigiarBotaoCompra } from './brinquedo/efeitos';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -864,18 +866,33 @@ const chipsBrinquedo = computed(() => {
 // Cronômetro do card de oferta (dias, horas e minutos até o fim da data "ate" da oferta).
 const agora = ref(Date.now());
 let relogio = null;
-onMounted(() => { if (brinquedo.value) relogio = setInterval(() => { agora.value = Date.now(); }, 30000); });
+onMounted(() => { if (brinquedo.value) relogio = setInterval(() => { agora.value = Date.now(); }, 1000); });
 onUnmounted(() => clearInterval(relogio));
 const contagem = computed(() => {
     if (!oferta.value?.ate) return null;
     const falta = Date.parse(`${oferta.value.ate}T23:59:59-03:00`) - agora.value;
     if (!(falta > 0)) return null;
-    const minutos = Math.floor(falta / 60000);
-    return { dias: Math.floor(minutos / 1440), horas: String(Math.floor((minutos % 1440) / 60)).padStart(2, '0'), min: String(minutos % 60).padStart(2, '0') };
+    const segundos = Math.floor(falta / 1000);
+    const minutos = Math.floor(segundos / 60);
+    // Como na referência: com dias mostra dias/horas/minutos; no último dia, horas/minutos/segundos.
+    return { dias: Math.floor(minutos / 1440), horas: String(Math.floor((minutos % 1440) / 60)).padStart(2, '0'), min: String(minutos % 60).padStart(2, '0'), seg: String(segundos % 60).padStart(2, '0') };
 });
 const irParaCompra = () => {
     document.getElementById('comprar')?.scrollIntoView({ behavior: rolarSuave() ? 'smooth' : 'auto', block: 'start' });
 };
+// Efeitos de entrada ao rolar e barra fixa escura de compra (só na página de brinquedo).
+const barraBrinquedo = ref(false);
+const parcelasAbertas = ref(false);
+const tabelaParcelas = computed(() => tabelaDeParcelas(precoPor.value, page.props.parcelamento));
+let pararEntradas = null;
+let pararBarra = null;
+onMounted(async () => {
+    if (!brinquedo.value) return;
+    await nextTick();
+    pararEntradas = ligarEntradas(document.querySelector('.pg-brinquedo'));
+    pararBarra = vigiarBotaoCompra(() => botaoCompraEl.value, (passou) => { barraBrinquedo.value = passou; });
+});
+onUnmounted(() => { pararEntradas?.(); pararBarra?.(); });
 const escolherKit = (kit, rolar = false) => {
     escolherVariacao(kit);
     kzmAcao(`kit:${kit.id}`);
@@ -887,7 +904,8 @@ const escolherKit = (kit, rolar = false) => {
 <template>
     <Head :title="product.seo_title || product.name" />
 
-    <AppLayout>
+    <AppLayout :sem-topo="brinquedo">
+        <template v-if="brinquedo" #topo><CabecalhoBrinquedo /></template>
         <div class="pd2" :class="{ 'pg-brinquedo': brinquedo }">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
@@ -928,6 +946,7 @@ const escolherKit = (kit, rolar = false) => {
                                     </template>
                                     <img v-else-if="activeMedia" :src="activeMedia.src" :srcset="activeMedia.srcset" :sizes="activeMedia.srcset ? FOTO_SIZES : null" :alt="`${product.name} — foto ${activeIndex + 1}`" fetchpriority="high">
                                     <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
+                                    <span v-if="brinquedo && mediaItems.length > 1" class="pb-contador" aria-hidden="true">{{ activeIndex + 1 }} / {{ mediaItems.length }}</span>
 
                                     <template v-if="mediaItems.length > 1">
                                         <button type="button" class="seta esq" data-kzm="galeria-seta" aria-label="Mídia anterior" @click.stop="goPrev"><i class="fas fa-chevron-left"></i></button>
@@ -997,7 +1016,7 @@ const escolherKit = (kit, rolar = false) => {
                                 </ul>
                                 <p v-if="oferta.texto">{{ oferta.texto }}</p>
                                 <div v-if="brinquedo && contagem" class="pb-relogio" aria-label="Tempo até o fim da oferta">
-                                    <span><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span>
+                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span v-if="!contagem.dias"><b>{{ contagem.seg }}</b>seg</span>
                                 </div>
                             </div>
 
@@ -1037,7 +1056,10 @@ const escolherKit = (kit, rolar = false) => {
                                 <div class="pb-pagamento">
                                     <span v-if="precoPix !== null && seloPix"><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>No Pix</small><b>{{ formatPrice(precoPix) }}</b></span>
                                     <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><Icone nome="diamond-plus" :tamanho="18" /></i><small>Aceitamos</small><b>Pix</b></span>
-                                    <span><i class="pb-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="pb-pag-seta" nome="chevron-down" :tamanho="16" /></span>
+                                    <button type="button" class="pb-pag-parcelas" :aria-expanded="parcelasAbertas" aria-controls="pb-parcelas" @click="parcelasAbertas = !parcelasAbertas"><i class="pb-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="pb-pag-seta" nome="chevron-down" :tamanho="16" /></button>
+                                    <div v-if="parcelasAbertas" id="pb-parcelas" class="pb-parcelas">
+                                        <div v-for="linha in tabelaParcelas" :key="linha.parcelas"><span>{{ linha.parcelas }}x de {{ formatPrice(linha.valor) }}</span><span>{{ linha.juros ? `total ${formatPrice(linha.total)}` : 'sem juros' }}</span></div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1399,6 +1421,16 @@ const escolherKit = (kit, rolar = false) => {
         </div>
 
         <SomComemoracao v-if="brinquedo" />
+
+        <!-- Barra escura de compra da página de brinquedo: entra de baixo quando o botão "Comprar" da
+             caixa sai da tela (celular e computador), com o kit escolhido e o preço. -->
+        <div v-if="brinquedo" class="pb-barra" :class="{ 'is-on': barraBrinquedo }" :aria-hidden="!barraBrinquedo">
+            <div class="pb-barra-info">
+                <small>{{ escolhida && variations.length ? nomeDoKit(escolhida) : product.name }}</small>
+                <b>{{ formatPrice(precoPor) }}</b>
+            </div>
+            <button type="button" class="pb-btn" data-kzm="comprar:barra-brinquedo" :tabindex="barraBrinquedo ? 0 : -1" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'Comprar agora' : 'Esgotado' }}</button>
+        </div>
 
         <Modal :open="showReviewModal" max-width="max-w-[480px]" @close="showReviewModal = false">
             <h3 class="font-display text-xl font-semibold">Avaliar {{ product.name }}</h3>

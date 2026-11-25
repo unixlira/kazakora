@@ -13,6 +13,8 @@ import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 import RodapeLoja from '@/Shared/Components/RodapeLoja.vue';
 
 const page = usePage();
+// semTopo: a página manda o próprio cabeçalho pelo slot "topo" (página de brinquedo, 24/11/2026).
+defineProps({ semTopo: { type: Boolean, default: false } });
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => totalFavoritos());
@@ -173,11 +175,15 @@ onUnmounted(() => {
 
 <template>
     <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
-        <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
-        <FaixaPromo />
         <TrocarSenhaModal />
         <ModalAvaliacao />
         <AvisoCookies />
+        <!-- Página de brinquedo (pedido do Lira 24/11/2026): topo próprio no lugar da faixa, do
+             letreiro e do cabeçalho da loja; o rodapé continua o da loja. -->
+        <slot v-if="semTopo" name="topo" />
+        <template v-else>
+        <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
+        <FaixaPromo />
         <!-- Marquee. "relative" pinta a faixa por cima das formas desfocadas da FaixaPromo
              (o PageSpeed lia o laranja delas atrás do "Full" verde). -->
         <div class="relative overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
@@ -472,6 +478,7 @@ onUnmounted(() => {
                 </nav>
             </div>
         </header>
+        </template>
 
         <!-- Page content -->
         <main>

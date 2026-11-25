@@ -119,26 +119,30 @@ const GARANTIA = [
             <section class="pb-sec" :class="`fundo-${bloco.fundo}`">
                 <div class="pb-centro">
                     <!-- Primeira história: as telas riscadas (brincadeira longe das telas). -->
-                    <ul v-if="i === 0" class="pb-sem-telas" aria-label="Longe das telas">
+                    <ul v-if="i === 0" class="pb-sem-telas pb-reveal" aria-label="Longe das telas">
                         <li v-for="tela in TELAS" :key="tela"><Icone :nome="tela" /></li>
                     </ul>
-                    <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>{{ bloco.sobre }}</p>
-                    <h2 class="pb-h2">{{ bloco.titulo.antes }} <mark :class="`cor-${bloco.cor}`">{{ bloco.titulo.marcado }}</mark></h2>
-                    <p class="pb-texto">{{ bloco.texto }}</p>
-                    <figure v-if="bloco.foto" class="pb-moldura" :class="{ 'com-coracao': i === 4 || (i === blocos.length - 1 && blocos.length < 5) }">
+                    <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>{{ bloco.sobre }}</p>
+                    <h2 class="pb-h2 pb-reveal">{{ bloco.titulo.antes }} <mark :class="`cor-${bloco.cor}`">{{ bloco.titulo.marcado }}</mark></h2>
+                    <p class="pb-texto pb-reveal">{{ bloco.texto }}</p>
+                    <figure v-if="bloco.foto" class="pb-moldura pb-reveal" :class="{ 'com-coracao': i === 4 || (i === blocos.length - 1 && blocos.length < 5) }">
                         <span class="pb-coracao" aria-hidden="true"><Icone nome="heart" :tamanho="28" /></span>
                         <img :src="bloco.foto" :alt="bloco.titulo.antes + ' ' + bloco.titulo.marcado" loading="lazy" decoding="async">
+                        <template v-if="i === 0">
+                            <span class="pb-snap" aria-hidden="true"><Cubo cor="laranja" :tamanho="40" /><Cubo cor="azul" :tamanho="40" /></span>
+                            <span class="pb-adesivo" aria-hidden="true">Uau!</span>
+                        </template>
                     </figure>
-                    <button type="button" class="pb-btn" @click="emit('comprar')">{{ bloco.botao }} <Icone nome="arrow-right" :tamanho="22" /></button>
+                    <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">{{ bloco.botao }} <Icone nome="arrow-right" :tamanho="22" /></button>
                 </div>
             </section>
 
             <!-- Depois da primeira história: os benefícios em cartões e as habilidades -->
             <section v-if="i === 0 && (beneficios.length || habilidades.length)" class="pb-sec fundo-branco">
                 <div class="pb-centro">
-                    <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>O segredo da brincadeira</p>
-                    <h2 class="pb-h2">Por que a criançada <mark class="cor-azul">não larga</mark></h2>
-                    <ul v-if="beneficios.length" class="pb-cartoes-icone">
+                    <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>O segredo da brincadeira</p>
+                    <h2 class="pb-h2 pb-reveal">Por que a criançada <mark class="cor-azul">não larga</mark></h2>
+                    <ul v-if="beneficios.length" class="pb-cartoes-icone pb-reveal">
                         <li v-for="(b, j) in beneficios" :key="j">
                             <span class="pb-icone" :class="`cor-${b.cor}`"><Icone :nome="b.icone" :tamanho="28" /></span>
                             <strong>{{ b.titulo }}</strong>
@@ -146,8 +150,8 @@ const GARANTIA = [
                         </li>
                     </ul>
                     <template v-if="habilidades.length">
-                        <h3 class="pb-h3">Enquanto brinca, a criança treina:</h3>
-                        <ul class="pb-habilidades">
+                        <h3 class="pb-h3 pb-reveal">Enquanto brinca, a criança treina:</h3>
+                        <ul class="pb-habilidades pb-reveal">
                             <li v-for="(h, j) in habilidades" :key="j"><span class="pb-icone mini" :class="`cor-${CORES[j % 4]}`"><Icone :nome="iconeHabilidade(h, j)" :tamanho="22" /></span>{{ h }}</li>
                         </ul>
                     </template>
@@ -158,29 +162,29 @@ const GARANTIA = [
         <!-- Comparativo no fundo escuro -->
         <section v-if="comparativo" class="pb-sec fundo-tinta">
             <div class="pb-centro">
-                <p class="pb-sobre claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>A troca que vale a pena</p>
-                <h2 class="pb-h2">{{ comparativo.titulo.antes }} <mark class="cor-amarelo">{{ comparativo.titulo.marcado }}</mark></h2>
-                <p v-if="comparativo.intro" class="pb-texto">{{ comparativo.intro }}</p>
-                <div class="pb-tabela">
+                <p class="pb-sobre pb-reveal claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>A troca que vale a pena</p>
+                <h2 class="pb-h2 pb-reveal">{{ comparativo.titulo.antes }} <mark class="cor-amarelo">{{ comparativo.titulo.marcado }}</mark></h2>
+                <p v-if="comparativo.intro" class="pb-texto pb-reveal">{{ comparativo.intro }}</p>
+                <div class="pb-tabela pb-reveal">
                     <div class="pb-tabela-cab" aria-hidden="true">
                         <span></span><span class="bom">{{ comparativo.rotulos[1] }}</span><span class="ruim">{{ comparativo.rotulos[0] }}</span>
                     </div>
-                    <div v-for="(linha, j) in comparativo.linhas" :key="j" class="pb-tabela-linha">
+                    <div v-for="(linha, j) in comparativo.linhas" :key="j" class="pb-tabela-linha" :style="{ '--i': j }">
                         <strong>{{ linha.criterio }}</strong>
                         <span class="bom"><span class="pb-marca sim"><Icone nome="check" :tamanho="20" /></span><span><span class="sr-only">{{ comparativo.rotulos[1] }}: </span>{{ linha.bom }}</span></span>
                         <span class="ruim"><span class="pb-marca nao"><Icone nome="x" :tamanho="20" /></span><span><span class="sr-only">{{ comparativo.rotulos[0] }}: </span>{{ linha.ruim }}</span></span>
                     </div>
                 </div>
-                <button type="button" class="pb-btn" @click="emit('comprar')">Quero trocar a tela pelo brinquedo <Icone nome="arrow-right" :tamanho="22" /></button>
+                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Quero trocar a tela pelo brinquedo <Icone nome="arrow-right" :tamanho="22" /></button>
             </div>
         </section>
 
         <!-- Os kits de novo, em cartões com foto -->
         <section v-if="opcoes.length > 1" id="kits" class="pb-sec fundo-creme">
             <div class="pb-centro largo">
-                <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Monte a sua diversão</p>
-                <h2 class="pb-h2">Escolha o tamanho <mark class="cor-amarelo">da diversão</mark></h2>
-                <p class="pb-texto">Quanto mais brinquedos no kit, menor o preço de cada um.</p>
+                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Monte a sua diversão</p>
+                <h2 class="pb-h2 pb-reveal">Escolha o tamanho <mark class="cor-amarelo">da diversão</mark></h2>
+                <p class="pb-texto pb-reveal">Quanto mais brinquedos no kit, menor o preço de cada um.</p>
                 <KitsBrinquedo :opcoes="opcoes" :escolhida-id="escolhidaId" formato="cartoes" @escolher="(kit) => emit('escolher', kit, true)" />
             </div>
         </section>
@@ -188,9 +192,9 @@ const GARANTIA = [
         <!-- Como funciona -->
         <section class="pb-sec fundo-creme">
             <div class="pb-centro largo">
-                <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Como funciona</p>
-                <h2 class="pb-h2">Do clique na loja à <mark class="cor-azul">brincadeira</mark></h2>
-                <ol class="pb-passos">
+                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Como funciona</p>
+                <h2 class="pb-h2 pb-reveal">Do clique na loja à <mark class="cor-azul">brincadeira</mark></h2>
+                <ol class="pb-passos pb-reveal">
                     <li v-for="(passo, j) in PASSOS" :key="j">
                         <span class="pb-num" :class="`cor-${CORES[(j + 3) % 4]}`">{{ j + 1 }}</span>
                         <Icone class="pb-passo-icone" :nome="passo.icone" :tamanho="28" />
@@ -198,13 +202,13 @@ const GARANTIA = [
                         <span>{{ passo.texto }}</span>
                     </li>
                 </ol>
-                <button type="button" class="pb-btn" @click="emit('comprar')">Começar a diversão <Icone nome="arrow-right" :tamanho="22" /></button>
+                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Começar a diversão <Icone nome="arrow-right" :tamanho="22" /></button>
             </div>
         </section>
 
         <!-- Garantia -->
         <section class="pb-sec fundo-creme">
-            <div class="pb-garantia">
+            <div class="pb-garantia pb-reveal">
                 <div class="pb-garantia-selo" aria-hidden="true">
                     <svg viewBox="0 0 150 150" class="pb-garantia-anel">
                         <defs><path id="pb-anel" d="M75,75 m-58,0 a58,58 0 1,1 116,0 a58,58 0 1,1 -116,0" /></defs>
@@ -214,24 +218,24 @@ const GARANTIA = [
                     </svg>
                     <b>30</b><span>dias</span>
                 </div>
-                <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Garantia KazaKora de 30 dias</p>
-                <h2 class="pb-h2">Mais diversão <mark class="cor-verde">ou seu dinheiro de volta</mark></h2>
-                <p class="pb-texto">Você tem <b>30 dias</b> depois de receber para ver a criança brincando:</p>
-                <ul class="pb-garantia-itens">
+                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Garantia KazaKora de 30 dias</p>
+                <h2 class="pb-h2 pb-reveal">Mais diversão <mark class="cor-verde">ou seu dinheiro de volta</mark></h2>
+                <p class="pb-texto pb-reveal">Você tem <b>30 dias</b> depois de receber para ver a criança brincando:</p>
+                <ul class="pb-garantia-itens pb-reveal">
                     <li v-for="(g, j) in GARANTIA" :key="j"><Cubo :cor="g.cor" :tamanho="30" />{{ g.texto }}</li>
                 </ul>
-                <p class="pb-garantia-frase">Se não gostar, <mark class="cor-amarelo">devolvemos 100%</mark> do seu dinheiro.</p>
+                <p class="pb-garantia-frase pb-reveal">Se não gostar, <mark class="cor-amarelo">devolvemos 100%</mark> do seu dinheiro.</p>
                 <p class="pb-pequeno">É só falar com a gente em até 30 dias após o recebimento.</p>
-                <button type="button" class="pb-btn" @click="emit('comprar')">Experimentar sem risco <Icone nome="arrow-right" :tamanho="22" /></button>
+                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Experimentar sem risco <Icone nome="arrow-right" :tamanho="22" /></button>
             </div>
         </section>
 
         <!-- Perguntas frequentes -->
         <section v-if="duvidas.length" class="pb-sec fundo-branco">
             <div class="pb-centro">
-                <p class="pb-sobre"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Tire suas dúvidas</p>
-                <h2 class="pb-h2">Perguntas <mark class="cor-azul">frequentes</mark></h2>
-                <div class="pb-faq">
+                <p class="pb-sobre pb-reveal"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Tire suas dúvidas</p>
+                <h2 class="pb-h2 pb-reveal">Perguntas <mark class="cor-azul">frequentes</mark></h2>
+                <div class="pb-faq pb-reveal">
                     <details v-for="(d, j) in duvidas" :key="j" :open="j === 0">
                         <summary><span>{{ d[0] }}</span><i class="pb-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="18" /></i></summary>
                         <p>{{ d[1] }}</p>
@@ -243,7 +247,7 @@ const GARANTIA = [
         <!-- Detalhes completos do produto (a descrição de sempre, recolhida) -->
         <section v-if="descriptionSections.length || dimensoes" class="pb-sec fundo-branco pb-sec-detalhes">
             <div class="pb-centro">
-                <details class="pb-detalhes">
+                <details class="pb-detalhes pb-reveal">
                     <summary><span>Descrição completa e ficha técnica</span><i class="pb-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="18" /></i></summary>
                     <div class="pb-detalhes-corpo">
                         <div v-for="(section, j) in descriptionSections" :key="j">
@@ -264,11 +268,11 @@ const GARANTIA = [
             <i class="pb-confete c1" aria-hidden="true"></i><i class="pb-confete c2" aria-hidden="true"></i>
             <i class="pb-confete c3" aria-hidden="true"></i><i class="pb-confete c4" aria-hidden="true"></i>
             <div class="pb-centro">
-                <p class="pb-sobre claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Bora brincar?</p>
-                <h2 class="pb-h2">Dê a eles um presente <mark class="cor-amarelo">pra lembrar</mark></h2>
-                <p class="pb-texto">Menos tela, mais imaginação, e um brinquedo que cresce junto com a criança.</p>
-                <button type="button" class="pb-btn" @click="emit('comprar')">Escolher meu kit <Icone nome="arrow-right" :tamanho="22" /></button>
-                <ul class="pb-confianca">
+                <p class="pb-sobre pb-reveal claro"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Bora brincar?</p>
+                <h2 class="pb-h2 pb-reveal">Dê a eles um presente <mark class="cor-amarelo">pra lembrar</mark></h2>
+                <p class="pb-texto pb-reveal">Menos tela, mais imaginação, e um brinquedo que cresce junto com a criança.</p>
+                <button type="button" class="pb-btn pb-reveal" @click="emit('comprar')">Escolher meu kit <Icone nome="arrow-right" :tamanho="22" /></button>
+                <ul class="pb-confianca pb-reveal">
                     <li><Icone nome="shield-check" :tamanho="18" /> Garantia de 30 dias</li>
                     <li><Icone nome="truck" :tamanho="18" /> Envio com rastreio</li>
                     <li><Icone nome="lock" :tamanho="18" /> Compra segura</li>
@@ -278,7 +282,7 @@ const GARANTIA = [
         </section>
 
         <!-- Faixa de confiança (garantia, rastreio, compra segura, Pix/parcelas) -->
-        <ul class="pb-faixa-confianca">
+        <ul class="pb-faixa-confianca pb-reveal">
             <li v-for="item in CONFIANCA" :key="item.titulo"><span class="pb-icone" :class="`cor-${item.cor}`"><Icone :nome="item.icone" :tamanho="26" /></span>
                 <span><strong>{{ item.titulo }}</strong><small>{{ item.texto }}</small></span></li>
         </ul>

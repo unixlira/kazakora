@@ -141,7 +141,7 @@ class LeadsUnicosTest extends TestCase
         $props = [];
         $this->actingAs($this->admin())->get($url)->assertOk()
             ->assertInertia(function (AssertableInertia $page) use (&$props) {
-                $page->component('Admin/LeadsUnicos/Index');
+                $page->component('Admin/LeadsUnicos/Index', false);
                 $props = $page->toArray()['props'];
             });
 

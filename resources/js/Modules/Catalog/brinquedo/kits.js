@@ -72,6 +72,9 @@ export const fotoDoKit = (variante) => {
 /** Título com a(s) última(s) palavra(s) num marcador colorido, sem o emoji do fim. */
 export const tituloComMarcador = (titulo) => {
     const limpo = String(titulo ?? '').replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+    // "Livro comum × Livro Falante": marca o lado do produto, depois do "×".
+    const vs = limpo.split(/\s[×x]\s/);
+    if (vs.length === 2) return { antes: `${vs[0]} ×`, marcado: vs[1] };
     const palavras = limpo.split(' ');
     if (palavras.length < 3) return { antes: '', marcado: limpo };
     const n = palavras.length > 6 ? 2 : 1;

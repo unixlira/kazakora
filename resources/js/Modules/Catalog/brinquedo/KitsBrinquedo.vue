@@ -15,7 +15,6 @@ const emit = defineEmits(['escolher']);
 
 const kits = computed(() => ordenarKits(props.opcoes));
 const selos = computed(() => selosDosKits(props.opcoes));
-const rotuloUnidade = (variante) => (unidadesDoKit(variante) > 1 ? 'por brinquedo' : 'no kit');
 </script>
 
 <template>
@@ -31,7 +30,7 @@ const rotuloUnidade = (variante) => (unidadesDoKit(variante) > 1 ? 'por brinqued
                 <strong class="kb-nome">{{ nomeDoKit(kit) }}</strong>
                 <span class="kb-itens">{{ kit.stock < 1 ? 'Esgotado' : itensDoKit(kit) }}</span>
                 <span class="kb-pilulas">
-                    <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} {{ rotuloUnidade(kit) }}</span>
+                    <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                     <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
                 </span>
             </span>
@@ -54,7 +53,7 @@ const rotuloUnidade = (variante) => (unidadesDoKit(variante) > 1 ? 'por brinqued
             <p class="kb-itens">{{ itensDoKit(kit) }}</p>
             <p class="kb-linha-preco"><b>{{ formatPrice(precoDoKit(kit)) }}</b><s v-if="precoDeDoKit(kit)">{{ formatPrice(precoDeDoKit(kit)) }}</s></p>
             <span class="kb-pilulas">
-                <span class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} {{ rotuloUnidade(kit) }}</span>
+                <span v-if="unidadesDoKit(kit) > 1" class="kb-pilula azul">{{ formatPrice(porUnidade(kit)) }} por brinquedo</span>
                 <span v-if="economia(kit)" class="kb-pilula verde">Economize {{ formatPrice(economia(kit)) }}</span>
             </span>
             <button type="button" class="pb-btn" :disabled="kit.stock < 1" :data-kzm="`kit-cartao:${kit.id}`" @click="emit('escolher', kit)">

@@ -221,7 +221,7 @@ onUnmounted(() => {
                 <Link v-if="logoTopo" :href="logoTopo.href" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" :aria-label="`${logoTopo.alt} — início`">
                     <picture>
                         <source :srcset="logoTopo.webp" type="image/webp">
-                        <img :src="logoTopo.png" :alt="logoTopo.alt" class="h-9 w-auto md:h-11" :width="logoTopo.largura" :height="logoTopo.altura" fetchpriority="high">
+                        <img :src="logoTopo.png" :alt="logoTopo.alt" :class="logoTopo.classe || 'h-9 w-auto md:h-11'" :width="logoTopo.largura" :height="logoTopo.altura" fetchpriority="high">
                     </picture>
                 </Link>
                 <Link v-else href="/" class="shrink-0 no-underline max-lg:absolute max-lg:left-1/2 max-lg:-translate-x-1/2" aria-label="KazaKora — início">

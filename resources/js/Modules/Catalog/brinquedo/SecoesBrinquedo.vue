@@ -119,6 +119,13 @@ const ICONES_CARTAO = [[/ouv|fala|palavra|idioma|livro/i, 'ear'], [/desenh|luz|l
 const ICONES_DETALHE = ['ear', 'palette', 'magnet', 'heart'];
 const detalhes = computed(() => cartoes(pg.value.detalhes?.cards, props.anuncio?.comparativo?.detalhes, ICONES_DETALHE,
     (d, i) => ICONES_CARTAO.find(([r]) => r.test(`${d[0]} ${d[1] ?? ''}`))?.[1] ?? ICONES_DETALHE[i % 4]));
+// Kit com mais de um brinquedo (pedido do Lira 25/11/2026): "detalhes.produtos" = uma seção para cada
+// brinquedo, com a foto dele e as características dele, em vez de uma seção só para o kit todo.
+const COR_MARCADOR = ['cor-vermelho', 'cor-azul', 'cor-verde'];
+const detalhesPorProduto = computed(() => lista(pg.value.detalhes?.produtos).map((b, i) => {
+    const montado = montarBloco(b);
+    return montado ? { ...montado, rotulo: semEmoji(b.rotulo ?? ''), marcador: COR_MARCADOR[i % 3], fundo: i % 2 ? 'fundo-creme' : 'fundo-branco', cards: cartoes(b.cards, [], ICONES_DETALHE) } : null;
+}).filter(Boolean));
 
 const comparativo = computed(() => {
     const proprio = pg.value.comparativo;
@@ -285,8 +292,31 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
             </div>
         </section>
 
+        <!-- Detalhes de cada brinquedo do kit (um bloco por brinquedo, foto de um lado e características do outro) -->
+        <section v-for="(dp, k) in detalhesPorProduto" :key="`dp-${k}`" class="pb-sec" :class="dp.fundo">
+            <div class="pb-wrap">
+                <div class="pb-head pb-narrow pb-reveal">
+                    <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>{{ dp.rotulo || 'Feito para durar' }}</p>
+                    <h2 class="pb-h2">{{ dp.titulo.antes }} <em :class="dp.marcador">{{ dp.titulo.marcado }}</em></h2>
+                    <p class="pb-lead">{{ dp.texto }}</p>
+                </div>
+                <div v-if="dp.foto" class="pb-media-chamadas pb-media-520 pb-reveal">
+                    <div class="pb-media"><img :src="dp.foto" :srcset="srcsetDe(dp.foto)" sizes="(max-width: 767px) 92vw, 520px" width="1200" height="1200" :alt="dp.titulo.antes + ' ' + dp.titulo.marcado" loading="lazy" decoding="async"></div>
+                    <span v-for="(d, j) in dp.cards" :key="j" class="pb-chamada com-linha" :class="`pos-${j}`">{{ d.titulo }}</span>
+                </div>
+                <div v-if="dp.cards.length" class="pb-why-cards pb-reveal">
+                    <div v-for="(d, j) in dp.cards" :key="j" class="pb-why-card">
+                        <span class="pb-why-ico" :class="`cor-${d.cor}`"><Icone :nome="d.icone" :tamanho="28" :traco="2.4" /></span>
+                        <h3 class="pb-h3">{{ d.titulo }}</h3>
+                        <p>{{ d.texto }}</p>
+                    </div>
+                </div>
+                <div v-if="k === detalhesPorProduto.length - 1" class="pb-cta pb-reveal"><button type="button" class="pb-btn" @click="emit('comprar')">{{ cta('detalhes', 'Escolher meu kit') }} <Icone nome="arrow-right" :tamanho="22" /></button></div>
+            </div>
+        </section>
+
         <!-- Detalhes -->
-        <section v-if="detalhe" class="pb-sec fundo-branco">
+        <section v-if="detalhe && !detalhesPorProduto.length" class="pb-sec fundo-branco">
             <div class="pb-wrap">
                 <div class="pb-head pb-narrow pb-reveal">
                     <p class="pb-eyebrow"><span class="pb-cubos" aria-hidden="true"><Cubo cor="laranja" :tamanho="16" /><Cubo cor="amarelo" :tamanho="16" /><Cubo cor="azul" :tamanho="16" /></span>Feito para durar</p>

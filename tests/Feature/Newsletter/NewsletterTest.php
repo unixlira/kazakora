@@ -235,6 +235,17 @@ class NewsletterTest extends TestCase
         Mail::assertSent(BlogPorEmail::class, fn ($m) => $m->hasTo('lira@exemplo.com') && $m->teste);
     }
 
+    public function test_teste_com_smtp_fora_do_ar_avisa_em_vez_de_dar_500(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email' => 'lira@exemplo.com']);
+        $this->materia();
+        Mail::shouldReceive('to')->andThrow(new \Symfony\Component\Mailer\Exception\TransportException('Connection to "ssl://smtp.hostinger.com:465" has been closed unexpectedly.'));
+
+        $this->actingAs($admin)->from('/admin/newsletter')->post('/admin/newsletter/teste')
+            ->assertRedirect('/admin/newsletter')
+            ->assertSessionHas('error');
+    }
+
     public function test_bloco_de_newsletter_aparece_no_rodape_da_loja(): void
     {
         $rodape = file_get_contents(resource_path('js/Shared/Components/RodapeLoja.vue'));

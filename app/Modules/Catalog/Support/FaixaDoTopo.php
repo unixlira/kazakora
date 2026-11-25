@@ -56,7 +56,7 @@ class FaixaDoTopo
     public static function paraProduto(?ProductAdContent $conteudo): array
     {
         $frases = array_map(
-            fn (string $texto) => ['texto' => $texto, 'icone' => 'fa-solid fa-check'],
+            fn (string $texto) => ['texto' => $texto, 'icone' => 'fa-solid fa-circle-check'],
             self::frasesDoProduto($conteudo),
         );
 

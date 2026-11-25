@@ -265,7 +265,7 @@
 .pd2.pg-brinquedo .wrap { max-width: none; padding: 0 clamp(16px, 2.4vw, 46px); }
 .pd2.pg-brinquedo .faixa, .pd2.pg-brinquedo .migalhas, .pd2.pg-brinquedo .barra { display: none !important; }
 .pd2.pg-brinquedo .grade { padding-top: 34px; }
-.pd2.pg-brinquedo .col-principal { grid-template-columns: minmax(0, 57fr) minmax(0, 43fr); gap: 32px; }
+@media (min-width: 1025px) { .pd2.pg-brinquedo .col-principal { grid-template-columns: minmax(0, 57fr) minmax(0, 43fr); gap: 32px; } }
 .pd2.pg-brinquedo .pb-centro.largo { max-width: 1180px; padding: 0 18px; box-sizing: content-box; }
 .pd2.pg-brinquedo .pb-sec { padding: 76px 18px; }
 .pd2.pg-brinquedo .pb-secoes { margin-top: 40px; }

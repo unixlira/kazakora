@@ -7,6 +7,7 @@
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InfoTooltip from '@/Shared/Components/InfoTooltip.vue';
+import CabecalhoComAjuda from './CabecalhoComAjuda.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import { formatarNumero, formatarReais, statusMeta } from './metaAds';
@@ -39,7 +40,11 @@ const atualizar = () => {
 const linhas = computed(() => props.dados?.linhas ?? []);
 
 // Formatação ----------------------------------------------------------------
-const reais = (v) => (v === null || v === undefined ? '—' : formatarReais(v));
+// curto = sem o "R$" (tabela do computador: o R$ vai no cabeçalho).
+const reais = (v, curto = false) => {
+    if (v === null || v === undefined) return '—';
+    return curto ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatarReais(v);
+};
 const pct = (v, casas = 1) => (v === null || v === undefined ? '—' : `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: casas })}%`);
 const num = (v, casas = 2) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: casas }));
 const roas = (v) => (v === null || v === undefined ? '—' : `${num(v)}x`);
@@ -67,28 +72,28 @@ const COLUNAS = [
       ajuda: ['O que é: quantas pessoas pararam 3 segundos no vídeo, a cada 100 que viram o anúncio.', `Bom é: ${f.hook?.verde_min}% ou mais (abaixo de ${f.hook?.amarelo_min}% é ruim). Anúncio sem vídeo mostra —.`] },
     { grupo: 'Atenção', chave: 'frequencia', rotulo: 'Frequência', valor: (l) => num(l.m.frequencia), sem: 'frequencia',
       ajuda: ['O que é: quantas vezes, em média, a mesma pessoa viu o anúncio.', `Bom é: até ${num(f.frequencia?.verde_max)} (acima de ${num(f.frequencia?.amarelo_max)} cansa o público).`] },
-    { grupo: 'Entrega', chave: 'gasto', rotulo: 'Valor usado', valor: (l) => reais(l.m.gasto),
+    { grupo: 'Entrega', chave: 'gasto', unidade: 'R$', rotulo: 'Valor usado', valor: (l, c) => reais(l.m.gasto, c),
       ajuda: ['O que é: quanto a Meta gastou do seu orçamento no período.', 'Bom é: o que você planejou; sozinho não diz se está bom.'] },
-    { grupo: 'Entrega', chave: 'cpm', rotulo: 'CPM', valor: (l) => reais(l.m.cpm), sem: 'cpm',
+    { grupo: 'Entrega', chave: 'cpm', unidade: 'R$', rotulo: 'CPM', valor: (l, c) => reais(l.m.cpm, c), sem: 'cpm',
       ajuda: ['O que é: quanto custa mostrar o anúncio 1.000 vezes.', `Bom é: até R$ ${f.cpm?.verde_max} (acima de R$ ${f.cpm?.amarelo_max} está caro).`] },
     { grupo: 'Clique', chave: 'ctr', rotulo: 'CTR do link', valor: (l) => pct(l.m.ctr_link, 2), sem: 'ctr',
       ajuda: ['O que é: de cada 100 pessoas que viram, quantas clicaram no link.', `Bom é: ${f.ctr?.verde_min}% ou mais (abaixo de ${f.ctr?.amarelo_min}% o anúncio não convence).`] },
-    { grupo: 'Clique', chave: 'cpc', rotulo: 'CPC do link', valor: (l) => reais(l.m.cpc_link), sem: 'cpc',
+    { grupo: 'Clique', chave: 'cpc', unidade: 'R$', rotulo: 'CPC do link', valor: (l, c) => reais(l.m.cpc_link, c), sem: 'cpc',
       ajuda: ['O que é: quanto custou cada clique no link.', `Bom é: até R$ ${f.cpc?.verde_max} (acima de R$ ${f.cpc?.amarelo_max} está caro).`] },
-    { grupo: 'Funil', chave: 'pagina', rotulo: 'Página', valor: (l) => formatarNumero(l.m.visualizacoes_pagina), sub: (l) => reais(l.m.custo_pagina),
+    { grupo: 'Funil', chave: 'pagina', unidade: 'e custo', rotulo: 'Página', valor: (l) => formatarNumero(l.m.visualizacoes_pagina), sub: (l, c) => reais(l.m.custo_pagina, c),
       ajuda: ['O que é: quantas pessoas viram a página do produto (e o custo de cada uma).', 'Bom é: perto do número de cliques; muito menor = a página demora a abrir.'] },
-    { grupo: 'Funil', chave: 'carrinho', rotulo: 'Carrinho', valor: (l) => formatarNumero(l.m.carrinho), sub: (l) => reais(l.m.custo_carrinho),
+    { grupo: 'Funil', chave: 'carrinho', unidade: 'e custo', rotulo: 'Carrinho', valor: (l) => formatarNumero(l.m.carrinho), sub: (l, c) => reais(l.m.custo_carrinho, c),
       ajuda: ['O que é: quantas pessoas puseram no carrinho (e o custo de cada uma).', 'Bom é: ter carrinho; página visitada sem carrinho = olhe página, preço e frete.'] },
-    { grupo: 'Funil', chave: 'checkout', rotulo: 'Checkout', valor: (l) => formatarNumero(l.m.checkout), sub: (l) => reais(l.m.custo_checkout),
+    { grupo: 'Funil', chave: 'checkout', unidade: 'e custo', rotulo: 'Checkout', valor: (l) => formatarNumero(l.m.checkout), sub: (l, c) => reais(l.m.custo_checkout, c),
       ajuda: ['O que é: quantas pessoas foram para o pagamento (e o custo de cada uma).', 'Bom é: boa parte de quem pôs no carrinho chegar aqui.'] },
     { grupo: 'Venda', chave: 'compras', rotulo: 'Compras', valor: (l) => formatarNumero(l.m.compras),
       ajuda: ['O que é: vendas que a Meta atribuiu ao conjunto.', 'Bom é: vender antes de gastar o CPA máximo.'] },
-    { grupo: 'Venda', chave: 'cpa', rotulo: 'CPA', valor: (l) => reais(l.m.cpa), sem: 'cpa',
-      sub: (l) => (l.produto ? `alvo ${reais(l.produto.cpa_alvo)}` : null),
+    { grupo: 'Venda', chave: 'cpa', unidade: 'R$', rotulo: 'CPA', valor: (l, c) => reais(l.m.cpa, c), sem: 'cpa',
+      sub: (l, c) => (l.produto ? `alvo ${reais(l.produto.cpa_alvo, c)}` : null),
       ajuda: ['O que é: custo por compra (valor usado ÷ compras).', 'Bom é: até o CPA alvo do produto (verde); até o CPA máximo, o 0 a 0 (amarelo); acima, prejuízo (vermelho).'] },
     { grupo: 'Venda', chave: 'roas', rotulo: 'ROAS', valor: (l) => roas(l.m.roas),
       ajuda: ['O que é: quanto voltou em venda para cada R$ 1 de anúncio (o da Meta).', 'Bom é: o suficiente para dar lucro; olhe a coluna Lucro, que já tira os custos.'] },
-    { grupo: 'Lucro', chave: 'lucro', rotulo: 'Lucro real (estimado)', valor: (l) => reais(l.m.lucro),
+    { grupo: 'Lucro', chave: 'lucro', unidade: 'R$', rotulo: 'Lucro real (estimado)', valor: (l, c) => reais(l.m.lucro, c),
       ajuda: ['O que é: venda − valor usado − compras × (custo do produto + frete médio + insumos) − venda × (imposto + taxa do cartão).', 'Bom é: positivo. É estimado: usa as médias do produto e a venda que a Meta atribuiu.'] },
 ];
 // Ponto de extensão: "Métrica do professor" (fórmula a definir; LeituraCampanhasMeta::metricaDoProfessor).
@@ -200,35 +205,34 @@ const BOTAO = 'rounded border border-[var(--surface-border)] px-2 py-0.5 text-xs
                 <table class="w-full border-separate border-spacing-0 text-xs">
                     <thead>
                         <tr>
-                            <th rowspan="2" class="sticky left-0 top-0 z-30 w-44 min-w-44 border-b border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left align-bottom">Conjunto</th>
+                            <th rowspan="2" class="sticky left-0 top-0 z-30 w-36 min-w-36 border-b border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left align-bottom">Conjunto</th>
                             <th v-for="g in GRUPOS" :key="g.nome" :colspan="g.span" scope="colgroup"
                                 class="sticky top-0 z-20 h-7 border-b border-l border-[var(--surface-border)] bg-[var(--surface)] px-1 text-center font-semibold uppercase tracking-wide">
                                 <span class="block rounded" :class="COR_GRUPO[g.nome]">{{ g.nome }}</span>
                             </th>
-                            <th rowspan="2" class="sticky top-0 z-20 w-56 min-w-56 border-b border-l border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left align-bottom">
+                            <th rowspan="2" class="sticky top-0 z-20 w-48 min-w-48 border-b border-l border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left align-bottom">
                                 O que fazer
                                 <InfoTooltip label="O que é a coluna O que fazer" :paragraphs="['Olha os números na ordem (hook → CPM → CTR → CPC → página → carrinho → checkout → compra) e mostra só o primeiro problema, com a ação.', 'Corte e escala usam os dias do ciclo: gastou o CPA máximo sem vender = desligar; CPA no alvo nos 2 últimos dias = subir 20%.']" />
                             </th>
                         </tr>
                         <tr>
-                            <th v-for="c in COLUNAS" :key="c.chave" scope="col" :title="c.ajuda.join(' ')"
-                                class="sticky top-7 z-20 border-b border-[var(--surface-border)] bg-[var(--surface)] px-1 py-1 text-right font-medium leading-tight">
-                                <span class="inline-flex items-center justify-end gap-0.5">{{ c.rotulo }} <InfoTooltip :label="`O que é ${c.rotulo}`" :paragraphs="c.ajuda" /></span>
+                            <th v-for="(c, i) in COLUNAS" :key="c.chave" scope="col"
+                                class="sticky top-7 z-20 border-b border-[var(--surface-border)] bg-[var(--surface)] px-1 py-1 text-right align-bottom">
+                                <CabecalhoComAjuda :rotulo="c.rotulo" :unidade="c.unidade" :ajuda="c.ajuda" :lado="i > COLUNAS.length / 2 ? 'direita' : 'esquerda'" />
                             </th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="l in linhas" :key="l.id" class="align-top">
-                            <th scope="row" class="sticky left-0 z-10 w-44 min-w-44 max-w-44 border-b border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left font-normal">
+                            <th scope="row" class="sticky left-0 z-10 w-36 min-w-36 max-w-36 border-b border-[var(--surface-border)] bg-[var(--surface)] p-2 text-left font-normal">
                                 <a :href="l.gerenciador" target="_blank" rel="noopener" class="block break-words font-semibold hover:underline">{{ l.nome }}</a>
-                                <span class="block break-words text-[11px] text-slate-500">{{ l.campanha }}</span>
-                                <span class="mt-0.5 inline-block rounded px-1 text-[10px]" :class="statusMeta(l.status)[1]">{{ statusMeta(l.status)[0] }}</span>
+                                <span class="block break-words text-[11px] text-slate-500">{{ l.campanha }}
+                                    <span class="rounded px-1 text-[10px]" :class="statusMeta(l.status)[1]">{{ statusMeta(l.status)[0] }}</span></span>
                                 <!-- Ciclo -->
                                 <div class="mt-1 text-[11px] text-slate-500">
                                     <template v-if="editandoCiclo[l.campanha_id] === undefined">
-                                        Ciclo: {{ dataHora(l.ciclo.inicio) }}
-                                        <button v-if="podeEditar" type="button" class="ml-1 text-indigo-600 underline" :aria-label="`Editar início do ciclo de ${l.campanha}`" @click="abrirCiclo(l)">editar</button>
-                                        <span class="block text-[10px]">{{ ORIGEM_CICLO[l.ciclo.origem] ?? 'sem início' }}</span>
+                                        <span :title="ORIGEM_CICLO[l.ciclo.origem] ?? 'sem início'">Ciclo {{ dataHora(l.ciclo.inicio) }}</span>
+                                        <button v-if="podeEditar" type="button" class="ml-1 text-indigo-600 underline" :aria-label="`Editar início do ciclo de ${l.campanha} (${ORIGEM_CICLO[l.ciclo.origem] ?? 'sem início'})`" @click="abrirCiclo(l)">editar</button>
                                     </template>
                                     <form v-else class="space-y-1" @submit.prevent="salvarCiclo(l)">
                                         <label class="block">Início do ciclo<input v-model="editandoCiclo[l.campanha_id]" type="datetime-local" :class="INPUT"></label>
@@ -241,10 +245,9 @@ const BOTAO = 'rounded border border-[var(--surface-border)] px-2 py-0.5 text-xs
                                 </div>
                                 <!-- Produto e CPA -->
                                 <div v-if="l.produto" class="mt-1 text-[11px]">
-                                    <span class="block truncate text-slate-500" :title="l.produto.nome">{{ l.produto.nome }}</span>
                                     <template v-if="editandoCpa[l.produto.product_id] === undefined">
-                                        <span class="inline-flex items-center gap-1">alvo {{ reais(l.produto.cpa_alvo) }} · máx {{ reais(l.produto.cpa_maximo) }}
-                                            <InfoTooltip label="Como o CPA foi calculado" :paragraphs="contaDoCpa(l.produto)" /></span>
+                                        <span class="inline-flex items-center gap-1" :title="l.produto.nome">CPA {{ reais(l.produto.cpa_alvo, true) }} / {{ reais(l.produto.cpa_maximo, true) }}
+                                            <InfoTooltip :label="`Como o CPA de ${l.produto.nome} foi calculado`" :paragraphs="[`${l.produto.nome}: alvo ${reais(l.produto.cpa_alvo)} / máximo ${reais(l.produto.cpa_maximo)}.`, ...contaDoCpa(l.produto)]" /></span>
                                         <button v-if="podeEditar" type="button" class="ml-1 text-indigo-600 underline" :aria-label="`Editar CPA de ${l.produto.nome}`" @click="abrirCpa(l.produto)">editar</button>
                                     </template>
                                     <form v-else class="space-y-1" @submit.prevent="salvarCpa(l.produto)">
@@ -263,9 +266,9 @@ const BOTAO = 'rounded border border-[var(--surface-border)] px-2 py-0.5 text-xs
                                 <span class="inline-flex items-center gap-1" :class="semaforoDe(l, c) ? SEMAFORO[semaforoDe(l, c).cor].classe : ''">
                                     <i v-if="semaforoDe(l, c)" class="fas" :class="SEMAFORO[semaforoDe(l, c).cor].icone" aria-hidden="true"></i>
                                     <span v-if="semaforoDe(l, c)" class="sr-only">{{ semaforoDe(l, c).rotulo }}:</span>
-                                    {{ c.valor(l) }}
+                                    {{ c.valor(l, true) }}
                                 </span>
-                                <span v-if="c.sub && c.sub(l)" class="block text-[10px] text-slate-500">{{ c.sub(l) }}</span>
+                                <span v-if="c.sub && c.sub(l, true)" class="block text-[10px] text-slate-500">{{ c.sub(l, true) }}</span>
                             </td>
                             <td class="border-b border-l border-[var(--surface-border)] p-2">
                                 <p class="rounded border-l-4 px-2 py-1 font-medium leading-snug" :class="NIVEL_ACAO[l.acao.nivel]">{{ l.acao.frase }}</p>

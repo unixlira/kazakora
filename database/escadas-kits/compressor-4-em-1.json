@@ -1,0 +1,104 @@
+{
+    "_sobre": "Oferta em escada do Compressor 4 em 1 (pedido do Lira 26/11/2026). Rodar: php artisan kits:escada compressor-4-em-1 (confere) e --aplicar (grava, com backup em storage/app/backups). Kit A = 413 (preço atual, não muda). Kit B = produto novo pelo SKU. Kit C = 508 (Kit Macaco Elétrico).",
+    "criar": [
+        {
+            "sku": "FK-KIT-COMPRESSOR-REPARO-CATRACA",
+            "name": "Kit Estrada Segura: Compressor de Ar Portátil 4 em 1 + Kit Reparo de Pneu + Chave Catraca para Macaco",
+            "nome_interno": "Kit B Compressor 4 em 1 + Kit Reparo Pneu 5 remendos + Chave Catraca Macaco",
+            "slug": "kit-estrada-segura-compressor-de-ar-portatil-kit-reparo-de-pneu-chave-catraca",
+            "copiar_de": 413,
+            "price": 629.00,
+            "por": 297.90,
+            "cost_price": 142.99,
+            "estoque": 10,
+            "categoria_frete": "media",
+            "fiscal": {
+                "copiar_de": 413,
+                "peso_bruto": 1.8,
+                "peso_liquido": 1.8,
+                "altura_cm": 12,
+                "largura_cm": 22,
+                "profundidade_cm": 36,
+                "informacoes_adicionais": "Kit composto por: 1 compressor de ar portátil 4 em 1, 1 kit reparo de pneu com 5 remendos e 1 chave catraca para macaco."
+            },
+            "avaliacoes_de": [
+                {"id": 413, "rotulo": "Compressor 4 em 1"},
+                {"id": 495, "rotulo": "Kit Reparo de Pneu"},
+                {"id": 490, "rotulo": "Chave Catraca"}
+            ],
+            "ferrakora": {"categoria": "Automotivo", "ordem": 98},
+            "fotos": [
+                {"arquivo": "compressor-4-em-1/kit-estrada-segura-capa.jpg"},
+                {"produto": 413, "indice": 9},
+                {"produto": 413, "indice": 10},
+                {"produto": 413, "indice": 3},
+                {"produto": 413, "indice": 5},
+                {"produto": 495, "indice": 0},
+                {"produto": 495, "indice": 6},
+                {"produto": 490, "indice": 0},
+                {"produto": 490, "indice": 4},
+                {"produto": 413, "indice": 11}
+            ],
+            "description": "Kit Estrada Segura: os 3 itens que resolvem o pneu na estrada, juntos no porta-malas.\n\nPneu baixo? Calibra onde estiver\nO compressor de ar portátil 4 em 1 tem bateria recarregável e visor digital: você escolhe a pressão e ele enche até chegar nela. Serve para pneu de carro, moto e bicicleta, bola e outros infláveis.\n\nPneu furado? Remendo na hora\nO kit reparo de pneu traz escareador para limpar o furo, agulha para aplicar, cola (solução de borracha) e 5 remendos tipo macarrão, para fechar o furo do pneu sem câmara e seguir até o borracheiro.\n\nTroca de pneu mais rápida\nA chave catraca encaixa no macaco do carro e gira sem tirar e pôr a manivela a cada volta: o macaco sobe e desce com menos esforço.\n\nBateria arriada e celular sem carga\nO compressor vem com garras de partida (auxiliar de partida para a bateria do carro), funciona como powerbank para o celular e tem lanterna LED para usar à noite.\n\nO que vem no kit\n1 compressor de ar portátil 4 em 1 (com mangueira, garras de partida, cabo de carga, bicos adaptadores e bolsa)\n1 kit reparo de pneu com escareador, agulha, cola e 5 remendos tipo macarrão\n1 chave catraca universal para macaco de carro",
+            "conteudo": {
+                "destaques": ["Calibra o pneu onde estiver", "Remenda o furo e segue viagem", "Sobe o macaco com menos esforço", "Garras para a partida do carro"],
+                "chamada": "Pneu baixo, furado ou para trocar: o Kit Estrada Segura resolve os três com o que fica no seu porta-malas",
+                "blocos": [
+                    {"titulo": "Pneu baixo? Calibra ali mesmo", "texto": "Encaixa o bico na válvula, escolhe a pressão no visor digital e o compressor enche até chegar nela, sem fila no posto.", "imagem": 2},
+                    {"titulo": "Furou? Remendo macarrão na hora", "texto": "Limpa o furo com o escareador, passa o remendo com a agulha e o pneu sem câmara volta a segurar o ar até o borracheiro.", "imagem": 5},
+                    {"titulo": "Troca de pneu sem cansar o braço", "texto": "A chave catraca encaixa no macaco e gira sem tirar a manivela a cada volta: o carro sobe mais rápido.", "imagem": 7},
+                    {"titulo": "Bateria arriada? Use as garras", "texto": "As garras do compressor prendem na bateria do carro e ajudam na partida. Ele ainda carrega o celular e tem lanterna LED.", "imagem": 3}
+                ],
+                "beneficios": [["3 em 1 na estrada", "Calibra, remenda e troca o pneu"], ["Visor digital", "Escolhe a pressão e ele para sozinho"], ["5 remendos", "Tipo macarrão, com cola e ferramentas"], ["Chave catraca", "Encaixa no macaco do carro"]],
+                "duvidas": [
+                    ["O que vem no Kit Estrada Segura?", "1 compressor de ar portátil 4 em 1 (com garras de partida, mangueira, cabo, bicos e bolsa), 1 kit reparo de pneu com 5 remendos tipo macarrão e 1 chave catraca para macaco."],
+                    ["O compressor é o mesmo vendido sozinho?", "Sim, é o mesmo Compressor 4 em 1: compressor, auxiliar de partida, powerbank e lanterna LED."],
+                    ["O kit reparo serve para qualquer pneu?", "Os remendos tipo macarrão são para pneu sem câmara (tubeless), o da maioria dos carros. É um reparo de emergência para chegar ao borracheiro."],
+                    ["A chave catraca serve no meu macaco?", "Ela é universal para o macaco sanfona (tipo tesoura) que vem no carro: encaixa no olhal onde vai a manivela."]
+                ]
+            }
+        }
+    ],
+    "ajustar": [
+        {
+            "sku": "FK-KIT-MACACO-ELET-5T",
+            "name": "Kit Macaco Elétrico 5 Toneladas 12V 4 em 1: Chave de Impacto, Compressor 150 PSI e Lanterna",
+            "slug": "kit-macaco-eletrico-5-toneladas-12v-4-em-1-chave-de-impacto-compressor-150-psi",
+            "price": 1299.00,
+            "por": 730.00,
+            "estoque": 10,
+            "motivo_estoque": "Entrada: chegaram mais Kits Macaco Elétrico (pedido do Lira 26/11/2026)"
+        }
+    ],
+    "escada": {
+        "titulo": "Escolha o seu kit para a estrada",
+        "texto": "Do essencial ao completo: veja o que vai no seu porta-malas.",
+        "itens": [
+            {
+                "sku": "344-BOMBAAR-4EM1",
+                "nome": "Compressor 4 em 1",
+                "itens": "Compressor + garras de partida + powerbank + lanterna",
+                "partes": ["Compressor de ar portátil com visor digital", "Garras para a partida do carro", "Powerbank para o celular e lanterna LED"],
+                "acrescenta": "Calibra o pneu e ajuda na partida",
+                "selo": "Essencial"
+            },
+            {
+                "sku": "FK-KIT-COMPRESSOR-REPARO-CATRACA",
+                "nome": "Kit Estrada Segura",
+                "itens": "Compressor 4 em 1 + Kit Reparo de Pneu + Chave Catraca",
+                "partes": ["Compressor 4 em 1 (o mesmo do kit Essencial)", "Kit reparo de pneu com 5 remendos", "Chave catraca para o macaco do carro"],
+                "acrescenta": "+ remenda o furo e sobe o macaco mais rápido",
+                "destaque": true,
+                "selo": "Recomendado"
+            },
+            {
+                "sku": "FK-KIT-MACACO-ELET-5T",
+                "nome": "Kit Macaco Elétrico 5t",
+                "itens": "Macaco elétrico + chave de impacto + compressor 150 PSI + lanterna",
+                "partes": ["Macaco elétrico 5 t que sobe o carro no botão", "Chave de impacto 12V para os parafusos da roda", "Compressor 150 PSI e lanterna LED", "Maleta rígida para guardar tudo"],
+                "acrescenta": "Troca o pneu sem fazer força",
+                "selo": "Mais completo"
+            }
+        ]
+    }
+}

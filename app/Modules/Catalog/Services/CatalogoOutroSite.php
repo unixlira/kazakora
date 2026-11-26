@@ -193,7 +193,18 @@ abstract class CatalogoOutroSite
      */
     public function produto(string $idOuSlug): ?array
     {
-        $produtos = collect($this->produtos());
+        return $this->produtoNaLista($idOuSlug, $this->produtos());
+    }
+
+    /**
+     * O mesmo que produto(), procurando numa lista já montada (a página do
+     * FerraKora usa a mesma lista para os cartões da escada de kits).
+     *
+     * @param  array<int, array<string, mixed>>  $lista
+     */
+    protected function produtoNaLista(string $idOuSlug, array $lista): ?array
+    {
+        $produtos = collect($lista);
         $achado = $produtos->first(fn (array $produto) => $produto['id'] === $idOuSlug || $produto['slug'] === $idOuSlug);
 
         if ($achado !== null) {

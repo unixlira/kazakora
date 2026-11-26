@@ -40,6 +40,7 @@ class Product extends Model
         'layout_pagina',
         'avaliacoes_de',
         'pagina_brinquedo',
+        'escada_kits',
         'grupo_modelos',
         'rotulo_modelo',
         'video_path',
@@ -66,7 +67,7 @@ class Product extends Model
     protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine', 'preco_cupom'];
 
     /** Só serve para calcular o preco_vitrine; não vai no JSON. */
-    protected $hidden = ['variacoesAtivas', 'avaliacoes_de', 'pagina_brinquedo'];
+    protected $hidden = ['variacoesAtivas', 'avaliacoes_de', 'pagina_brinquedo', 'escada_kits'];
 
     protected function casts(): array
     {
@@ -88,6 +89,7 @@ class Product extends Model
             'tags' => 'array',
             'avaliacoes_de' => 'array',
             'pagina_brinquedo' => 'array',
+            'escada_kits' => 'array',
         ];
     }
 

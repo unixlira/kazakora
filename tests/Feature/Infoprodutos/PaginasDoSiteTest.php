@@ -89,10 +89,12 @@ class PaginasDoSiteTest extends TestCase
         $this->assertSame('Árvore de Natal', $paginas['kz/arvore|produto']['rotulo']);
         $this->assertSame([2, 1, 1, 1], [$paginas['kz/arvore|produto']['visitas'], $paginas['kz/arvore|produto']['carrinho'],
             $paginas['kz/arvore|produto']['checkout'], $paginas['kz/arvore|produto']['pedidos']]);
-        // Só página de produto na lista (2026-11-23): início, departamento, carrinho e checkout ficam fora...
-        $this->assertSame([], $paginas->keys()->filter(fn ($k) => str_starts_with($k, 'kzp') || str_starts_with($k, 'fkp'))->values()->all());
-        $this->assertSame(['kz/arvore|produto'], $paginas->keys()->all());
-        // ...mas continuam nos totais de visitas da loja.
+        // Todas as páginas na lista de novo (2026-11-26): início, departamento, carrinho e checkout também.
+        $this->assertSame(['kz/arvore|produto', 'kzp/carrinho|pagina', 'kzp/departamento/natal|pagina', 'kzp/finalizacao|pagina', 'kzp|pagina'],
+            $paginas->keys()->sort()->values()->all());
+        $this->assertSame(1, $paginas['kzp|pagina']['visitas']);
+        $this->assertSame('Início', $paginas['kzp|pagina']['rotulo']);
+        // E nos totais de visitas da loja.
         $this->assertSame(['visitas' => 3, 'carrinho' => 1, 'checkout' => 1, 'pedidos' => 1], array_intersect_key($r['totais']['kazakora'], array_flip(['visitas', 'carrinho', 'checkout', 'pedidos'])));
     }
 
@@ -146,5 +148,30 @@ class PaginasDoSiteTest extends TestCase
         $this->assertSame('/?busca', \App\Http\Middleware\TrackSiteVisit::caminho('/', ['search' => 'furadeira']));
         $this->assertSame('/', \App\Http\Middleware\TrackSiteVisit::caminho('/', ['categoria' => '<script>']));
         $this->assertSame('/produtos/x', \App\Http\Middleware\TrackSiteVisit::caminho('produtos/x', ['categoria' => 'natal']));
+    }
+
+    public function test_slug_antigo_soma_na_pagina_atual_e_medidas_ao_lado_das_visitas(): void
+    {
+        $produto = Product::factory()->create(['name' => 'Compressor', 'slug' => 'compressor-pdf-gratis']);
+        $produto->update(['slug' => 'compressor']);
+        \App\Modules\Infoprodutos\Support\ChaveAtualDaPagina::esquecer();
+        $this->assertSame('kz/compressor', \App\Modules\Infoprodutos\Support\ChaveAtualDaPagina::atual('kz/compressor-pdf-gratis'));
+
+        SiteVisit::create(['site' => 'kazakora', 'visitor_id' => 'a', 'path' => '/produtos/compressor-pdf-gratis', 'ip' => '1.1.1.1', 'consentiu' => true]);
+        SiteVisit::create(['site' => 'kazakora', 'visitor_id' => 'b', 'path' => '/produtos/compressor', 'ip' => '1.1.1.2', 'consentiu' => true]);
+        $pv = fn (string $sessao, string $p, string $pg) => \App\Modules\Infoprodutos\Models\InfoprodutoEvento::create(['sessao' => $sessao, 'produto' => $p, 'pagina' => $pg,
+            'tipo' => 'pageview', 'teste' => false, 'created_at' => now()]);
+        $pv('s1', 'kz/compressor-pdf-gratis', 'produto');
+        $pv('s2', 'kz/compressor', 'produto');
+        $pv('s3', 'kzp', 'pagina');
+
+        [$de, $ate] = FunilInfoprodutos::intervalo('7d');
+        $r = app(PaginasDoSite::class)->montar($de, $ate);
+        $paginas = collect($r['paginas'])->keyBy(fn ($p) => $p['produto'].'|'.$p['pagina']);
+
+        $this->assertFalse($paginas->has('kz/compressor-pdf-gratis|produto'));
+        $this->assertSame([2, 2], [$paginas['kz/compressor|produto']['visitas'], $paginas['kz/compressor|produto']['medidas']]);
+        $this->assertSame(1, $paginas['kzp|pagina']['medidas']);
+        $this->assertSame(3, $r['totais']['kazakora']['medidas']);
     }
 }

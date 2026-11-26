@@ -62,6 +62,9 @@ class Comportamento
 
     public static function rotuloDaPagina(string $produto, string $pagina, ?string $nomeDoCatalogo = null): string
     {
+        if (PaginasDoSite::paginaDeLoja($produto)) {
+            return PaginasDoSite::nomeDaPagina($produto);
+        }
         $nome = config("infoprodutos.produtos.{$produto}") ?? $nomeDoCatalogo
             ?? ucfirst(str_replace('-', ' ', (string) preg_replace('/^(kz|fk)\//', '', $produto)));
         $sufixo = ['oferta' => ' · upsell', 'oferta-2' => ' · downsell'][$pagina] ?? '';
@@ -108,7 +111,7 @@ class Comportamento
      */
     public function visita(string $sessao, string $produto): array
     {
-        $eventos = InfoprodutoEvento::query()->where('sessao', $sessao)->where('produto', $produto)
+        $eventos = InfoprodutoEvento::query()->where('sessao', $sessao)->whereIn('produto', ChaveAtualDaPagina::todas($produto))
             ->orderBy('created_at')->orderByRaw('COALESCE(ms, 0)')->orderBy('id')->limit(500)->get();
 
         $anterior = null;
@@ -151,7 +154,7 @@ class Comportamento
     {
         $pv = InfoprodutoEvento::query()
             ->where('tipo', 'pageview')->dePessoas(self::$comTestes)
-            ->where('produto', $produto)->where('pagina', $pagina)
+            ->whereIn('produto', ChaveAtualDaPagina::todas($produto))->where('pagina', $pagina)
             ->whereBetween('created_at', [$de, $ate])
             ->orderBy('id')
             ->get(['sessao', 'dispositivo', 'pais', 'utm_source', 'utm_content', 'referrer', 'created_at'])
@@ -171,7 +174,7 @@ class Comportamento
     private function eventos(string $produto, string $pagina, Collection $sessoes): Collection
     {
         return $sessoes->chunk(500)->flatMap(fn ($lote) => InfoprodutoEvento::query()
-            ->whereIn('sessao', $lote->all())->where('produto', $produto)->where('pagina', $pagina)
+            ->whereIn('sessao', $lote->all())->whereIn('produto', ChaveAtualDaPagina::todas($produto))->where('pagina', $pagina)
             ->orderBy('created_at')->orderByRaw('COALESCE(ms, 0)')->orderBy('id')
             ->get(['sessao', 'tipo', 'valor', 'ms', 'x', 'y', 'largura', 'alvo', 'secao', 'elemento', 'nome', 'origem', 'rolagem_max']))->values();
     }

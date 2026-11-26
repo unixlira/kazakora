@@ -21,10 +21,13 @@ use Symfony\Component\HttpFoundation\IpUtils;
  * TODA página acessada, com ou sem anúncio, com nome e número de visitas, e o
  * funil de cada uma (carrinho, checkout, pedido).
  *
- * Só páginas de produto na lista (Lira, 2026-11-23: "comportamento só tela de
- * produto"): kz/<slug>, fk/<slug> e as páginas de venda dos infoprodutos. As
- * outras páginas das lojas (kzp/fkp: início, checkout, entrar...) continuam
- * contando nos totais de visitas da loja, mas saem da lista e dos prints.
+ * Todas as páginas na lista de novo (Lira, 2026-11-26: "captar todos os
+ * pontos clicados na tela; se teve 1 visita do anúncio, eu quero as marcas da
+ * tela"): produto (kz/<slug>, fk/<slug>), as outras páginas das lojas
+ * (kzp/fkp: início, departamento, busca, carrinho, blog...) e as páginas de
+ * venda dos infoprodutos. Cada página traz as visitas do site (site_visits) e
+ * as medidas pelo mapa de cliques (kzm.js), lado a lado. O slug antigo de um
+ * produto soma no atual (ChaveAtualDaPagina).
  *
  * Fontes (nada de coleta nova, só o "adicionar ao carrinho" no servidor):
  *  - KazaKora e FerraKora: site_visits (TrackSiteVisit e a tag da FerraKora);
@@ -107,7 +110,13 @@ class PaginasDoSite
         $this->dosInfoprodutos($de, $ate);
         $this->nomear();
 
-        $paginas = collect($this->paginas)->reject(fn ($p) => ! self::paginaDeProduto($p['produto']))->map(function ($p) {
+        foreach (self::LOJAS as $loja) {
+            if (isset($this->totais[$loja])) {
+                $this->totais[$loja]['medidas'] = $this->medidasDaLoja($loja, $de, $ate);
+            }
+        }
+
+        $paginas = collect($this->paginas)->map(function ($p) {
             unset($p['_quem']);
 
             return $p;
@@ -224,6 +233,7 @@ class PaginasDoSite
 
     private function &pagina(string $produto, string $pagina): array
     {
+        $produto = ChaveAtualDaPagina::atual($produto);
         $k = $produto.'|'.$pagina;
         if (! isset($this->paginas[$k])) {
             $this->paginas[$k] = [
@@ -245,8 +255,8 @@ class PaginasDoSite
             ->groupBy('produto', 'pagina')->limit(1000)->toBase()->get();
         foreach ($linhas as $l) {
             $p = &$this->pagina((string) $l->produto, (string) $l->pagina);
-            $p['medidas'] = (int) $l->visitas;
-            $p['visitas'] = max($p['visitas'], (int) $l->visitas);
+            $p['medidas'] += (int) $l->visitas;
+            $p['visitas'] = max($p['visitas'], $p['medidas']);
             unset($p);
         }
     }
@@ -288,7 +298,7 @@ class PaginasDoSite
                 $abriuCarrinho[$v] = true;
             }
             if ($chave !== null) {
-                $porPagina[$chave[0].'|'.$chave[1]][$v] = $apelidos;
+                $porPagina[ChaveAtualDaPagina::atual($chave[0]).'|'.$chave[1]][$v] = $apelidos;
             }
         }
 
@@ -425,7 +435,23 @@ class PaginasDoSite
             ->where(fn ($q) => $q->where('tipo', 'buy')
                 ->orWhere(fn ($q) => $q->where('tipo', 'clk')->where(fn ($q) => $q->where('nome', 'carrinho')->orWhere('nome', 'like', 'comprar%'))))
             ->selectRaw('produto, COUNT(DISTINCT sessao) as n')->groupBy('produto')->pluck('n', 'produto')
-            ->map(fn ($n) => (int) $n)->all();
+            ->reduce(function (array $soma, $n, $produto) {
+                $atual = ChaveAtualDaPagina::atual((string) $produto);
+                $soma[$atual] = ($soma[$atual] ?? 0) + (int) $n;
+
+                return $soma;
+            }, []);
+    }
+
+    /** Abas medidas pelo mapa de cliques na loja (qualquer página), para comparar com as visitas. */
+    private function medidasDaLoja(string $loja, Carbon $de, Carbon $ate): int
+    {
+        [$produto, $pagina] = $loja === 'ferrakora' ? ['fk/', 'fkp'] : ['kz/', 'kzp'];
+
+        return (int) InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas(Comportamento::$comTestes)
+            ->whereBetween('created_at', [$de, $ate])
+            ->where(fn ($q) => $q->where('produto', 'like', $produto.'%')->orWhere('produto', $pagina)->orWhere('produto', 'like', $pagina.'/%'))
+            ->distinct()->count('sessao');
     }
 
     private function dosInfoprodutos(Carbon $de, Carbon $ate): void

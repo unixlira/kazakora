@@ -110,6 +110,8 @@ class HandleInertiaRequests extends Middleware
             'avaliacaoModal' => fn () => ! $request->is('admin*') && $request->user() && ! $request->user()->isStaff() && \App\Modules\Catalog\Support\ModalAvaliacao::ativo($request->session())
                 ? rescue(fn () => app(\App\Modules\Catalog\Support\ModalAvaliacao::class)->proximo($request->user(), $request->session()), null, false)
                 : null,
+            // Mapa de cliques em toda página da loja (2026-11-26): qual página está aberta (MedicaoDaLoja).
+            'medicao' => fn () => rescue(fn () => \App\Modules\Infoprodutos\Support\MedicaoDaLoja::daRequisicao($request), null, false),
             'cart' => fn () => [
                 // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.
                 'count' => app(CartManager::class)->quantidadeNoCarrinho(),

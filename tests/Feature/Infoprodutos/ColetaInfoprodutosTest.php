@@ -189,4 +189,69 @@ class ColetaInfoprodutosTest extends TestCase
         // Origem fora da lista = 422.
         $this->enviar(['s' => 'Sessao0123456789AC', 'p' => 'kz/x', 'pg' => 'produto', 'e' => [['t' => 'clk', 'x' => 1, 'y' => 1, 'w' => 390, 'k' => 'a', 'o' => 'x']]], 'https://kazakora.com')->assertStatus(422);
     }
+
+    public function test_toda_pagina_da_loja_e_aceita_com_a_abertura_na_hora(): void
+    {
+        foreach (['kzp', 'kzp/departamento/cozinha', 'kzp/blog/como-limpar', 'kzp/rastreio/_', 'fkp', 'fkp/produtos/medicao'] as $i => $p) {
+            // Abertura sozinha (e = []), como o kzm.js manda assim que a página abre.
+            $this->enviar(['s' => 'Pagina0123456789A'.$i, 'p' => $p, 'pg' => 'pagina', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')
+                ->assertNoContent();
+        }
+        $this->assertSame(6, InfoprodutoEvento::where('tipo', 'pageview')->where('pagina', 'pagina')->count());
+
+        foreach (['kzp/../x', 'kzp/a/b/c/d', 'kzpx', 'kzp/'] as $p) {
+            $this->enviar(['s' => 'Pagina0123456789ZZ', 'p' => $p, 'pg' => 'pagina', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')->assertStatus(422);
+        }
+        $this->enviar(['s' => 'Pagina0123456789ZZ', 'p' => 'kzp', 'pg' => 'outra', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')->assertStatus(422);
+    }
+
+    public function test_loja_fora_do_brasil_sai_da_conta_e_infoproduto_nao(): void
+    {
+        $fora = fn (array $corpo, string $origem) => $this->call('POST', self::URL, [], [], [], [
+            'HTTP_ORIGIN' => $origem, 'HTTP_USER_AGENT' => self::UA, 'CONTENT_TYPE' => 'text/plain;charset=UTF-8',
+            'REMOTE_ADDR' => '203.0.113.90', 'HTTP_CF_IPCOUNTRY' => 'US',
+        ], json_encode($corpo));
+
+        $fora(['s' => 'ForaBR0123456789AB', 'p' => 'kzp', 'pg' => 'pagina', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')->assertNoContent();
+        $fora(['s' => 'ForaBR0123456789CD', 'p' => 'pidelo-bien', 'pg' => 'landing', 'l' => 'es', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://digitalmktseller.com')->assertNoContent();
+
+        $this->assertSame('fora-do-brasil', InfoprodutoEvento::where('sessao', 'ForaBR0123456789AB')->value('robo'));
+        $this->assertNull(InfoprodutoEvento::where('sessao', 'ForaBR0123456789CD')->value('robo'));
+
+        // O lote seguinte da mesma aba (sem abertura, IP do Brasil) herda a marca.
+        $this->enviar(['s' => 'ForaBR0123456789AB', 'p' => 'kzp', 'pg' => 'pagina', 'e' => [['t' => 'exit', 'v' => 5, 'ms' => 5000]]], 'https://kazakora.com')->assertNoContent();
+        $this->assertSame('fora-do-brasil', InfoprodutoEvento::where('sessao', 'ForaBR0123456789AB')->where('tipo', 'exit')->value('robo'));
+        $this->assertSame(0, InfoprodutoEvento::query()->where('produto', 'kzp')->dePessoas()->count());
+    }
+
+    public function test_chave_da_pagina_e_a_mesma_das_visitas(): void
+    {
+        $m = \App\Modules\Infoprodutos\Support\MedicaoDaLoja::class;
+        $this->assertSame(['p' => 'kzp', 'pg' => 'pagina'], $m::doCaminho('/'));
+        $this->assertSame(['p' => 'kz/arvore', 'pg' => 'produto'], $m::doCaminho('produtos/arvore'));
+        $this->assertSame(['p' => 'kzp/departamento/cozinha', 'pg' => 'pagina'], $m::doCaminho('/', ['categoria' => 'cozinha']));
+        $this->assertSame(['p' => 'kzp/busca', 'pg' => 'pagina'], $m::doCaminho('/', ['search' => 'panela']));
+        $this->assertSame(['p' => 'kzp/carrinho', 'pg' => 'pagina'], $m::doCaminho('carrinho'));
+        $this->assertSame(['p' => 'kzp/blog/como-limpar', 'pg' => 'pagina'], $m::doCaminho('blog/como-limpar'));
+        $this->assertNull($m::doCaminho('frete/cotar'));
+
+        $this->assertNull($m::daRequisicao(\Illuminate\Http\Request::create(config('app.url').'/finalizacao')));
+        $this->assertNull($m::daRequisicao(\Illuminate\Http\Request::create(config('app.url').'/admin/pedidos')));
+        $this->assertSame(['p' => 'kzp/ofertas', 'pg' => 'pagina'], $m::daRequisicao(\Illuminate\Http\Request::create(rtrim(config('app.url'), '/').'/ofertas')));
+    }
+
+    public function test_html_da_loja_traz_o_medidor_com_a_pagina(): void
+    {
+        $this->withHeaders(['User-Agent' => self::UA])->get(rtrim(config('app.url'), '/').'/carrinho')->assertOk()
+            ->assertSee('/js/kzm.js?v=', false)->assertSee('data-p="kzp/carrinho" data-pg="pagina"', false);
+    }
+
+    public function test_teste_da_entrada_vale_para_a_pagina_seguinte_da_aba(): void
+    {
+        $this->enviar(['s' => 'TesteAba0123456789', 'p' => 'kzp', 'pg' => 'pagina', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'us' => config('infoprodutos.utm_teste'), 'fb' => 0]], 'https://kazakora.com')->assertNoContent();
+        $this->enviar(['s' => 'TesteAba0123456789', 'p' => 'kz/arvore', 'pg' => 'produto', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')->assertNoContent();
+
+        $this->assertSame(2, InfoprodutoEvento::where('sessao', 'TesteAba0123456789')->where('tipo', 'pageview')->where('teste', true)->count());
+    }
 }
+

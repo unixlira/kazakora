@@ -388,10 +388,15 @@ telefone. **Não coleta nada novo**: só lê o que já existe.
 
 Pedido do Lira em 19/11/2026: funil dos infoprodutos (digitalmktseller.com e
 elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
-(`/produtos/*`) e da FerraKora (`/produto/*`).
+(`/produtos/*`) e da FerraKora (`/produto/*`). Desde 26/11/2026, TODA página das
+duas lojas (início, departamentos, busca, carrinho, blog, institucionais), menos
+o checkout, que tem medição própria; a chave da página é a mesma das visitas
+(`MedicaoDaLoja`, `PaginasDoSite::chave`).
 
-- **Script:** `/js/kzm.js` (o mesmo nos 4 sites, < 3 KB, defer, carregado na loja
-  só depois que a página fica ociosa: `resources/js/Shared/medicao.js`). Envio em
+- **Script:** `/js/kzm.js` (o mesmo nos 4 sites, < 3 KB, defer). Na KazaKora vem
+  no HTML (`app.blade.php`) e a troca de página do Inertia avisa o script
+  (`resources/js/Shared/medicao.js`); na FerraKora vem no `index.html`. A
+  abertura da página vai na hora (sem esperar o navegador ficar ocioso). Envio em
   lote por `sendBeacon` para `POST /api-infoprodutos/evento`
   (`ColetaController`), aceito só dos domínios de `config/infoprodutos.php`
   (`INFOPRODUTOS_ORIGENS`), com CORS próprio (fora de `/api/*`).
@@ -408,6 +413,10 @@ elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
   `p` fica fora do mapa e do Reproduzir (2026-11-20: o robô de revisão do Meta
   "clica" em todos os links de cada anúncio novo). Lista fechada: qualquer
   campo fora dela = 422.
+- **Fora da conta (lojas, 26/11/2026):** o mesmo critério das visitas
+  (`VisitaIgnorada::doIp`): rede de robô (Meta/Google) e IP de fora do Brasil
+  marcam a sessão (`robo`), IP da equipe/casa do dono marca como teste. O IP só
+  é conferido em memória, nunca gravado.
 - **O que NÃO vai:** cookie (nenhum é lido ou criado), localStorage, fingerprint,
   IP (não há coluna de IP; o país sai do `CF-IPCountry`, só quando a chamada vem
   de IP da Cloudflare), nome, e-mail, telefone, texto digitado.

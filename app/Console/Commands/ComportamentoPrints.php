@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
+use App\Modules\Infoprodutos\Support\ChaveAtualDaPagina;
 use App\Modules\Infoprodutos\Support\PaginasDoSite;
 use App\Modules\Infoprodutos\Support\PaginasMedidas;
 use App\Modules\Infoprodutos\Support\PrintDaPagina;
@@ -34,10 +35,10 @@ class ComportamentoPrints extends Command
             : InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas()
                 ->where('created_at', '>=', now()->subDays(7))
                 ->selectRaw('produto, pagina, COUNT(*) as n')->groupBy('produto', 'pagina')
-                ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => $p->produto, 'pagina' => $p->pagina])
-                // E as páginas de produto das lojas visitadas na semana (2026-11-20); kzp/fkp fora (2026-11-23).
+                // Toda página medida pelo mapa (kzp/fkp de volta em 2026-11-26), na chave atual do produto.
+                ->orderByDesc('n')->get()->map(fn ($p) => ['produto' => ChaveAtualDaPagina::atual($p->produto), 'pagina' => $p->pagina])
+                // E as páginas de produto das lojas visitadas na semana (2026-11-20).
                 ->concat(app(PaginasDoSite::class)->visitadas(now()->subDays(7)))
-                ->filter(fn ($p) => PaginasDoSite::paginaDeProduto($p['produto']))
                 ->unique(fn ($p) => $p['produto'].'|'.$p['pagina'])->values();
         $paginas = $paginas->when($this->option('produto'), fn ($c, $p) => $c->where('produto', $p))->take((int) $this->option('limite'));
 

@@ -246,13 +246,15 @@ class NewsletterTest extends TestCase
             ->assertSessionHas('error');
     }
 
-    public function test_bloco_de_newsletter_aparece_no_rodape_da_loja(): void
+    public function test_bloco_de_newsletter_aparece_no_rodape_so_na_home(): void
     {
         $rodape = file_get_contents(resource_path('js/Shared/Components/RodapeLoja.vue'));
         $bloco = file_get_contents(resource_path('js/Shared/Components/BlocoNewsletter.vue'));
 
-        $this->assertStringContainsString('<BlocoNewsletter />', $rodape);
-        $this->assertLessThan(strpos($rodape, '<footer'), strpos($rodape, '<BlocoNewsletter />'));
+        // Só na home (pedido do Lira 25/11/2026), antes do rodapé.
+        $this->assertStringContainsString('<BlocoNewsletter v-if="naHome" />', $rodape);
+        $this->assertLessThan(strpos($rodape, '<footer'), strpos($rodape, '<BlocoNewsletter v-if="naHome" />'));
+        $this->assertStringContainsString("=== '/'", $rodape);
         $this->assertStringNotContainsString('fa-bolt', $bloco);
         $this->assertStringContainsString('name="website"', $bloco);
     }

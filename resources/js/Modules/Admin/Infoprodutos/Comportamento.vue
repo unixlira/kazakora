@@ -38,6 +38,8 @@ const props = defineProps({
     loja: { type: String, default: 'kazakora' },
     paginas: { type: Array, default: () => [] },
     totais: { type: Object, default: () => ({}) },
+    // Corte da página ("Zerar a partir de agora", 2026-11-26): { desde, motivo, quem, ativo }.
+    corte: { type: Object, default: null },
     robos: { type: Boolean, default: false },
     pagina: { type: Object, default: null },
     print: { type: Object, default: null },
@@ -88,6 +90,19 @@ const funil = computed(() => {
 const ir = (mudanca) => router.get('/admin/publicidade/comportamento', {
     loja: props.loja, produto: props.pagina?.produto, pagina: props.pagina?.pagina, aparelho: props.aparelho, periodo: props.periodo, robos: props.robos ? 1 : undefined, ...mudanca,
 }, { preserveScroll: true });
+// Começar do zero (pedido do Lira 2026-11-26): a página mudou de layout e os pontos antigos
+// enganam. Não apaga nada: grava o corte (quem e quando) e a tela passa a ler só dali em diante.
+const zerando = ref(false);
+const zerarPagina = () => {
+    if (!props.pagina || zerando.value) return;
+    const motivo = window.prompt(`Zerar o comportamento de "${props.pagina.rotulo}" a partir de agora?\n\nMapa de cliques, rolagem, sequências e contagens desta página passam a contar só daqui para frente. Os dados antigos ficam guardados.\n\nMotivo (opcional):`, 'Layout novo');
+    if (motivo === null) return;
+    zerando.value = true;
+    router.post('/admin/publicidade/comportamento/zerar', { produto: props.pagina.produto, pagina: props.pagina.pagina, motivo }, {
+        preserveScroll: true,
+        onFinish: () => { zerando.value = false; },
+    });
+};
 const escolherPagina = (valor) => {
     const [produto, pagina] = valor.split('|');
     ir({ produto, pagina });
@@ -355,6 +370,17 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
             Onde as pessoas clicam, até onde rolam e como navegam. Anônimo: sem cookie, sem IP, só um código aleatório por aba.
         </p>
+
+        <div v-if="pagina" class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+            :class="corte?.ativo ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-700'">
+            <span v-if="corte?.ativo" class="min-w-0 flex-1">
+                <i class="fas fa-rotate-left mr-1 text-amber-600"></i>
+                <b>{{ pagina.rotulo }}</b>: medindo desde <b>{{ hora(corte.desde) }}</b> ({{ corte.motivo || 'layout novo' }}<template v-if="corte.quem">, zerado por {{ corte.quem }}</template>). Antes disso fica guardado, fora da tela.
+            </span>
+            <span v-else class="min-w-0 flex-1 text-slate-500">Mudou o layout de <b>{{ pagina.rotulo }}</b>? Zere para o mapa não misturar cliques da tela antiga.</span>
+            <button type="button" class="shrink-0 rounded border border-amber-500 px-3 py-1 font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                :disabled="zerando" @click="zerarPagina">{{ zerando ? 'Zerando…' : 'Zerar a partir de agora' }}</button>
+        </div>
 
         <div class="grid min-w-0 gap-5 lg:grid-cols-3">
             <!-- Coluna 1: filtros -->

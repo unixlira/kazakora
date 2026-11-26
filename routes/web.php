@@ -888,6 +888,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('publicidade/infoprodutos', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'index'])->name('publicidade.infoprodutos');
         Route::get('publicidade/criativos', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'criativos'])->name('publicidade.criativos');
         Route::get('publicidade/comportamento', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'comportamento'])->name('publicidade.comportamento');
+        // "Zerar a partir de agora" por página (2026-11-26): corte com quem/quando, nada apagado.
+        Route::post('publicidade/comportamento/zerar', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'zerar'])
+            ->middleware('permission:financeiro.edit')->name('publicidade.comportamento.zerar');
         Route::get('publicidade/comportamento/visita', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'visita'])->name('publicidade.comportamento.visita');
         Route::get('publicidade/comportamento/print', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'print'])->name('publicidade.comportamento.print');
         Route::get('publicidade/comportamento/print/info', [\App\Modules\Admin\Http\Controllers\InfoprodutosPainelController::class, 'printInfo'])->name('publicidade.comportamento.print-info');

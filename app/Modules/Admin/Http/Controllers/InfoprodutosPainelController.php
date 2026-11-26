@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Publicidade\CampanhasMetaPorLoja;
 use App\Modules\Admin\Support\Publicidade\CriativosMeta;
 use App\Modules\Infoprodutos\Jobs\GerarPrintDaPagina;
+use App\Modules\Infoprodutos\Models\ComportamentoCorte;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Models\InfoprodutoVenda;
 use App\Modules\Infoprodutos\Support\Comportamento;
@@ -18,6 +19,7 @@ use App\Modules\Notifications\Push\AppsDeVendas;
 use App\Modules\Notifications\Push\MetricasDaLoja;
 use App\Services\Meta\MetaAdsException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -176,6 +178,20 @@ class InfoprodutosPainelController extends Controller
         $escolhida = collect($paginas)->first(fn ($p) => $p['produto'] === $request->query('produto') && $p['pagina'] === ($request->query('pagina') ?: $p['pagina']))
             ?? collect($paginas)->first(fn ($p) => $loja === null || $p['loja'] === $loja);
 
+        // "Zerar a partir de agora" (2026-11-26): a página mudou de layout; mapa, rolagem,
+        // sequências e contagens dela só com os eventos depois do corte (nada é apagado).
+        $corte = $escolhida ? ComportamentoCorte::atual($escolhida['produto'], $escolhida['pagina']) : null;
+        $deDaPagina = $corte && $corte->desde->greaterThan($de) ? $corte->desde->copy() : $de;
+        if ($escolhida && $deDaPagina !== $de) {
+            $chave = $escolhida['produto'].'|'.$escolhida['pagina'];
+            $desdeOCorte = Cache::remember('comportamento:paginas:corte:'.md5($chave.'|'.$corte->desde->timestamp.'|'.$periodo).':'.(int) Comportamento::$comTestes.(int) InfoprodutoEvento::$comRobos, 120,
+                fn () => app(PaginasDoSite::class)->montar($deDaPagina, $ate));
+            $zerada = ['visitas' => 0, 'medidas' => 0, 'carrinho' => 0, 'checkout' => 0, 'pedidos' => 0, 'vendidos' => 0];
+            $escolhida = array_replace($escolhida, array_intersect_key(
+                collect($desdeOCorte['paginas'])->first(fn ($p) => $p['produto'].'|'.$p['pagina'] === $chave) ?? $zerada, $zerada));
+            $paginas = array_map(fn ($p) => $p['produto'].'|'.$p['pagina'] === $chave ? $escolhida : $p, $paginas);
+        }
+
         return Inertia::render('Admin/Infoprodutos/Comportamento', [
             'periodo' => $periodo,
             'periodos' => $periodos,
@@ -185,15 +201,43 @@ class InfoprodutosPainelController extends Controller
             'paginas' => $paginas,
             'totais' => $lista['totais'],
             'pagina' => $escolhida,
+            'corte' => $corte ? [
+                'desde' => $corte->desde->toIso8601String(),
+                'motivo' => $corte->motivo,
+                'quem' => $corte->user?->name,
+                'ativo' => $deDaPagina !== $de,
+            ] : null,
             'print' => $escolhida ? $this->infoDoPrint($escolhida['produto'], $escolhida['pagina'], $aparelho) : null,
             'dados' => Inertia::defer(fn () => $escolhida
-                ? $comportamento->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $de, $ate)
+                ? $comportamento->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $deDaPagina, $ate)
                 : null),
             // Funil completo da página de produto até o pedido pago, cruzando o checkout (2026-11-23). Só contagens.
             'funilProduto' => Inertia::defer(fn () => $escolhida
-                ? app(FunilDoProduto::class)->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $de, $ate)
+                ? app(FunilDoProduto::class)->montar($escolhida['produto'], $escolhida['pagina'], $aparelho, $deDaPagina, $ate)
                 : null),
         ]);
+    }
+
+    /**
+     * "Zerar a partir de agora" (pedido do Lira em 2026-11-26): a página mudou e
+     * os cliques antigos caem em pontos errados. Grava o corte com quem e
+     * quando; nada é apagado. Pede print novo da página nos dois aparelhos.
+     */
+    public function zerar(Request $request): RedirectResponse
+    {
+        $dados = $request->validate([
+            'produto' => ['required', 'string', 'max:130', 'regex:/^[a-z0-9\/_-]+$/'],
+            'pagina' => ['required', 'string', 'max:10', 'regex:/^[a-z0-9-]+$/'],
+            'motivo' => ['nullable', 'string', 'max:200'],
+        ]);
+        $corte = ComportamentoCorte::zerar($dados['produto'], $dados['pagina'], $dados['motivo'] ?? 'Layout novo', $request->user()?->id);
+        if (PrintDaPagina::url($corte->produto, $corte->pagina) !== null) {
+            foreach ([Comportamento::CELULAR, Comportamento::COMPUTADOR] as $aparelho) {
+                rescue(fn () => GerarPrintDaPagina::dispatch($corte->produto, $corte->pagina, $aparelho), null, false);
+            }
+        }
+
+        return back()->with('success', 'Página zerada: o comportamento dela conta a partir de '.$corte->desde->format('d/m H:i').'. Os dados antigos ficam guardados.');
     }
 
     public function visita(Request $request, Comportamento $comportamento): JsonResponse

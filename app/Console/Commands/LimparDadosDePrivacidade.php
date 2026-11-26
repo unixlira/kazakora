@@ -28,7 +28,8 @@ class LimparDadosDePrivacidade extends Command
 
     public function handle(): int
     {
-        $visitas = SiteVisit::query()
+        // Inclui as visitas que não contam (ignorada): o prazo do IP vale para todas.
+        $visitas = SiteVisit::query()->withoutGlobalScope(SiteVisit::SO_QUE_CONTA)
             ->where('created_at', '<', now()->subMonths(6)->subDay())
             ->where(fn ($query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent')->orWhereNotNull('user_id')->orWhereNotNull('click_id')->orWhereNotNull('cookies')->orWhereNotNull('latitude')->orWhereNotNull('cep')->orWhere('visitor_id', '!=', 'anonimo'))
             ->update(['ip' => null, 'user_agent' => null, 'user_id' => null, 'click_id' => null, 'cookies' => null, 'latitude' => null, 'longitude' => null, 'cep' => null, 'visitor_id' => 'anonimo']);

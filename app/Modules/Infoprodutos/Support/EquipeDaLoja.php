@@ -61,7 +61,7 @@ class EquipeDaLoja
     {
         return Cache::remember('comportamento:equipe', 600, function () {
             $usuarios = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
-            $logado = SiteVisit::query()->whereIn('user_id', $usuarios ?: [0])->where('created_at', '>=', now()->subDays(self::DIAS));
+            $logado = SiteVisit::query()->withoutGlobalScope(SiteVisit::SO_QUE_CONTA)->whereIn('user_id', $usuarios ?: [0])->where('created_at', '>=', now()->subDays(self::DIAS));
             $visitantes = (clone $logado)->distinct()->pluck('visitor_id')->filter()->map(fn ($v) => (string) $v)->values()->all();
             $ips = (clone $logado)->whereNotNull('ip')->distinct()->pluck('ip')->map(fn ($ip) => (string) $ip)->all();
             $fixos = array_values(array_filter((array) config('infoprodutos.ips_equipe'), fn ($ip) => is_string($ip) && $ip !== ''));

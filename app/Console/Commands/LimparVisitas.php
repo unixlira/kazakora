@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\Storage;
  * visitas com OK de cookies, então o robô sem OK sai pela rede (Meta,
  * Google, nossos servidores) ou pelo volume (mais de 300 páginas num dia).
  * Casa da equipe: a mesma rede (/64 do IPv6 ou IPv4) de uma visita da
- * equipe no mesmo dia, no dia anterior ou no seguinte.
+ * equipe no mesmo dia, no dia anterior ou no seguinte. Fora do Brasil: país
+ * do IP pela base DB-IP do servidor (sem a base, ninguém sai por isso).
  *
  *   php artisan visitas:limpar --dry-run   # só conta, por motivo
  *   php artisan visitas:limpar             # marca
@@ -142,6 +143,7 @@ class LimparVisitas extends Command
                 $daEquipe => VisitaIgnorada::EQUIPE,
                 VisitaIgnorada::ipDaLista($l->ip) => VisitaIgnorada::IP_IGNORADO,
                 $rede !== null && $this->casaNoDia($redesDaEquipe, $rede, $dia) => VisitaIgnorada::CASA_EQUIPE,
+                $this->foraDoBrasil($l->ip) => VisitaIgnorada::FORA_DO_BRASIL,
                 default => null,
             };
             if ($motivo !== null) {
@@ -163,6 +165,18 @@ class LimparVisitas extends Command
         ksort($motivos);
 
         return [$motivos, array_map(fn ($linha) => Carbon::parse($linha[0]->created_at)->timestamp, $linhas)];
+    }
+
+    /** @var array<string, bool> país por IP já consultado */
+    private array $paises = [];
+
+    private function foraDoBrasil(?string $ip): bool
+    {
+        if ($ip === null || $ip === '') {
+            return false;
+        }
+
+        return $this->paises[$ip] ??= VisitaIgnorada::foraDoBrasil($ip);
     }
 
     /** A rede foi da equipe no dia, no anterior ou no seguinte. */

@@ -897,7 +897,7 @@ const contagem = computed(() => {
     if (!(falta > 0)) return null;
     const segundos = Math.floor(falta / 1000);
     const minutos = Math.floor(segundos / 60);
-    // Como na referência: com dias mostra dias/horas/minutos; no último dia, horas/minutos/segundos.
+    // Segundos sempre à mostra (pedido do Lira 25/11/2026): o cliente vê o relógio andando.
     return { dias: Math.floor(minutos / 1440), horas: String(Math.floor((minutos % 1440) / 60)).padStart(2, '0'), min: String(minutos % 60).padStart(2, '0'), seg: String(segundos % 60).padStart(2, '0') };
 });
 const irParaCompra = () => {
@@ -1065,7 +1065,7 @@ const escolherKit = (kit, rolar = false) => {
                                     <small>{{ variations.length ? 'nos kits' : 'neste brinquedo' }} · tempo limitado</small>
                                 </div>
                                 <div v-if="contagem" class="pb-bf-timer" aria-label="Tempo até o fim da oferta">
-                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span v-if="!contagem.dias"><b>{{ contagem.seg }}</b>seg</span>
+                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span><b>{{ contagem.seg }}</b>seg</span>
                                 </div>
                             </div>
                             <div v-if="oferta && !brinquedo" class="oferta-bf" data-oferta-produto>
@@ -1076,7 +1076,7 @@ const escolherKit = (kit, rolar = false) => {
                                 </ul>
                                 <p v-if="oferta.texto">{{ oferta.texto }}</p>
                                 <div v-if="brinquedo && contagem" class="pb-relogio" aria-label="Tempo até o fim da oferta">
-                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span v-if="!contagem.dias"><b>{{ contagem.seg }}</b>seg</span>
+                                    <span v-if="contagem.dias"><b>{{ contagem.dias }}</b>dias</span><span><b>{{ contagem.horas }}</b>hrs</span><span><b>{{ contagem.min }}</b>min</span><span><b>{{ contagem.seg }}</b>seg</span>
                                 </div>
                             </div>
 

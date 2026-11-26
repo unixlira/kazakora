@@ -121,7 +121,10 @@ Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
             ?? \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar($slug);
         abort_unless($produto, 404);
 
-        return redirect()->route('produtos.ver', $produto->slug, 301);
+        // Mantém UTMs e fbclid dos anúncios (25/11/2026): sem eles a venda perde a origem.
+        $query = $request->getQueryString();
+
+        return redirect(route('produtos.ver', $produto->slug).($query ? '?'.$query : ''), 301);
     });
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
 // "Carregar mais avaliações" da página do produto, de 12 em 12 (tarefa 3878, 06/11).

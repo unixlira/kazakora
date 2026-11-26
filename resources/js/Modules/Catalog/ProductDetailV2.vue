@@ -1537,7 +1537,8 @@ const escolherKit = (kit, rolar = false) => {
                 </Teleport>
 
                 <!-- FAIXA DE CONFIANÇA (card do frete sem os raios e o FULL e FLEX, pedido 2026-10-25) -->
-                <div v-if="!brinquedo" class="confianca">
+                <!-- Também na página de brinquedo (pedido do Lira 25/11/2026: sumiu e ele quer de volta). -->
+                <div class="confianca">
                     <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis</strong>Entrega em todo Brasil</span></div>
                     <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
                     <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>

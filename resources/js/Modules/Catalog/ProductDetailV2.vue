@@ -949,10 +949,12 @@ onMounted(async () => {
     document.fonts?.ready?.then(alinharGaleria);
 });
 onUnmounted(() => { window.removeEventListener('resize', alinharGaleria); observadorAltura?.disconnect(); });
-const escolherKit = (kit, rolar = false) => {
+// Cartões "Monte o kit" no fim da página (pedido do Lira 25/11/2026): quem chegou até ali e
+// escolheu vai direto para o checkout com o kit escolhido; na caixa de compra só marca.
+const escolherKit = (kit, direto = false) => {
     escolherVariacao(kit);
     kzmAcao(`kit:${kit.id}`);
-    if (rolar) irParaCompra();
+    if (direto) nextTick(() => buyNow());
 };
 
 </script>

@@ -28,9 +28,9 @@ class ForaDaVitrineKzTest extends TestCase
         $this->assertNotContains($velho->id, Product::query()->naKazaKora()->pluck('id')->all());
         $this->assertSame([['id' => $velho->id, 'rotulo' => 'Macaco']], $novo->fresh()->avaliacoes_de);
 
-        $this->get('/produtos/macaco-velho?utm_source=teste&fbclid=x')
+        $this->get('/produtos/macaco-velho?fbclid=x&utm_source=teste')
             ->assertStatus(301)
-            ->assertRedirect('/produtos/kit-macaco-novo?utm_source=teste&fbclid=x');
+            ->assertRedirect('/produtos/kit-macaco-novo?fbclid=x&utm_source=teste');
         $this->get('/produtos/macaco-mais-velho?utm_source=teste')
             ->assertStatus(301)
             ->assertRedirect('/produtos/kit-macaco-novo?utm_source=teste');

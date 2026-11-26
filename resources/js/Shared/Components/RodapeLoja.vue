@@ -10,6 +10,8 @@ import BlocoNewsletter from '@/Shared/Components/BlocoNewsletter.vue';
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const user = computed(() => page.props.auth?.user);
+// Newsletter só na home (pedido do Lira 25/11/2026): saiu da página de produto e das demais.
+const naHome = computed(() => (page.url || '').split(/[?#]/)[0] === '/');
 
 // Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).
 const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
@@ -25,8 +27,8 @@ const REDES = [
 </script>
 
 <template>
-<!-- Newsletter logo antes do rodapé (pedido do Lira 24/11/2026). -->
-<BlocoNewsletter />
+<!-- Newsletter logo antes do rodapé (pedido do Lira 24/11/2026), só na home (25/11/2026). -->
+<BlocoNewsletter v-if="naHome" />
 <footer class="bg-[#0b0b0b] text-white">
     <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
         <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">

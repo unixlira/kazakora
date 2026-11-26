@@ -45,6 +45,7 @@ class ProductController extends Controller
             ->with(['category', 'images'])
             ->when($validated['search'] ?? null, fn ($query, $search) => $query->where(fn ($q) => $q
                 ->where('name', 'like', "%{$search}%")
+                ->orWhere('termos_busca', 'like', "%{$search}%")
                 ->orWhere('sku', 'like', "%{$search}%")))
             ->when($validated['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))
             ->when(array_key_exists('is_active', $validated), fn ($query) => $query->where('is_active', $validated['is_active']))

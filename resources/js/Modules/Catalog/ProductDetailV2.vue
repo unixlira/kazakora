@@ -68,6 +68,8 @@ const props = defineProps({
     paginaBrinquedo: { type: Object, default: null },
     // Escada de kits entre produtos (26/11/2026, oferta do Compressor 4 em 1): EscadaDeKits::paraKazaKora; null sem escada.
     kits: { type: Object, default: null },
+    // Opção já escolhida ao abrir (?opcao=<id>, links antigos das opções do anúncio, 26/11/2026).
+    opcaoInicial: { type: Number, default: null },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
 // Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
@@ -129,7 +131,8 @@ const blocosDaDescricao = computed(() => {
     return blocos.slice(0, blocos.some((bloco) => bloco?.video_url) ? BLOCOS_NA_DESCRICAO + 1 : BLOCOS_NA_DESCRICAO);
 });
 // Vídeo do produto: desde 14/11/2026 sai do carrossel e abre a descrição, mostrando o produto em uso.
-const videoDescricao = computed(() => props.product.video_url || null);
+// Anúncio com opções (26/11/2026, Compressor 4 em 1): o vídeo da opção escolhida, se ela tiver.
+const videoDescricao = computed(() => escolhida.value?.video_url || props.product.video_url || null);
 
 // Galeria do topo: só fotos (sem o vídeo), em ordem, e sem repetir as que ilustram a descrição
 // (pedido do Lira 14/11/2026: carrossel com o produto em vários ângulos; a descrição reforça com
@@ -160,6 +163,8 @@ const mediaItems = computed(() => {
 // aparecem os botões ("1 unidade" antes de "Kit 2 unidades"). Tudo esgotado: nenhuma.
 const variacaoInicial = (produto, variacoes) => {
     if (!variacoes.length) return produto;
+    const daUrl = props.opcaoInicial ? [produto, ...variacoes].find((variant) => variant.id === props.opcaoInicial && variant.stock > 0) : null;
+    if (daUrl) return daUrl;
     if (produto.parent_product_id && produto.stock > 0) return produto;
     return [produto, ...variacoes]
         .sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
@@ -221,7 +226,8 @@ const variantIndex = (id) => {
 // A página abre sempre na primeira foto do carrossel (pedido 2026-10-18,
 // Árvore de Natal; antes abria na foto do modelo da página, o 303). Escolher
 // a variação troca a foto principal pela dela, sem recarregar.
-const activeIndex = ref(0);
+// Link de uma opção (?opcao=<id>): abre já na foto dela.
+const activeIndex = ref(props.opcaoInicial && escolhida.value?.id === props.opcaoInicial ? Math.max(0, variantIndex(props.opcaoInicial)) : 0);
 const escolherVariacao = (variant) => {
     escolhida.value = variant;
     alertaVariacao.value = 0;

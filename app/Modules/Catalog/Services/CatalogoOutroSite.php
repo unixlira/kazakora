@@ -212,8 +212,20 @@ abstract class CatalogoOutroSite
         }
 
         $antigo = $this->idPeloSlugAntigo($idOuSlug);
+        if ($antigo === null) {
+            return null;
+        }
+        if ($achado = $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$antigo)) {
+            return $achado;
+        }
 
-        return $antigo === null ? null : $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$antigo);
+        // Produto que virou opção de outro anúncio (26/11/2026, Compressor 4 em 1 com 3 opções): o
+        // link antigo abre o anúncio do pai com essa opção já escolhida (opcao_inicial).
+        $pai = Product::query()->whereKey($antigo)->value('parent_product_id');
+        $doPai = $pai ? $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$pai) : null;
+        $opcao = self::PREFIXO_VARIACAO.$antigo;
+
+        return $doPai && collect($doPai['variants'] ?? [])->contains('id', $opcao) ? [...$doPai, 'opcao_inicial' => $opcao] : null;
     }
 
     /**

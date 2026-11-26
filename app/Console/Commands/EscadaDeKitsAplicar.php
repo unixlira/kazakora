@@ -23,9 +23,11 @@ use Illuminate\Support\Facades\Storage;
  *            no StockManager), fiscal copiado de outro produto, fotos copiadas (arquivo do git ou
  *            foto de outro produto, sempre um arquivo novo), conteúdo da página, avaliacoes_de e o
  *            registro no site FerraKora.
- *   ajustar  produtos que já existem, pelo SKU: nome, slug, preço "de"/"por" e estoque (entrada
- *            ou saída registrada no StockManager, só a diferença).
- *   escada   o JSON dos cartões (itens por SKU), gravado em products.escada_kits de cada kit.
+ *   ajustar  produtos que já existem, pelo SKU: nome, slug, preço "de"/"por", estoque (entrada
+ *            ou saída registrada no StockManager, só a diferença) e vídeo (arquivo já no disco público).
+ *            Tudo opcional: só muda o que o item traz.
+ *   escada   o JSON dos cartões (itens por SKU), gravado em products.escada_kits de cada kit
+ *            (opcional: um arquivo só com ajustes, como os vídeos, não mexe na escada).
  *
  * Sem --aplicar só mostra o que faria. Com --aplicar guarda antes um backup JSON dos produtos
  * tocados em storage/app/backups/escada-kits-<nome>-<data>.json.
@@ -67,7 +69,7 @@ class EscadaDeKitsAplicar extends Command
             }
         }
         $escadaTeste = $this->escadaComIds($dados['escada'] ?? [], fn ($sku) => $existentes->get($sku)?->id ?? 999999);
-        if ($problemas = EscadaDeKits::problemas($escadaTeste)) {
+        if (isset($dados['escada']) && $problemas = EscadaDeKits::problemas($escadaTeste)) {
             $this->error('Escada com problemas: '.implode('; ', $problemas));
 
             return self::FAILURE;
@@ -80,6 +82,9 @@ class EscadaDeKitsAplicar extends Command
             foreach ($dados['ajustar'] ?? [] as $ajuste) {
                 $p = $existentes->get($ajuste['sku']);
                 $this->line("ajustar: {$ajuste['sku']} (id ".($p?->id ?? '?').') de '.($ajuste['price'] ?? '-').' por '.($ajuste['por'] ?? '-').', estoque '.($p?->stock ?? '?').' -> '.($ajuste['estoque'] ?? '-'));
+                if (! empty($ajuste['video']['arquivo'])) {
+                    $this->line('  vídeo: '.($p?->video_path ?: '(nenhum)').' -> '.$ajuste['video']['arquivo'].(Storage::disk('public')->exists($ajuste['video']['arquivo']) ? '' : ' (ARQUIVO NÃO ENCONTRADO)'));
+                }
             }
             $this->info('Nada gravado. Rode com --aplicar.');
 
@@ -96,6 +101,9 @@ class EscadaDeKitsAplicar extends Command
                 $this->ajustar($ajuste, $estoque, $conteudos);
             }
 
+            if (! isset($dados['escada'])) {
+                return;
+            }
             $porSku = Product::whereIn('sku', collect($dados['escada']['itens'] ?? [])->pluck('sku'))->pluck('id', 'sku');
             $escada = $this->escadaComIds($dados['escada'], fn ($sku) => $porSku[$sku] ?? null);
             Product::whereIn('id', EscadaDeKits::ids($escada))->get()->each(fn (Product $p) => $p->forceFill(['escada_kits' => $escada])->saveQuietly());
@@ -205,6 +213,16 @@ class EscadaDeKitsAplicar extends Command
         if ($conteudoEmDia) {
             $produto->unsetRelation('images');
             $produto->adContent->forceFill(['origem_hash' => $conteudos->hash($produto)])->saveQuietly();
+        }
+
+        // Vídeo do produto (o mesmo campo do upload do admin): arquivo já enviado ao disco público.
+        // O vídeo anterior fica no disco, para voltar se precisar.
+        if (! empty($ajuste['video']['arquivo'])) {
+            if (! Storage::disk('public')->exists($ajuste['video']['arquivo'])) {
+                throw new \RuntimeException("Vídeo não encontrado no disco público: {$ajuste['video']['arquivo']}");
+            }
+            $this->info("Vídeo de {$produto->sku}: ".($produto->video_path ?: '(nenhum)')." -> {$ajuste['video']['arquivo']}");
+            $produto->forceFill(['video_path' => $ajuste['video']['arquivo'], 'video_duration_seconds' => (int) ($ajuste['video']['segundos'] ?? 0) ?: null])->save();
         }
 
         if (isset($ajuste['estoque'])) {

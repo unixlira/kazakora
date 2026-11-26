@@ -76,7 +76,7 @@ const campo = 'w-full min-w-0 rounded-xl border-0 bg-white px-4 py-3.5 text-[15p
                     <i class="fa-regular fa-envelope mr-1.5" aria-hidden="true"></i>Newsletter KazaKora
                 </p>
                 <h2 id="newsletter-titulo" class="font-display mt-2 text-[1.7rem] font-extrabold leading-[1.08] [text-wrap:balance] md:text-4xl">
-                    Notícias populares e ofertas no seu e-mail
+                    Notícias e Ofertas no seu e-mail
                 </h2>
                 <p class="mt-3 max-w-[46ch] text-sm text-white/95 md:text-base">
                     Toda semana: as matérias mais lidas do blog e as melhores ofertas da loja, antes de todo mundo.

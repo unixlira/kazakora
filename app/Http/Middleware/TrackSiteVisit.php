@@ -6,11 +6,11 @@ use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Modules\Analytics\Support\PrecoVisto;
+use App\Modules\Analytics\Support\VisitaIgnorada;
 use App\Support\Privacidade\Cookies;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\IpUtils;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -47,6 +47,11 @@ use Symfony\Component\HttpFoundation\Response;
  *   abrir e o frete que estava dentro dele (site_visits.preco_visto e
  *   frete_visto, regra em PrecoVisto). Não é dado pessoal.
  *
+ * - Desde 2026-11-26 (pedido do Lira, "limpa isso"): robô não é gravado
+ *   (BOT_PATTERN, rede da Meta e do Google) e a visita da equipe logada, do
+ *   navegador da equipe, dos IPs da lista e da casa da equipe é gravada com
+ *   site_visits.ignorada = motivo e não conta (VisitaIgnorada).
+ *
  * Depois de 6 meses o IP, o navegador e a localização são apagados
  * (privacidade:limpar).
  */
@@ -54,9 +59,12 @@ class TrackSiteVisit
 {
     /**
      * Robôs e programas que não são navegador (pedido 2026-10-12: curl,
-     * scanners e monitores entravam como visita "Direto").
+     * scanners e monitores entravam como visita "Direto"). Ampliado em
+     * 26/11/2026 (pedido do Lira, "limpa isso"): prévias de link, robôs de
+     * IA e SEO, Playwright/Puppeteer, monitores e a auditoria do Pixel
+     * (KazaKoraPixelAudit). Sem propriedade Unicode: o PCRE da produção é o 10.39.
      */
-    public const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|facebookexternalua|externalads|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
+    public const BOT_PATTERN = '/bot|crawl|spider|slurp|preview|facebookexternalhit|facebookexternalua|facebookcatalog|meta-external|externalads|mediapartners|google-inspectiontool|googleother|google-read-aloud|google-safety|apis-google|feedfetcher|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|guzzle|headless|phantomjs|selenium|playwright|puppeteer|scan|censys|zgrab|lighthouse|pagespeed|gtmetrix|uptime|pingdom|statuscake|site24x7|monitor|checkly|newrelic|datadog|pixelaudit|ahrefs|semrush|mj12|bytespider|petalbot|yandex|baidu|gptbot|chatgpt|claude|anthropic|perplexity|ccbot|amazonbot|applebot|dataforseo|screaming frog|embedly|vkshare|ia_archiver/i';
 
     /**
      * Rede da própria Meta (pedido 2026-10-25): o robô que confere os anúncios
@@ -224,6 +232,8 @@ class TrackSiteVisit
             'click_id' => $consentiu || $clique[0] === 'fbclid' ? $clique[1] : null,
             'dispositivo' => self::dispositivo((string) $request->userAgent()),
             'consentiu' => $consentiu,
+            // Equipe, IP da lista ou casa da equipe: grava marcada e não conta (VisitaIgnorada, 26/11/2026).
+            'ignorada' => rescue(fn () => VisitaIgnorada::daRequisicao($request, $visitorId), null, false),
         ]);
     }
 
@@ -335,7 +345,7 @@ class TrackSiteVisit
             return true;
         }
 
-        if (IpUtils::checkIp((string) $request->ip(), self::REDES_DA_META)) {
+        if (VisitaIgnorada::redeDeRobo($request->ip())) {
             return true;
         }
 

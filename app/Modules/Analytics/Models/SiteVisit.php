@@ -52,7 +52,21 @@ class SiteVisit extends Model
         'dispositivo',
         'consentiu',
         'cookies',
+        'ignorada',
     ];
+
+    /**
+     * Visita que não conta (robô, equipe, IP da lista, casa da equipe:
+     * VisitaIgnorada, pedido do Lira em 26/11/2026) fica guardada com o
+     * motivo em ignorada e some de toda consulta pelo model. Para ver ou
+     * mexer nelas: withoutGlobalScope(SiteVisit::SO_QUE_CONTA).
+     */
+    public const SO_QUE_CONTA = 'so_que_conta';
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope(self::SO_QUE_CONTA, fn (Builder $query) => $query->whereNull($query->getModel()->getTable().'.ignorada'));
+    }
 
     protected function casts(): array
     {

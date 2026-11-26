@@ -932,8 +932,7 @@ const alinharGaleria = () => {
     const foto = document.querySelector('.pg-brinquedo .galeria .foto');
     const selos = compraEl.value?.querySelector('.pb-selos');
     if (!foto || !selos) return;
-    // A partir de 1024 px a foto segue a altura da tela (primeira dobra, pagina-brinquedo.css, 25/11/2026).
-    if (window.innerWidth <= 900 || window.innerWidth >= 1024) { foto.style.height = ''; foto.style.aspectRatio = ''; return; }
+    if (window.innerWidth <= 900) { foto.style.height = ''; foto.style.aspectRatio = ''; return; }
     foto.style.height = '';
     const altura = selos.getBoundingClientRect().bottom - foto.getBoundingClientRect().top;
     if (altura > 200) { foto.style.aspectRatio = 'auto'; foto.style.height = `${Math.round(altura)}px`; }

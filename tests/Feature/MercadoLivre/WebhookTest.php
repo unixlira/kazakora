@@ -182,4 +182,20 @@ class WebhookTest extends TestCase
             $this->assertSame('falha simulada', $log->fresh()->error_message);
         }
     }
+
+    public function test_webhook_tem_limite_por_ip(): void
+    {
+        Queue::fake();
+        config(['mercadolivre.webhook_por_minuto' => 3]);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->postJson('/api/mercadolivre/webhook', ['topic' => 'orders', 'resource' => '/orders/'.$i])->assertOk();
+        }
+
+        $this->postJson('/api/mercadolivre/webhook', ['topic' => 'orders', 'resource' => '/orders/x'])->assertStatus(429);
+
+        // Outro IP não é afetado.
+        $this->withServerVariables(['REMOTE_ADDR' => '10.9.8.7'])
+            ->postJson('/api/mercadolivre/webhook', ['topic' => 'orders', 'resource' => '/orders/y'])->assertOk();
+    }
 }

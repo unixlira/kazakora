@@ -1338,7 +1338,8 @@ const escolherKit = (kit, rolar = false) => {
                         <!-- Prova antes da oferta (pedido do Lira 22/11/2026): depois de entender o produto e o
                              "Por que escolher", o cliente vê quem já comprou, e só então os brindes e a garantia.
                              Mostra as 3 melhores avaliações com comentário (com foto primeiro); o resto fica embaixo. -->
-                        <section v-if="avaliacoesDestaque.length" class="card prova-social" data-kzm="prova">
+                        <!-- Na página de brinquedo (KoraKids) este quadro e a garantia abaixo saem: ela já tem os seus (pedido do Lira 25/11/2026). -->
+                        <section v-if="avaliacoesDestaque.length && !brinquedo" class="card prova-social" data-kzm="prova">
                             <h2>Quem comprou aprova</h2>
                             <div class="prova-nota">
                                 <span class="caixa-nota">{{ ratingAvg.toFixed(2) }}</span>
@@ -1421,7 +1422,7 @@ const escolherKit = (kit, rolar = false) => {
                             </div>
                         </section>
 
-                        <section class="card">
+                        <section v-if="!brinquedo" class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
                                 <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.webp" alt="Garantia de 100% de satisfação" loading="lazy">

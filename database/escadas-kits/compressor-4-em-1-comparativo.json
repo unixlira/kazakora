@@ -1,5 +1,5 @@
 {
-    "_sobre": "Oferta do Compressor 4 em 1, 26/11/2026 (pedidos do Lira): (1) capa limpa de bundle na frente do carrossel do Kit Estrada Segura (os blocos da descrição andam +1 sozinhos); (2) bloco 'Veja por que este kit é a melhor escolha' com foto nos dois lados de cada linha nos 3 kits; (3) os 3 kits também no KazaKora (so_ferrakora=false); (4) a escada regravada do arquivo principal (foto limpa do compressor no cartão do Kit A). Rodar: php artisan kits:escada compressor-4-em-1-comparativo --aplicar (backup antes, em storage/app/backups). Pode rodar de novo: foto que já está no carrossel não entra outra vez.",
+    "_sobre": "Oferta do Compressor 4 em 1, 26/11/2026 (pedidos do Lira): (1) capa limpa de bundle na frente do carrossel do Kit Estrada Segura (os blocos da descrição andam +1 sozinhos); (2) bloco 'Veja por que este kit é a melhor escolha' com foto nos dois lados de cada linha nos 3 kits; (3) os 3 kits também no KazaKora (so_ferrakora=false); (4) a escada regravada do arquivo principal (foto limpa do compressor no cartão do Kit A). Rodar: php artisan kits:escada compressor-4-em-1-comparativo --aplicar (backup antes, em storage/app/backups). Pode rodar de novo: foto que já está no carrossel não entra outra vez. (5) depois do bloco das garras/bateria arriada (623 e 413), um bloco com o vídeo do Kit Macaco Elétrico (508) e o link para a página dele; o 623 traz os blocos já com o +1 da capa nova.",
     "_fotos": {
         "413-comum-pneu-baixo.webp": "Pixabay https://pixabay.com/photos/flatfoot-senselessly-mature-76564/ (autor stux, Licença Pixabay: uso comercial, sem crédito obrigatório)",
         "413-produto-calibra.webp": "Cadastro do produto 413: products/413/padrao/a1.jpg (recorte quadrado)",
@@ -74,7 +74,62 @@
                             "compressor-4-em-1/comparativo/413-produto-bolsa.webp"
                         ]
                     ]
-                }
+                },
+                "blocos": [
+                    {
+                        "titulo": "Pneu vazio ou bateria arriada na estrada? 🛑",
+                        "texto": "Não passe aperto longe de casa. Tenha sempre à mão a qualidade KazaKora para salvar seu trajeto com rapidez e zero estruço.",
+                        "imagem": 0
+                    },
+                    {
+                        "titulo": "Tudo o que você precisa em um só aparelho 🎒",
+                        "texto": "Com design compacto que cabe na palma da mão, este compressor 4 em 1 reúne compressor de ar, auxiliar de partida, power bank e iluminação LED.",
+                        "imagem": 1
+                    },
+                    {
+                        "titulo": "Controle total da calibragem no visor digital 🔢",
+                        "texto": "Esqueça adivinhações. Basta escolher a pressão desejada nos botões e acompanhar a leitura exata direto na tela digital iluminada.",
+                        "imagem": 2
+                    },
+                    {
+                        "titulo": "As garras que salvam a partida do seu carro 🔋",
+                        "texto": "Com os cabos e garras resistentes inclusos, você consegue dar a partida no veículo de forma prática quando a bateria falhar.",
+                        "imagem": 3
+                    },
+                    {
+                        "titulo": "Quer trocar o pneu sem esforço?",
+                        "texto": "Conheça o Kit Macaco Elétrico 5t: o macaco sobe o carro com um botão, a chave de impacto de 420 N.m solta os parafusos da roda e ainda vêm compressor de até 150 PSI, lanterna LED e maleta rígida, tudo ligado no 12V do carro.",
+                        "video": "products/508/video/kitC-macaco-eletrico-4em1-web.mp4",
+                        "poster": "products/508/ia-10-g64sH6thXIvFwMWP.jpg",
+                        "link_produto": 508,
+                        "link_texto": "Ver o Kit Macaco Elétrico"
+                    },
+                    {
+                        "titulo": "Calibra muito além do carro e da moto 🚲",
+                        "texto": "Versátil para o dia a dia, ele atende bicicletas, bolas e infláveis, além de funcionar como power bank para carregar o seu celular.",
+                        "imagem": 4
+                    },
+                    {
+                        "titulo": "Tudo pronto para ficar no porta-malas 🚗",
+                        "texto": "Acompanha mangueira, cabos de carga, bicos adaptadores e uma bolsa de transporte prática para manter tudo organizado no veículo.",
+                        "imagem": 5
+                    },
+                    {
+                        "titulo": "Tenha a solução completa sempre por perto 🛠️",
+                        "texto": "Garanta o seu equipamento multifunção FerraKora e viaje com muito mais tranquilidade e segurança em qualquer situação.",
+                        "imagem": 6
+                    },
+                    {
+                        "titulo": "Pronto para uso automotivo imediato 🚙",
+                        "texto": "Com peso de 1,2 kg e medidas compactas na embalagem de 10 x 20 x 15 cm, ele se encaixa perfeitamente na sua rotina de motorista.",
+                        "imagem": 8
+                    },
+                    {
+                        "titulo": "Compacto por fora, potente para o seu dia 🎒",
+                        "texto": "A escolha que muita gente faz para garantir autonomia e praticidade ao cuidar do carro, da moto e dos acessórios em qualquer lugar.",
+                        "imagem": 9
+                    }
+                ]
             }
         },
         {
@@ -155,6 +210,36 @@
                         "Powerbank e lanterna LED",
                         "Carrega o celular e ilumina à noite"
                     ]
+                ],
+                "blocos": [
+                    {
+                        "titulo": "Pneu baixo? Calibra ali mesmo",
+                        "texto": "Encaixa o bico na válvula, escolhe a pressão no visor digital e o compressor enche até chegar nela, sem fila no posto.",
+                        "imagem": 3
+                    },
+                    {
+                        "titulo": "Furou? Remendo macarrão na hora",
+                        "texto": "Limpa o furo com o escareador, passa o remendo com a agulha e o pneu sem câmara volta a segurar o ar até o borracheiro.",
+                        "imagem": 6
+                    },
+                    {
+                        "titulo": "Troca de pneu sem cansar o braço",
+                        "texto": "A chave catraca encaixa no macaco e gira sem tirar a manivela a cada volta: o carro sobe mais rápido.",
+                        "imagem": 8
+                    },
+                    {
+                        "titulo": "Bateria arriada? Use as garras",
+                        "texto": "As garras do compressor prendem na bateria do carro e ajudam na partida. Ele ainda carrega o celular e tem lanterna LED.",
+                        "imagem": 4
+                    },
+                    {
+                        "titulo": "Quer trocar o pneu sem esforço?",
+                        "texto": "Conheça o Kit Macaco Elétrico 5t: o macaco sobe o carro com um botão, a chave de impacto de 420 N.m solta os parafusos da roda e ainda vêm compressor de até 150 PSI, lanterna LED e maleta rígida, tudo ligado no 12V do carro.",
+                        "video": "products/508/video/kitC-macaco-eletrico-4em1-web.mp4",
+                        "poster": "products/508/ia-10-g64sH6thXIvFwMWP.jpg",
+                        "link_produto": 508,
+                        "link_texto": "Ver o Kit Macaco Elétrico"
+                    }
                 ]
             }
         },

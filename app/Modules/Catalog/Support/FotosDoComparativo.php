@@ -24,6 +24,35 @@ class FotosDoComparativo
         return $comparativo;
     }
 
+    /**
+     * Blocos da descrição com vídeo próprio e link para outro produto (pedido do Lira 26/11/2026:
+     * depois de "Bateria arriada", o vídeo do Kit Macaco Elétrico com o link para a página dele).
+     * No bloco: video (caminho no disco público), poster (idem, a capa antes do play), link_produto
+     * (id do produto) e link_texto. Sai video_url, poster_url e link {texto, url}; o link só sai
+     * quando $urlDoProduto devolve a página (produto fora da loja fica sem link).
+     *
+     * @param  callable(int): ?string  $urlDoProduto
+     */
+    public static function blocosComVideo(?array $blocos, callable $urlDoProduto): array
+    {
+        return array_map(function ($bloco) use ($urlDoProduto) {
+            if (! is_array($bloco)) {
+                return $bloco;
+            }
+            if (filled($bloco['video'] ?? null)) {
+                $bloco['video_url'] = self::url($bloco['video']);
+                $bloco['poster_url'] = self::url($bloco['poster'] ?? null);
+            }
+            if ((int) ($bloco['link_produto'] ?? 0) > 0) {
+                $url = $urlDoProduto((int) $bloco['link_produto']);
+                $bloco['link'] = $url ? ['texto' => (string) ($bloco['link_texto'] ?? 'Ver o produto'), 'url' => $url] : null;
+            }
+            unset($bloco['video'], $bloco['poster'], $bloco['link_produto'], $bloco['link_texto']);
+
+            return $bloco;
+        }, array_values($blocos ?? []));
+    }
+
     /** Caminho do disco público (ou URL) para URL; vazio vira null. */
     public static function url(mixed $foto): ?string
     {

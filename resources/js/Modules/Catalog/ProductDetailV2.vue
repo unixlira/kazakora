@@ -123,7 +123,11 @@ const srcsetFoto = (image) => (image?.thumb_url && image.media_url && image.thum
 // Quantos blocos da descrição aparecem: "padrão 4 para todos os produtos" (anotação da mentoria).
 // Com vídeo, o primeiro bloco mostra o vídeo e os outros 3, fotos.
 const BLOCOS_NA_DESCRICAO = 4;
-const blocosDaDescricao = computed(() => (props.product.ad_content?.blocos ?? []).slice(0, BLOCOS_NA_DESCRICAO));
+// Com um bloco de vídeo próprio (26/11/2026: o vídeo do Kit Macaco Elétrico depois de "Bateria arriada"), 5 blocos.
+const blocosDaDescricao = computed(() => {
+    const blocos = props.product.ad_content?.blocos ?? [];
+    return blocos.slice(0, blocos.some((bloco) => bloco?.video_url) ? BLOCOS_NA_DESCRICAO + 1 : BLOCOS_NA_DESCRICAO);
+});
 // Vídeo do produto: desde 14/11/2026 sai do carrossel e abre a descrição, mostrando o produto em uso.
 const videoDescricao = computed(() => props.product.video_url || null);
 
@@ -574,6 +578,14 @@ const descriptionSections = computed(() => {
 const anuncio = computed(() => props.product.ad_content ?? null);
 // No máximo 4 blocos na descrição (BLOCOS_NA_DESCRICAO, 14/11/2026).
 const blocosAnuncio = computed(() => blocosDaDescricao.value);
+// Vídeo de cada bloco: o próprio (video_url, com a capa poster_url) ou, no 1º, o vídeo do produto. A capa
+// com o play abre o vídeo inteiro no lightbox, como no FerraKora (26/11/2026).
+const videoDoBloco = (bloco, index) => {
+    if (bloco?.video_url) return { src: bloco.video_url, capa: bloco.poster_url || null };
+    if (index === 0 && videoDescricao.value) return { src: videoDescricao.value, capa: imagemDoBloco(bloco?.imagem) || videoPoster.value || null };
+    return null;
+};
+const abrirVideoDoBloco = (video) => abrirFoto([{ image_url: video.src, alt: 'Vídeo do produto' }], 0);
 // Oferta do produto cadastrada no conteúdo do anúncio (14/11/2026), dentro do comparativo:
 // { selo, titulo, texto, ate }. Só aparece com título e até a data "ate" (AAAA-MM-DD, fim do dia no
 // horário de Brasília); sem data, fica até tirarem do cadastro. "faixas" (opcional) lista vantagens por
@@ -1257,13 +1269,17 @@ const escolherKit = (kit, rolar = false) => {
                                 <!-- São no máximo 4 blocos (padrão de 14/11/2026). No primeiro, o vídeo do produto em uso
                                      entra no lugar da foto; produto sem vídeo mostra a foto, como nos outros. -->
                                 <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
-                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem) || (index === 0 && videoDescricao), 'foto-direita': index % 2 === 1 }">
-                                    <video v-if="index === 0 && videoDescricao" class="foto-desc video-desc" data-video-descricao :src="videoDescricao"
-                                        :poster="imagemDoBloco(bloco.imagem) || videoPoster" controls playsinline muted preload="metadata"></video>
+                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem) || videoDoBloco(bloco, index), 'foto-direita': index % 2 === 1 }">
+                                    <button v-if="videoDoBloco(bloco, index)" type="button" class="foto-desc video-desc-capa" data-video-descricao data-kzm="video:tela-cheia"
+                                        aria-label="Assistir ao vídeo em tela cheia" @click="abrirVideoDoBloco(videoDoBloco(bloco, index))">
+                                        <video class="video-desc" :src="videoDoBloco(bloco, index).src" :poster="videoDoBloco(bloco, index).capa" playsinline muted preload="metadata" tabindex="-1" aria-hidden="true"></video>
+                                        <span class="video-desc-play"><i class="fas fa-play"></i></span>
+                                    </button>
                                     <img v-else-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :srcset="srcsetDoBloco(bloco.imagem)" :sizes="srcsetDoBloco(bloco.imagem) ? '320px' : null" :alt="bloco.titulo" loading="lazy" decoding="async">
                                     <div>
                                         <h3>{{ bloco.titulo }}</h3>
                                         <p>{{ bloco.texto }}</p>
+                                        <Link v-if="bloco.link?.url" :href="bloco.link.url" class="btn bloco-link" :data-kzm="`bloco-link:${index + 1}`">{{ bloco.link.texto }}</Link>
                                     </div>
                                 </article>
 
@@ -2174,6 +2190,12 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 /* Padrão da página de produto da FerraKora (produto.css), trazido em 14/11/2026 com as cores da KazaKora. */
 /* Vídeo do produto em uso no primeiro bloco da descrição: ocupa o lugar da foto do bloco. */
 .pd2 .video-desc { object-fit: cover; background: #000; cursor: pointer; }
+/* Capa do vídeo da descrição com o play; o clique abre o vídeo inteiro no lightbox (26/11/2026, igual ao FerraKora). */
+.pd2 .video-desc-capa { position: relative; display: block; padding: 0; border: 0; overflow: hidden; cursor: pointer; background: #000; }
+.pd2 .video-desc-capa .video-desc { width: 100%; height: 100%; display: block; pointer-events: none; }
+.pd2 .video-desc-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; padding-left: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+.pd2 .video-desc-capa:hover .video-desc-play { background: rgba(0, 0, 0, .75); }
+.pd2 .bloco-link { display: inline-flex; flex: 0 0 auto; margin-top: 12px; min-height: 44px; padding: 0 18px; font-size: 14px; text-decoration: none; }
 
 /* "Por que escolher" unido aos benefícios: solução comum (X vermelho) ao lado da solução com o produto (verde). */
 .pd2 .porque-linhas { display: grid; gap: 18px; margin: 14px 0 20px; }

@@ -487,6 +487,12 @@ class CatalogController extends Controller
             $conteudoCard->comparativo = FotosDoComparativo::comUrls(OfertaBlackFriday::comparativoPercentual(
                 $conteudoCard->comparativo, collect([$product])->concat($variations),
             ));
+            // Bloco com vídeo e link para outro kit (26/11/2026): o link abre a página dele na KazaKora.
+            $conteudoCard->blocos = FotosDoComparativo::blocosComVideo($conteudoCard->blocos, function (int $id) {
+                $outro = Product::query()->find($id);
+
+                return $outro && $outro->naKazaKora() && $outro->slug ? route('produtos.ver', $outro->slug, false) : null;
+            });
             $product->setRelation('adContent', $conteudoCard);
         }
 

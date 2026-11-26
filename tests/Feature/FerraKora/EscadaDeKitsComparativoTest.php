@@ -156,6 +156,33 @@ class EscadaDeKitsComparativoTest extends TestCase
                 ->where('product.ad_content.comparativo.imagens.0.1', fn ($url) => str_ends_with($url, "/storage/products/{$b->id}/comparativo/produto.webp")));
     }
 
+    public function test_bloco_com_video_e_link_para_outro_kit_nas_duas_lojas(): void
+    {
+        [$a, $b] = $this->kits();
+        $this->rodar($a, $b);
+        $ajuste = $this->arquivo('-video', ['ajustar' => [['sku' => 'KIT-B', 'conteudo' => ['blocos' => [
+            ['titulo' => 'Um', 'texto' => 'T', 'imagem' => 2],
+            ['titulo' => 'Dois', 'texto' => 'T', 'imagem' => 3],
+            ['titulo' => 'Três', 'texto' => 'T', 'imagem' => 1],
+            ['titulo' => 'Quatro', 'texto' => 'T', 'imagem' => 0],
+            ['titulo' => 'Quer trocar o pneu sem esforço?', 'texto' => 'Kit C', 'video' => "products/{$a->id}/video/kit.mp4", 'poster' => "products/{$a->id}/a0.jpg", 'link_produto' => $a->id, 'link_texto' => 'Ver o kit'],
+        ]]]]]);
+        $this->artisan('kits:escada', ['nome' => $ajuste, '--aplicar' => true])->assertSuccessful();
+
+        $bloco = $this->getJson('/api/ferrakora/produtos/kz-'.$b->id)->assertOk()->json('product.conteudo.blocos.4');
+        $this->assertStringEndsWith("/storage/products/{$a->id}/video/kit.mp4", $bloco['video_url']);
+        $this->assertStringEndsWith("/storage/products/{$a->id}/a0.jpg", $bloco['poster_url']);
+        $this->assertSame('Ver o kit', $bloco['link']['texto']);
+        $this->assertStringStartsWith('/produto/', $bloco['link']['url']);
+        $this->assertArrayNotHasKey('link_produto', $bloco);
+
+        $this->get('/produtos/kit-estrada')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('product.ad_content.blocos.4.link.url', '/produtos/compressor')
+                ->where('product.ad_content.blocos.4.video_url', fn ($url) => str_ends_with($url, "/storage/products/{$a->id}/video/kit.mp4")));
+    }
+
     public function test_kit_so_do_ferrakora_fica_fora_da_escada_da_kazakora(): void
     {
         [$a, $b] = $this->kits();

@@ -8,6 +8,7 @@ use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\GeoDoVisitante;
 use App\Modules\Analytics\Support\LocalizacaoDaVisita;
 use App\Modules\Analytics\Support\OrigemVisita;
+use App\Modules\Analytics\Support\VisitaIgnorada;
 use App\Modules\Analytics\Support\PrecoVisto;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -58,7 +59,9 @@ class OutroSiteVisitaController extends Controller
         if ($journey !== null && (! is_string($journey) || preg_match('/^[a-f0-9]{32}$/D', $journey) !== 1)) {
             return response('', 422);
         }
-        if (str_starts_with($userAgent, 'Mozilla/') && preg_match(TrackSiteVisit::BOT_PATTERN, $userAgent) !== 1) {
+        // Robô (navegador ou rede de robô) não é gravado; IP da lista e casa da equipe: gravado marcado (VisitaIgnorada, 26/11/2026).
+        $ignorada = VisitaIgnorada::navegadorDeRobo($userAgent) ? VisitaIgnorada::ROBO : rescue(fn () => VisitaIgnorada::doIp($request->ip()), null, false);
+        if ($ignorada !== VisitaIgnorada::ROBO) {
             $pagina = $request->query('p');
             if (! is_string($pagina) || $pagina === '') {
                 $pagina = (string) (parse_url((string) $request->headers->get('referer'), PHP_URL_PATH) ?: '/');
@@ -100,6 +103,7 @@ class OutroSiteVisitaController extends Controller
                 // Mesma regra da loja: só o fbclid tem o valor guardado sem aceite.
                 'click_id' => $clickParam === 'fbclid' ? $clickValor : null,
                 'cookies' => $this->cookiesDoPixel($request),
+                'ignorada' => $ignorada,
             ]);
 
             // Lugar aproximado do IP, igual à loja (2026-10-24); a "sessão" é o visitante.

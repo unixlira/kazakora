@@ -21,6 +21,13 @@ concurrency:
 jobs:
   testes:
     runs-on: ubuntu-latest
+    # Em paralelo (pedido do Lira 25/11/2026): os testes são repartidos em 4
+    # máquinas ao mesmo tempo (scripts/ci/fatia-testes.py), ~4x mais rápido.
+    strategy:
+      fail-fast: true
+      matrix:
+        fatia: [0, 1, 2, 3]
+    name: testes (${{ matrix.fatia }})
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +36,13 @@ jobs:
           php-version: '8.3'
           extensions: gd, intl, bcmath, zip, soap, pdo_sqlite
           tools: composer:v2
+
+      - name: Cache do Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
 
       - name: Dependências
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -48,7 +62,9 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           if [ -n "$ARQUIVOS" ]; then
+            [ "${{ matrix.fatia }}" = "0" ] || exit 0
             for f in $ARQUIVOS; do php artisan test --compact "$f" || falhou=1; done
             exit ${falhou:-0}
           fi
+          python3 scripts/ci/fatia-testes.py ${{ matrix.fatia }} 4
           php artisan test --compact

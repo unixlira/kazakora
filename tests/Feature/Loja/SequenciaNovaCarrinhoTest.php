@@ -68,7 +68,7 @@ class SequenciaNovaCarrinhoTest extends TestCase
             'type' => 'news',
             'category' => 'eletroportateis-e-casa',
             'status' => 'published',
-            'published_at' => now()->subDays(10 - $n),
+            'published_at' => now()->subDays(20)->addMinutes($n),
             'site' => 'kazakora',
             ...$extra,
         ]);
@@ -126,6 +126,18 @@ class SequenciaNovaCarrinhoTest extends TestCase
         $recente = $this->materia(['title' => 'Janela sem manchas', 'published_at' => now()->subHour()]);
 
         $this->assertSame($recente->id, app(MateriaDoCarrinho::class)->escolher('kazakora', $produto)['post']->id);
+    }
+
+    public function test_noticia_generica_de_compras_perde_para_materia_do_tema(): void
+    {
+        $produto = $this->microfone();
+        $util = $this->materia(['title' => 'Férias em casa: atividades sem tela'], [$produto->id]);
+        $this->materia(['title' => 'Black Friday: Senacon publica cartilha', 'published_at' => now()->subMinute()], [$produto->id]);
+        $this->assertSame($util->id, app(MateriaDoCarrinho::class)->escolher('kazakora', $produto)['post']->id);
+
+        // Sem nada do tema: a mais recente que não é genérica.
+        $outro = Product::factory()->create(['name' => 'Parafusadeira 48V', 'price' => 10, 'stock' => 1, 'is_active' => true]);
+        $this->assertSame($util->id, app(MateriaDoCarrinho::class)->escolher('kazakora', $outro)['post']->id);
     }
 
     public function test_d5_e_o_email_do_caderno_com_a_materia_e_o_link_do_produto(): void

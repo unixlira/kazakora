@@ -18,8 +18,9 @@ use Throwable;
  *
  * Pontos: matéria ligada ao produto (ou ao pai, na variação) +10, mesma
  * categoria +3, cada palavra do nome/categoria do produto no título +2 e no
- * resumo +1. Empate: a mais recente. Nenhuma com ponto: a mais recente do
- * blog (o "tema mais próximo" que existe).
+ * resumo +1. Notícia genérica de compras (Black Friday, Procon, Senacon,
+ * varejo, direitos do consumidor) -6: não fala do produto. Empate: a mais
+ * recente. Nenhuma com ponto: a mais recente do blog que não é genérica.
  */
 class MateriaDoCarrinho
 {
@@ -27,6 +28,9 @@ class MateriaDoCarrinho
         'para', 'como', 'mais', 'voce', 'seus', 'suas', 'sem', 'com', 'unidades', 'unidade', 'gratis', 'guia', 'kit',
         'pdf', 'novo', 'nova', 'mesmo', 'ritmo', 'depender', 'dentro', 'cada', 'todo', 'toda', 'isso', 'esse', 'essa',
     ];
+
+    /** Notícia de compras em geral, que não fala de produto nenhum. */
+    public const GENERICA = '/black ?friday|procon|senacon|varejo|direitos|consumidor/iu';
 
     /** @return array{post: EditorialPost, titulo: string, resumo: string, imagem: ?string, link: string, tipo: string, pontos: int}|null */
     public function escolher(string $site, ?Product $produto): ?array
@@ -64,17 +68,17 @@ class MateriaDoCarrinho
     private function melhor(Collection $posts, ?Product $produto): array
     {
         if (! $produto) {
-            return [$posts->first(), 0];
+            return [$posts->first(fn ($p) => ! preg_match(self::GENERICA, (string) $p->title)) ?? $posts->first(), 0];
         }
 
         $ids = array_filter([(int) $produto->id, (int) $produto->parent_product_id]);
         $categoria = Str::slug((string) $produto->category?->name);
         $palavras = self::palavras($produto->name.' '.$produto->category?->name);
 
-        $melhor = $posts->first();
-        $maior = 0;
+        $melhor = null;
+        $maior = null;
         foreach ($posts as $post) {
-            $pontos = 0;
+            $pontos = preg_match(self::GENERICA, (string) $post->title) ? -6 : 0;
             if ($post->products->pluck('id')->intersect($ids)->isNotEmpty()) {
                 $pontos += 10;
             }
@@ -87,13 +91,13 @@ class MateriaDoCarrinho
                 $pontos += in_array($palavra, $titulo, true) ? 2 : (in_array($palavra, $resumo, true) ? 1 : 0);
             }
             // Posts vêm do mais novo para o mais velho: só troca com ponto maior.
-            if ($pontos > $maior) {
+            if ($maior === null || $pontos > $maior) {
                 $maior = $pontos;
                 $melhor = $post;
             }
         }
 
-        return [$melhor, $maior];
+        return [$melhor ?? $posts->first(), max(0, (int) $maior)];
     }
 
     /** @return list<string> palavras de 4+ letras, sem acento, sem as fracas, com o singular simples */

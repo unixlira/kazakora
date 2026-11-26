@@ -23,7 +23,7 @@ return [
             // Página do site, para o link do e-mail.
             'pagina' => '/guia-de-viagem',
             // Oferta ligada ao material (link do e-mail): Compressor 4 em 1.
-            'oferta' => '/produto/kz-413',
+            'oferta' => '/produto/bomba-de-ar-portatil-compressor-inflator-4-em-1-powerbank-calibrador/?utm_source=email&utm_medium=lead&utm_campaign=guia-viagem',
             'oferta_texto' => 'Ver o Compressor 4 em 1',
         ],
     ],

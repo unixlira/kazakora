@@ -28,9 +28,10 @@ final class Materiais
 
         $livro = filled($dados['livro_id'] ?? null)
             ? LivroDigital::query()->find((int) $dados['livro_id'])
-            : LivroDigital::query()->where('ativo', true)
+            : LivroDigital::query()
                 ->where('titulo', 'like', '%'.($dados['livro_titulo'] ?? "\0").'%')
-                ->orderByDesc('id')->first();
+                // O ativo (que aparece na página do produto) primeiro; sem ele, o mais novo.
+                ->orderByDesc('ativo')->orderByDesc('id')->first();
 
         return $livro && Storage::disk('local')->exists($livro->arquivo) ? $livro : null;
     }

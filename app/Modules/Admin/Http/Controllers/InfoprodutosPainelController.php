@@ -168,7 +168,10 @@ class InfoprodutosPainelController extends Controller
         $lista = Cache::remember('comportamento:paginas:'.$periodo.':'.(int) Comportamento::$comTestes.(int) InfoprodutoEvento::$comRobos, 120,
             fn () => app(PaginasDoSite::class)->montar($de, $ate));
         $paginas = $lista['paginas'];
-        $loja = in_array($request->query('loja'), ['kazakora', 'ferrakora', 'infoprodutos'], true) ? (string) $request->query('loja') : null;
+        // Abre sempre na KazaKora (pedido do Lira 2026-11-26); só segue a loja da página quando um produto vem no endereço.
+        $loja = in_array($request->query('loja'), ['kazakora', 'ferrakora', 'infoprodutos'], true)
+            ? (string) $request->query('loja')
+            : ($request->filled('produto') ? null : 'kazakora');
 
         $escolhida = collect($paginas)->first(fn ($p) => $p['produto'] === $request->query('produto') && $p['pagina'] === ($request->query('pagina') ?: $p['pagina']))
             ?? collect($paginas)->first(fn ($p) => $loja === null || $p['loja'] === $loja);

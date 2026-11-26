@@ -61,7 +61,14 @@ class LoginRequest extends FormRequest
 
         RateLimiter::clear($this->throttleKey());
 
-        return $guard->getLastAttempted();
+        $user = $guard->getLastAttempted();
+
+        // O Auth::attempt fazia isso sozinho (hash antigo vira hash novo).
+        if (config('hashing.rehash_on_login', true)) {
+            $guard->getProvider()->rehashPasswordIfRequired($user, $this->only('password'));
+        }
+
+        return $user;
     }
 
     public function ensureIsNotRateLimited(): void

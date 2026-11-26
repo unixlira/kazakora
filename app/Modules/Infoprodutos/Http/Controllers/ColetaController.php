@@ -132,7 +132,10 @@ class ColetaController extends Controller
         $teste = false;
         if ($dados['pv'] !== null) {
             $pv = $dados['pv'];
-            $teste = $daEquipe || ($pv['us'] ?? null) === config('infoprodutos.utm_teste');
+            // A marca de teste vale para a aba inteira: a troca de página (Inertia, React)
+            // abre a página seguinte sem o utm da entrada (2026-11-26).
+            $teste = $daEquipe || ($pv['us'] ?? null) === config('infoprodutos.utm_teste')
+                || InfoprodutoEvento::query()->where('sessao', $dados['s'])->where('tipo', 'pageview')->where('teste', true)->exists();
             $linhas[] = $base + [
                 'tipo' => 'pageview',
                 'valor' => null,

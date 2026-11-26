@@ -245,5 +245,13 @@ class ColetaInfoprodutosTest extends TestCase
         $this->withHeaders(['User-Agent' => self::UA])->get(rtrim(config('app.url'), '/').'/carrinho')->assertOk()
             ->assertSee('/js/kzm.js?v=', false)->assertSee('data-p="kzp/carrinho" data-pg="pagina"', false);
     }
+
+    public function test_teste_da_entrada_vale_para_a_pagina_seguinte_da_aba(): void
+    {
+        $this->enviar(['s' => 'TesteAba0123456789', 'p' => 'kzp', 'pg' => 'pagina', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'us' => config('infoprodutos.utm_teste'), 'fb' => 0]], 'https://kazakora.com')->assertNoContent();
+        $this->enviar(['s' => 'TesteAba0123456789', 'p' => 'kz/arvore', 'pg' => 'produto', 'l' => 'pt', 'e' => [], 'pv' => ['r' => '', 'fb' => 0]], 'https://kazakora.com')->assertNoContent();
+
+        $this->assertSame(2, InfoprodutoEvento::where('sessao', 'TesteAba0123456789')->where('tipo', 'pageview')->where('teste', true)->count());
+    }
 }
 

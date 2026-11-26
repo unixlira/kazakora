@@ -63,6 +63,10 @@ class SlugDoProdutoFerraKoraTest extends TestCase
         $this->get('/api/ferrakora/produto-antigo/'.$antigo)
             ->assertStatus(301)
             ->assertHeader('Location', '/produto/'.$novo.'/');
+        // Link do anúncio: a query (utm, fbclid) vai junto para o endereço novo.
+        $this->get('/api/ferrakora/produto-antigo/'.$antigo.'?utm_source=meta&utm_campaign=fk%20bf&fbclid=abc')
+            ->assertStatus(301)
+            ->assertHeader('Location', '/produto/'.$novo.'/?utm_source=meta&utm_campaign=fk%20bf&fbclid=abc');
         // O atual e um slug que nunca existiu não redirecionam.
         $this->get('/api/ferrakora/produto-antigo/'.$novo)->assertNotFound();
         $this->get('/api/ferrakora/produto-antigo/nao-existe')->assertNotFound();

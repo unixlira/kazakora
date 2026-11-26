@@ -51,10 +51,10 @@ class ForaDaVitrineKzTest extends TestCase
 
         $this->get('/produtos/kit-macaco?utm_source=teste')
             ->assertStatus(301)
-            ->assertRedirect('/produtos/compressor-4-em-1?opcao='.$kit->id.'&utm_source=teste');
+            ->assertRedirect('/produtos/compressor-4-em-1?utm_source=teste&opcao='.$kit->id);
         $this->get('/produtos/macaco-velho?utm_source=teste&opcao=999')
             ->assertStatus(301)
-            ->assertRedirect('/produtos/compressor-4-em-1?opcao='.$kit->id.'&utm_source=teste');
+            ->assertRedirect('/produtos/compressor-4-em-1?utm_source=teste&opcao='.$kit->id);
         $this->assertNull($pai->fresh()->redirecionamentoNaKazaKora());
         $this->assertFalse($velho->fresh()->naKazaKora());
     }

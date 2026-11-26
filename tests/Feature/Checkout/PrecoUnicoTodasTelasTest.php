@@ -264,6 +264,8 @@ class PrecoUnicoTodasTelasTest extends TestCase
     #[DataProvider('produtos')]
     public function test_ferrakora_mesmo_preco_na_lista_na_pagina_e_no_checkout_com_cep_de_qualquer_regiao(array $atributos, ?float $fixo): void
     {
+        // Em produção o BLACKFRIDAY vale também na FerraKora (liberado em 10/11/2026).
+        Coupon::query()->where('code', 'BLACKFRIDAY')->update(['so_kazakora' => false]);
         $produto = $this->criar($atributos);
         $id = 'kz-'.$produto->id;
 
@@ -283,6 +285,20 @@ class PrecoUnicoTodasTelasTest extends TestCase
             $this->novaRequisicao();
             $kz = $this->get("/produtos/{$produto->slug}", $regiao)->assertOk()->viewData('page')['props']['product'];
             $this->assertSame((int) round((float) $kz['final_price'] * 100), self::vendaFk($pagina), "FerraKora e KazaKora com o mesmo preço ({$uf}).");
+
+            // Black Friday: o card do FerraKora mostra o mesmo de/por/Pix com o cupom da KazaKora.
+            $cupomFk = $pagina['variants'][0]['prices'][0]['cupom'] ?? null;
+            $this->assertNotNull($cupomFk, 'BLACKFRIDAY liberado para a FerraKora: preço com o cupom no card.');
+            $this->assertSame($lista['variants'][0]['prices'][0]['cupom'], $cupomFk, 'Lista e página com o mesmo preço com cupom.');
+            $this->assertSame((int) round((float) $kz['preco_cupom']['de'] * 100), $cupomFk['de']);
+            $this->assertSame((int) round((float) $kz['preco_cupom']['por'] * 100), $cupomFk['por']);
+            $this->assertSame((int) round((float) $kz['preco_cupom']['pix'] * 100), $cupomFk['pix']);
+            $this->assertNotEmpty($pagina['parcelamento'] ?? null, 'Tabela do cartão para a parcela com juros.');
+
+            $this->novaRequisicao();
+            $comCupom = $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => [['variante' => 'kzv-'.$produto->id, 'quantidade' => 1]], 'cupom' => 'BLACKFRIDAY'], $regiao)->assertOk();
+            $this->assertSame($cupomFk['por'], $comCupom->json('total'), 'Checkout do FerraKora com o cupom = "por" do card.');
+            $this->assertSame($cupomFk['pix'], $comCupom->json('total_pix'), 'No Pix = o Pix do card.');
 
             $ufNavegacao = null;
             foreach ([null, self::CEP_SP, self::CEP_CE] as $cep) {

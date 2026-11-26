@@ -9,7 +9,9 @@ use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Catalog\Support\EscadaDeKits;
 use App\Modules\Catalog\Support\FotosDoComparativo;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
+use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\ParcelasCartao;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\DescontoPix;
 use App\Support\SiteAtual;
@@ -51,6 +53,22 @@ class CatalogoFerraKora extends CatalogoOutroSite
         return true;
     }
 
+    protected function precoComCupom(Product $produto, float $acrescimo): array
+    {
+        $cupom = $acrescimo > 0 ? null : BlackFriday::precos($produto, 1, false, outroSite: true);
+        if ($cupom === null) {
+            return [];
+        }
+
+        return ['cupom' => [
+            'code' => $cupom['code'],
+            'rotulo' => $cupom['rotulo'],
+            'de' => (int) round($cupom['de'] * 100),
+            'por' => (int) round($cupom['por'] * 100),
+            'pix' => $cupom['pix'] === null ? null : (int) round($cupom['pix'] * 100),
+        ]];
+    }
+
     protected function camposDoItem(array $item): array
     {
         return ['categoria' => filled($item['categoria'] ?? null) ? trim((string) $item['categoria']) : null];
@@ -64,6 +82,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
             // Pix + cupom automático (BEMVINDO), que o checkout aplica sozinho (2026-10-24).
             'desconto_pix' => DescontoPix::percentualNaVitrine($pai),
+            // Taxas do cartão do Mercado Pago (as mesmas da KazaKora, ParcelasCartao): a
+            // parcela do card e da página sai com juros, igual à loja e ao checkout.
+            'parcelamento' => ParcelasCartao::tabela(),
             // Nota e total das avaliações do KazaKora (pai + variações), as
             // mesmas da página do produto na loja (pedido 2026-10-28). O card
             // do FerraKora já lê average_rating.

@@ -396,6 +396,7 @@ abstract class CatalogoOutroSite
                     'sale_amount' => $final < $preco ? $final : null,
                     'currency_code' => 'brl',
                     'currency' => self::MOEDA,
+                    ...$this->precoComCupom($produto, $acrescimo),
                 ]],
                 'options' => $temOpcao ? [[
                     'id' => 'kzov-'.$produto->id,
@@ -495,6 +496,18 @@ abstract class CatalogoOutroSite
         $cheio = self::comAcrescimo($produto, (float) $cheio, $acrescimo);
 
         return [(int) round(max($cheio, $final) * 100), (int) round($final * 100)];
+    }
+
+    /**
+     * Preço com o cupom da Black Friday que o checkout do site aplica sozinho
+     * (preço único, 26/11/2026): ['cupom' => {code, de, por, pix}] em centavos,
+     * a mesma conta do card da KazaKora. Vazio fora da BF e nos sites sem o cupom.
+     *
+     * @return array<string, mixed>
+     */
+    protected function precoComCupom(Product $produto, float $acrescimo): array
+    {
+        return [];
     }
 
     /** "Tom 01", "Cor 340"; sem variação cadastrada, o nome do produto. */

@@ -339,6 +339,8 @@ Tela do admin com as contas criadas na KazaKora (`users`, só `role =
 customer`) e na FerraKora (`ferrakora_clientes`): cadastro, endereços,
 pedidos, último acesso e os leads/carrinhos ligados pelo e-mail, CPF ou
 telefone. **Não coleta nada novo**: só lê o que já existe.
+- Desde 26/11/2026: filtro das duas lojas juntas e linha do tempo (só admin),
+  ver "Histórico do cliente" acima.
 - Permissão `pedidos.view` (a mesma de Clientes e Leads). Só leitura: nada é
   enviado, editado ou apagado. Hash de senha, `remember_token` e token de
   sessão da FerraKora nunca vão para a tela.
@@ -353,6 +355,72 @@ telefone. **Não coleta nada novo**: só lê o que já existe.
   `export`, entidade `ClientesDosSites`: quem, quando, site, filtro e IP).
   O arquivo baixado é dado pessoal: não mandar para fora da equipe.
 
+### Histórico do cliente (`cliente_eventos`, pedido 2026-11-26)
+Pedido do Lira: "quero saber quem fez cadastro no KazaKora e FerraKora, entrou,
+quais telas acessou, quais horários, tipo de pagamento, se tem imagem de perfil,
+por onde veio, se refez senha; quero rastreio de histórico total dos clientes".
+Tela: Admin > Clientes dos sites (filtro KazaKora e FerraKora / KazaKora /
+FerraKora, colunas de acompanhamento) e a linha do tempo
+`/admin/clientes-dos-sites/{site}/{id}/historico`.
+
+- **O que passa a ser gravado (desde 26/11/2026, nada do passado é
+  inventado)** em `cliente_eventos` (`App\Modules\Clientes\Support\HistoricoDoCliente`),
+  só de contas de cliente (equipe e admin fora): cadastro (com a origem: a 1ª
+  página de fora do site do mesmo `kazakora_visitor` nos últimos 30 dias; na
+  FerraKora, utm_*, site de onde veio sem o `?...` e o NOME do parâmetro de
+  clique que o site manda junto do cadastro), login (como: senha, código,
+  lembrar-me, cadastro), saída, link de nova senha enviado, senha redefinida
+  pelo link, senha trocada no perfil, foto trocada/removida, endereço
+  criado/alterado/apagado (só cidade/UF), perfil alterado (só o NOME dos campos).
+  Cada evento leva IP e tipo de aparelho. Nunca senha, token, valor do clique
+  nem o que foi digitado.
+- **Navegação ligada à conta:**
+  - KazaKora: as visitas com `user_id` já existiam (desde 12/10/2026). Novo:
+    no login, no cadastro e no aceite de cookies com a conta logada, as visitas
+    anteriores do MESMO `kazakora_visitor` (UUID, nunca o código de sessão
+    `s-...`), sem dono e com menos de 6 meses, ganham o `user_id`, **só se o
+    aceite de cookies estiver registrado naquela hora** (`Cookies::aceitou`).
+    Fica um evento `visitas_ligadas` com a quantidade. Risco aceito:
+    computador compartilhado liga a navegação de quem usou antes no mesmo
+    navegador.
+  - FerraKora: o visitante de lá é o IP (pode ser de várias pessoas), então
+    **nada do passado é ligado**. A partir de agora, o site manda o token da
+    conta no corpo do aviso de visita (`t`, nunca na URL) só com a conta aberta
+    E o "Aceitar todos" (`ac=1`); a visita ganha `site_visits.ferrakora_cliente_id`.
+  - Na tela, a página só aparece se a visita tem aceite (`consentiu`, ou
+    FerraKora com dono); sem aceite, só "Acessou o site logado" e o horário.
+  - Tempo na página: diferença até a próxima página do mesmo navegador, se
+    for de até 30 min.
+- **Mapa de cliques (kzm.js, `infoproduto_eventos`) continua anônimo** e não
+  entra no histórico. Medição do checkout (`checkout_eventos`) entra só do
+  próprio usuário ou dos `kazakora_visitor` cujas visitas já estão ligadas à conta.
+- **O resto da linha do tempo só lê o que já existia:** pedidos, pagamentos
+  (forma e status), e-mails do pedido (`order_email_logs`), WhatsApp pelo
+  telefone da conta (`whatsapp_messages`), carrinho do checkout
+  (`lead_checkout`, `leads` da FerraKora), sequência do carrinho abandonado
+  (`adm_abandoned_carts.historico`), cupons (`cupom_usos`, `orders.coupon_code`),
+  endereços, aceites de cookies, senha temporária (notificação
+  `SenhaTemporariaEnviada`), último link de nova senha em aberto e sessões da
+  FerraKora ainda guardadas. A tela mostra "registrado desde" de cada tipo.
+- **Acesso:** a linha do tempo e as colunas de acompanhamento (último acesso,
+  dias com acesso, foto, origem, pagamento, senha) são **só do admin**
+  (`middleware admin`); a lista básica continua com `pedidos.view`. Cada
+  abertura da linha do tempo fica na Auditoria (`audit_logs`, ação `view`,
+  entidade `HistoricoDoCliente`).
+- **Base legal:** execução do contrato (conta, pedidos, suporte) e legítimo
+  interesse (segurança da conta, prevenção a fraude, entender o uso), art. 7º V
+  e IX; páginas ligadas à pessoa só com o consentimento de cookies (art. 7º I).
+- **Guarda:** login, saída e `visitas_ligadas` apagados aos 6 meses; IP e
+  aparelho dos outros eventos apagados aos 6 meses; o evento fica enquanto a
+  conta existir (some junto com ela, `cascadeOnDelete`). `site_visits.ferrakora_cliente_id`
+  é apagado junto com o `user_id` aos 6 meses.
+- **Políticas:** seção "Histórico da sua conta" na Política de Privacidade da
+  KazaKora (`/politica-de-privacidade#historico-da-conta`) e na da FerraKora
+  (`/politica-de-privacidade#historico-da-conta`), atualizadas em 26/11/2026.
+  `Cookies::VERSAO` não mudou: nenhum cookie novo e nenhum terceiro novo; o
+  que mudou é ligar à conta a navegação que já era registrada, e isso depende
+  do aceite que já existe.
+
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Medição do checkout (`checkout_eventos`) com mais de 6 meses: apagada.
 - Carrinho abandonado (`lead_checkout`) sem interação há mais de 3 meses:
@@ -363,6 +431,9 @@ telefone. **Não coleta nada novo**: só lê o que já existe.
 - Localização do visitante por sessão (`visitante_geolocalizacoes`) sem
   atualização há mais de 6 meses: apagada.
 - Prova de OK com mais de 5 anos: apagada.
+- Histórico do cliente (`cliente_eventos`): login, saída e ligação de visitas
+  com mais de 6 meses apagados; IP e aparelho dos outros eventos apagados.
+  Visitas: `ferrakora_cliente_id` sai junto com o `user_id`.
 
 ## Regras para quem for mexer (Claude Code e Naia)
 

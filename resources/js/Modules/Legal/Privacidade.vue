@@ -82,6 +82,30 @@ const direitos = [
                     </ul>
                 </LegalCard>
 
+                <!-- Histórico da conta (pedido do Lira 2026-11-26): admin > Clientes dos sites > linha do tempo.
+                     Detalhe técnico: docs/privacidade-e-cookies.md, "Histórico do cliente". -->
+                <LegalCard id="historico-da-conta" title="Histórico da sua conta" class="scroll-mt-28">
+                    <p>
+                        Se você tem conta na Loja (KazaKora ou FerraKora), guardamos o histórico de uso dessa conta para
+                        atender você, dar suporte, proteger a conta contra fraude e entender como a Loja é usada (LGPD, art. 7º,
+                        V e IX): a data do cadastro e de onde você veio (site, campanha UTM e o tipo de link de anúncio, sem o
+                        código do clique), cada entrada e saída da conta, os pedidos de nova senha e as trocas de senha (nunca a
+                        senha), as trocas de foto, endereço e dados do perfil (só quais campos mudaram), carrinhos e pedidos, as
+                        formas de pagamento escolhidas, os cupons usados e as mensagens de e-mail e WhatsApp sobre seus pedidos.
+                    </p>
+                    <p>
+                        Com o seu aceite de cookies, as páginas que você abre com a conta logada ficam ligadas a ela, com data,
+                        hora e o tempo em cada página; na KazaKora, também as páginas que o mesmo navegador abriu antes de você
+                        entrar na conta, nos últimos 6 meses. Sem o aceite, guardamos só o horário do acesso, sem a página. Os
+                        cliques registrados nas páginas de produto para melhorar o site são anônimos e nunca são ligados a você.
+                    </p>
+                    <p>
+                        Esse histórico só é visto pela administração da Loja, é usado internamente e não é vendido nem passado a
+                        terceiros. Entradas, saídas e páginas ficam guardadas por 6 meses; o restante, enquanto a conta existir.
+                        Você pode pedir uma cópia ou a exclusão pelo {{ COMPANY.email }}.
+                    </p>
+                </LegalCard>
+
                 <LegalCard title="Seus Direitos (LGPD)">
                     <ul class="flex flex-col gap-2.5">
                         <li v-for="item in direitos" :key="item" class="flex items-start gap-2.5">
@@ -214,7 +238,7 @@ const direitos = [
                         <div><dt class="text-xs text-store-fg-faint">E-mail</dt><dd class="text-store-fg">{{ COMPANY.email }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">WhatsApp</dt><dd class="text-store-fg">{{ COMPANY.whatsappDisplay }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">Horário de atendimento</dt><dd class="text-store-fg">{{ COMPANY.horario }}</dd></div>
-                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">19/11/2026</dd></div>
+                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">26/11/2026</dd></div>
                     </dl>
                     <p class="mt-2">
                         Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados, para

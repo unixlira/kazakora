@@ -160,7 +160,7 @@ class EscadaDeKitsComparativoTest extends TestCase
     {
         [$a, $b] = $this->kits();
         $this->rodar($a, $b);
-        $a->forceFill(['so_ferrakora' => true])->save();
+        $a->fresh()->forceFill(['so_ferrakora' => true])->save();
 
         $this->get('/produtos/kit-estrada')
             ->assertOk()

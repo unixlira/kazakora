@@ -136,14 +136,15 @@ class ResumoDoCliente
                 DB::table('lead_checkout')
                     ->when($site === HistoricoDoCliente::FERRAKORA, fn ($q) => $q->where('site', 'ferrakora'), fn ($q) => $q->where(fn ($q) => $q->whereNull('site')->orWhere('site', '!=', 'ferrakora')))
                     ->whereIn('email', $emailsFaltam->values())
-                    ->where(fn ($q) => $q->whereNotNull('origem')->orWhereNotNull('utm_source'))
+                    // "interno"/"direto" não dizem de onde a pessoa veio: só origem de fora ou UTM.
+                    ->where(fn ($q) => $q->whereNotIn('origem', ['interno', 'direto'])->orWhereNotNull('utm_source'))
                     ->orderBy('id')
                     ->get(['email', 'origem', 'utm_source', 'utm_medium', 'utm_campaign', 'created_at'])
                     ->each(function ($l) use (&$origens, $porEmail) {
                         $dono = $porEmail[mb_strtolower((string) $l->email)] ?? null;
                         if ($dono !== null && empty($origens[$dono]['detalhe'])) {
                             $origens[$dono] = [...($origens[$dono] ?? ['via' => null]), 'detalhe' => array_filter([
-                                'origem' => $l->origem, 'utm_source' => $l->utm_source, 'utm_medium' => $l->utm_medium, 'utm_campaign' => $l->utm_campaign,
+                                'origem' => in_array($l->origem, ['interno', 'direto'], true) ? null : $l->origem, 'utm_source' => $l->utm_source, 'utm_medium' => $l->utm_medium, 'utm_campaign' => $l->utm_campaign,
                             ]), 'estimada' => true];
                         }
                     });

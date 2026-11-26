@@ -462,3 +462,35 @@ elcodigodivinoamen.com) e mapa de cliques das páginas de produto da KazaKora
   `NEWSLETTER_BLOG_HORA=10:00`; semanal sai na sexta), `php artisan
   config:cache` e conferir com `php artisan schedule:list | grep newsletter`.
 
+
+## Leads de materiais gratuitos (26/11/2026, Guia de Viagem da FerraKora)
+
+Pedido do Lira: o Guia de Viagem de Bolso sai de graça em
+`ferrakora.com/guia-de-viagem?origem=<instagram|facebook|reels|story...>` para
+quem deixa nome, e-mail e celular. Código: `app/Modules/Materiais`,
+`config/materiais.php`; na FerraKora, `src/pages/GuiaViagemPage.jsx`.
+
+- **O que grava** (`leads_materiais`): nome, e-mail, celular (55 + DDD +
+  número), cidade/UF e DDD sugerido aproximados pelo IP (Cloudflare ou base
+  DB-IP do servidor; sem GPS, sem pedir permissão), origem (`?origem=`),
+  `utm_*`, referrer, IP, navegador, quantas vezes baixou.
+- **Base legal:** consentimento (art. 7º I). Caixinha obrigatória com o texto
+  de `materiais.consentimento_texto` (receber o guia + dicas e ofertas por
+  e-mail e WhatsApp). Prova: versão, texto, IP, navegador e data/hora. Mudou o
+  texto? Troque `consentimento_versao`. O formulário mostra o aviso e o link da
+  Política de Privacidade.
+- **Sair:** link "Não quero mais receber" no e-mail (`/api/ferrakora/materiais/sair/{id}`
+  assinado) marca `aceita_contato = false` e `descadastrado_em`. Pedido pelo
+  WhatsApp/e-mail: marcar à mão na mesma tabela.
+- **Contra robô:** campo escondido (`website`), Origin só dos domínios da
+  FerraKora, limite de 5 cadastros por minuto e 20 por hora por IP; e-mail com
+  o link no máximo 1 a cada 10 min para o mesmo endereço.
+- **Download:** link assinado (`materiais.dias_link`, 30 dias) que entrega o
+  PDF do Livro Digital (Entregáveis) cujo título contém "Guia de Viagem de
+  Bolso" (ou o id em `MATERIAL_GUIA_VIAGEM_LIVRO_ID`).
+- **Pixel:** evento `Lead` da Meta só com "Aceito" no pop-up de cookies da
+  FerraKora (`lib/pixelMeta.js` descarta sem aceite). Sem dado pessoal no evento.
+- **Prazo:** 12 meses sem nova interação (`materiais.meses_guarda`), apagado
+  pelo `model:prune` das 03:58.
+- **Admin:** Atendimento > Leads de materiais (`/admin/leads-materiais`,
+  permissão `pedidos.view`), CSV registrado na Auditoria.

@@ -123,6 +123,21 @@ class ClientesHistoricoTest extends TestCase
         $this->actingAs($maria)->get("/admin/clientes-dos-sites/kazakora/{$maria->id}/historico")->assertForbidden();
     }
 
+    public function test_origem_estimada_pelo_carrinho_ignora_interno(): void
+    {
+        $ana = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'ana@cliente.test']);
+        $bia = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'bia@cliente.test']);
+        DB::table('lead_checkout')->insert([
+            ['site' => 'kazakora', 'email' => 'ana@cliente.test', 'origem' => 'interno', 'utm_source' => null, 'status' => 'aberto', 'etapa' => 'entrega', 'subtotal' => 10, 'quantidade_itens' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['site' => 'kazakora', 'email' => 'bia@cliente.test', 'origem' => 'interno', 'utm_source' => 'meta', 'status' => 'aberto', 'etapa' => 'entrega', 'subtotal' => 10, 'quantidade_itens' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $linhas = collect($this->actingAs($this->admin)->get('/admin/clientes-dos-sites?site=kazakora')->viewData('page')['props']['clientes']['data']);
+
+        $this->assertNull($linhas->firstWhere('id', $ana->id)['acompanhamento']['origem']);
+        $this->assertSame('utm: meta', $linhas->firstWhere('id', $bia->id)['acompanhamento']['origem']['texto']);
+    }
+
     public function test_login_na_kazakora_grava_evento_e_liga_a_navegacao_anterior_com_aceite(): void
     {
         $maria = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'email' => 'maria@cliente.test', 'password' => bcrypt('segredo-123')]);

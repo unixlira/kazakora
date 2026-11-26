@@ -2,21 +2,39 @@
 
 namespace App\Modules\WhatsApp\Support;
 
+use App\Modules\Materiais\Support\TelefoneBrasil;
+
 /**
- * Telefone brasileiro no formato do WhatsApp (55 + DDD + número). Mesma regra
- * que a lista de destinatários das campanhas usava.
+ * Telefone brasileiro no formato do WhatsApp (55 + DDD + número).
+ *
+ * 10 ou 11 dígitos = DDD + número (inclusive DDD 55, do RS); 12 ou 13
+ * começando em 55 = país + DDD + número. Desde 26/11/2026 (pedido 4562: o
+ * "55" do país virou DDD e o número foi cortado) o DDD tem que existir e o
+ * número de 9 dígitos tem que começar com 9; número cortado ou inventado
+ * volta null em vez de virar um WhatsApp de outra pessoa.
  */
 class WhatsAppPhone
 {
     public static function normalize(?string $phone): ?string
     {
         $phone = ltrim(preg_replace('/\D+/', '', (string) $phone), '0');
+        $tamanho = strlen($phone);
 
-        if (! str_starts_with($phone, '55') && strlen($phone) >= 10) {
+        if ($tamanho === 10 || $tamanho === 11) {
             $phone = '55'.$phone;
+        } elseif (! (($tamanho === 12 || $tamanho === 13) && str_starts_with($phone, '55'))) {
+            return null;
         }
 
-        return preg_match('/^55\d{10,11}$/', $phone) ? $phone : null;
+        $nacional = substr($phone, 2);
+        if (! TelefoneBrasil::dddValido(substr($nacional, 0, 2))) {
+            return null;
+        }
+        if (strlen($nacional) === 11 && $nacional[2] !== '9') {
+            return null;
+        }
+
+        return $phone;
     }
 
     /**

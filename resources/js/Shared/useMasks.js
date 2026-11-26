@@ -25,8 +25,21 @@ export function maskCnpj(value) {
         .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
 }
 
+// Celular (pedido 4562, 26/11/2026): o preenchimento automático manda
+// "+55 11 99123-4567" e cortar em 11 dígitos gravava "(55) 11991-2345". Com 12
+// ou 13 dígitos começando em 55, o 55 é do país e sai; zero de operadora sai.
+// MESMA regra de App\Modules\Checkout\Support\CelularDoCheckout.
+export function semPaisDoCelular(value) {
+    let digits = String(value ?? '').replace(/\D/g, '').replace(/^0+/, '');
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+        digits = digits.slice(2);
+    }
+
+    return digits;
+}
+
 export function maskPhone(value) {
-    const digits = (value ?? '').replace(/\D/g, '').slice(0, 11);
+    const digits = semPaisDoCelular(value).slice(0, 11);
 
     if (digits.length <= 10) {
         return digits

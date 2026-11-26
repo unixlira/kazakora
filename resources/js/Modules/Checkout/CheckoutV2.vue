@@ -80,7 +80,8 @@ const pessoa = reactive({
     name: props.customer?.name ?? draftGuest.name ?? '',
     email: props.customer?.email ?? draftGuest.email ?? '',
     cpf: props.customer?.cpf ? maskCpf(props.customer.cpf) : (draftGuest.cpf ?? ''),
-    phone: props.customer?.phone ? maskPhone(props.customer.phone) : (draftGuest.phone ?? props.draft?.new_address?.phone ?? ''),
+    // Rascunho/recuperação do carrinho também passa pela máscara (tira o 55 do país, 26/11/2026).
+    phone: maskPhone(props.customer?.phone || draftGuest.phone || props.draft?.new_address?.phone || ''),
 });
 
 // Pessoa física ou jurídica (pedido 2026-10-24, modelo Mavo). PROTÓTIPO: a

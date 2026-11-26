@@ -392,6 +392,24 @@ class CheckoutController extends Controller
             ])]);
         }
 
+        // Celular (pedido 4562, 26/11/2026): "+55 11 99123-4567" vira "(11) 99123-4567"; nunca corta, DDD tem que existir.
+        foreach (['guest', 'new_address'] as $grupo) {
+            if (is_array($request->input($grupo)) && filled($request->input($grupo.'.phone'))) {
+                $request->merge([$grupo => array_merge($request->input($grupo), [
+                    'phone' => \App\Modules\Checkout\Support\CelularDoCheckout::formatar((string) $request->input($grupo.'.phone')),
+                ])]);
+            }
+        }
+        $celularValido = function (string $atributo, mixed $valor, \Closure $falhar) {
+            if (is_string($valor) && ($erro = \App\Modules\Checkout\Support\CelularDoCheckout::erro($valor))) {
+                $falhar($erro);
+            }
+        };
+        $rules['new_address.phone'][] = $celularValido;
+        if (isset($rules['guest.phone'])) {
+            $rules['guest.phone'][] = $celularValido;
+        }
+
         $validator = Validator::make($request->all(), $rules, [
             'new_address.phone.required_without' => 'Informe seu celular com DDD no campo "Celular" acima.',
             'new_address.*.required_without' => 'Informe :attribute.',

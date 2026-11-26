@@ -1,9 +1,12 @@
 /**
- * Mapa de cliques das páginas de produto (pedido do Lira em 2026-11-19).
- * Carrega /js/kzm.js (o mesmo script dos infoprodutos, < 3 KB, sem cookie,
- * sem dado pessoal, envio em lote por sendBeacon) só depois que a página fica
- * ociosa, para não pesar no LCP, e avisa qual página está aberta.
- * Leitura: admin › Publicidade › Comportamento.
+ * Mapa de cliques em TODA página da loja (pedido do Lira em 2026-11-19; todas
+ * as páginas desde 2026-11-26). O script /js/kzm.js (o mesmo dos infoprodutos,
+ * ~3 KB, sem cookie, sem dado pessoal, envio por sendBeacon) já vem no HTML
+ * com defer (resources/views/app.blade.php) e mede a primeira página sozinho.
+ * Aqui só a troca de página do Inertia: fecha a anterior (saída) e abre a nova
+ * com a chave que o servidor manda em props.medicao (MedicaoDaLoja: a mesma
+ * das visitas). medicao = null (checkout) para de medir; sem a prop (recarga
+ * parcial) não mexe. Leitura: admin › Publicidade › Comportamento.
  */
 let carregando = null;
 
@@ -20,18 +23,28 @@ const carregar = () => {
     return carregando;
 };
 
-const quandoOcioso = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 2500));
+let atual = null;
 
-/** Começa a medir a página (p = "kz/<slug>" ou "fk/<slug>"); devolve a função que para. */
-export function carregarMedicao(p, pg = 'produto', l = 'pt') {
-    let ativo = true;
-    // Hora da abertura: o tempo na página conta desde aqui, não desde que o script desceu.
-    const inicio = performance.now();
-    quandoOcioso(() => carregar().then((kzm) => {
-        try { if (ativo) kzm?.page(p, pg, l, inicio); } catch { /* medição nunca quebra a página */ }
-    }));
-    return () => {
-        ativo = false;
-        try { window.kzm?.page(null); } catch { /* idem */ }
-    };
+/** Página aberta no Inertia (evento navigate, inclusive a primeira). */
+export function medirPagina(page) {
+    try {
+        const m = page?.props?.medicao;
+        if (m === undefined) return;
+        const chave = m?.p ? `${m.p}|${m.pg}` : null;
+        if (chave === atual) return;
+        atual = chave;
+        if (!chave) {
+            window.kzm?.page(null);
+            return;
+        }
+        const inicio = performance.now();
+        if (window.kzm) {
+            window.kzm.page(m.p, m.pg, 'pt');
+            return;
+        }
+        carregar().then((kzm) => {
+            // O kzm.js do HTML já abre a primeira página sozinho (e ignora a mesma chave).
+            if (atual === chave) kzm?.page(m.p, m.pg, 'pt', inicio);
+        });
+    } catch { /* medição nunca quebra a página */ }
 }

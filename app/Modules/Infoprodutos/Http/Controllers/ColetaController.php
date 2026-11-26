@@ -5,6 +5,7 @@ namespace App\Modules\Infoprodutos\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Support\GeoDoVisitante;
+use App\Modules\Analytics\Support\VisitaIgnorada;
 use App\Modules\Infoprodutos\Models\InfoprodutoEvento;
 use App\Modules\Infoprodutos\Support\EquipeDaLoja;
 use App\Modules\Infoprodutos\Support\OrigemInfoproduto;
@@ -54,10 +55,25 @@ class ColetaController extends Controller
 
     public const NOME = '/^[a-z0-9:_-]{1,40}$/';
 
-    public const PAGINAS = ['landing', 'oferta', 'oferta-2', 'produto'];
+    /** 'pagina' = outra página das lojas (kzp/..., fkp/...), desde 2026-11-26. */
+    public const PAGINAS = ['landing', 'oferta', 'oferta-2', 'produto', 'pagina'];
 
     /** Página de produto das lojas: kz/<slug> (kazakora.com) ou fk/<slug> (ferrakora.com). */
     public const PRODUTO_DE_LOJA = '/^(kz|fk)\/[a-z0-9-]{1,120}$/';
+
+    /**
+     * Outra página das lojas (pedido do Lira em 2026-11-26: "toda visita tem
+     * que ter as marcas da tela"): a mesma chave de PaginasDoSite::chave(),
+     * kzp ou fkp com até 3 partes do caminho (início = kzp; departamento =
+     * kzp/departamento/<slug>; código ou número = "_").
+     */
+    public const PAGINA_DE_LOJA = '/^(kzp|fkp)(\/[a-z0-9_-]{1,40}){0,3}$/';
+
+    /** Sessão fora da conta por ser de fora do Brasil (o mesmo critério das visitas, VisitaIgnorada). */
+    public const FORA_DO_BRASIL = 'fora-do-brasil';
+
+    /** Sessão de robô pela rede (Google e outros de VisitaIgnorada::redeDeRobo, fora a Meta). */
+    public const ROBO_REDE = 'rede-robo';
 
     public const IDIOMAS = ['es', 'pt', 'en'];
 
@@ -85,9 +101,19 @@ class ColetaController extends Controller
         // Robô de revisão de anúncios da Meta (2026-11-20): vem da rede da
         // Meta (TrackSiteVisit::REDES_DA_META, AS32934) com cara de celular. A
         // sessão inteira fica marcada e sai das contagens; o IP não é gravado.
-        $robo = IpUtils::checkIp((string) $request->ip(), TrackSiteVisit::REDES_DA_META)
-            || ($dados['pv'] === null && InfoprodutoEvento::query()->where('sessao', $dados['s'])->whereNotNull('robo')->exists())
-            ? InfoprodutoEvento::ROBO_META : null;
+        // Lojas (2026-11-26): o mesmo critério das visitas (VisitaIgnorada::doIp):
+        // rede de robô (Meta e Google) e IP de fora do Brasil saem; IP da equipe
+        // (lista, casa do dono) entra como teste. Infoprodutos vendem fora do
+        // Brasil: para eles só a Meta.
+        $daLoja = self::daLoja($dados['p']);
+        $motivo = $daLoja ? rescue(fn () => VisitaIgnorada::doIp($request->ip(), $request->header('CF-IPCountry')), null, false) : null;
+        $robo = match (true) {
+            IpUtils::checkIp((string) $request->ip(), TrackSiteVisit::REDES_DA_META) => InfoprodutoEvento::ROBO_META,
+            $motivo === VisitaIgnorada::ROBO => self::ROBO_REDE,
+            $motivo === VisitaIgnorada::FORA_DO_BRASIL => self::FORA_DO_BRASIL,
+            $dados['pv'] === null => InfoprodutoEvento::query()->where('sessao', $dados['s'])->whereNotNull('robo')->value('robo'),
+            default => null,
+        };
 
         $base = [
             'sessao' => $dados['s'],
@@ -101,7 +127,8 @@ class ColetaController extends Controller
 
         // Equipe (EquipeDaLoja, 2026-11-20): o IP só é conferido, nunca gravado;
         // a visita entra como teste e fica fora da tela Comportamento.
-        $daEquipe = rescue(fn () => EquipeDaLoja::ip($request->ip()), false, false);
+        $daEquipe = in_array($motivo, [VisitaIgnorada::IP_IGNORADO, VisitaIgnorada::CASA_EQUIPE], true)
+            || rescue(fn () => EquipeDaLoja::ip($request->ip()), false, false);
         $teste = false;
         if ($dados['pv'] !== null) {
             $pv = $dados['pv'];
@@ -218,7 +245,14 @@ class ColetaController extends Controller
 
     public static function produtoValido(string $p): bool
     {
-        return array_key_exists($p, (array) config('infoprodutos.produtos')) || preg_match(self::PRODUTO_DE_LOJA, $p) === 1;
+        return array_key_exists($p, (array) config('infoprodutos.produtos')) || preg_match(self::PRODUTO_DE_LOJA, $p) === 1
+            || preg_match(self::PAGINA_DE_LOJA, $p) === 1;
+    }
+
+    /** Página das lojas (produto kz/fk ou outra página kzp/fkp), não de infoproduto. */
+    public static function daLoja(string $p): bool
+    {
+        return preg_match(self::PRODUTO_DE_LOJA, $p) === 1 || preg_match(self::PAGINA_DE_LOJA, $p) === 1;
     }
 
     /** @return array<string, int|string>|null */

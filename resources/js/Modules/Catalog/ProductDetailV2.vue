@@ -21,7 +21,6 @@ import { ehFavorito } from '@/Shared/favoritos';
 import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { carregarMedicao } from '@/Shared/medicao';
 // Página de brinquedo (pedido do Lira 24/11/2026): kits em cartões, seções coloridas e o "aeee".
 import '../../../css/fontes-brinquedo.css';
 import '../../../css/pagina-brinquedo.css';
@@ -715,14 +714,11 @@ const consultarPrazo = async () => {
 };
 
 // Mapa de cliques (pedido do Lira 2026-11-19): /js/kzm.js, sem cookie e sem
-// dado pessoal, carregado depois que a página fica ociosa (não pesa no LCP).
+// dado pessoal; desde 2026-11-26 vem no HTML de toda página (Shared/medicao.js).
 // Os elementos levam data-kzm com nome estável; troca de foto e de variação
 // viram ação nomeada. Leitura: admin › Publicidade › Comportamento.
 const nomeKzm = (prefixo, texto) => `${prefixo}:${String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30)}`;
 const kzmAcao = (nome) => { try { window.kzm?.acao(nome); } catch { /* medição nunca quebra a página */ } };
-let pararKzm = null;
-onMounted(() => { pararKzm = carregarMedicao(`kz/${props.product.slug}`); });
-onUnmounted(() => pararKzm?.());
 watch(activeIndex, (i) => kzmAcao(`galeria:${i + 1}`));
 
 const buyingNow = ref(false);

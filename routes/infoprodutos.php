@@ -13,8 +13,10 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(CorsInfoprodutos::class)->group(function () {
     Route::options('evento', fn () => response('', 204));
+    // 240/min por IP (2026-11-26): agora toda página da loja manda a abertura
+    // na hora e a operadora de celular põe muita gente atrás do mesmo IP (CGNAT).
     Route::post('evento', [ColetaController::class, 'registrar'])
-        ->middleware('throttle:60,1,infoprodutos-evento')
+        ->middleware('throttle:240,1,infoprodutos-evento')
         ->name('infoprodutos.evento');
 });
 

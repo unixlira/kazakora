@@ -155,6 +155,14 @@
                     @endif>
             @endif
         @endunless
+        {{-- Mapa de cliques (tela Comportamento, 2026-11-26): /js/kzm.js (3 KB, sem cookie, sem dado
+             pessoal) em TODA página da loja, com defer: começa a medir assim que o HTML termina, sem
+             esperar o navegador ficar ocioso (antes perdia quem clicava ou saía nos primeiros segundos).
+             A troca de página no Inertia avisa o script em resources/js/Shared/medicao.js. --}}
+        @php($medicao = $page['props']['medicao'] ?? null)
+        @if (is_array($medicao) && ! empty($medicao['p']))
+            <script src="/js/kzm.js?v={{ @filemtime(public_path('js/kzm.js')) }}" defer data-p="{{ $medicao['p'] }}" data-pg="{{ $medicao['pg'] }}" data-l="pt"></script>
+        @endif
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
     </head>

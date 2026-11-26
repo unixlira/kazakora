@@ -3,6 +3,7 @@ import { createApp, h } from 'vue';
 import { createInertiaApp, router } from '@inertiajs/vue3';
 import { rastrearPagina } from '@/Shared/pixelMeta';
 import { rastrearPaginaGoogle } from '@/Shared/tagGoogle';
+import { medirPagina } from '@/Shared/medicao';
 import { liberarImagensDepoisDaPrimeiraPintura } from '@/Shared/imagensDepoisDoTopo';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
@@ -28,6 +29,8 @@ createInertiaApp({
             rastrearPagina(e.detail.page);
             // Tag do Google Ads (Shared/tagGoogle.js, 2026-11-19): só com o aceite registrado.
             rastrearPaginaGoogle(e.detail.page);
+            // Mapa de cliques (Shared/medicao.js, 2026-11-26): toda página da loja.
+            medirPagina(e.detail.page);
         });
 
         // Tela de abertura (resources/views/app.blade.php): some quando a loja montou

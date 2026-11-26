@@ -138,9 +138,11 @@ class BlackFriday
      *
      * @return array{code: string, rotulo: string, ate: ?string, quantidade: int, de: float, cupom: float, plataforma: float, por: float, pix: ?float}|null
      */
-    public static function precos(Product $produto, int $quantidade = 1, bool $comCaixaUnica = true): ?array
+    public static function precos(Product $produto, int $quantidade = 1, bool $comCaixaUnica = true, bool $outroSite = false): ?array
     {
-        if (! self::naKazaKora() || ! ($cupom = self::cupom())) {
+        // FerraKora (preço único, 26/11/2026): o checkout de lá também aplica o BLACKFRIDAY
+        // sozinho, então o card mostra a mesma conta, se o cupom não for só da KazaKora.
+        if ((! self::naKazaKora() && ! $outroSite) || ! ($cupom = self::cupom()) || ($outroSite && $cupom->so_kazakora)) {
             return null;
         }
 

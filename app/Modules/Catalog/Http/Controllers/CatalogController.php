@@ -198,7 +198,9 @@ class CatalogController extends Controller
                 'nome' => $produto->name,
                 'slug' => $produto->slug,
                 'imagem' => $produto->images->first()?->thumb_url ?? $produto->images->first()?->url,
-                'preco' => $produto->variacaoMaisBarata()->final_price,
+                // Preço único (26/11/2026): o número grande do card, com o cupom da Black Friday quando ela está no ar.
+                'preco' => ($maisBarata = $produto->variacaoMaisBarata())->preco_cupom['por'] ?? $maisBarata->final_price,
+                'preco_sem_cupom' => $maisBarata->final_price,
             ]);
 
         return response()->json(['produtos' => $produtos, 'total' => $total]);

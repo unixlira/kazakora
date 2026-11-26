@@ -24,6 +24,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 // Página de brinquedo (pedido do Lira 24/11/2026): kits em cartões, seções coloridas e o "aeee".
 import '../../../css/fontes-brinquedo.css';
 import '../../../css/pagina-brinquedo.css';
+import KitsEscada from './KitsEscada.vue';
 import KitsBrinquedo from './brinquedo/KitsBrinquedo.vue';
 import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
 import SomComemoracao from './brinquedo/SomComemoracao.vue';
@@ -65,6 +66,8 @@ const props = defineProps({
     layout: { type: String, default: 'padrao' },
     // Conteúdo próprio da página de brinquedo (products.pagina_brinquedo, 25/11/2026) ou null.
     paginaBrinquedo: { type: Object, default: null },
+    // Escada de kits entre produtos (26/11/2026, oferta do Compressor 4 em 1): EscadaDeKits::paraKazaKora; null sem escada.
+    kits: { type: Object, default: null },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
 // Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
@@ -1145,6 +1148,9 @@ const escolherKit = (kit, rolar = false) => {
                                 </div>
                             </div>
 
+                            <!-- Escada de kits (26/11/2026): os kits da oferta, cada um com a página dele. -->
+                            <KitsEscada v-if="kits" :kits="kits" formato="lista" />
+
                             <!-- Kits (pedido 2026-10-23): "2 unidades · 9% OFF" com o desconto já
                                  cadastrado; o clique escolhe a quantidade e o total atualiza. -->
                             <div v-if="faixasVisiveis.length" class="leve-mais">
@@ -1236,6 +1242,9 @@ const escolherKit = (kit, rolar = false) => {
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
+                        <!-- Cartões da escada de kits (26/11/2026): foto e o que vem em cada kit, antes da descrição. -->
+                        <KitsEscada v-if="kits" :kits="kits" formato="cartoes" />
+
                         <section v-if="!brinquedo && (blocosAnuncio.length || descriptionSections.length)" class="card descricao-card">
                             <header class="desc-cabecalho">
                                 <!-- Sem "Por que esse produto merece atenção?" (pedido 2026-10-20, definitivo). -->
@@ -2190,6 +2199,51 @@ html:not(.dark) .pd2 .prazo-cep input:not([type="radio"])::placeholder { color: 
 .dark .pd2 .porque-lado.bom figcaption, .dark .pd2 .porque-cabecalho .bom { color: #4ade80; }
 .pd2 .beneficios-quadros { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .pd2 .beneficios-quadros li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; line-height: 1.45; }
+/* Escada de kits (pedido do Lira 26/11/2026, Compressor 4 em 1 também no KazaKora): lista na caixa de compra
+   e cartões com foto e o que vem em cada kit. O kit da página fica com a borda verde; o recomendado, amarela. */
+.pd2 .kits-escada { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 18px; }
+.pd2 .kits-escada .subtitulo { font-weight: 700; color: var(--ink); font-size: 15px; }
+.pd2 .kit-opcao { position: relative; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 14px 12px 12px; border: 1.5px solid #d4d4d4; border-radius: 12px; background: var(--card); color: var(--ink); text-decoration: none; cursor: pointer; transition: border-color .15s; }
+.pd2 .kit-opcao:hover { border-color: #888; }
+.pd2 .kit-opcao.destaque { border-color: var(--yellow); }
+.pd2 .kit-opcao.atual { border: 2px solid var(--green); background: var(--soft); cursor: default; }
+.pd2 .kit-opcao.esgotado { opacity: .55; }
+.pd2 .kit-marca { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #b9b9b9; display: grid; place-items: center; font-size: 11px; color: transparent; }
+.pd2 .kit-opcao.atual .kit-marca { background: var(--green); border-color: var(--green); color: #fff; }
+.pd2 .kit-foto { width: 48px; height: 48px; border-radius: 8px; object-fit: contain; background: #fff; }
+.pd2 .kit-info { display: flex; flex-direction: column; min-width: 0; }
+.pd2 .kit-nome { font-weight: 700; font-size: 15px; line-height: 1.25; }
+.pd2 .kit-itens { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.pd2 .kit-lado { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.pd2 .kit-precos { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.pd2 .kit-precos s { font-size: 12.5px; color: var(--muted); }
+.pd2 .kit-precos b { font-size: 17px; color: var(--ink); white-space: nowrap; }
+.pd2 .kit-pilula { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e7f6ea; color: var(--green-edge); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.pd2 .kit-selo { position: absolute; top: -10px; right: 12px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 11.5px; font-weight: 700; line-height: 1.5; }
+.pd2 .kit-selo.destaque { background: var(--yellow); color: #1a1a1a; }
+.pd2 .kit-selo i { font-size: 10px; }
+.pd2 .kits-cartoes h2 { font-size: 22px; margin: 0; }
+.pd2 .kits-texto { margin: 6px 0 0; color: var(--text); font-size: 15px; }
+.pd2 .kits-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+.pd2 .kit-cartao { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1.5px solid var(--line); border-radius: 16px; background: var(--card); }
+.pd2 .kit-cartao.destaque { border: 2px solid var(--yellow); box-shadow: 0 6px 18px rgba(252, 189, 16, .25); }
+.pd2 .kit-cartao.atual { outline: 2px solid var(--green); outline-offset: 2px; }
+.pd2 .kit-cartao .kit-selo { top: -11px; left: 14px; right: auto; }
+.pd2 .kit-cartao-foto { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 12px; background: #fff; }
+.pd2 .kit-cartao h3 { font-size: 17px; margin: 0; }
+.pd2 .kit-acrescenta { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--green-edge); }
+.pd2 .kit-partes { list-style: none; margin: 0; padding: 0; font-size: 13.5px; color: var(--text); flex: 1; }
+.pd2 .kit-partes li { display: flex; gap: 6px; align-items: baseline; margin: 3px 0; }
+.pd2 .kit-partes i { color: var(--green); font-size: 11px; }
+.pd2 .kit-cartao-preco { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pd2 .kit-cartao-preco .kit-precos { align-items: flex-start; }
+.pd2 .kit-cartao-preco .kit-precos b { font-size: 21px; }
+.pd2 .kit-botao { flex: 0 0 auto; min-height: 46px; font-size: 13.5px; text-decoration: none; text-align: center; line-height: 1.2; padding: 6px 12px; }
+.pd2 .kit-botao.esgotado { background: #9ca3af; border-color: #6b7280; cursor: default; }
+.dark .pd2 .kit-pilula { background: rgba(0, 171, 33, .15); color: var(--green); }
+.dark .pd2 .kit-opcao { border-color: var(--line); }
+@media (max-width: 1280px) { .pd2 .kits-grade { grid-template-columns: minmax(0, 1fr); } .pd2 .kit-cartao { display: grid; grid-template-columns: 120px minmax(0, 1fr); column-gap: 14px; } .pd2 .kit-cartao > :not(.kit-cartao-foto):not(.kit-selo) { grid-column: 2; } .pd2 .kit-cartao-foto { grid-row: 1 / span 5; align-self: start; } .pd2 .kit-cartao .kit-botao { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .pd2 .kit-opcao { grid-template-columns: auto 44px minmax(0, 1fr); row-gap: 6px; } .pd2 .kit-foto { width: 44px; height: 44px; } .pd2 .kit-lado { grid-column: 3; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 4px 8px; text-align: left; } .pd2 .kit-precos { flex-direction: row; align-items: baseline; gap: 6px; } .pd2 .kit-cartao { grid-template-columns: 96px minmax(0, 1fr); } }
 @media (max-width: 640px) {
     .pd2 .porque-cabecalho, .pd2 .porque-par { gap: 8px; }
     .pd2 .porque-cabecalho span { font-size: 11px; letter-spacing: 0; }

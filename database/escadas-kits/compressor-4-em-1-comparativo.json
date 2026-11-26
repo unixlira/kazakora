@@ -1,0 +1,213 @@
+{
+    "_sobre": "Oferta do Compressor 4 em 1, 26/11/2026 (pedidos do Lira): (1) capa limpa de bundle na frente do carrossel do Kit Estrada Segura (os blocos da descrição andam +1 sozinhos); (2) bloco 'Veja por que este kit é a melhor escolha' com foto nos dois lados de cada linha nos 3 kits; (3) os 3 kits também no KazaKora (so_ferrakora=false); (4) a escada regravada do arquivo principal (foto limpa do compressor no cartão do Kit A). Rodar: php artisan kits:escada compressor-4-em-1-comparativo --aplicar (backup antes, em storage/app/backups). Pode rodar de novo: foto que já está no carrossel não entra outra vez.",
+    "_fotos": {
+        "413-comum-pneu-baixo.webp": "Pixabay https://pixabay.com/photos/flatfoot-senselessly-mature-76564/ (autor stux, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "413-produto-calibra.webp": "Cadastro do produto 413: products/413/padrao/a1.jpg (recorte quadrado)",
+        "413-comum-chupeta.webp": "Pixabay https://pixabay.com/photos/jumper-cables-battery-engine-car-926308/ (autor StockSnap, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "413-produto-garras.webp": "Cadastro do produto 413: products/413/padrao/garras-real.jpg (recorte quadrado)",
+        "413-comum-celular.webp": "Pixabay https://pixabay.com/photos/smartphone-mobile-phone-gadget-2568602/ (autor StockSnap, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "413-produto-powerbank.webp": "Cadastro do produto 413: products/413/padrao/a3.jpg (recorte quadrado)",
+        "413-comum-bomba-separada.webp": "Pixabay https://pixabay.com/photos/compressor-tire-pump-tyre-pump-840706/ (autor stevepb, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "413-produto-bolsa.webp": "Cadastro do produto 413: products/413/padrao/a4.jpg (recorte quadrado)",
+        "623-comum-pneu-murcho.webp": "Pixabay https://pixabay.com/photos/flat-tire-car-wheel-automobile-6660469/ (autor Wounds_and_Cracks, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "623-produto-calibra.webp": "Cadastro do produto 413: products/413/padrao/a1.jpg (recorte quadrado)",
+        "623-comum-esperando-socorro.webp": "Pixabay https://pixabay.com/photos/car-accident-bike-tire-tires-car-5397633/ (autor Skica911, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "623-produto-remendo.webp": "Cadastro do produto 495: products/495/ia-07-FtUTyZtvDkiCAEyj.jpg (recorte quadrado)",
+        "623-comum-manivela.webp": "Pixabay https://pixabay.com/photos/tire-flat-fix-spare-car-606100/ (autor nrjfalcon1, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "623-produto-catraca.webp": "Cadastro do produto 490: products/490/ia-09-zrwFwJKV1aWrITRq.jpg (recorte quadrado)",
+        "623-comum-chupeta.webp": "Pixabay https://pixabay.com/photos/jumper-cables-battery-engine-car-926308/ (autor StockSnap, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "623-produto-garras.webp": "Cadastro do produto 413: products/413/padrao/garras-real.jpg (recorte quadrado)",
+        "508-comum-manivela.webp": "Pixabay https://pixabay.com/photos/tire-flat-fix-spare-car-606100/ (autor nrjfalcon1, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "508-produto-macaco.webp": "Cadastro do produto 508: products/508/ia-03-AoGkj4EyLjKdIIcm.jpg (recorte quadrado)",
+        "508-comum-chave-roda.webp": "Pixabay https://pixabay.com/photos/winter-tires-tire-service-tire-4664205/ (autor Mylene2401, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "508-produto-impacto.webp": "Cadastro do produto 508: products/508/ia-10-g64sH6thXIvFwMWP.jpg (recorte quadrado)",
+        "508-comum-pneu-baixo.webp": "Pixabay https://pixabay.com/photos/flatfoot-senselessly-mature-76564/ (autor stux, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "508-produto-compressor.webp": "Cadastro do produto 508: products/508/ia-05-ECwRjrmzZQVv17FU.jpg (recorte quadrado)",
+        "508-comum-escuro.webp": "Pixabay https://pixabay.com/photos/street-alley-lane-night-dark-789626/ (autor donterase, Licença Pixabay: uso comercial, sem crédito obrigatório)",
+        "508-produto-lanterna.webp": "Cadastro do produto 508: products/508/ia-06-fpvvaNt65fExgW50.jpg (recorte quadrado)"
+    },
+    "ajustar": [
+        {
+            "sku": "344-BOMBAAR-4EM1",
+            "so_ferrakora": false,
+            "conteudo": {
+                "comparativo": {
+                    "titulo": "Veja por que o Compressor 4 em 1 é a melhor escolha",
+                    "intro": "Um aparelho no porta-malas no lugar de quatro soluções separadas.",
+                    "linhas": [
+                        [
+                            "Pneu baixo",
+                            "Rodar com o pneu murcho até achar um calibrador de posto",
+                            "Calibra onde estiver: escolhe a pressão no visor digital e ele enche até chegar nela"
+                        ],
+                        [
+                            "Bateria arriada",
+                            "Esperar outro carro e um cabo chupeta para dar a partida",
+                            "Garras de partida inclusas, presas direto na bateria do carro"
+                        ],
+                        [
+                            "Celular sem carga",
+                            "Celular descarregado justo na hora de pedir ajuda",
+                            "Funciona como powerbank e carrega o celular pelo cabo"
+                        ],
+                        [
+                            "Espaço no carro",
+                            "Compressor grande e separado, com mangueira comprida",
+                            "Compacto: vai na bolsa que acompanha e cabe no porta-malas"
+                        ]
+                    ],
+                    "imagens": [
+                        [
+                            "compressor-4-em-1/comparativo/413-comum-pneu-baixo.webp",
+                            "compressor-4-em-1/comparativo/413-produto-calibra.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/413-comum-chupeta.webp",
+                            "compressor-4-em-1/comparativo/413-produto-garras.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/413-comum-celular.webp",
+                            "compressor-4-em-1/comparativo/413-produto-powerbank.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/413-comum-bomba-separada.webp",
+                            "compressor-4-em-1/comparativo/413-produto-bolsa.webp"
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "sku": "FK-KIT-COMPRESSOR-REPARO-CATRACA",
+            "so_ferrakora": false,
+            "fotos_na_frente": [
+                {
+                    "arquivo": "compressor-4-em-1/kit-estrada-segura-bundle-limpo.jpg"
+                }
+            ],
+            "conteudo": {
+                "comparativo": {
+                    "titulo": "Veja por que este kit é a melhor escolha",
+                    "intro": "Os problemas de pneu mais comuns na estrada, resolvidos com o que fica no seu porta-malas.",
+                    "linhas": [
+                        [
+                            "Pneu baixo",
+                            "Rodar com o pneu murcho até um posto",
+                            "O compressor calibra ali mesmo, na pressão escolhida no visor digital"
+                        ],
+                        [
+                            "Pneu furado",
+                            "Ficar parado no acostamento esperando socorro",
+                            "O remendo tipo macarrão fecha o furo do pneu sem câmara para seguir até o borracheiro"
+                        ],
+                        [
+                            "Subir o macaco",
+                            "Manivela que precisa ser tirada e encaixada a cada volta",
+                            "A chave catraca encaixa no macaco e gira sem sair do lugar"
+                        ],
+                        [
+                            "Bateria arriada",
+                            "Depender de outro carro e de um cabo chupeta",
+                            "As garras do compressor ajudam na partida, presas direto na bateria"
+                        ]
+                    ],
+                    "imagens": [
+                        [
+                            "compressor-4-em-1/comparativo/623-comum-pneu-murcho.webp",
+                            "compressor-4-em-1/comparativo/623-produto-calibra.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/623-comum-esperando-socorro.webp",
+                            "compressor-4-em-1/comparativo/623-produto-remendo.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/623-comum-manivela.webp",
+                            "compressor-4-em-1/comparativo/623-produto-catraca.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/623-comum-chupeta.webp",
+                            "compressor-4-em-1/comparativo/623-produto-garras.webp"
+                        ]
+                    ]
+                },
+                "beneficios": [
+                    [
+                        "Calibra, remenda e troca",
+                        "Os 3 itens do pneu juntos no porta-malas"
+                    ],
+                    [
+                        "Visor digital",
+                        "Escolhe a pressão e ele enche até chegar nela"
+                    ],
+                    [
+                        "5 remendos tipo macarrão",
+                        "Com escareador, agulha e cola"
+                    ],
+                    [
+                        "Chave catraca universal",
+                        "Para o macaco sanfona que vem no carro"
+                    ],
+                    [
+                        "Garras de partida",
+                        "Ajudam a dar a partida com a bateria arriada"
+                    ],
+                    [
+                        "Powerbank e lanterna LED",
+                        "Carrega o celular e ilumina à noite"
+                    ]
+                ]
+            }
+        },
+        {
+            "sku": "FK-KIT-MACACO-ELET-5T",
+            "so_ferrakora": false,
+            "conteudo": {
+                "comparativo": {
+                    "titulo": "Veja por que este kit é a melhor escolha",
+                    "intro": "Veja o que muda quando você troca o esforço manual pela força do 12V. 🔋",
+                    "linhas": [
+                        [
+                            "Levantar o carro",
+                            "Macaco manual exige bombear ou girar manivela",
+                            "Macaco elétrico de 5 t sobe com um botão e tem display digital"
+                        ],
+                        [
+                            "Soltar parafusos",
+                            "Chave de cruz exige força do corpo",
+                            "Chave de impacto de até 420 N.m com soquetes 17/19 e 21/23 mm"
+                        ],
+                        [
+                            "Calibrar o pneu",
+                            "Depende de posto ou de bomba separada",
+                            "Compressor até 150 PSI, 35 L/min, incluso no kit"
+                        ],
+                        [
+                            "Troca no escuro",
+                            "Precisa de lanterna à parte",
+                            "Lanterna LED integrada ao macaco"
+                        ]
+                    ],
+                    "imagens": [
+                        [
+                            "compressor-4-em-1/comparativo/508-comum-manivela.webp",
+                            "compressor-4-em-1/comparativo/508-produto-macaco.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/508-comum-chave-roda.webp",
+                            "compressor-4-em-1/comparativo/508-produto-impacto.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/508-comum-pneu-baixo.webp",
+                            "compressor-4-em-1/comparativo/508-produto-compressor.webp"
+                        ],
+                        [
+                            "compressor-4-em-1/comparativo/508-comum-escuro.webp",
+                            "compressor-4-em-1/comparativo/508-produto-lanterna.webp"
+                        ]
+                    ]
+                }
+            }
+        }
+    ],
+    "escada": "compressor-4-em-1"
+}

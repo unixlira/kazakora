@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Catalog\Support\EscadaDeKits;
+use App\Modules\Catalog\Support\FotosDoComparativo;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
@@ -203,9 +204,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
                 ...$bloco,
                 'imagem_url' => isset($bloco['imagem']) && $bloco['imagem'] !== null ? $fotos->get((int) $bloco['imagem'])?->url : null,
             ])->values()->all(),
-            'comparativo' => OfertaBlackFriday::comparativoPercentual(
+            'comparativo' => FotosDoComparativo::comUrls(OfertaBlackFriday::comparativoPercentual(
                 $conteudo->comparativo, collect([$pai])->concat(Product::query()->where('parent_product_id', $pai->id)->get()),
-            ),
+            )),
             'beneficios' => $conteudo->beneficios ?? [],
             'duvidas' => $conteudo->duvidas ?? [],
             'fonte' => $conteudo->fonte,

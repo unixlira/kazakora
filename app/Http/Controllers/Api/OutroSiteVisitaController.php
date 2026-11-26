@@ -56,7 +56,7 @@ class OutroSiteVisitaController extends Controller
 
         $userAgent = (string) $request->userAgent();
         // Robô (navegador ou rede de robô) não é gravado; IP da lista e casa da equipe: gravado marcado (VisitaIgnorada, 26/11/2026).
-        $ignorada = VisitaIgnorada::navegadorDeRobo($userAgent) ? VisitaIgnorada::ROBO : rescue(fn () => VisitaIgnorada::doIp($request->ip()), null, false);
+        $ignorada = VisitaIgnorada::navegadorDeRobo($userAgent) ? VisitaIgnorada::ROBO : rescue(fn () => VisitaIgnorada::doIp($request->ip(), $request->header('CF-IPCountry')), null, false);
         if ($ignorada !== VisitaIgnorada::ROBO) {
             $pagina = $request->query('p');
             if (! is_string($pagina) || $pagina === '') {

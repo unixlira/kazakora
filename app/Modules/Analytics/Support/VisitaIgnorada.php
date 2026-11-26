@@ -27,6 +27,11 @@ use Symfony\Component\HttpFoundation\IpUtils;
  *   (config visitas.dias_casa): o /64 do IPv6 (a casa inteira; a operadora
  *   troca o prefixo a cada poucos dias) ou o IPv4 exato. Pega o celular do
  *   dono deslogado, a Cora Box e as abas abertas sem login.
+ * - fora_do_brasil (config visitas.so_brasil): IP de outro país (Cloudflare
+ *   CF-IPCountry ou a base DB-IP do servidor). A loja só vende no Brasil e,
+ *   de 19 a 26/11/2026, mais da metade dos IPs que visitaram eram de
+ *   servidores nos EUA, Singapura, China, Europa (Google Cloud, Tencent,
+ *   Alibaba) abrindo só a home com navegador comum. País desconhecido conta.
  * - robo_volume (só no histórico): o mesmo visitante com mais de
  *   SiteVisit::VISITAS_DIA_ROBO páginas num dia.
  *
@@ -45,12 +50,15 @@ class VisitaIgnorada
 
     public const ROBO_VOLUME = 'robo_volume';
 
+    public const FORA_DO_BRASIL = 'fora_do_brasil';
+
     /** Motivo => rótulo, na ordem em que a regra confere. */
     public const MOTIVOS = [
         self::ROBO => 'Robô (navegador ou rede de robô)',
         self::EQUIPE => 'Equipe logada / navegador da equipe',
         self::IP_IGNORADO => 'IP da lista (nossos robôs e IPs fixos)',
         self::CASA_EQUIPE => 'Mesma rede da equipe (casa do dono)',
+        self::FORA_DO_BRASIL => 'IP fora do Brasil (servidores no exterior)',
         self::ROBO_VOLUME => 'Mais de 300 páginas num dia',
     ];
 
@@ -88,11 +96,11 @@ class VisitaIgnorada
             return self::EQUIPE;
         }
 
-        return self::doIp($request->ip());
+        return self::doIp($request->ip(), $request->header('CF-IPCountry'));
     }
 
     /** Motivo só pelo IP (outros sites, sem cookie nem login), ou null. */
-    public static function doIp(?string $ip): ?string
+    public static function doIp(?string $ip, ?string $paisDaCloudflare = null): ?string
     {
         if (self::redeDeRobo($ip)) {
             return self::ROBO;
@@ -101,8 +109,32 @@ class VisitaIgnorada
             return self::IP_IGNORADO;
         }
         $chave = self::rede($ip);
+        if ($chave !== null && in_array($chave, self::dados()['redes'], true)) {
+            return self::CASA_EQUIPE;
+        }
 
-        return $chave !== null && in_array($chave, self::dados()['redes'], true) ? self::CASA_EQUIPE : null;
+        return self::foraDoBrasil($ip, $paisDaCloudflare) ? self::FORA_DO_BRASIL : null;
+    }
+
+    /** País conhecido e diferente de BR (com a regra ligada). */
+    public static function foraDoBrasil(?string $ip, ?string $paisDaCloudflare = null): bool
+    {
+        if (! config('visitas.so_brasil', true)) {
+            return false;
+        }
+        $pais = strtoupper(trim((string) $paisDaCloudflare));
+        if (preg_match('/^[A-Z]{2}$/', $pais) !== 1 || in_array($pais, ['XX', 'T1'], true)) {
+            $pais = ($ip !== null && $ip !== '') ? strtoupper((string) (self::geo()->buscar($ip)['pais'] ?? '')) : '';
+        }
+
+        return preg_match('/^[A-Z]{2}$/', $pais) === 1 && $pais !== 'BR';
+    }
+
+    private static ?LocalDoIp $geo = null;
+
+    private static function geo(): LocalDoIp
+    {
+        return self::$geo ??= new LocalDoIp;
     }
 
     /** Sem navegador, robô, prévia de link, programa ou monitor. */

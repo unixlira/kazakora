@@ -24,5 +24,11 @@ return [
      * Dias em que a rede (o /64 do IPv6 ou o IPv4 exato) de um navegador da
      * equipe continua valendo como "casa da equipe".
      */
+    /*
+     * IP de fora do Brasil não conta (a loja só vende no Brasil; quem abre de
+     * fora são servidores no exterior). false desliga.
+     */
+    'so_brasil' => (bool) env('VISITAS_SO_BRASIL', true),
+
     'dias_casa' => (int) env('VISITAS_DIAS_CASA', 3),
 ];

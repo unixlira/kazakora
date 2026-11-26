@@ -176,6 +176,22 @@ class VisitasSemRoboEDonoTest extends TestCase
         $this->assertSame(1, SiteVisit::query()->count());
     }
 
+    public function test_ip_de_fora_do_brasil_nao_conta(): void
+    {
+        $this->withHeader('CF-IPCountry', 'SG');
+        $this->abrir(self::NAVEGADOR, '43.159.145.153')->assertOk();
+        $this->assertSame(VisitaIgnorada::FORA_DO_BRASIL, $this->todas()->sole()->ignorada);
+
+        $this->withHeader('CF-IPCountry', 'BR');
+        $this->abrir()->assertOk();
+        $this->assertSame(1, SiteVisit::query()->count());
+
+        config(['visitas.so_brasil' => false]);
+        $this->withHeader('CF-IPCountry', 'US');
+        $this->abrir(self::NAVEGADOR, '34.77.76.113')->assertOk();
+        $this->assertSame(2, SiteVisit::query()->count());
+    }
+
     public function test_rede_normaliza_o_ipv6(): void
     {
         $this->assertSame('2804:1b3:af40:de1d::/64', VisitaIgnorada::rede('2804:01b3:af40:de1d:0:0:0:1'));

@@ -23,7 +23,7 @@
  * lista com busca na coluna da esquerda; embaixo, o funil da loja no período
  * (visitas → carrinho → checkout → pedido).
  *
- * Só páginas de produto na lista (2026-11-23); embaixo dos números da página,
+ * Todas as páginas na lista (de novo em 2026-11-26, com as abas medidas no mapa ao lado das visitas); embaixo dos números da página,
  * o funil COMPLETO dela até o pedido pago, cruzando o que a mesma pessoa
  * preencheu no checkout (FunilDoProduto), com a maior queda em destaque.
  */
@@ -365,16 +365,17 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 </div>
                 <div>
                     <div class="mb-1 flex items-baseline justify-between text-xs text-slate-500">
-                        <span>Páginas de produto ({{ n(paginasDaLoja.length) }})</span>
-                        <span>visitas · carrinho · checkout</span>
+                        <span>Páginas ({{ n(paginasDaLoja.length) }})</span>
+                        <span title="Visitas do site (pessoas) · abas medidas no mapa de cliques · carrinho · checkout">visitas · mapa · carr. · check.</span>
                     </div>
-                    <input v-model="buscaPagina" type="search" placeholder="Buscar produto" class="mb-1 w-full rounded border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+                    <input v-model="buscaPagina" type="search" placeholder="Buscar página ou produto" class="mb-1 w-full rounded border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
                     <div class="max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700">
                         <button v-for="p in paginasFiltradas" :key="`${p.produto}|${p.pagina}`" type="button" :title="p.rotulo"
                             class="flex w-full items-center gap-2 border-b border-slate-100 px-2 py-1 text-left text-xs last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
                             :class="ehEscolhida(p) ? 'bg-indigo-50 font-semibold dark:bg-indigo-900/30' : ''" @click="escolherPagina(`${p.produto}|${p.pagina}`)">
                             <span class="min-w-0 flex-1 truncate">{{ p.rotulo }}</span>
                             <span class="shrink-0 tabular-nums">{{ n(p.visitas) }}</span>
+                            <span class="w-6 shrink-0 text-right tabular-nums text-indigo-600 dark:text-indigo-400" title="Abas medidas no mapa de cliques">{{ n(p.medidas) }}</span>
                             <span class="w-14 shrink-0 text-right tabular-nums text-slate-500">{{ n(p.carrinho) }} · {{ n(p.checkout) }}</span>
                         </button>
                         <p v-if="!paginasFiltradas.length" class="px-2 py-2 text-xs text-slate-500">{{ paginasDaLoja.length ? 'Nenhuma página com esse nome.' : 'Sem visitas no período.' }}</p>
@@ -407,7 +408,8 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                 <!-- Funil da loja no período (todas as páginas) -->
                 <section v-if="funil.length" class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
                     <h2 class="text-sm font-semibold">Funil · {{ LOJAS[loja] }} · {{ periodos[periodo] || periodo }}</h2>
-                    <p class="mb-2 text-xs text-slate-500">Todas as páginas da loja (início, checkout, entrar...). Pessoas diferentes, sem robôs e sem a equipe. {{ n(totais[loja]?.paginas) }} páginas acessadas.</p>
+                    <p class="mb-2 text-xs text-slate-500">Todas as páginas da loja (início, checkout, entrar...). Pessoas diferentes, sem robôs, sem a equipe e sem IP de fora do Brasil. {{ n(totais[loja]?.paginas) }} páginas acessadas.</p>
+                    <p v-if="totais[loja]?.medidas != null" class="mb-2 text-xs text-slate-600 dark:text-slate-300">Medidas no mapa de cliques: <b class="tabular-nums">{{ n(totais[loja].medidas) }}</b> abas · visitas do site: <b class="tabular-nums">{{ n(totais[loja].visitas) }}</b> pessoas (o checkout tem medição própria).</p>
                     <ol class="space-y-1.5">
                         <li v-for="d in funil" :key="d.nome">
                             <div class="flex items-baseline justify-between text-xs">
@@ -515,7 +517,7 @@ onBeforeUnmount(() => { clearTimeout(relogio); clearTimeout(consulta); });
                             <div><div class="text-slate-500">Medidas no mapa</div><div class="text-base font-bold tabular-nums">{{ n(dados.visitas) }}</div></div>
                             <div><div class="text-slate-500">Tempo médio</div><div class="text-base font-bold">{{ dados.tempo_medio !== null ? `${dados.tempo_medio} s` : '-' }}</div></div>
                         </div>
-                        <p v-if="!dados.visitas" class="text-slate-500">Esta página ainda não tem medição de cliques (o mapa só aparece onde a tag de medição roda). As visitas vêm do registro de acessos.</p>
+                        <p v-if="!dados.visitas" class="text-slate-500">Nenhuma visita medida no mapa nesta página e aparelho no período. Desde 26/11 toda página da loja é medida (menos o checkout, que tem medição própria); visitas antigas de páginas que não eram produto não têm cliques.</p>
 
                         <section class="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
                             <h2 class="mb-1.5 text-sm font-semibold">Onde clicam</h2>

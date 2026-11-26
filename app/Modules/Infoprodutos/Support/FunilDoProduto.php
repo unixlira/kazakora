@@ -319,7 +319,7 @@ class FunilDoProduto
         $sessoes = $this->sessoesDoMjs($produto, 'produto', $aparelho, $de, $ate);
 
         return $sessoes === [] ? 0 : (int) collect(array_chunk($sessoes, 1000))->sum(fn ($lote) => InfoprodutoEvento::query()
-            ->where('produto', $produto)->dePessoas(Comportamento::$comTestes)->whereIn('sessao', $lote)
+            ->whereIn('produto', ChaveAtualDaPagina::todas($produto))->dePessoas(Comportamento::$comTestes)->whereIn('sessao', $lote)
             ->whereBetween('created_at', [$de, $ate])
             ->where(fn ($q) => $q->where('tipo', 'buy')
                 ->orWhere(fn ($q) => $q->where('tipo', 'clk')->where(fn ($q) => $q->where('nome', 'carrinho')->orWhere('nome', 'like', 'comprar%'))))
@@ -330,7 +330,7 @@ class FunilDoProduto
     private function sessoesDoMjs(string $produto, string $pagina, string $aparelho, Carbon $de, Carbon $ate): array
     {
         return InfoprodutoEvento::query()->where('tipo', 'pageview')->dePessoas(Comportamento::$comTestes)
-            ->where('produto', $produto)->where('pagina', $pagina)->whereBetween('created_at', [$de, $ate])
+            ->whereIn('produto', ChaveAtualDaPagina::todas($produto))->where('pagina', $pagina)->whereBetween('created_at', [$de, $ate])
             ->toBase()->get(['sessao', 'dispositivo'])
             ->filter(fn ($p) => in_array($p->dispositivo, ['mobile', 'tablet', 'celular'], true) === ($aparelho === Comportamento::CELULAR))
             ->pluck('sessao')->unique()->values()->all();

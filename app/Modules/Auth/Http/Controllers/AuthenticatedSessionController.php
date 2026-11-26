@@ -5,6 +5,7 @@ namespace App\Modules\Auth\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Auth\Http\Requests\LoginRequest;
+use App\Modules\Auth\Support\CodigoLoginAdmin;
 use App\Modules\Catalog\Support\ModalAvaliacao;
 use App\Modules\Inventory\Support\LowStockAlertService;
 use Illuminate\Http\RedirectResponse;
@@ -31,14 +32,39 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    public function store(LoginRequest $request, LowStockAlertService $lowStockAlert): HttpResponse
+    public function store(LoginRequest $request, LowStockAlertService $lowStockAlert, CodigoLoginAdmin $codigoLogin): HttpResponse
     {
-        $request->authenticate();
+        $user = $request->validarCredenciais();
+
+        // Login em 2 fatores do admin (auditoria 2026-11-25): senha certa de
+        // quem entra no painel ainda não abre a sessão; vai um código por
+        // e-mail e a sessão só abre em CodigoLoginController. Cliente segue direto.
+        if ($user instanceof User && $codigoLogin->exigePara($user, $request)) {
+            $request->session()->regenerate();
+            $request->session()->put(CodigoLoginController::SESSAO, [
+                'user_id' => $user->getKey(),
+                'remember' => $request->boolean('remember'),
+                'em' => now()->getTimestamp(),
+            ]);
+
+            CodigoLoginController::enviarCodigo($codigoLogin, $user, 'email');
+
+            return redirect()->route('entrar.codigo');
+        }
+
+        Auth::guard('web')->login($user, $request->boolean('remember'));
 
         $request->session()->regenerate();
 
-        $user = $request->user();
-        $isAdmin = $user instanceof User && $user->role === User::ROLE_ADMIN;
+        return $this->concluirLogin($request, $user, $lowStockAlert);
+    }
+
+    /**
+     * Para onde vai quem acabou de entrar (senha, ou senha + código do admin).
+     */
+    public function concluirLogin(Request $request, User $user, LowStockAlertService $lowStockAlert): HttpResponse
+    {
+        $isAdmin = $user->role === User::ROLE_ADMIN;
 
         // Correção 2026-10-22: em kazakora.com o nginx bloqueia /admin (404),
         // o painel mora em painel.kazakora.com. Admin que entra pela loja vai

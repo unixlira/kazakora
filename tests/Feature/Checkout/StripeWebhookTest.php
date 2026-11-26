@@ -17,6 +17,14 @@ class StripeWebhookTest extends TestCase
             'Stripe-Signature' => 'invalid',
         ]);
 
-        $response->assertStatus(400);
+        $response->assertStatus(401);
+    }
+
+    public function test_webhook_sem_segredo_configurado_recusa(): void
+    {
+        config(['services.stripe.webhook_secret' => null]);
+
+        $this->postJson('/api/stripe/webhook', ['type' => 'payment_intent.succeeded'], ['Stripe-Signature' => 't=1,v1=abc'])
+            ->assertStatus(401);
     }
 }

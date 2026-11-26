@@ -88,7 +88,12 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
 
     // Called by Mercado Livre's servers, not a browser — stays stateless
     // and CSRF-exempt (see bootstrap/app.php).
-    Route::post('/webhook', [MercadoLivreController::class, 'webhook'])->name('webhook');
+    // O ML não assina a notificação: limite por IP (auditoria 2026-11-25)
+    // para ninguém encher a fila com aviso falso. Limitador 'ml-webhook'
+    // em AppServiceProvider (ML_WEBHOOK_POR_MINUTO, padrão 600).
+    Route::post('/webhook', [MercadoLivreController::class, 'webhook'])
+        ->middleware('throttle:ml-webhook')
+        ->name('webhook');
 });
 
 Route::prefix('bling')->name('api.bling.')->group(function () {

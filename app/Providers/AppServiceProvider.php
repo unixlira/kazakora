@@ -73,6 +73,11 @@ class AppServiceProvider extends ServiceProvider
         //
         // Checa os DOIS guards (sanctum e jwt_partner, ver abaixo) — um
         // parceiro autenticado via JWT não aparece em user('sanctum').
+        // Webhook do Mercado Livre (auditoria 2026-11-25): o ML não assina,
+        // então o limite por IP segura quem tentar encher a fila.
+        RateLimiter::for('ml-webhook', fn (Request $request) => Limit::perMinute(max(1, (int) config('mercadolivre.webhook_por_minuto', 600)))
+            ->by('ml-webhook:'.$request->ip()));
+
         RateLimiter::for('api', function (Request $request) {
             $partner = $request->user('sanctum') ?? $request->user('jwt_partner');
 

@@ -66,6 +66,8 @@ class KiwifyWebhookController extends Controller
     {
         $corpo = (string) $request->getContent();
         if (! self::assinaturaValida($corpo, (string) $request->query('signature', ''))) {
+            Log::warning('kiwify.webhook.assinatura_invalida', ['tem_assinatura' => $request->query('signature', '') !== '', 'ip' => $request->ip()]);
+
             return response()->json(['ok' => false], 401);
         }
 

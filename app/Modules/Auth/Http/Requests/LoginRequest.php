@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Http\Requests;
 
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -37,6 +38,37 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+    }
+
+    /**
+     * Confere e-mail e senha SEM abrir a sessão (o admin ainda passa pelo
+     * código por e-mail, ver CodigoLoginAdmin). Mesmo limite de tentativas
+     * do authenticate().
+     */
+    public function validarCredenciais(): Authenticatable
+    {
+        $this->ensureIsNotRateLimited();
+
+        $guard = Auth::guard('web');
+
+        if (! $guard->validate($this->only('email', 'password'))) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => __('auth.failed'),
+            ]);
+        }
+
+        RateLimiter::clear($this->throttleKey());
+
+        $user = $guard->getLastAttempted();
+
+        // O Auth::attempt fazia isso sozinho (hash antigo vira hash novo).
+        if (config('hashing.rehash_on_login', true)) {
+            $guard->getProvider()->rehashPasswordIfRequired($user, $this->only('password'));
+        }
+
+        return $user;
     }
 
     public function ensureIsNotRateLimited(): void

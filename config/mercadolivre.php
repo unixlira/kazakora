@@ -31,6 +31,10 @@ return [
 
     'log_channel' => env('ML_LOG_CHANNEL', 'mercadolivre'),
 
+    // Limite do webhook por IP, por minuto (auditoria 2026-11-25). Bem acima
+    // do pico real do ML; passou disso devolve 429 e o ML reenvia depois.
+    'webhook_por_minuto' => (int) env('ML_WEBHOOK_POR_MINUTO', 600),
+
     // Bug real encontrado 2026-08-01: o cron do homolog roda `queue:work`
     // sem `--queue=`, então só drena a fila "default" — jobs numa fila
     // nomeada nunca são processados (46 webhooks do ML ficaram parados até

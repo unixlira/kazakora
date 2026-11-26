@@ -39,7 +39,14 @@ class WhatsAppWebhookController extends Controller
 
     public function handle(Request $request, WhatsAppSettings $settings): JsonResponse
     {
+        // Fail-closed (auditoria 2026-11-25): com WHATSAPP_APP_SECRET
+        // configurado, sem X-Hub-Signature-256 ou com assinatura errada = 403.
         if (! $this->signatureIsValid($request)) {
+            Log::warning('whatsapp.webhook.invalid_signature', [
+                'tem_assinatura' => $request->headers->has('X-Hub-Signature-256'),
+                'ip' => $request->ip(),
+            ]);
+
             return response()->json(['error' => 'invalid_signature'], 403);
         }
 
@@ -306,10 +313,17 @@ class WhatsAppWebhookController extends Controller
         $secret = config('services.whatsapp.app_secret');
 
         if (! filled($secret)) {
+            // Sem o segredo não há o que conferir; fica registrado para
+            // ninguém achar que o webhook está protegido.
+            Log::warning('whatsapp.webhook.no_secret_configured');
+
             return true;
         }
 
         $signature = (string) $request->header('X-Hub-Signature-256');
+        if ($signature === '') {
+            return false;
+        }
         $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $secret);
 
         return hash_equals($expected, $signature);

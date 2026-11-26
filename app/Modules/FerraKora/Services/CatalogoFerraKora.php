@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
+use App\Modules\Catalog\Support\CartoesDeOpcoes;
 use App\Modules\Catalog\Support\EscadaDeKits;
 use App\Modules\Catalog\Support\FotosDoComparativo;
 use App\Modules\Catalog\Support\MarcaDaLoja;
@@ -211,6 +212,13 @@ class CatalogoFerraKora extends CatalogoOutroSite
             // Escada de kits (pedido do Lira 26/11/2026): os cartões de todos os kits, com o
             // preço de cada um tirado da mesma lista (mesmo frete da região). null sem escada.
             'kits' => $pai ? MarcaDaLoja::paraFerraKora(EscadaDeKits::paraSite($pai, $lista, self::PREFIXO_PRODUTO)) : null,
+            // Opções do anúncio em cartões, no formato dos kits do Livro Falante (pedido do Lira 26/11/2026):
+            // nome, o que vem, vantagens e destaque de cada variante ("kzv-<id>"); o preço é o da variante.
+            'cartoes_opcoes' => $pai && count($produto['variants'] ?? []) > 1 ? MarcaDaLoja::paraFerraKora(CartoesDeOpcoes::paraPagina(
+                $pai,
+                array_map(fn (array $variante) => (int) Str::after((string) $variante['id'], self::PREFIXO_VARIACAO), $produto['variants']),
+                self::PREFIXO_VARIACAO,
+            )) : null,
         ];
     }
 

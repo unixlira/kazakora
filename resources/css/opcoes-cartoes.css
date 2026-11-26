@@ -1,0 +1,72 @@
+/* Opções do anúncio em cartões (pedido do Lira 26/11/2026, Compressor 4 em 1: "o formato da variação igual
+   ao do livro"). Mesmas medidas, cores e efeitos do "Escolha seu kit" da página de brinquedo
+   (pagina-brinquedo.css, .kb-*), com a fonte da página de sempre. Só vale dentro de .oc-escolha. */
+
+.pd2 .oc-escolha {
+    --oc-ink: #17182c; --oc-linha: #ecdfc8; --oc-verde: #21a346; --oc-verde-d: #157a32; --oc-amarelo: #ffc21a; --oc-muted: #5d5f74;
+    margin: 4px 0 18px;
+}
+.pd2 .oc-escolha > .subtitulo { display: block; font-size: 19px; font-weight: 800; line-height: 1.15; color: var(--oc-ink); margin: 0 0 14px; }
+.pd2 .oc-lista { display: flex; flex-direction: column; gap: 18px; }
+.pd2 .oc-kit { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; width: 100%; text-align: left; background: #fff; border: 2px solid var(--oc-linha); border-radius: 18px; padding: 16px 16px 14px; cursor: pointer; font: inherit; color: var(--oc-ink); transition: transform .2s, border-color .2s, box-shadow .2s; }
+.pd2 .oc-kit:hover { border-color: #cdb68e; transform: translateY(-1px); }
+.pd2 .oc-kit.is-sel { border-color: var(--oc-ink); box-shadow: 0 5px 0 var(--oc-ink); background: #fffdf7; }
+.pd2 .oc-kit.esgotado { opacity: .55; }
+.pd2 .oc-marca { grid-row: 1; width: 24px; height: 24px; border-radius: 8px; border: 2px solid #cdbb98; display: grid; place-items: center; color: transparent; background: #fff; transition: all .2s; }
+.pd2 .oc-kit.is-sel .oc-marca { background: var(--oc-verde); border-color: var(--oc-ink); color: #fff; animation: ocpop .35s both; }
+.pd2 .oc-info { grid-row: 1; display: flex; flex-direction: column; min-width: 0; }
+.pd2 .oc-nome { font-size: 17px; font-weight: 800; line-height: 1.2; }
+.pd2 .oc-itens { font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--oc-muted); margin-top: 1px; }
+.pd2 .oc-vantagens { display: flex; flex-direction: column; margin-top: 4px; gap: 1px; }
+.pd2 .oc-vantagens span { font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--oc-verde-d); }
+.pd2 .oc-precos { grid-row: 1; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; align-self: start; padding-top: 2px; }
+.pd2 .oc-precos s { font-size: 12.5px; font-weight: 700; color: #9a9aa8; }
+.pd2 .oc-precos b { font-size: 20px; font-weight: 800; line-height: 1.25; white-space: nowrap; }
+.pd2 .oc-precos small { font-size: 10.5px; font-weight: 700; color: var(--oc-muted); white-space: nowrap; }
+.pd2 .oc-pilulas { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pd2 .oc-pilulas:empty { display: none; }
+.pd2 .oc-pilula { font-size: 11.5px; font-weight: 800; line-height: 1; padding: 6px 8px; border-radius: 8px; white-space: nowrap; }
+.pd2 .oc-pilula.azul { background: #e3eefd; color: #1f5fbf; }
+.pd2 .oc-pilula.verde { background: #e4f6e9; color: var(--oc-verde-d); }
+.pd2 .oc-selo { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; font-size: 10.5px; font-weight: 800; line-height: 1; letter-spacing: .07em; text-transform: uppercase; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 0 rgba(0, 0, 0, .25); }
+.pd2 .oc-selo.tom-escuro { background: var(--oc-ink); color: #fff; }
+.pd2 .oc-selo.tom-amarelo { background: var(--oc-amarelo); color: var(--oc-ink); }
+.pd2 .oc-selo.tom-verde { background: var(--oc-verde); color: #fff; }
+
+/* Pix e parcelas da opção escolhida, embaixo dos cartões (como no livro). */
+.pd2 .oc-pagamento { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 0; }
+.pd2 .oc-pagamento > span, .pd2 .oc-pag-parcelas { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 9px; align-items: center; background: #fff; border: 2px solid var(--oc-linha); border-radius: 14px; padding: 9px 10px; color: var(--oc-ink); text-align: left; font: inherit; }
+.pd2 .oc-pag-parcelas { cursor: pointer; padding-right: 26px; transition: border-color .2s; }
+.pd2 .oc-pag-parcelas:hover, .pd2 .oc-pag-parcelas[aria-expanded=true] { border-color: var(--oc-ink); }
+.pd2 .oc-pag-icone { grid-row: span 2; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff; }
+.pd2 .oc-pag-icone.pix { background: #fff; color: #32bcad; border: 1.5px solid #c6ece7; font-size: 19px; }
+.pd2 .oc-pag-icone.cartao { background: var(--oc-ink); }
+.pd2 .oc-pagamento small { font-size: 11px; font-weight: 700; line-height: 1.1; color: var(--oc-muted); }
+.pd2 .oc-pagamento b { font-size: 14px; font-weight: 800; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd2 .oc-pag-seta { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--oc-muted); transition: transform .2s; }
+.pd2 .oc-pag-parcelas[aria-expanded=true] .oc-pag-seta { transform: translateY(-50%) rotate(180deg); }
+.pd2 .oc-parcelas { grid-column: 1 / -1; background: #fff; border: 2px solid var(--oc-linha); border-radius: 14px; padding: 6px 12px; }
+.pd2 .oc-parcelas div { display: flex; justify-content: space-between; gap: 6px; padding: 5px 0; border-bottom: 1px dashed var(--oc-linha); font-size: 12.5px; font-weight: 700; line-height: 1.3; color: var(--oc-muted); white-space: nowrap; }
+.pd2 .oc-parcelas div:last-child { border-bottom: 0; }
+
+@keyframes ocpop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+@media (max-width: 380px) {
+    .pd2 .oc-kit { padding: 15px 12px 13px; gap: 4px 10px; }
+    .pd2 .oc-nome { font-size: 16px; }
+    .pd2 .oc-precos b { font-size: 18px; }
+}
+
+/* Tema escuro da loja. */
+.dark .pd2 .oc-escolha { --oc-ink: #f3f4f6; --oc-linha: #273042; --oc-muted: #9ca3af; --oc-verde-d: #4ade80; }
+.dark .pd2 .oc-kit, .dark .pd2 .oc-marca, .dark .pd2 .oc-pagamento > span, .dark .pd2 .oc-pag-parcelas, .dark .pd2 .oc-parcelas { background: #141a24; }
+.dark .pd2 .oc-kit.is-sel { background: #1a2130; box-shadow: 0 5px 0 #000; }
+.dark .pd2 .oc-selo.tom-escuro { background: #f3f4f6; color: #141a24; }
+.dark .pd2 .oc-selo.tom-amarelo { color: #17182c; }
+.dark .pd2 .oc-pag-icone.cartao { background: #273042; }
+.dark .pd2 .oc-pilula.verde { background: rgba(74, 222, 128, .14); }
+.dark .pd2 .oc-pilula.azul { background: rgba(122, 162, 255, .16); color: #9db9ff; }
+
+@media (prefers-reduced-motion: reduce) {
+    .pd2 .oc-kit, .pd2 .oc-marca { transition: none; animation: none !important; }
+}

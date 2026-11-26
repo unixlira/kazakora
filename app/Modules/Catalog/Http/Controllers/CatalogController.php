@@ -13,6 +13,7 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\CartoesDeOpcoes;
 use App\Modules\Catalog\Support\EscadaDeKits;
 use App\Modules\Catalog\Support\FaixaDoTopo;
 use App\Modules\Catalog\Support\FichaTecnica;
@@ -589,6 +590,11 @@ class CatalogController extends Controller
             // Escada de kits (pedido do Lira 26/11/2026, oferta do Compressor 4 em 1 também na KazaKora):
             // os cartões de todos os kits, cada um com a página dele. null sem escada.
             'kits' => $version === 2 ? MarcaDaLoja::paraKazaKora(EscadaDeKits::paraKazaKora($product)) : null,
+            // Opções do anúncio em cartões, no formato dos kits do Livro Falante (pedido do Lira 26/11/2026,
+            // Compressor 4 em 1): products.cartoes_opcoes do pai; null = seletor de variação de sempre.
+            'cartoesOpcoes' => $version === 2 && $variations->isNotEmpty()
+                ? MarcaDaLoja::paraKazaKora(CartoesDeOpcoes::paraPagina($product, $variations->pluck('id')->push($product->id)->all()))
+                : null,
             // Opção já escolhida ao abrir (?opcao=<id>, links antigos das opções, 26/11/2026).
             'opcaoInicial' => $variations->pluck('id')->push($product->id)->contains((int) $request->query('opcao')) ? (int) $request->query('opcao') : null,
             // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em

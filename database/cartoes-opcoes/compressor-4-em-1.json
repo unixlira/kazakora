@@ -1,0 +1,42 @@
+{
+    "produto": 413,
+    "slug": "bomba-de-ar-portatil-compressor-inflator-4-em-1-powerbank-calibrador",
+    "cartoes": {
+        "titulo": "Escolha a sua opção",
+        "itens": [
+            {
+                "id": 413,
+                "nome": "Compressor 4 em 1",
+                "itens": "Compressor com partida, power bank e lanterna",
+                "vantagens": [
+                    "Calibra o pneu com visor digital",
+                    "Dá partida no carro com a bateria arriada",
+                    "Lanterna para emergência à noite",
+                    "Power bank para carregar o celular"
+                ]
+            },
+            {
+                "id": 623,
+                "nome": "Kit Estrada Segura",
+                "itens": "Compressor 4 em 1 + kit reparo de pneu + chave catraca",
+                "vantagens": [
+                    "Tudo do Compressor 4 em 1",
+                    "Remenda pneu sem câmara na hora",
+                    "Chave catraca para subir o macaco"
+                ],
+                "destaque": true
+            },
+            {
+                "id": 508,
+                "nome": "Kit Macaco Elétrico 5t",
+                "itens": "Macaco elétrico + chave de impacto + compressor + lanterna + maleta",
+                "vantagens": [
+                    "Macaco elétrico 5 t levanta o carro sem esforço",
+                    "Chave de impacto 420 N.m solta a roda",
+                    "Compressor 150 PSI calibra o pneu",
+                    "Lanterna e maleta para guardar tudo"
+                ]
+            }
+        ]
+    }
+}

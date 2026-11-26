@@ -294,6 +294,41 @@ abstract class CatalogoOutroSite
         );
     }
 
+    /**
+     * Títulos persuasivos do KazaKora (2026-11-26): o produto vai mudar de
+     * nome só na loja. Registro do site sem título próprio passa a ter
+     * gravado o título que publica hoje (sai do nome atual), para o título e
+     * o endereço no site irmão ficarem como estão. Chamar ANTES de trocar o
+     * nome. Devolve o título gravado, ou null quando não precisou.
+     */
+    public function fixarTituloAtual(Product $produto): ?string
+    {
+        if ($produto->parent_product_id !== null) {
+            return null;
+        }
+
+        $registro = $this->modelo()::query()->where('product_id', $produto->id)->first();
+
+        if ($registro === null || filled($registro->titulo)) {
+            return null;
+        }
+
+        $titulo = $this->tituloDoGrupo($produto, $this->temOpcao($produto));
+        $registro->forceFill(['titulo' => $titulo])->save();
+
+        return $titulo;
+    }
+
+    /** Desfaz fixarTituloAtual(): o registro volta a tirar o título do nome do produto. */
+    public function soltarTitulo(int $productId, string $tituloFixado): void
+    {
+        $registro = $this->modelo()::query()->where('product_id', $productId)->first();
+
+        if ($registro !== null && $registro->titulo === $tituloFixado) {
+            $registro->forceFill(['titulo' => null])->save();
+        }
+    }
+
     /** Pai com alguma variação ativa: o título sai sem a variação do pai (montar()). */
     private function temOpcao(Product $pai): bool
     {

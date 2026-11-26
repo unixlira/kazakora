@@ -47,11 +47,13 @@ class ManuelaProductSearch
         $products = Product::query()
             ->with('parent:id,slug,is_active')
             ->naKazaKora()
-            ->get(['id', 'parent_product_id', 'name', 'slug', 'stock'])
+            ->get(['id', 'parent_product_id', 'name', 'termos_busca', 'slug', 'stock'])
             ->map(fn (Product $product) => [
                 'origem' => self::ORIGIN_STORE,
                 'id' => (string) $product->id,
                 'nome' => $product->name,
+                // Nome antigo do produto (títulos persuasivos, 2026-11-26): só para achar.
+                '_termos' => (string) $product->termos_busca,
                 'em_estoque' => $product->stock > 0,
                 'link' => $base.'/produtos/'.($product->parent?->slug ?? $product->slug),
             ]);
@@ -178,7 +180,7 @@ class ManuelaProductSearch
 
         return collect($items)
             ->map(function (array $item) use ($words) {
-                $nameWords = $this->words($item['nome']);
+                $nameWords = $this->words(trim($item['nome'].' '.($item['_termos'] ?? '')));
                 $joined = implode('', $nameWords);
                 $hits = collect($words)->filter(fn ($word) => $this->wordMatches($word, $nameWords, $joined));
 
@@ -196,7 +198,7 @@ class ManuelaProductSearch
             ->sortBy([['_score', 'desc'], [fn ($item) => strlen($item['nome']), 'asc']])
             ->unique('link')
             ->take(self::MAX_RESULTS)
-            ->map(fn ($item) => collect($item)->except('_score')->all())
+            ->map(fn ($item) => collect($item)->except(['_score', '_termos'])->all())
             ->values()
             ->all();
     }

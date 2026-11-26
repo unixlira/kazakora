@@ -103,8 +103,8 @@ class CatalogController extends Controller
             ->when($ordenar === 'nome', fn ($query) => $query->orderBy('name'))
             // Na busca, quem começa com o termo vem primeiro.
             ->when($ordenar === '' && $search->isNotEmpty(), fn ($query) => $query->orderByRaw(
-                'CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END',
-                [$search.'%', '%'.$search.'%'],
+                'CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? OR termos_busca LIKE ? THEN 1 ELSE 2 END',
+                [$search.'%', '%'.$search.'%', '%'.$search.'%'],
             ));
 
         // Primeira leva com 8 e depois de 12 em 12 (pedido 2026-10-13): a
@@ -188,7 +188,7 @@ class CatalogController extends Controller
             ->comPrecoDaVariacao()
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(1)])
-            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END', [$search.'%', '%'.$search.'%'])
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? OR termos_busca LIKE ? THEN 1 ELSE 2 END', [$search.'%', '%'.$search.'%', '%'.$search.'%'])
             ->latest()
             ->take(8)
             ->get()
@@ -205,12 +205,14 @@ class CatalogController extends Controller
     /**
      * Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem.
      * Desde 2026-11-19 também no slug: o Livro Falante (id 213) mudou de nome e sumia de "livro".
+     * Desde 2026-11-26 também em termos_busca: o nome antigo, guardado ao trocar pelo título persuasivo.
      */
     private static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
             $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
             $query->where(fn ($q) => $q->where('name', 'like', $termo)
+                ->orWhere('termos_busca', 'like', $termo)
                 ->orWhere('brand', 'like', $termo)
                 ->orWhere('model', 'like', $termo)
                 ->orWhere('sku', 'like', $termo)

@@ -27,7 +27,11 @@ const destroy = async (product) => {
 
 const columns = [
     {
-        accessorKey: 'name',
+        // Busca por nome, SKU e termos_busca (2026-11-26: o nome antigo do
+        // produto, guardado quando o título virou persuasivo). O nome vem
+        // primeiro, então ordenar a coluna continua sendo pelo nome.
+        id: 'name',
+        accessorFn: (row) => [row.name, row.sku, row.termos_busca].filter(Boolean).join(' '),
         header: 'Produto',
         // Pedido explícito 2026-08-17 (variações de produto): antes disso
         // 2 variações do mesmo item físico apareciam como 2 linhas soltas

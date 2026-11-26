@@ -59,6 +59,7 @@ class Product extends Model
         'seo_description',
         'cta_compra',
         'tags',
+        'termos_busca',
         'brinde_fisico',
     ];
 

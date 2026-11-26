@@ -50,7 +50,8 @@ class ProductController extends Controller
             // antes ia o produto inteiro (descrição, SEO, fiscal...), ~440 KB
             // de HTML medido em produção 2026-09-29, pra tela usar 9 campos.
             'products' => Product::query()
-                ->select(['id', 'name', 'sku', 'category_id', 'parent_product_id', 'price', 'cost_price', 'stock', 'is_active', 'created_at'])
+                // termos_busca (2026-11-26): a busca da tela também acha pelo nome antigo do produto.
+                ->select(['id', 'name', 'sku', 'termos_busca', 'category_id', 'parent_product_id', 'price', 'cost_price', 'stock', 'is_active', 'created_at'])
                 ->with(['category:id,name', 'parent:id,name'])
                 ->withCount('children')
                 ->latest()

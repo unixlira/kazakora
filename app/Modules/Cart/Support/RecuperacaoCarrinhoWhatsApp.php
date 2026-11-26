@@ -12,9 +12,11 @@ use Throwable;
 /**
  * Botão "Enviar WhatsApp" e "Disparar para todos" em Admin > Carrinhos
  * abandonados (pedido do Lira 2026-11-23). Não manda nada por fora: antecipa
- * o disparo da vez da sequência automática (DisparadorSequencia), que manda
- * WhatsApp E e-mail, grava no histórico do carrinho e na tela de Conversas, e
- * segue o calendário a partir daí. Assim o automático não repete a mensagem.
+ * o 1º disparo da sequência automática (DisparadorSequencia): desde
+ * 26/11/2026 é o WhatsApp de lembrete (sem celular, o e-mail), grava no
+ * histórico do carrinho e na tela de Conversas e segue o calendário a partir
+ * daí (D+3, D+5 Caderno, D+7). Assim o automático não repete a mensagem, e
+ * quem já recebeu mensagem de carrinho hoje não recebe outra.
  */
 class RecuperacaoCarrinhoWhatsApp
 {
@@ -66,9 +68,12 @@ class RecuperacaoCarrinhoWhatsApp
         }
 
         if ($resultado !== 'enviado') {
-            return $resultado === 'sem_canal'
-                ? 'Sem canal para enviar (celular sem modelo de WhatsApp e sem e-mail).'
-                : 'O WhatsApp e o e-mail recusaram o envio. Veja o histórico em Sequência.';
+            return match ($resultado) {
+                'sem_canal' => 'Sem canal para enviar (celular sem modelo de WhatsApp e sem e-mail).',
+                'adiado' => 'O cliente já recebeu uma mensagem de carrinho hoje; a próxima sai amanhã, sozinha.',
+                'pulado' => 'Sem contato para esta etapa; a sequência seguiu para a próxima.',
+                default => 'O envio foi recusado. Veja o histórico em Sequência.',
+            };
         }
 
         $lead->forceFill(['whatsapp_enviado_em' => now()])->save();

@@ -9,8 +9,9 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\URL;
 
 /**
- * E-mail da sequência de carrinho abandonado (pedido do Lira 21/11/2026):
- * o 1º é o lembrete do carrinho; do 2º ao 6º, uma notícia sobre o produto.
+ * E-mail da sequência de carrinho abandonado (pedido do Lira 21/11/2026),
+ * para quem não tem celular: o 1º é o lembrete do carrinho; o 2º, uma notícia
+ * sobre o produto; o 4º, o último lembrete. O D+5 é o CadernoDoCarrinho.
  * SEM desconto, cupom ou preço. Marca da loja do carrinho (FerraKora com a
  * dela) e link de descadastro no rodapé.
  */
@@ -30,6 +31,11 @@ class SequenciaCarrinho extends Mailable
 
     public static function assunto(int $numero, string $produto, string $nome): string
     {
+        // Desde 26/11/2026 este e-mail só sai no lugar do WhatsApp de quem não tem celular (D+1, D+3, D+7).
+        if ($numero === \App\Modules\Cart\Support\Sequencia\CalendarioSequencia::TOTAL) {
+            return "Última lembrança: o {$produto} continua no seu carrinho";
+        }
+
         return match (\App\Modules\Cart\Support\Sequencia\NoticiaDoProduto::ASSUNTOS[$numero] ?? null) {
             'dica' => "Uma dica sobre o {$produto}",
             'curiosidade' => "Você sabia? Uma curiosidade sobre o {$produto}",

@@ -14,7 +14,7 @@ use Throwable;
 
 /**
  * Janela "Remarketing" da tela única de Leads (plano do Lira 25/11/2026, §5):
- * a sequência de carrinho abandonado do lead, passo a passo (D+1 ... D+30),
+ * a sequência de carrinho abandonado do lead, passo a passo (D+1 ... D+7),
  * com o estado de cada canal (WhatsApp e e-mail). Só leitura: quem manda é o
  * comando loja:carrinho-abandonado-sequencia.
  */
@@ -108,6 +108,8 @@ class RemarketingDoLead
             $numero = $i + 1;
             $atual = $ativo && $numero === $enviados + 1;
             $canais = [];
+            // Um canal por etapa desde 26/11/2026; o WhatsApp de quem não tem celular vai por e-mail.
+            $esperado = CalendarioSequencia::canal($numero) === 'whatsapp' && ! $contato['whatsapp'] ? 'email' : CalendarioSequencia::canal($numero);
             foreach (self::CANAIS as $canal) {
                 $linhas = collect($historico)->filter(fn ($h) => (int) ($h['numero'] ?? 0) === $numero && ($h['canal'] ?? null) === $canal);
                 $enviado = $linhas->where('status', 'enviado')->last();
@@ -124,12 +126,13 @@ class RemarketingDoLead
                     $numero <= $enviados => ['estado' => self::PULADO, 'motivo' => $contato[$canal] ? 'não saiu por este canal (modelo do WhatsApp desligado?)' : $semContato[$canal]],
                     $registro === null => ['estado' => self::PULADO, 'motivo' => 'não inscrito na sequência'],
                     ! $ativo => ['estado' => self::PULADO, 'motivo' => 'sequência parada ('.(LeadStatusResolver::MOTIVOS[$registro->motivo_parada] ?? $registro->motivo_parada).')'],
+                    $canal !== $esperado => ['estado' => self::PULADO, 'motivo' => 'esta etapa vai por '.($esperado === 'email' ? 'e-mail' : 'WhatsApp')],
                     ! $contato[$canal] => ['estado' => self::PULADO, 'motivo' => $semContato[$canal]],
                     default => ['estado' => self::AGENDADO, 'quando' => $this->previsto($registro, $numero)],
                 };
             }
 
-            $passos[] = ['numero' => $numero, 'dia' => $dia, 'rotulo' => 'D+'.$dia, 'atual' => $atual, 'canais' => $canais];
+            $passos[] = ['numero' => $numero, 'dia' => $dia, 'rotulo' => 'D+'.$dia, 'etapa' => CalendarioSequencia::ETAPAS[$numero]['rotulo'], 'atual' => $atual, 'canais' => $canais];
         }
 
         return $passos;

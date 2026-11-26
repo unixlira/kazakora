@@ -169,7 +169,7 @@ class LeadsUnicosTest extends TestCase
         $this->assertSame('Pedido aguardando pgto', $linhas[$chaves['aguardando']]['situacao']['rotulo']);
         $this->assertNotNull($linhas[$chaves['aguardando']]['pedido']);
         $this->assertSame('No checkout agora', $linhas[$chaves['agora']]['situacao']['rotulo']);
-        $this->assertSame('Em remarketing 2/6', $linhas[$chaves['remarketing']]['situacao']['rotulo']);
+        $this->assertSame('Em remarketing 2/4', $linhas[$chaves['remarketing']]['situacao']['rotulo']);
         $this->assertNotNull($linhas[$chaves['remarketing']]['proximo_contato']);
         $this->assertSame('pediu para parar', $linhas[$chaves['parou']]['situacao']['motivo']);
         $this->assertNull($linhas[$chaves['parou']]['proximo_contato']);
@@ -192,7 +192,7 @@ class LeadsUnicosTest extends TestCase
         $this->assertSame('aguardando', $resolver->resolver($aguardando, true, null, null)['codigo']);
         $this->assertSame('agora', $resolver->resolver(null, false, $agora, $ativo)['codigo']);
         $this->assertSame('remarketing', $resolver->resolver($cancelado, false, now()->subHour(), $ativo)['codigo']);
-        $this->assertSame('Em remarketing 3/6', $resolver->resolver(null, false, now()->subHour(), $ativo)['rotulo']);
+        $this->assertSame('Em remarketing 3/4', $resolver->resolver(null, false, now()->subHour(), $ativo)['rotulo']);
         $parado = new Registro(['parado' => true, 'motivo_parada' => Registro::PAROU_SEM_PROMOCOES]);
         $this->assertSame(['parou', 'saiu das promoções'], array_values(array_intersect_key($resolver->resolver(null, false, now()->subHour(), $parado), ['codigo' => 1, 'motivo' => 1])));
         $this->assertSame('abandonou', $resolver->resolver(null, false, now()->subMinutes(6), null)['codigo']);
@@ -254,7 +254,7 @@ class LeadsUnicosTest extends TestCase
         $this->assertSame(1, $this->props('/admin/leads?q='.urlencode('('.substr($rita, 0, 2).') '.substr($rita, 2, 5).'-'.substr($rita, 7)))['leads']['total']);
     }
 
-    public function test_remarketing_mostra_os_seis_passos_por_canal(): void
+    public function test_remarketing_mostra_os_quatro_passos_por_canal(): void
     {
         $lead = $this->lead('Rita', 3000);
         $carrinho = $this->carrinho('Rita', 3000);
@@ -271,8 +271,8 @@ class LeadsUnicosTest extends TestCase
 
         $admin = $this->admin();
         $r = $this->actingAs($admin)->getJson("/admin/leads/l{$lead->id}/remarketing")->assertOk();
-        $this->assertCount(6, $r->json('passos'));
-        $this->assertSame(['D+1', 'D+3', 'D+5', 'D+7', 'D+20', 'D+30'], array_column($r->json('passos'), 'rotulo'));
+        $this->assertCount(4, $r->json('passos'));
+        $this->assertSame(['D+1', 'D+3', 'D+5', 'D+7'], array_column($r->json('passos'), 'rotulo'));
         $r->assertJsonPath('sequencia.estado', 'andamento')
             ->assertJsonPath('passos.0.canais.whatsapp.estado', 'enviado')
             ->assertJsonPath('passos.0.canais.email.estado', 'falhou')
@@ -280,7 +280,11 @@ class LeadsUnicosTest extends TestCase
             ->assertJsonPath('passos.1.atual', true)
             ->assertJsonPath('passos.1.canais.whatsapp.estado', 'agendado')
             ->assertJsonPath('passos.1.canais.email.estado', 'falhou')
-            ->assertJsonPath('passos.5.canais.email.estado', 'agendado')
+            // Um canal por etapa: D+5 é o e-mail do Caderno, D+7 o último WhatsApp.
+            ->assertJsonPath('passos.2.canais.email.estado', 'agendado')
+            ->assertJsonPath('passos.2.canais.whatsapp.estado', 'pulado')
+            ->assertJsonPath('passos.3.canais.whatsapp.estado', 'agendado')
+            ->assertJsonPath('passos.3.canais.email.estado', 'pulado')
             ->assertJsonPath('total', 100);
 
         $this->actingAs($admin)->getJson("/admin/leads/l{$sozinho->id}/remarketing")->assertOk()
@@ -361,7 +365,8 @@ class LeadsUnicosTest extends TestCase
         $this->actingAs($admin)->post("/admin/leads/l{$lead->id}/antecipar")->assertSessionHas('success');
 
         Http::assertSent(fn (HttpRequest $r) => ($r['template']['name'] ?? null) === 'carrinho_lembrete_kazakora');
-        Mail::assertSent(SequenciaCarrinho::class, 1);
+        // Um canal por disparo (26/11/2026): com celular, só o WhatsApp.
+        Mail::assertNothingSent();
         $this->assertNotNull($carrinho->fresh()->whatsapp_enviado_em);
         $registro = Registro::query()->where('origem', Registro::ORIGEM_LEAD)->where('origem_id', $carrinho->id)->firstOrFail();
         $this->assertSame(1, $registro->disparos_enviados);

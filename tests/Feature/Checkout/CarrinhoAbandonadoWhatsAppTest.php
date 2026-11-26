@@ -55,7 +55,7 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
         return $lead;
     }
 
-    public function test_botao_manda_whatsapp_e_email_e_registra_tudo(): void
+    public function test_botao_manda_o_whatsapp_e_registra_tudo(): void
     {
         $lead = $this->lead();
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
@@ -63,7 +63,8 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
         $this->actingAs($admin)->post("/admin/carrinhos-abandonados/{$lead->id}/whatsapp")->assertSessionHas('success');
 
         Http::assertSent(fn (HttpRequest $r) => ($r['template']['name'] ?? null) === 'carrinho_lembrete_kazakora');
-        Mail::assertSent(SequenciaCarrinho::class, 1);
+        // Desde 26/11/2026 é um canal por disparo: com celular, o 1º sai só no WhatsApp.
+        Mail::assertNothingSent();
         $this->assertNotNull($lead->fresh()->whatsapp_enviado_em);
         $registro = Registro::query()->where('origem', Registro::ORIGEM_LEAD)->where('origem_id', $lead->id)->firstOrFail();
         $this->assertSame(1, $registro->disparos_enviados);
@@ -89,7 +90,7 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
         $this->actingAs($admin)->post('/admin/carrinhos-abandonados/whatsapp-todos')->assertSessionHas('success');
 
         Http::assertSentCount(1);
-        Mail::assertSent(SequenciaCarrinho::class, 1);
+        Mail::assertNothingSent();
     }
 
     public function test_quem_nao_esta_logado_nao_dispara(): void

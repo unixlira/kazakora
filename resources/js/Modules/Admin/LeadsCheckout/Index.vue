@@ -146,8 +146,8 @@ const columns = [
         <h1 class="mb-2 text-2xl font-bold">Carrinhos abandonados</h1>
         <p class="mb-4 text-sm text-slate-500">
             Quem preencheu a Identificação do checkout e clicou em "Ir para Entrega". Vira "Convertido" quando o
-            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. A sequência automática manda WhatsApp e e-mail
-            sozinha (D+1, D+3, D+5, D+7, D+20 e D+30, das 9h às 20h). Em Ações, o botão antecipa a 1ª mensagem; tudo fica registrado.
+            pedido sai da mesma sessão, do mesmo e-mail ou do mesmo CPF. A sequência automática manda sozinha
+            D+1 e D+3 WhatsApp, D+5 e-mail do Caderno KazaKora e D+7 último WhatsApp (das 9h às 20h, nunca 2 no mesmo dia). Em Ações, o botão antecipa a 1ª mensagem (WhatsApp; sem celular, e-mail); tudo fica registrado.
             "Parou em" mostra a etapa do checkout onde a pessoa parou; "Ver fluxo" abre o passo a passo com o horário.
         </p>
 

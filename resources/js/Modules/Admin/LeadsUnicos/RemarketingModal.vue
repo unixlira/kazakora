@@ -1,6 +1,6 @@
 <script setup>
 // Janela "Remarketing" da tela única de Leads (plano do Lira 25/11/2026, §5):
-// a sequência do carrinho abandonado (D+1 ... D+30) com o estado de cada
+// a sequência do carrinho abandonado (D+1, D+3, D+5 e D+7) com o estado de cada
 // canal. Só consulta + o botão de antecipar que já existia.
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
@@ -58,7 +58,7 @@ const COR_SEQUENCIA = { andamento: 'bg-orange-50 text-orange-800', comprou: 'bg-
                     :class="passo.atual ? 'border-orange-400 bg-orange-50/60' : 'border-[var(--surface-border)]'">
                     <div class="mb-1 flex items-center gap-2 text-sm font-semibold">
                         <span class="rounded bg-[var(--surface-muted)] px-1.5 py-0.5 font-mono text-xs">{{ passo.rotulo }}</span>
-                        <span>{{ passo.numero }}º disparo</span>
+                        <span>{{ passo.numero }}º disparo<template v-if="passo.etapa"> · {{ passo.etapa }}</template></span>
                         <span v-if="passo.atual" class="text-xs font-semibold text-orange-700">· próximo</span>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-2">

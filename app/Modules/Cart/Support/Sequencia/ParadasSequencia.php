@@ -18,12 +18,17 @@ use App\Modules\WhatsApp\Support\WhatsAppPhone;
  *   descadastro do e-mail;
  * - sem_promocoes: o cliente desmarcou receber promoções (`recebe_promocoes`);
  * - sem_contato: nem e-mail nem celular;
- * - fim: mandou os 6 disparos, ou a sequência passou do D+30 sem conseguir.
+ * - fim: mandou os 4 disparos (D+1, D+3, D+5, D+7), ou passou do D+7 (com
+ *   2 dias de folga para a janela das 9h–20h) sem conseguir.
+ *
+ * Compra (26/11/2026, pedido 4562 com o telefone gravado errado): além do
+ * e-mail, telefone e usuário do carrinho, vale o pedido do usuário cujo
+ * e-mail ou celular é o do carrinho e o e-mail do usuário do carrinho.
  */
 class ParadasSequencia
 {
     /** Dias depois do início em que a sequência acaba mesmo sem ter mandado tudo. */
-    public const DIAS_VALIDADE = 32;
+    public const DIAS_VALIDADE = 9;
 
     /** Pedido que conta como compra para parar a sequência (o mesmo de LeadsDigitados::pago). */
     public const STATUS_PAGOS = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
@@ -112,15 +117,14 @@ class ParadasSequencia
         }
 
         $desde = $registro->abandonado_em ?? $registro->created_at;
-        $email = $registro->email;
-        $userId = $registro->user_id;
+        [$emails, $userIds] = $this->identidades($registro);
 
-        if (($email || $userId) && Order::query()
+        if (($emails || $userIds) && Order::query()
             ->whereIn('status', self::STATUS_PAGOS)
             ->where('created_at', '>=', $desde)
             ->where(fn ($q) => $q
-                ->when($email, fn ($q) => $q->orWhere('shipping_email', $email))
-                ->when($userId, fn ($q) => $q->orWhere('user_id', $userId)))
+                ->when($emails, fn ($q) => $q->orWhereIn('shipping_email', $emails))
+                ->when($userIds, fn ($q) => $q->orWhereIn('user_id', $userIds)))
             ->exists()) {
             return true;
         }
@@ -139,6 +143,44 @@ class ParadasSequencia
             ->limit(50)
             ->get(['shipping_phone', 'shipping_whatsapp'])
             ->contains(fn (Order $o) => WhatsAppPhone::mesmoNumero($registro->telefone, [$o->shipping_phone, $o->shipping_whatsapp]));
+    }
+
+    /**
+     * E-mails e usuários da pessoa do carrinho: os do registro, o usuário com
+     * esse e-mail, o e-mail do usuário e o usuário cujo celular é o do carrinho.
+     *
+     * @return array{0: list<string>, 1: list<int>}
+     */
+    private function identidades(Registro $registro): array
+    {
+        $emails = array_filter([$registro->email ? mb_strtolower($registro->email) : null]);
+        $userIds = array_filter([(int) $registro->user_id]);
+
+        $usuarios = User::query()
+            ->where(fn ($q) => $q
+                ->when($userIds, fn ($q) => $q->orWhereIn('id', $userIds))
+                ->when($emails, fn ($q) => $q->orWhereIn('email', $emails)))
+            ->when(! $userIds && ! $emails, fn ($q) => $q->whereRaw('1 = 0'))
+            ->limit(5)
+            ->get(['id', 'email']);
+
+        $final = substr((string) preg_replace('/\D/', '', (string) $registro->telefone), -8);
+        if (strlen($final) === 8) {
+            $usuarios = $usuarios->merge(User::query()
+                ->where('phone', 'like', '%'.substr($final, 0, 4).'%'.substr($final, 4))
+                ->limit(20)
+                ->get(['id', 'email', 'phone'])
+                ->filter(fn (User $u) => WhatsAppPhone::mesmoNumero($registro->telefone, [$u->phone])));
+        }
+
+        foreach ($usuarios as $usuario) {
+            $userIds[] = (int) $usuario->id;
+            if ($usuario->email) {
+                $emails[] = mb_strtolower($usuario->email);
+            }
+        }
+
+        return [array_values(array_unique($emails)), array_values(array_unique(array_filter($userIds)))];
     }
 
     private function cliente(Registro $registro): ?User

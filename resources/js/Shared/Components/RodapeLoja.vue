@@ -12,8 +12,13 @@ const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.webp', logoRodape: '/images/marca/logo-rodape.webp' });
 const user = computed(() => page.props.auth?.user);
 // Newsletter só na home (pedido do Lira 25/11/2026): saiu da página de produto e das demais.
-// Faixa de confiança em toda a loja (25/11/2026); home e produto já mostram a delas.
-const comFaixa = computed(() => !['Catalog/Home', 'Catalog/ProductDetailV2', 'Catalog/ProductDetail'].includes(page.component));
+// Faixa de confiança em toda a loja (25/11/2026); produto e a vitrine da home já mostram a delas.
+// A home em modo lista (?todos=1, ?categoria=, busca) não tem vitrine e ficava sem faixa (26/11/2026).
+const comFaixa = computed(() => {
+    if (['Catalog/ProductDetailV2', 'Catalog/ProductDetail'].includes(page.component)) return false;
+    if (page.component === 'Catalog/Home') return !page.props.vitrine;
+    return true;
+});
 const naHome = computed(() => (page.url || '').split(/[?#]/)[0] === '/');
 
 // Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).

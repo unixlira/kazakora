@@ -138,6 +138,8 @@ class FerraKoraCliente extends Model
             'deve_trocar_senha' => true,
         ]);
 
+        \App\Modules\Clientes\Support\HistoricoDoCliente::cadastroFerraKora($conta, 'compra sem conta (senha temporária por e-mail)');
+
         DB::afterCommit(function () use ($conta, $senhaTemporaria) {
             rescue(fn () => Mail::to($conta->email)->send(new FerraKoraBoasVindas($conta, $senhaTemporaria)));
         });

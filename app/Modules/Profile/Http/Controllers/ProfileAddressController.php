@@ -35,6 +35,8 @@ class ProfileAddressController extends Controller
             $user->addresses()->create([...$data, 'is_default' => $principal]);
         });
 
+        \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($user, 'endereco_criado', ['cidade' => $data['city'] ?? null, 'uf' => $data['state'] ?? null]);
+
         return back()->with('success', 'Endereço cadastrado.');
     }
 
@@ -51,6 +53,8 @@ class ProfileAddressController extends Controller
             // O principal só deixa de ser principal quando outro é escolhido.
             $address->update([...$data, 'is_default' => $data['is_default'] || $address->is_default]);
         });
+
+        \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($request->user(), 'endereco_alterado', ['cidade' => $data['city'] ?? null, 'uf' => $data['state'] ?? null]);
 
         return back()->with('success', 'Endereço atualizado.');
     }
@@ -70,6 +74,8 @@ class ProfileAddressController extends Controller
                 $request->user()->addresses()->first()?->update(['is_default' => true]);
             }
         });
+
+        \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($request->user(), 'endereco_apagado', ['cidade' => $address->city, 'uf' => $address->state]);
 
         return back()->with('success', 'Endereço excluído.');
     }

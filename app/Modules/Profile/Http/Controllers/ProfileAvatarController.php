@@ -24,6 +24,7 @@ class ProfileAvatarController extends Controller
         $path = $request->file('avatar')->store('avatars', 'public');
 
         $user->update(['avatar_path' => $path]);
+        \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($user, 'foto_trocada');
 
         return back()->with('success', 'Foto de perfil atualizada.');
     }
@@ -35,6 +36,7 @@ class ProfileAvatarController extends Controller
         if ($user->avatar_path) {
             Storage::disk('public')->delete($user->avatar_path);
             $user->update(['avatar_path' => null]);
+            \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($user, 'foto_removida');
         }
 
         return back()->with('success', 'Foto de perfil removida.');

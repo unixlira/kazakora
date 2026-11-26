@@ -150,6 +150,9 @@ class Cookies
             $request->cookies->set(self::COOKIE_VISITANTE, $visitante);
             self::criarFbc($request);
             self::criarGclAw($request);
+            // Histórico do cliente (26/11/2026): com o aceite e a conta logada,
+            // as páginas deste navegador passam a aparecer na conta.
+            \App\Modules\Clientes\Support\HistoricoDoCliente::ligarVisitasKazaKora($request->user(), $request);
         }
 
         return $visitante;

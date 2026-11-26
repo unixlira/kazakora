@@ -100,6 +100,7 @@ class OutroSiteVisitaController extends Controller
                 'click_id' => $clickParam === 'fbclid' ? $clickValor : null,
                 'cookies' => $this->cookiesDoPixel($request),
                 'ignorada' => $ignorada,
+                'ferrakora_cliente_id' => $site === 'ferrakora' ? $this->clienteLogadoComAceite($request) : null,
             ]);
 
             // Lugar aproximado do IP, igual à loja (2026-10-24); a "sessão" é o visitante.
@@ -110,6 +111,22 @@ class OutroSiteVisitaController extends Controller
         }
 
         return response('', 204);
+    }
+
+    /**
+     * Histórico do cliente (26/11/2026): a FerraKora manda o token da sessão
+     * da conta no corpo do aviso (campo t, nunca na URL) só quando a pessoa
+     * está logada E clicou em "Aceito" no aviso de cookies (ac=1). Sem os
+     * dois, a visita fica sem dono, como sempre foi.
+     */
+    private function clienteLogadoComAceite(Request $request): ?int
+    {
+        $token = $request->input('t');
+        if ($request->input('ac') !== '1' || ! is_string($token) || $token === '' || strlen($token) > 200) {
+            return null;
+        }
+
+        return rescue(fn () => \App\Modules\FerraKora\Models\FerraKoraSessao::doToken($token)?->cliente_id, null, false);
     }
 
     private function texto(Request $request, string $campo, int $limite): ?string

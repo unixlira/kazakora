@@ -45,7 +45,16 @@ class ProfileController extends Controller
             'birth_date' => ['nullable', 'date', 'before:today'],
         ]);
 
-        $target->update($validated);
+        $target->fill($validated);
+        // Histórico do cliente: só o NOME dos campos que mudaram, nunca o valor.
+        $mudou = array_keys($target->getDirty());
+        $target->save();
+        if ($mudou !== []) {
+            \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($target, 'perfil_alterado', array_filter([
+                'campos' => $mudou,
+                'pela_equipe' => $target->is($request->user()) ? null : true,
+            ]));
+        }
 
         return back()->with('success', 'Perfil atualizado com sucesso.');
     }

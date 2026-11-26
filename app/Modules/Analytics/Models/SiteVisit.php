@@ -33,6 +33,7 @@ class SiteVisit extends Model
         'site',
         'visitor_id',
         'user_id',
+        'ferrakora_cliente_id',
         'path',
         'preco_visto',
         'frete_visto',

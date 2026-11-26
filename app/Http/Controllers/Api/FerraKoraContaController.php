@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Clientes\Support\HistoricoDoCliente;
 use App\Modules\FerraKora\Mail\FerraKoraNovaSenha;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Models\FerraKoraSessao;
@@ -45,6 +46,7 @@ class FerraKoraContaController extends Controller
         }
 
         $cliente = FerraKoraCliente::query()->create([...$dados, 'email' => $email, 'senha_definida' => true]);
+        HistoricoDoCliente::cadastroFerraKora($cliente, 'formulário de cadastro', $request);
 
         return $this->comSessao($cliente, $request, 201);
     }
@@ -63,6 +65,7 @@ class FerraKoraContaController extends Controller
         if (! $cliente || ! Hash::check($dados['password'], $cliente->password)) {
             return response()->json(['message' => 'E-mail ou senha incorretos.'], 422);
         }
+        HistoricoDoCliente::ferrakora($cliente, 'login', ['como' => 'senha'], $request);
 
         return $this->comSessao($cliente, $request);
     }
@@ -84,6 +87,7 @@ class FerraKoraContaController extends Controller
             );
             $link = rtrim((string) config('services.ferrakora.url'), '/').'/nova-senha?'.http_build_query(['token' => $token, 'email' => $cliente->email]);
             rescue(fn () => Mail::to($cliente->email)->send(new FerraKoraNovaSenha($cliente, $link)));
+            HistoricoDoCliente::ferrakora($cliente, 'senha_link_enviado', [], $request);
         }
 
         return response()->json(['message' => 'Se houver conta com este e-mail, enviamos o link para criar uma nova senha.']);
@@ -114,6 +118,8 @@ class FerraKoraContaController extends Controller
         DB::table('ferrakora_senha_tokens')->where('email', $email)->delete();
         $cliente->forceFill(['password' => $dados['password'], 'senha_definida' => true, 'deve_trocar_senha' => false])->save();
         FerraKoraSessao::encerrarTodas($cliente);
+        HistoricoDoCliente::ferrakora($cliente, 'senha_redefinida', [], $request);
+        HistoricoDoCliente::ferrakora($cliente, 'login', ['como' => 'link de nova senha'], $request);
 
         return $this->comSessao($cliente, $request);
     }
@@ -135,6 +141,7 @@ class FerraKoraContaController extends Controller
     public function sair(Request $request): JsonResponse
     {
         $request->attributes->get('ferrakora_sessao')?->encerrar();
+        HistoricoDoCliente::ferrakora($request->user(), 'logout', [], $request);
 
         return response()->json(['ok' => true]);
     }

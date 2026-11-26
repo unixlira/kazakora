@@ -2022,6 +2022,7 @@ class CheckoutController extends Controller
         ]);
         // Senha temporária: a loja pede para trocar ao entrar (pedido 2026-10-10).
         $user->forceFill(['deve_trocar_senha' => true])->save();
+        \App\Modules\Clientes\Support\HistoricoDoCliente::cadastroKazaKora($user, 'compra sem conta (senha temporária por e-mail)');
 
         // Sem Auth::login (pedido do Lira 2026-10-24): a conta nasce, mas o
         // cliente só entra nela fazendo login com a senha do e-mail.

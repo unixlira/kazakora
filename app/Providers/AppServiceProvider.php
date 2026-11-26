@@ -61,6 +61,39 @@ class AppServiceProvider extends ServiceProvider
             if ($event->guard === 'web' && ! ($event->user instanceof \App\Models\User && $event->user->isStaff())) {
                 \App\Modules\Catalog\Support\ModalAvaliacao::ativar(session()->driver());
             }
+            // Histórico do cliente (26/11/2026): cada entrada na conta e, com o
+            // aceite de cookies, as páginas que o navegador abriu antes de entrar.
+            if ($event->guard === 'web' && $event->user instanceof \App\Models\User) {
+                $caminho = request()->path();
+                \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($event->user, 'login', array_filter([
+                    'como' => match (true) {
+                        ! request()->isMethod('post') => 'lembrar-me',
+                        str_starts_with($caminho, 'entrar/codigo') => 'código por e-mail',
+                        $caminho === 'cadastro' => 'cadastro',
+                        $caminho === 'entrar' => 'senha',
+                        default => 'outro',
+                    },
+                ]));
+                \App\Modules\Clientes\Support\HistoricoDoCliente::ligarVisitasKazaKora($event->user, request());
+            }
+        });
+
+        Event::listen(function (\Illuminate\Auth\Events\Logout $event): void {
+            if ($event->guard === 'web' && $event->user instanceof \App\Models\User) {
+                \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($event->user, 'logout');
+            }
+        });
+
+        Event::listen(function (\Illuminate\Auth\Events\PasswordReset $event): void {
+            if ($event->user instanceof \App\Models\User) {
+                \App\Modules\Clientes\Support\HistoricoDoCliente::kazakora($event->user, 'senha_redefinida');
+            }
+        });
+
+        Event::listen(function (\Illuminate\Auth\Events\Registered $event): void {
+            if ($event->user instanceof \App\Models\User) {
+                \App\Modules\Clientes\Support\HistoricoDoCliente::cadastroKazaKora($event->user, 'formulário de cadastro');
+            }
         });
 
         // Pedido explícito 2026-08-21 (API pública pra parceiros

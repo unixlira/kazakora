@@ -45,11 +45,17 @@ class FerraKoraPerfilController extends Controller
             'email.unique' => 'Já existe uma conta com este e-mail.',
         ]);
 
-        $cliente->update([
+        $cliente->fill([
             ...$dados,
             'email' => mb_strtolower(trim($dados['email'])),
             'cpf' => preg_replace('/\D/', '', (string) ($dados['cpf'] ?? '')) ?: null,
         ]);
+        // Histórico do cliente: só o NOME dos campos que mudaram, nunca o valor.
+        $mudou = array_keys($cliente->getDirty());
+        $cliente->save();
+        if ($mudou !== []) {
+            \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'perfil_alterado', ['campos' => $mudou]);
+        }
 
         return $this->perfil($cliente->fresh(), ['user' => $cliente->fresh()->paraSite()]);
     }
@@ -64,6 +70,7 @@ class FerraKoraPerfilController extends Controller
         }
 
         $cliente->update(['avatar_path' => $request->file('avatar')->store('ferrakora/avatars', 'public')]);
+        \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'foto_trocada');
 
         return $this->perfil($cliente);
     }
@@ -75,6 +82,7 @@ class FerraKoraPerfilController extends Controller
         if ($cliente->avatar_path) {
             Storage::disk('public')->delete($cliente->avatar_path);
             $cliente->update(['avatar_path' => null]);
+            \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'foto_removida');
         }
 
         return $this->perfil($cliente);
@@ -84,8 +92,11 @@ class FerraKoraPerfilController extends Controller
     {
         $dados = $this->validarSenha($request);
 
+        $eraTemporaria = (bool) $request->user()->deve_trocar_senha;
         // Cast "hashed" do modelo faz o hash.
         $request->user()->forceFill(['password' => $dados['password'], 'senha_definida' => true, 'deve_trocar_senha' => false])->save();
+
+        \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($request->user(), 'senha_trocada', $eraTemporaria ? ['era_temporaria' => true] : []);
 
         return response()->json(['message' => 'Senha alterada com sucesso.']);
     }
@@ -105,6 +116,8 @@ class FerraKoraPerfilController extends Controller
             $cliente->enderecos()->create([...$dados, 'state' => mb_strtoupper($dados['state']), 'is_default' => $principal]);
         });
 
+        \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'endereco_criado', ['cidade' => $dados['city'] ?? null, 'uf' => mb_strtoupper((string) ($dados['state'] ?? ''))]);
+
         return response()->json(['enderecos' => $this->enderecos($cliente)], 201);
     }
 
@@ -122,6 +135,7 @@ class FerraKoraPerfilController extends Controller
             // O principal só deixa de ser principal quando outro é escolhido.
             $endereco->update([...$dados, 'state' => mb_strtoupper($dados['state']), 'is_default' => $dados['is_default'] || $endereco->is_default]);
         });
+        \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'endereco_alterado', ['cidade' => $dados['city'] ?? null, 'uf' => mb_strtoupper((string) ($dados['state'] ?? ''))]);
 
         return response()->json(['enderecos' => $this->enderecos($cliente)]);
     }
@@ -142,6 +156,7 @@ class FerraKoraPerfilController extends Controller
                 $cliente->enderecos()->first()?->update(['is_default' => true]);
             }
         });
+        \App\Modules\Clientes\Support\HistoricoDoCliente::ferrakora($cliente, 'endereco_apagado', ['cidade' => $endereco->city, 'uf' => $endereco->state]);
 
         return response()->json(['enderecos' => $this->enderecos($cliente)]);
     }

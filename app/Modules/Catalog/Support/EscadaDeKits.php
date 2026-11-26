@@ -21,8 +21,10 @@ use App\Modules\Catalog\Models\Product;
  *     acrescenta  o que este degrau acrescenta ao anterior, numa frase
  *     destaque    true no kit recomendado (selo "Mais vendido")
  *     selo        texto do selo (opcional; o destaque sem selo usa "Mais vendido")
+ *     foto        caminho no disco público da foto do kit nos cartões (opcional; sem ela, a 1ª foto
+ *                 do produto). Serve para o kit cuja capa é uma arte com texto, ilegível pequena.
  *
- * Preço, estoque e foto nunca vêm do JSON: saem do cadastro de cada produto, na hora.
+ * Preço e estoque nunca vêm do JSON: saem do cadastro de cada produto, na hora.
  */
 class EscadaDeKits
 {
@@ -77,6 +79,71 @@ class EscadaDeKits
         return $problemas;
     }
 
+    /** Foto própria do kit (item.foto, caminho no disco público), no formato das fotos da API. */
+    private static function fotoPropria(array $item): ?array
+    {
+        $url = FotosDoComparativo::url($item['foto'] ?? null);
+
+        return $url === null ? null : ['url' => $url, 'thumb_url' => $url, 'media_url' => $url];
+    }
+
+    /**
+     * Cartões para a página da KazaKora (pedido do Lira 26/11/2026: a oferta também no KazaKora),
+     * no mesmo formato dos do FerraKora, com o preço da loja (final_price e preco_de, em reais)
+     * e a URL da página de cada kit. Kit fora da loja ou desligado não aparece; sobrando menos
+     * de 2, sem escada.
+     *
+     * @return array{titulo: string, texto: ?string, itens: list<array<string, mixed>>}|null
+     */
+    public static function paraKazaKora(Product $atual): ?array
+    {
+        $escada = self::doProduto($atual);
+        if ($escada === null) {
+            return null;
+        }
+
+        $produtos = Product::query()->with('images')->whereIn('id', self::ids($escada))->get()->keyBy('id');
+        $atualId = (int) ($atual->parent_product_id ?: $atual->id);
+        $itens = [];
+        foreach ((array) $escada['itens'] as $item) {
+            /** @var Product|null $produto */
+            $produto = $produtos->get((int) ($item['id'] ?? 0));
+            if ($produto === null || ! $produto->naKazaKora()) {
+                continue;
+            }
+            $primeira = $produto->images->first();
+            $foto = self::fotoPropria($item)
+                ?? ($primeira ? ['url' => $primeira->url, 'thumb_url' => $primeira->thumb_url, 'media_url' => $primeira->media_url] : null);
+            $destaque = (bool) ($item['destaque'] ?? false);
+            $por = (float) $produto->final_price;
+            $de = $produto->preco_de !== null && (float) $produto->preco_de > $por ? (float) $produto->preco_de : null;
+
+            $itens[] = [
+                'id' => $produto->id,
+                'slug' => $produto->slug,
+                'url' => route('produtos.ver', $produto->slug, false),
+                'titulo' => $produto->name,
+                'nome' => (string) $item['nome'],
+                'itens' => (string) ($item['itens'] ?? ''),
+                'partes' => array_values(array_filter(array_map('strval', (array) ($item['partes'] ?? [])))),
+                'acrescenta' => filled($item['acrescenta'] ?? null) ? (string) $item['acrescenta'] : null,
+                'destaque' => $destaque,
+                'selo' => filled($item['selo'] ?? null) ? (string) $item['selo'] : ($destaque ? 'Mais vendido' : null),
+                'foto' => $foto,
+                'preco' => ['de' => $de, 'por' => $por],
+                'estoque' => (int) $produto->stock,
+                'disponivel' => (int) $produto->stock > 0,
+                'atual' => $produto->id === $atualId,
+            ];
+        }
+
+        return count($itens) >= 2 ? [
+            'titulo' => (string) ($escada['titulo'] ?? 'Escolha o seu kit'),
+            'texto' => filled($escada['texto'] ?? null) ? (string) $escada['texto'] : null,
+            'itens' => $itens,
+        ] : null;
+    }
+
     /**
      * Cartões para o site (FerraKora), a partir da lista de produtos do site já montada
      * (preço com o frete da região, em centavos, igual ao do produto). Kit fora do site
@@ -104,7 +171,7 @@ class EscadaDeKits
             }
             $por = (int) ($preco['sale_amount'] ?? $preco['amount']);
             $de = $preco['sale_amount'] !== null && (int) $preco['amount'] > $por ? (int) $preco['amount'] : null;
-            $foto = $produto['images'][0] ?? null;
+            $foto = self::fotoPropria($item) ?? ($produto['images'][0] ?? null);
             $destaque = (bool) ($item['destaque'] ?? false);
 
             $itens[] = [

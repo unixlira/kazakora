@@ -17,6 +17,8 @@ use App\Modules\Catalog\Support\LayoutDaPagina;
 use App\Modules\Catalog\Support\PaginaBrinquedo;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\EscadaDeKits;
+use App\Modules\Catalog\Support\FotosDoComparativo;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
@@ -482,9 +484,15 @@ class CatalogController extends Controller
         // Cópia de apresentação: preserva o anúncio no banco e todos os preços.
         if ($version === 2 && $product->adContent) {
             $conteudoCard = clone $product->adContent;
-            $conteudoCard->comparativo = OfertaBlackFriday::comparativoPercentual(
+            $conteudoCard->comparativo = FotosDoComparativo::comUrls(OfertaBlackFriday::comparativoPercentual(
                 $conteudoCard->comparativo, collect([$product])->concat($variations),
-            );
+            ));
+            // Bloco com vídeo e link para outro kit (26/11/2026): o link abre a página dele na KazaKora.
+            $conteudoCard->blocos = FotosDoComparativo::blocosComVideo($conteudoCard->blocos, function (int $id) {
+                $outro = Product::query()->find($id);
+
+                return $outro && $outro->naKazaKora() && $outro->slug ? route('produtos.ver', $outro->slug, false) : null;
+            });
             $product->setRelation('adContent', $conteudoCard);
         }
 
@@ -557,6 +565,9 @@ class CatalogController extends Controller
             'salesCount' => $salesCount,
             // Faixa do topo com os benefícios deste produto (pedido do Lira 2026-11-24); sem conteúdo, as gerais.
             'faixa' => FaixaDoTopo::paraProduto($product->adContent),
+            // Escada de kits (pedido do Lira 26/11/2026, oferta do Compressor 4 em 1 também na KazaKora):
+            // os cartões de todos os kits, cada um com a página dele. null sem escada.
+            'kits' => $version === 2 ? EscadaDeKits::paraKazaKora($product) : null,
             // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
             // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
             'layout' => LayoutDaPagina::para($product),

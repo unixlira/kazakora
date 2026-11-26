@@ -24,10 +24,16 @@ use Illuminate\Support\Facades\Storage;
  *            foto de outro produto, sempre um arquivo novo), conteúdo da página, avaliacoes_de e o
  *            registro no site FerraKora.
  *   ajustar  produtos que já existem, pelo SKU: nome, slug, preço "de"/"por", estoque (entrada
- *            ou saída registrada no StockManager, só a diferença) e vídeo (arquivo já no disco público).
+ *            ou saída registrada no StockManager, só a diferença), vídeo (arquivo já no disco público),
+ *            so_ferrakora (true/false), fotos_na_frente (arquivos do git que entram no começo do carrossel; os blocos da descrição
+ *            andam junto para cada um continuar com a mesma foto; foto que já está lá não entra de novo)
+ *            e conteudo (só as chaves que vierem, por cima do conteúdo da página; as fotos do
+ *            comparativo, comparativo.imagens = [[solução comum, com o produto], ...] por linha, são
+ *            arquivos do git copiados para products/<id>/comparativo/).
  *            Tudo opcional: só muda o que o item traz.
  *   escada   o JSON dos cartões (itens por SKU), gravado em products.escada_kits de cada kit
- *            (opcional: um arquivo só com ajustes, como os vídeos, não mexe na escada).
+ *            (opcional: um arquivo só com ajustes, como os vídeos, não mexe na escada; o nome de
+ *            outro arquivo, como "compressor-4-em-1", regrava a escada daquele arquivo).
  *
  * Sem --aplicar só mostra o que faria. Com --aplicar guarda antes um backup JSON dos produtos
  * tocados em storage/app/backups/escada-kits-<nome>-<data>.json.
@@ -50,6 +56,18 @@ class EscadaDeKitsAplicar extends Command
             $this->error("Arquivo inválido ou ausente: {$arquivo}");
 
             return self::FAILURE;
+        }
+
+        // "escada": "<outro arquivo>" usa a escada daquele arquivo (um arquivo só de ajustes regrava
+        // os cartões sem repetir o JSON deles).
+        if (isset($dados['escada']) && is_string($dados['escada'])) {
+            $outro = json_decode((string) @file_get_contents(database_path("escadas-kits/{$dados['escada']}.json")), true);
+            if (! is_array($outro['escada'] ?? null)) {
+                $this->error("Escada não encontrada em {$dados['escada']}.json");
+
+                return self::FAILURE;
+            }
+            $dados['escada'] = $outro['escada'];
         }
 
         $aplicar = (bool) $this->option('aplicar');
@@ -81,7 +99,16 @@ class EscadaDeKitsAplicar extends Command
             }
             foreach ($dados['ajustar'] ?? [] as $ajuste) {
                 $p = $existentes->get($ajuste['sku']);
+                if (array_key_exists('so_ferrakora', $ajuste)) {
+                    $this->line("ajustar: {$ajuste['sku']} só FerraKora: ".var_export((bool) $p?->so_ferrakora, true).' -> '.var_export((bool) $ajuste['so_ferrakora'], true));
+                }
                 $this->line("ajustar: {$ajuste['sku']} (id ".($p?->id ?? '?').') de '.($ajuste['price'] ?? '-').' por '.($ajuste['por'] ?? '-').', estoque '.($p?->stock ?? '?').' -> '.($ajuste['estoque'] ?? '-'));
+                foreach ((array) ($ajuste['fotos_na_frente'] ?? []) as $foto) {
+                    $this->line('  foto na frente: '.$foto['arquivo'].(is_file(database_path('escadas-kits/'.$foto['arquivo'])) ? '' : ' (ARQUIVO NÃO ENCONTRADO)'));
+                }
+                if (! empty($ajuste['conteudo'])) {
+                    $this->line('  conteúdo: '.implode(', ', array_keys($ajuste['conteudo'])));
+                }
                 if (! empty($ajuste['video']['arquivo'])) {
                     $this->line('  vídeo: '.($p?->video_path ?: '(nenhum)').' -> '.$ajuste['video']['arquivo'].(Storage::disk('public')->exists($ajuste['video']['arquivo']) ? '' : ' (ARQUIVO NÃO ENCONTRADO)'));
                 }
@@ -202,6 +229,10 @@ class EscadaDeKitsAplicar extends Command
                 $campos[$campo] = $ajuste[$campo];
             }
         }
+        // Loja do produto (so_ferrakora): o Lira pôs a oferta do Compressor também no KazaKora (26/11/2026).
+        if (array_key_exists('so_ferrakora', $ajuste)) {
+            $campos['so_ferrakora'] = (bool) $ajuste['so_ferrakora'];
+        }
         if (isset($ajuste['price'], $ajuste['por'])) {
             $campos['price'] = $ajuste['price'];
             $campos['discount_percentage'] = null;
@@ -228,6 +259,101 @@ class EscadaDeKitsAplicar extends Command
         if (isset($ajuste['estoque'])) {
             $this->estoqueAte($produto, (int) $ajuste['estoque'], $estoque, $ajuste['motivo_estoque'] ?? 'Ajuste da escada de kits');
         }
+
+        $novasNaFrente = $this->fotosNaFrente($produto, (array) ($ajuste['fotos_na_frente'] ?? []));
+
+        if ($novasNaFrente > 0 || ! empty($ajuste['conteudo'])) {
+            $this->conteudoDoAjuste($produto, $novasNaFrente, (array) ($ajuste['conteudo'] ?? []), $conteudos);
+        }
+    }
+
+    /**
+     * Põe arquivos do git no começo do carrossel (a primeira vira a capa e a miniatura da vitrine).
+     * Foto que já está no produto (mesmo caminho) não entra de novo. Devolve quantas entraram.
+     */
+    private function fotosNaFrente(Product $produto, array $fotos): int
+    {
+        $disco = Storage::disk('public');
+        $novas = [];
+        foreach ($fotos as $foto) {
+            $destino = "products/{$produto->id}/kit/".basename((string) $foto['arquivo']);
+            if (ProductImage::where('product_id', $produto->id)->where('path', $destino)->exists()) {
+                continue;
+            }
+            $origem = database_path('escadas-kits/'.$foto['arquivo']);
+            if (! is_file($origem)) {
+                throw new \RuntimeException("Foto não encontrada: {$origem}");
+            }
+            $disco->put($destino, (string) file_get_contents($origem));
+            $novas[] = $destino;
+        }
+        if ($novas === []) {
+            return 0;
+        }
+
+        $quantas = count($novas);
+        ProductImage::where('product_id', $produto->id)->increment('position', $quantas);
+        ProductImage::where('product_id', $produto->id)->update(['is_primary' => false]);
+        foreach ($novas as $posicao => $destino) {
+            ProductImage::create([
+                'product_id' => $produto->id,
+                'path' => $destino,
+                'position' => $posicao,
+                'is_primary' => $posicao === 0,
+                'is_variant' => false,
+            ]);
+        }
+        $produto->unsetRelation('images');
+        $this->info("Fotos na frente do carrossel de {$produto->sku}: ".implode(', ', $novas).'.');
+
+        return $quantas;
+    }
+
+    /**
+     * Conteúdo da página escrito à mão por cima do atual (só as chaves que vierem). Com fotos novas
+     * na frente do carrossel, os blocos andam o mesmo tanto. O hash fica em dia para a IA não gerar
+     * outro conteúdo por cima.
+     */
+    private function conteudoDoAjuste(Product $produto, int $deslocar, array $conteudo, AnuncioConteudoService $conteudos): void
+    {
+        $atual = ProductAdContent::firstOrNew(['product_id' => $produto->id]);
+
+        if ($deslocar > 0 && ! isset($conteudo['blocos']) && ! empty($atual->blocos)) {
+            $conteudo['blocos'] = array_map(function (array $bloco) use ($deslocar) {
+                if (isset($bloco['imagem']) && $bloco['imagem'] !== null) {
+                    $bloco['imagem'] = (int) $bloco['imagem'] + $deslocar;
+                }
+
+                return $bloco;
+            }, $atual->blocos);
+        }
+
+        if (isset($conteudo['comparativo']['imagens'])) {
+            $disco = Storage::disk('public');
+            $conteudo['comparativo']['imagens'] = array_map(fn ($par) => array_map(function ($arquivo) use ($disco, $produto) {
+                if ($arquivo === null || $arquivo === '') {
+                    return null;
+                }
+                $origem = database_path('escadas-kits/'.$arquivo);
+                if (! is_file($origem)) {
+                    throw new \RuntimeException("Foto do comparativo não encontrada: {$origem}");
+                }
+                $destino = "products/{$produto->id}/comparativo/".basename((string) $arquivo);
+                $disco->put($destino, (string) file_get_contents($origem));
+
+                return $destino;
+            }, (array) $par), (array) $conteudo['comparativo']['imagens']);
+        }
+
+        $produto->unsetRelation('images');
+        $atual->fill([
+            ...$conteudo,
+            'fonte' => ProductAdContent::FONTE_CLAUDE,
+            'origem_hash' => $conteudos->hash($produto),
+            'erro' => null,
+            'gerado_em' => now(),
+        ])->save();
+        $this->info("Conteúdo da página de {$produto->sku}: ".implode(', ', array_keys($conteudo)).'.');
     }
 
     private function estoqueAte(Product $produto, int $alvo, StockManager $estoque, string $motivo): void

@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Catalog\Support\EscadaDeKits;
+use App\Modules\Catalog\Support\FotosDoComparativo;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
@@ -166,9 +167,19 @@ class CatalogoFerraKora extends CatalogoOutroSite
 
         $pai = Product::query()->with(['images', 'adContent'])->find((int) Str::after($produto['id'], self::PREFIXO_PRODUTO));
 
+        $conteudo = $pai ? $this->conteudoDaPagina($pai) : null;
+        if ($conteudo !== null) {
+            // Bloco com vídeo e link para outro kit (26/11/2026): o link abre a página dele no site.
+            $conteudo['blocos'] = FotosDoComparativo::blocosComVideo($conteudo['blocos'], function (int $id) use ($lista) {
+                $outro = collect($lista)->firstWhere('id', self::PREFIXO_PRODUTO.$id);
+
+                return $outro ? '/produto/'.($outro['slug'] ?: $outro['id']) : null;
+            });
+        }
+
         return [
             ...$produto,
-            'conteudo' => $pai ? $this->conteudoDaPagina($pai) : null,
+            'conteudo' => $conteudo,
             // Card de Black Friday padrão (14/11/2026), para o produto sem oferta própria no cadastro.
             'oferta_padrao' => $pai ? OfertaBlackFriday::padrao($pai, outroSite: true) : null,
             // Escada de kits (pedido do Lira 26/11/2026): os cartões de todos os kits, com o
@@ -203,9 +214,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
                 ...$bloco,
                 'imagem_url' => isset($bloco['imagem']) && $bloco['imagem'] !== null ? $fotos->get((int) $bloco['imagem'])?->url : null,
             ])->values()->all(),
-            'comparativo' => OfertaBlackFriday::comparativoPercentual(
+            'comparativo' => FotosDoComparativo::comUrls(OfertaBlackFriday::comparativoPercentual(
                 $conteudo->comparativo, collect([$pai])->concat(Product::query()->where('parent_product_id', $pai->id)->get()),
-            ),
+            )),
             'beneficios' => $conteudo->beneficios ?? [],
             'duvidas' => $conteudo->duvidas ?? [],
             'fonte' => $conteudo->fonte,

@@ -28,6 +28,7 @@
             ],
             "ferrakora": {"categoria": "Automotivo", "ordem": 98},
             "fotos": [
+                {"arquivo": "compressor-4-em-1/kit-estrada-segura-bundle-limpo.jpg"},
                 {"arquivo": "compressor-4-em-1/kit-estrada-segura-capa.jpg"},
                 {"produto": 413, "indice": 9},
                 {"produto": 413, "indice": 10},
@@ -44,12 +45,13 @@
                 "destaques": ["Calibra o pneu onde estiver", "Remenda o furo e segue viagem", "Sobe o macaco com menos esforço", "Garras para a partida do carro"],
                 "chamada": "Pneu baixo, furado ou para trocar: o Kit Estrada Segura resolve os três com o que fica no seu porta-malas",
                 "blocos": [
-                    {"titulo": "Pneu baixo? Calibra ali mesmo", "texto": "Encaixa o bico na válvula, escolhe a pressão no visor digital e o compressor enche até chegar nela, sem fila no posto.", "imagem": 2},
-                    {"titulo": "Furou? Remendo macarrão na hora", "texto": "Limpa o furo com o escareador, passa o remendo com a agulha e o pneu sem câmara volta a segurar o ar até o borracheiro.", "imagem": 5},
-                    {"titulo": "Troca de pneu sem cansar o braço", "texto": "A chave catraca encaixa no macaco e gira sem tirar a manivela a cada volta: o carro sobe mais rápido.", "imagem": 7},
-                    {"titulo": "Bateria arriada? Use as garras", "texto": "As garras do compressor prendem na bateria do carro e ajudam na partida. Ele ainda carrega o celular e tem lanterna LED.", "imagem": 3}
+                    {"titulo": "Pneu baixo? Calibra ali mesmo", "texto": "Encaixa o bico na válvula, escolhe a pressão no visor digital e o compressor enche até chegar nela, sem fila no posto.", "imagem": 3},
+                    {"titulo": "Furou? Remendo macarrão na hora", "texto": "Limpa o furo com o escareador, passa o remendo com a agulha e o pneu sem câmara volta a segurar o ar até o borracheiro.", "imagem": 6},
+                    {"titulo": "Troca de pneu sem cansar o braço", "texto": "A chave catraca encaixa no macaco e gira sem tirar a manivela a cada volta: o carro sobe mais rápido.", "imagem": 8},
+                    {"titulo": "Bateria arriada? Use as garras", "texto": "As garras do compressor prendem na bateria do carro e ajudam na partida. Ele ainda carrega o celular e tem lanterna LED.", "imagem": 4},
+                    {"titulo": "Quer trocar o pneu sem esforço?", "texto": "Conheça o Kit Macaco Elétrico 5t: o macaco sobe o carro com um botão, a chave de impacto de 420 N.m solta os parafusos da roda e ainda vêm compressor de até 150 PSI, lanterna LED e maleta rígida, tudo ligado no 12V do carro.", "video": "products/508/video/kitC-macaco-eletrico-4em1-web.mp4", "poster": "products/508/ia-10-g64sH6thXIvFwMWP.jpg", "link_produto": 508, "link_texto": "Ver o Kit Macaco Elétrico"}
                 ],
-                "beneficios": [["3 em 1 na estrada", "Calibra, remenda e troca o pneu"], ["Visor digital", "Escolhe a pressão e ele para sozinho"], ["5 remendos", "Tipo macarrão, com cola e ferramentas"], ["Chave catraca", "Encaixa no macaco do carro"]],
+                "beneficios": [["Calibra, remenda e troca", "Os 3 itens do pneu juntos no porta-malas"], ["Visor digital", "Escolhe a pressão e ele enche até chegar nela"], ["5 remendos tipo macarrão", "Com escareador, agulha e cola"], ["Chave catraca universal", "Para o macaco sanfona que vem no carro"], ["Garras de partida", "Ajudam a dar a partida com a bateria arriada"], ["Powerbank e lanterna LED", "Carrega o celular e ilumina à noite"]],
                 "duvidas": [
                     ["O que vem no Kit Estrada Segura?", "1 compressor de ar portátil 4 em 1 (com garras de partida, mangueira, cabo, bicos e bolsa), 1 kit reparo de pneu com 5 remendos tipo macarrão e 1 chave catraca para macaco."],
                     ["O compressor é o mesmo vendido sozinho?", "Sim, é o mesmo Compressor 4 em 1: compressor, auxiliar de partida, powerbank e lanterna LED."],
@@ -80,6 +82,7 @@
                 "itens": "Compressor + garras de partida + powerbank + lanterna",
                 "partes": ["Compressor de ar portátil com visor digital", "Garras para a partida do carro", "Powerbank para o celular e lanterna LED"],
                 "acrescenta": "Calibra o pneu e ajuda na partida",
+                "foto": "products/413/padrao/garras-real.jpg",
                 "selo": "Essencial"
             },
             {

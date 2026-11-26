@@ -1,0 +1,242 @@
+{
+  "titulo": "Cacto Dançante de Pelúcia com Voz, Música e Luz de LED",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Pelúcia macia",
+      "toque de carinho"
+    ],
+    [
+      "Luz e som",
+      "brincadeira viva"
+    ],
+    [
+      "Voz e música",
+      "alegra o dia"
+    ],
+    [
+      "Zero telas",
+      "diversão real"
+    ]
+  ],
+  "letreiro": [
+    "Brinquedo de pelúcia com luz e som",
+    "Estimula a imaginação e o faz de conta",
+    "Companheiro para brincar e relaxar",
+    "Pelúcia macia e confortável",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Diversão fora das telas",
+    "subtitulo": "Um amigo para todas as horas",
+    "texto": "Ver o cacto dançar, tocar música e acender as luzes é diversão pura. Longe do celular, os pequenos soltam a voz e a imaginação, e menos tela dá um descanso para os olhos.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 9,
+    "chamadas": [
+      "Dança e brilha",
+      "Voz, música e LED"
+    ],
+    "cards": [
+      {
+        "titulo": "Interativo",
+        "texto": "Ele dança e brilha enquanto toca músicas divertidas.",
+        "icone": "music"
+      },
+      {
+        "titulo": "Canta junto",
+        "texto": "Com voz e música, convida a criança a cantar e dançar.",
+        "icone": "mic"
+      },
+      {
+        "titulo": "Toque macio",
+        "texto": "Feito em pelúcia para abraçar e fazer companhia.",
+        "icone": "heart"
+      },
+      {
+        "titulo": "Criatividade",
+        "texto": "Perfeito para criar histórias e brincar de faz de conta.",
+        "icone": "sparkles"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto brinca, canta e interage, a criança desenvolve habilidades importantes sem nem perceber:",
+    "imagem": 1,
+    "chamadas": [
+      "Luzes e sons",
+      "Pelúcia de 34cm",
+      "Visual encantador",
+      "Divertido e macio"
+    ],
+    "habilidades": [
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Percepção sonora",
+        "icone": "volume-2"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Faz de conta",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Interação",
+        "icone": "users"
+      },
+      {
+        "texto": "Atenção e foco",
+        "icone": "target"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para encantar",
+    "texto": "Com 34cm de fofura, luzes coloridas e sons interativos: o companheiro ideal para o dia a dia.",
+    "imagem": 5,
+    "cards": [
+      {
+        "titulo": "Tamanho ideal",
+        "texto": "Com 34cm para ser o melhor amigo.",
+        "icone": "ruler"
+      },
+      {
+        "titulo": "Luzes de LED",
+        "texto": "Brilha enquanto dança e diverte.",
+        "icone": "lightbulb"
+      },
+      {
+        "titulo": "Sons e músicas",
+        "icone": "music-2",
+        "texto": "Ritmos que animam o ambiente."
+      },
+      {
+        "titulo": "Pelúcia verde",
+        "texto": "Macia e muito simpática.",
+        "icone": "leaf"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Pelúcia comum × Cacto Dançante",
+    "intro": "Os dois são fofos. Só um interage de verdade com a criança.",
+    "rotulos": [
+      "Comum",
+      "Dançante"
+    ],
+    "linhas": [
+      {
+        "texto": "É macio de abraçar",
+        "comum": true
+      },
+      {
+        "texto": "Toca músicas e dança",
+        "comum": false
+      },
+      {
+        "texto": "Tem voz e música",
+        "comum": false
+      },
+      {
+        "texto": "Tem luzes que brilham",
+        "comum": false
+      },
+      {
+        "texto": "Convida a cantar e dançar junto",
+        "comum": false
+      },
+      {
+        "texto": "Prende a atenção sem usar tela",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos de alegria em família",
+    "texto": "O cacto vira a atração da casa. Pais e filhos brincam juntos, rindo das músicas e danças, criando memórias longe dos aparelhos.",
+    "imagem": 4,
+    "citacao": "Menos tempo de tela e mais risadas em família com um amigo que dança e canta."
+  },
+  "kits": {
+    "titulo": "Escolha o seu novo amigo",
+    "texto": "O presente que traz alegria imediata e tira a atenção do celular.",
+    "itens": [
+      {
+        "id": 138,
+        "nome": "Kit Diversão Dançante",
+        "itens": "01 Cacto Dançante com Luz e Som",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Cacto Dançante",
+            "icone": "star"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Primeira dança",
+      "texto": "Chegou! Ligue e veja a mágica acontecer.",
+      "icone": "party-popper"
+    },
+    {
+      "titulo": "Brincar de verdade",
+      "texto": "Horas de música e dança, longe do celular.",
+      "icone": "smile"
+    }
+  ],
+  "garantia": [
+    "Brincando muito",
+    "Longe do celular",
+    "Cantando e rindo",
+    "Sempre acompanhada"
+  ],
+  "duvidas": [
+    [
+      "O que vem na embalagem?",
+      "Você recebe 01 Brinquedo de Pelúcia Cacto Dançante com luzes e sons."
+    ],
+    [
+      "Ele tem luzes e sons?",
+      "Sim, o cacto possui efeitos de luzes coloridas e sons interativos para a brincadeira."
+    ],
+    [
+      "Qual o tamanho do brinquedo?",
+      "O Cacto Dançante tem 34 cm."
+    ],
+    [
+      "O material é confortável?",
+      "Sim, ele possui pelúcia agradável ao toque, ideal para momentos de carinho e descanso."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, música, dança e muita diversão para toda a família."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero trocar a tela pela dança"
+  }
+}

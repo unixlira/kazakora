@@ -877,6 +877,9 @@ const submitReview = () => {
 };
 
 // Página de brinquedo (pedido do Lira 24/11/2026) ------------------------------
+// Sem título próprio, o nome do anúncio sem o "+ PDF para Colorir" do fim: na página de brinquedo o PDF
+// só aparece no checkout (PaginaBrinquedo::PROIBIDAS).
+const semBrindeNoNome = (nome) => String(nome ?? '').replace(/\s*\+\s*(livro\s+)?pdf\b.*$/i, '').trim() || nome;
 // Quatro "chips" coloridos abaixo das estrelas: os benefícios do anúncio (título + texto curto).
 const chipsBrinquedo = computed(() => {
     // Chips curtos próprios (comparativo.chips) quando o anúncio tiver; senão, os benefícios.
@@ -1030,7 +1033,7 @@ const escolherKit = (kit, rolar = false) => {
                                 <span class="tag-tempo">POR TEMPO LIMITADO!</span>
                             </div>
 
-                            <h1>{{ brinquedo && paginaBrinquedo?.titulo ? paginaBrinquedo.titulo : selecionada.name }}</h1>
+                            <h1>{{ brinquedo ? (paginaBrinquedo?.titulo || semBrindeNoNome(selecionada.name)) : selecionada.name }}</h1>
 
                             <!-- Três checks logo abaixo do título, antes das estrelas e do preço (pedido 2026-10-23). -->
                             <ul v-if="!brinquedo && highlights.length" class="checks">
@@ -1552,7 +1555,7 @@ const escolherKit = (kit, rolar = false) => {
              caixa sai da tela (celular e computador), com o kit escolhido e o preço. -->
         <div v-if="brinquedo" class="pb-barra" :class="{ 'is-on': barraBrinquedo }" :aria-hidden="!barraBrinquedo">
             <div class="pb-barra-info">
-                <b>{{ kitEscolhido ? nomeCurtoDoKit(kitEscolhido) : (paginaBrinquedo?.titulo || product.name) }}</b>
+                <b>{{ kitEscolhido ? nomeCurtoDoKit(kitEscolhido) : (paginaBrinquedo?.titulo || semBrindeNoNome(product.name)) }}</b>
                 <small v-if="kitEscolhido && composicaoDoKit(kitEscolhido) !== nomeCurtoDoKit(kitEscolhido)">{{ composicaoDoKit(kitEscolhido) }}</small>
             </div>
             <span class="pb-barra-preco">{{ formatPrice(precoPor) }}</span>

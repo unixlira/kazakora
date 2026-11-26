@@ -1,0 +1,266 @@
+{
+  "titulo": "Caminhão Unicórnio que Vira Pista de Corrida com 6 Carrinhos",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Vira pista",
+      "abre em segundos"
+    ],
+    [
+      "6 carrinhos",
+      "prontos para correr"
+    ],
+    [
+      "Pista dupla",
+      "com lançadores"
+    ],
+    [
+      "Zero telas",
+      "fecha e leva"
+    ]
+  ],
+  "letreiro": [
+    "Caminhão que vira pista de corrida",
+    "Acompanha 6 carrinhos coloridos",
+    "Pista dupla com lançadores",
+    "Estacionamento integrado",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Corrida de verdade, sem telas",
+    "subtitulo": "Abre o caminhão, monta a pista e valendo",
+    "texto": "O caminhão abre, vira pista e os carrinhos descem lado a lado. Brincadeira de chão, longe do celular e da TV. Menos tela também é mais descanso para os olhos e um sono mais tranquilo.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 2,
+    "chamadas": [
+      "Caminhão que vira pista",
+      "6 carrinhos inclusos"
+    ],
+    "cards": [
+      {
+        "titulo": "Se transforma",
+        "texto": "Abre e vira pista de corrida, sem ferramenta nenhuma.",
+        "icone": "rotate-cw"
+      },
+      {
+        "titulo": "Corrida a dois",
+        "texto": "Pista dupla com lançadores: dois carrinhos ao mesmo tempo.",
+        "icone": "flag"
+      },
+      {
+        "titulo": "Unicórnio rosa",
+        "texto": "Um caminhão encantado que conquista meninas e meninos.",
+        "icone": "sparkles"
+      },
+      {
+        "titulo": "Tudo no lugar",
+        "texto": "Estacionamento e vagas para guardar os carrinhos.",
+        "icone": "square-parking"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto monta, solta e estaciona, a criança treina sem nem perceber:",
+    "imagem": 1,
+    "chamadas": [
+      "Monta a pista",
+      "Solta os carrinhos",
+      "Estaciona",
+      "Brinca junto"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Organização",
+        "icone": "layout-grid"
+      },
+      {
+        "texto": "Brincar junto",
+        "icone": "users"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe pensado para brincar",
+    "texto": "Caminhão, pista, estacionamento e carrinhos num brinquedo só, que fecha e vai junto para qualquer lugar.",
+    "imagem": 4,
+    "cards": [
+      {
+        "titulo": "Pista dupla",
+        "texto": "Com lançadores",
+        "icone": "route"
+      },
+      {
+        "titulo": "Efeitos sonoros",
+        "texto": "Botões que fazem barulho",
+        "icone": "volume-2"
+      },
+      {
+        "titulo": "Estacionamento",
+        "texto": "Vagas para os carrinhos",
+        "icone": "square-parking"
+      },
+      {
+        "titulo": "Fecha e leva",
+        "texto": "Dobrável e portátil",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Caminhão comum × Caminhão Unicórnio",
+    "intro": "Os dois têm rodas. Só um vira pista de corrida.",
+    "rotulos": [
+      "Comum",
+      "Unicórnio"
+    ],
+    "linhas": [
+      {
+        "texto": "Caminhão para empurrar",
+        "comum": true
+      },
+      {
+        "texto": "Abre e vira pista de corrida",
+        "comum": false
+      },
+      {
+        "texto": "Vem com 6 carrinhos",
+        "comum": false
+      },
+      {
+        "texto": "Pista dupla com lançadores",
+        "comum": false
+      },
+      {
+        "texto": "Estacionamento integrado",
+        "comum": false
+      },
+      {
+        "texto": "Botões com efeitos sonoros",
+        "comum": false
+      },
+      {
+        "texto": "Fecha e guarda tudo dentro",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Uma pista que se monta no chão da sala chama irmãos, amigos e quem mais quiser apostar corrida, longe das telas.",
+    "imagem": 4,
+    "citacao": "Menos tela, mais risada: a família inteira torcendo pelo carrinho que chega primeiro."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Caminhão, pista e carrinhos juntos: tudo para a corrida começar assim que abrir a caixa.",
+    "itens": [
+      {
+        "id": 121,
+        "nome": "Kit Corrida Encantada",
+        "itens": "Caminhão Unicórnio + 6 carrinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão-pista",
+            "icone": "truck"
+          },
+          {
+            "texto": "6 carrinhos",
+            "icone": "car"
+          },
+          {
+            "texto": "Estacionamento",
+            "icone": "square-parking"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Olhos brilhando",
+      "texto": "Chegou! Abre o caminhão e monta a pista.",
+      "icone": "sparkles"
+    },
+    {
+      "titulo": "Corrida em família",
+      "texto": "Horas de brincadeira de verdade, longe das telas.",
+      "icone": "flag"
+    }
+  ],
+  "garantia": [
+    "Brincando mais",
+    "Mais longe das telas",
+    "Criando corridas novas",
+    "Brincando com os irmãos"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicado?",
+      "Recomendado para crianças acima de 3 anos, sempre com a supervisão de um adulto."
+    ],
+    [
+      "O que vem na caixa?",
+      "1 Caminhão Unicórnio transformável, 6 carrinhos, pista de corrida integrada, estacionamento e sistema de lançamento. As cores dos carrinhos podem variar conforme o lote."
+    ],
+    [
+      "Precisa de ferramenta para montar?",
+      "Não. O caminhão abre e vira pista de forma simples e rápida, sem ferramentas."
+    ],
+    [
+      "Do que é feito?",
+      "De plástico ABS resistente, na cor rosa predominante."
+    ],
+    [
+      "O caminhão guarda os carrinhos?",
+      "Sim. Fechado, ele guarda os carrinhos e fica compacto para guardar e levar."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de corrida de verdade, risada no chão da sala e a família mais perto."
+  },
+  "ctas": {
+    "historia": "Quero o caminhão unicórnio",
+    "porque": "Quero a pista encantada",
+    "ensina": "Quero brincar de corrida",
+    "detalhes": "Quero o meu",
+    "comparativo": "Quero o caminhão que vira pista",
+    "familia": "Quero corrida em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero brincar sem telas",
+    "final": "Quero o caminhão unicórnio"
+  },
+  "avaliacoes_de": []
+}

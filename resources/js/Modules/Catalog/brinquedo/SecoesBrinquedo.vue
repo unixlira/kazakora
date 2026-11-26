@@ -36,8 +36,10 @@ const CORES = ['amarelo', 'azul', 'verde', 'vermelho'];
 const pg = computed(() => props.pagina ?? {});
 const lista = (valor) => (Array.isArray(valor) ? valor : []);
 const iconeValido = (nome, reserva) => (nome && ICONES[nome] ? nome : reserva);
+// "imagem": índice da foto do produto ou caminho no storage (foto que só ilustra a página, fora da galeria).
 const foto = (indice) => {
     if (indice === null || indice === undefined) return null;
+    if (typeof indice === 'string') return /^(https?:)?\//.test(indice) ? indice : `/storage/${indice}`;
     const imagem = props.product.images?.[indice];
     return imagem ? (imagem.media_url ?? imagem.url) : null;
 };
@@ -65,7 +67,8 @@ const fotoExtra = computed(() => {
     return indice > 0 ? foto(indice) : null;
 });
 // Ícones de "longe das telas" na história: só quando o brinquedo é para largar a tela (não num videogame).
-const semTelas = computed(() => pg.value.sem_telas !== false);
+// Sem conteúdo próprio, pelo nome: videogame, console e controle não ganham os ícones.
+const semTelas = computed(() => (props.pagina ? pg.value.sem_telas !== false : !/v[ií]deo\s*-?game|console|controle(?!\s+remoto)|joystick/i.test(props.product.name ?? '')));
 
 // Vídeo da história: o vídeo do produto (admin › Produto › Vídeo). Toca mudo, em loop, só quando
 // aparece na tela (como na referência); sem vídeo, fica a foto no mesmo quadro 9:16 (celular em pé).
@@ -200,13 +203,8 @@ const abertaFaq = ref(0);
 // Chamadas por cima das fotos (como as etiquetas da referência), em HTML sobre as nossas fotos.
 const chamadasPorque = computed(() => (lista(pg.value.porque?.chamadas).length ? pg.value.porque.chamadas : lista(props.anuncio?.destaques))
     .map(semEmoji).filter(Boolean).slice(0, 2));
-// Etiquetas da foto das habilidades: do conteúdo da página; sem ele, as do Livro Falante (o que os kits têm).
-const chamadasKit = computed(() => {
-    if (lista(pg.value.ensina?.chamadas).length) return pg.value.ensina.chamadas.map(semEmoji).filter(Boolean).slice(0, 4);
-    if (props.pagina) return [];
-    const todos = props.opcoes.map((o) => String(o.variation || '')).join(' ');
-    return ['Português e Inglês', /lousa/i.test(todos) ? 'Desenha com luz' : null, /quebra/i.test(todos) ? 'Peças com ímã' : null, '300+ palavras'].filter(Boolean).slice(0, 4);
-});
+// Etiquetas da foto das habilidades: só do conteúdo da página (o anúncio não tem; sem elas, a foto fica limpa).
+const chamadasKit = computed(() => lista(pg.value.ensina?.chamadas).map(semEmoji).filter(Boolean).slice(0, 4));
 const citacao = computed(() => semEmoji(pg.value.familia?.citacao ?? props.anuncio?.chamada ?? ''));
 
 // Kits: seção com os cartões; com uma variação só (ou nenhuma), um cartão com a oferta única.
@@ -223,23 +221,15 @@ const PASSOS_LOJA = [
     { icone: 'sparkles', titulo: 'Olhos brilhando', texto: 'Chegou! A caixa abre e a brincadeira começa.' },
     { icone: 'blocks', titulo: 'Hora de brincar', texto: 'Diversão de verdade, todo dia, longe das telas.' },
 ];
-// Passos do Livro Falante (o modelo), enquanto ele não tiver conteúdo próprio.
-const PASSOS_LIVRO = [
-    { icone: 'gift', titulo: 'Escolha o kit', texto: 'Só o livro ou com mais um brinquedo: você decide.' },
-    PASSOS_LOJA[1],
-    { icone: 'sparkles', titulo: 'Olhos brilhando', texto: 'Chegou! Primeiro toque, primeira palavra.' },
-    { icone: 'blocks', titulo: 'Aprender brincando', texto: 'Português e inglês todo dia, longe das telas.' },
-];
 const passos = computed(() => {
     const proprios = lista(pg.value.passos);
-    const base = proprios.length === 4 ? proprios : (props.pagina ? PASSOS_LOJA : PASSOS_LIVRO);
+    const base = proprios.length === 4 ? proprios : PASSOS_LOJA;
     return base.map((p, j) => ({ titulo: semEmoji(p.titulo), texto: semEmoji(p.texto), icone: iconeValido(p.icone, PASSOS_LOJA[j].icone), cor: CORES_PASSO[j % 4] }));
 });
 const GARANTIA_LOJA = ['Brincando mais', 'Mais longe das telas', 'Usando a imaginação', 'Chamando você para brincar'];
-const GARANTIA_LIVRO = ['Falando palavras novas', 'Mais longe das telas', 'Brincando e aprendendo', 'Arriscando o inglês'];
 const garantia = computed(() => {
     const proprios = lista(pg.value.garantia).map(semEmoji).filter(Boolean);
-    const base = proprios.length === 4 ? proprios : (props.pagina ? GARANTIA_LOJA : GARANTIA_LIVRO);
+    const base = proprios.length === 4 ? proprios : GARANTIA_LOJA;
     return base.map((texto, j) => ({ texto, cor: CORES_PASSO[j % 4] }));
 });
 const final = computed(() => ({

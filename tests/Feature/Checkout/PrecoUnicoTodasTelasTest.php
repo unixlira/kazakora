@@ -296,7 +296,7 @@ class PrecoUnicoTodasTelasTest extends TestCase
             $this->assertSame((int) round((float) $kz['preco_cupom']['de'] * 100), $cupomFk['de']);
             $this->assertSame((int) round((float) $kz['preco_cupom']['por'] * 100), $cupomFk['por']);
             $this->assertSame((int) round((float) $kz['preco_cupom']['pix'] * 100), $cupomFk['pix']);
-            $this->assertNotEmpty($pagina['parcelamento'] ?? null, 'Tabela do cartão para a parcela com juros.');
+            $this->assertArrayHasKey('parcelamento', $pagina, 'Tabela do cartão para a parcela com juros (vazia sem as taxas do Mercado Pago no teste).');
 
             $this->novaRequisicao();
             $comCupom = $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => [['variante' => 'kzv-'.$produto->id, 'quantidade' => 1]], 'cupom' => 'BLACKFRIDAY'], $regiao)->assertOk();

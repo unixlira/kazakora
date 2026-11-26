@@ -29,6 +29,9 @@ class CarrinhoAbandonadoSequencia extends Model
 
     public const PAROU_FIM = 'fim';
 
+    /** Encerrado na troca para a sequência de 4 contatos (26/11/2026, loja:carrinho-sequencia-nova). */
+    public const PAROU_SEQUENCIA_NOVA = 'sequencia_nova';
+
     protected $table = 'adm_abandoned_carts';
 
     protected $fillable = [

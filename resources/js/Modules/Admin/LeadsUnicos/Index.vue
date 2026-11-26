@@ -81,7 +81,7 @@ const jornadaDe = ref(null);
 const abrirRemarketing = (l) => { remarketingDe.value = { chave: l.chave, nome: l.nome }; };
 const abrirJornada = (l) => { jornadaDe.value = { chave: l.chave, nome: l.nome }; };
 
-// Antecipar a 1ª mensagem: o mesmo serviço do botão "WhatsApp + e-mail" de Carrinhos abandonados.
+// Antecipar a 1ª mensagem: o 1º contato da sequência (WhatsApp; sem celular, e-mail).
 const confirmar = ref(null); // { chave, nome } ou 'todos'
 const enviando = ref(false);
 const antecipar = () => {
@@ -110,7 +110,7 @@ const botao = (titulo, icone, cor, onClick) => h('button', {
 const acoes = (l) => [
     botao('Remarketing', 'fa-bullhorn', 'text-orange-600', () => abrirRemarketing(l)),
     botao('Jornada', 'fa-route', 'text-sky-700', () => abrirJornada(l)),
-    l.pode_antecipar ? botao('Antecipar 1ª mensagem (WhatsApp + e-mail)', 'fa-paper-plane', 'text-emerald-700', () => { confirmar.value = { chave: l.chave, nome: l.nome }; }) : null,
+    l.pode_antecipar ? botao('Antecipar 1ª mensagem (WhatsApp)', 'fa-paper-plane', 'text-emerald-700', () => { confirmar.value = { chave: l.chave, nome: l.nome }; }) : null,
 ];
 
 const chipLoja = (site) => h('span', { class: ['shrink-0 rounded px-1.5 py-px text-[10px] font-semibold', COR_LOJA[site] ?? 'bg-slate-100 text-slate-700'] }, nomeDaLoja(site));
@@ -314,11 +314,11 @@ const columns = [
         <ConfirmModal :open="!!confirmar" title="Antecipar a 1ª mensagem?" confirm-label="Enviar agora" :loading="enviando"
             @close="confirmar = null" @confirm="antecipar">
             <p v-if="confirmar === 'todos'" class="text-sm">
-                Vai sair a 1ª mensagem da sequência (WhatsApp + e-mail) para <strong>{{ resumo.antecipar }}</strong>
+                Vai sair a 1ª mensagem da sequência (WhatsApp; sem celular, e-mail) para <strong>{{ resumo.antecipar }}</strong>
                 {{ resumo.antecipar === 1 ? 'cliente' : 'clientes' }}{{ filters.loja ? ` da ${nomeDaLoja(filters.loja)}` : '' }}, agora, uma por uma.
             </p>
             <p v-else-if="confirmar" class="text-sm">
-                Vai sair agora a 1ª mensagem da sequência (WhatsApp + e-mail) para <strong>{{ confirmar.nome ?? 'o cliente' }}</strong>.
+                Vai sair agora a 1ª mensagem da sequência (WhatsApp; sem celular, e-mail) para <strong>{{ confirmar.nome ?? 'o cliente' }}</strong>.
                 Depois a sequência segue o calendário a partir daqui.
             </p>
         </ConfirmModal>

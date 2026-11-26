@@ -15,23 +15,27 @@ use Illuminate\Support\Facades\DB;
  * minutos: (a) traz os carrinhos abertos do checkout e da sessão para
  * adm_abandoned_carts, (b) para quem comprou, pediu para parar, saiu das
  * promoções, não tem contato ou acabou a sequência e (c) manda os disparos
- * que estão na hora (D+1, D+3, D+5, D+7, D+20, D+30, das 9h às 20h), no
- * máximo --limite por rodada. Sem desconto nenhum.
+ * que estão na hora, das 9h às 20h, no máximo --limite por rodada. Desde
+ * 26/11/2026: D+1 WhatsApp, D+3 WhatsApp, D+5 e-mail do Caderno KazaKora e
+ * D+7 último WhatsApp; depois acabou (CalendarioSequencia).
  *
  * --simular faz tudo dentro de uma transação desfeita no fim: lista o que
- * mandaria, sem mandar nada nem gravar nada.
+ * mandaria agora, sem mandar nada nem gravar nada. --previa faz o mesmo e
+ * lista TUDO o que falta para cada carrinho ativo, com data e canal.
  */
 class SequenciaCarrinhoAbandonado extends Command
 {
     protected $signature = 'loja:carrinho-abandonado-sequencia
         {--simular : Só lista o que mandaria, sem mandar nem gravar}
+        {--previa : Lista tudo o que falta para cada carrinho ativo (data e canal), sem mandar nem gravar}
         {--limite= : Máximo de carrinhos com disparo nesta rodada (padrão: config loja.carrinho_sequencia_limite)}';
 
     protected $description = 'Importa os carrinhos abandonados e manda os disparos da sequência (WhatsApp e e-mail, sem desconto)';
 
     public function handle(ImportadorSequencia $importador, ParadasSequencia $paradas, DisparadorSequencia $disparador): int
     {
-        $simular = (bool) $this->option('simular');
+        $previa = (bool) $this->option('previa');
+        $simular = (bool) $this->option('simular') || $previa;
         $limite = max(1, (int) ($this->option('limite') ?: config('loja.carrinho_sequencia_limite', 50)));
 
         if ($simular) {
@@ -53,7 +57,9 @@ class SequenciaCarrinhoAbandonado extends Command
                 ->limit($limite)
                 ->get();
 
-            if ($simular) {
+            if ($previa) {
+                $this->listarPrevia($disparador);
+            } elseif ($simular) {
                 $this->listar($vez, $disparador);
             } elseif (! config('loja.carrinho_sequencia_ativa')) {
                 // Homolog/local: importa e para, mas nunca fala com o cliente.
@@ -107,7 +113,7 @@ class SequenciaCarrinhoAbandonado extends Command
                     $r->id,
                     $r->site,
                     trim(($r->nome ?: 'sem nome').' '.($r->telefone ? '(whats)' : '').($r->email ? ' (e-mail)' : '')),
-                    "{$p['numero']}º (D+{$p['dia']})",
+                    "{$p['numero']}º (D+{$p['dia']}) {$p['etapa']}",
                     $p['canais'] === [] ? 'nenhum (template vazio, espera)' : implode(' + ', $p['canais']),
                     $p['produto'],
                     $p['link'],
@@ -117,9 +123,34 @@ class SequenciaCarrinhoAbandonado extends Command
         $this->info("Mandaria {$vez->count()} disparo(s).");
     }
 
+    private function listarPrevia(DisparadorSequencia $disparador): void
+    {
+        $linhas = [];
+        Registro::query()->where('parado', false)->orderBy('id')->get()->each(function (Registro $r) use ($disparador, &$linhas) {
+            foreach ($disparador->previaCompleta($r) as $p) {
+                $linhas[] = [
+                    $r->id,
+                    trim(($r->nome ?: 'sem nome').' '.($r->telefone ? '(whats)' : '').($r->email ? ' (e-mail)' : '')),
+                    "{$p['numero']}º D+{$p['dia']}",
+                    $p['quando']->copy()->setTimezone(CalendarioSequencia::FUSO)->format('d/m H:i'),
+                    $p['canal'] ?? '-',
+                    $p['etapa'].($p['detalhe'] !== '' ? ' · '.$p['detalhe'] : ''),
+                ];
+            }
+        });
+
+        if ($linhas === []) {
+            $this->line('Nenhum carrinho ativo na sequência.');
+
+            return;
+        }
+
+        $this->table(['id', 'cliente', 'disparo', 'quando', 'canal', 'o que vai'], $linhas);
+    }
+
     private function mandar($vez, ParadasSequencia $paradas, DisparadorSequencia $disparador): void
     {
-        $resultado = ['enviado' => 0, 'sem_canal' => 0, 'falhou' => 0];
+        $resultado = ['enviado' => 0, 'sem_canal' => 0, 'falhou' => 0, 'adiado' => 0, 'pulado' => 0];
 
         foreach ($vez as $registro) {
             // Pode ter comprado entre a conferência e agora.
@@ -129,6 +160,6 @@ class SequenciaCarrinhoAbandonado extends Command
             $resultado[$disparador->disparar($registro)]++;
         }
 
-        $this->info("Disparos: {$resultado['enviado']} enviados, {$resultado['falhou']} com falha, {$resultado['sem_canal']} sem canal (esperando template).");
+        $this->info("Disparos: {$resultado['enviado']} enviados, {$resultado['falhou']} com falha, {$resultado['sem_canal']} sem canal (esperando template), {$resultado['adiado']} adiados (já recebeu hoje), {$resultado['pulado']} pulados.");
     }
 }

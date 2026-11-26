@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
-/** Sequência de carrinho abandonado (pedido do Lira 21/11/2026): D+1..D+30, WhatsApp e e-mail, sem desconto. */
+/** Sequência de carrinho abandonado: desde 26/11/2026, D+1 e D+3 WhatsApp, D+5 e-mail do Caderno, D+7 último WhatsApp; sem desconto. */
 class SequenciaCarrinhoAbandonadoTest extends TestCase
 {
     use RefreshDatabase;
@@ -78,17 +78,24 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.teste']]])]);
     }
 
-    public function test_calendario_d1_a_d30_na_janela_e_para_no_sexto(): void
+    public function test_calendario_d1_d3_d5_d7_na_janela_e_para_no_quarto(): void
     {
         $registro = new Registro(['inicio_sequencia_em' => Carbon::parse('2026-11-01 15:00', 'America/Sao_Paulo'), 'disparos_enviados' => 0]);
 
-        $esperado = ['2026-11-02 15:00', '2026-11-04 15:00', '2026-11-06 15:00', '2026-11-08 15:00', '2026-11-21 15:00', '2026-12-01 15:00'];
+        $esperado = ['2026-11-02 15:00', '2026-11-04 15:00', '2026-11-06 15:00', '2026-11-08 15:00'];
         foreach ($esperado as $i => $quando) {
             $registro->disparos_enviados = $i;
             $this->assertSame($quando, CalendarioSequencia::proximoEm($registro)->setTimezone('America/Sao_Paulo')->format('Y-m-d H:i'));
         }
+        $this->assertSame(['whatsapp', 'whatsapp', 'email', 'whatsapp'], array_map(fn ($n) => CalendarioSequencia::canal($n), [1, 2, 3, 4]));
 
-        $registro->disparos_enviados = 6;
+        // Nunca dois no mesmo dia: o último saiu às 9h do dia do próximo, então ele vai para o dia seguinte.
+        $registro->disparos_enviados = 1;
+        $registro->ultimo_disparo_em = Carbon::parse('2026-11-04 09:00', 'America/Sao_Paulo');
+        $this->assertSame('2026-11-05 09:00', CalendarioSequencia::proximoEm($registro)->setTimezone('America/Sao_Paulo')->format('Y-m-d H:i'));
+        $registro->ultimo_disparo_em = null;
+
+        $registro->disparos_enviados = 4;
         $this->assertNull(CalendarioSequencia::proximoEm($registro));
 
         // Fora da janela: 22h vai para as 9h do dia seguinte; 6h vai para as 9h do mesmo dia.
@@ -100,7 +107,7 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         $this->assertSame('2026-11-01 20:00', CalendarioSequencia::janela(Carbon::parse('2026-11-01 19:59', 'America/Sao_Paulo'))->addMinute()->setTimezone('America/Sao_Paulo')->format('Y-m-d H:i'));
     }
 
-    public function test_sequencia_inteira_manda_seis_e_para(): void
+    public function test_sequencia_inteira_manda_quatro_e_para(): void
     {
         Mail::fake();
         $this->lead();
@@ -110,7 +117,7 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         // Abandonado há 90 min: o 1º sai em D+1.
         $this->assertSame(0, $registro->disparos_enviados);
 
-        foreach ([1, 2, 2, 2, 13, 10] as $i => $dias) {
+        foreach ([1, 2, 2, 2] as $i => $dias) {
             $this->travel($dias)->days();
             $this->artisan('loja:carrinho-abandonado-sequencia')->assertSuccessful();
             $this->assertSame($i + 1, $registro->fresh()->disparos_enviados, "disparo ".($i + 1));
@@ -119,11 +126,14 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         $registro->refresh();
         $this->assertTrue($registro->parado);
         $this->assertSame(Registro::PAROU_FIM, $registro->motivo_parada);
-        Mail::assertSentCount(6);
+        // Sem template de WhatsApp no teste: os 3 lembretes vão por e-mail, e o D+5 é o Caderno.
+        Mail::assertSentCount(4);
+        Mail::assertSent(\App\Modules\Cart\Mail\CadernoDoCarrinho::class, 1);
+        $this->assertSame([1, 2, 3, 4], array_column($registro->historico, 'numero'));
 
-        $this->travel(5)->days();
+        $this->travel(30)->days();
         $this->artisan('loja:carrinho-abandonado-sequencia');
-        Mail::assertSentCount(6);
+        Mail::assertSentCount(4);
     }
 
     public function test_estoque_antigo_sai_na_primeira_rodada_e_mais_de_30_dias_nao_entra(): void
@@ -301,12 +311,19 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         Mail::fake();
         $this->lead([], 60 * 24 * 3);
         $this->artisan('loja:carrinho-abandonado-sequencia');
-        foreach ([2, 2, 2, 13, 10] as $dias) {
+        foreach ([2, 2, 2] as $dias) {
             $this->travel($dias)->days();
             $this->artisan('loja:carrinho-abandonado-sequencia');
         }
 
-        Mail::assertSentCount(6);
+        Mail::assertSentCount(4);
+        Mail::assertSent(\App\Modules\Cart\Mail\CadernoDoCarrinho::class, function ($mail) {
+            $html = $mail->render();
+            $texto = strip_tags((string) preg_replace('#<(style|head)[^>]*>.*?</\1>#si', '', $html));
+            $this->assertDoesNotMatchRegularExpression('/desconto|cupom|%/iu', $texto);
+
+            return str_contains($html, 'Caderno KazaKora');
+        });
         Mail::assertSent(SequenciaCarrinho::class, function (SequenciaCarrinho $mail) {
             $html = $mail->render();
             $texto = strip_tags((string) preg_replace('#<(style|head)[^>]*>.*?</\1>#si', '', $html));
@@ -342,8 +359,8 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         Http::assertSent(fn ($request) => ($request['template']['name'] ?? null) === 'carrinho_novidade_kazakora'
             && str_contains($request['template']['components'][1]['parameters'][2]['text'] ?? '', 'Black Friday'));
 
-        Mail::assertSent(SequenciaCarrinho::class, fn (SequenciaCarrinho $mail) => $mail->promocao
-            && str_contains($mail->build()->subject, 'Black Friday') && str_contains($mail->render(), 'Voltar ao meu carrinho'));
+        // Com WhatsApp, os lembretes saem só por ele (um canal por disparo).
+        Mail::assertNothingSent();
 
         // Depois de 30/11 volta a novidade comum.
         $this->assertNull(PromocaoDoCarrinho::texto($livro, Carbon::parse('2026-12-01 00:00:01', 'America/Sao_Paulo')));
@@ -360,8 +377,8 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         $this->assertSame('https://kazakora.com/produtos/organizador-de-gaveta?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d5', $link['url']);
         $this->assertSame('produtos/organizador-de-gaveta?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d5', $link['sufixo']);
 
-        $email = app(LinkDoCarrinho::class)->resolver('kazakora', $produto, 6, 'email');
-        $this->assertStringEndsWith('utm_source=email&utm_medium=carrinho_abandonado&utm_campaign=d30', $email['url']);
+        $email = app(LinkDoCarrinho::class)->resolver('kazakora', $produto, 4, 'email');
+        $this->assertStringEndsWith('utm_source=email&utm_medium=carrinho_abandonado&utm_campaign=d7', $email['url']);
     }
 
     public function test_template_vazio_nao_manda_whatsapp_e_manda_email(): void
@@ -398,7 +415,9 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
                 && $template['components'][1]['sub_type'] === 'url'
                 && $template['components'][1]['parameters'][0]['text'] === 'produtos/organizador?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d1';
         });
-        $this->assertEqualsCanonicalizing(['whatsapp', 'email'], array_column(Registro::sole()->historico, 'canal'));
+        // Um canal por disparo: o lembrete sai só no WhatsApp.
+        $this->assertSame(['whatsapp'], array_column(Registro::sole()->historico, 'canal'));
+        Mail::assertNothingSent();
 
         // 2º disparo: novidade com imagem no cabeçalho e o texto no {{3}}.
         $this->travel(2)->days();

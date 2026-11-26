@@ -22,8 +22,9 @@ Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->without
 // nova abaixo (WhatsApp + e-mail, sem desconto). O código fica, mas não roda
 // agendado: as duas juntas mandariam mensagens em dobro para o mesmo cliente.
 // Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlapping(10);
-// Sequência de carrinho abandonado (pedido do Lira 2026-11-21): D+1, D+3,
-// D+5, D+7, D+20 e D+30, das 9h às 20h, WhatsApp e e-mail, sem desconto.
+// Sequência de carrinho abandonado (desde 2026-11-26): D+1 e D+3 WhatsApp,
+// D+5 e-mail do Caderno KazaKora (matéria do produto), D+7 último WhatsApp,
+// das 9h às 20h, nunca 2 no mesmo dia, sem desconto. --previa mostra o que falta.
 // Ver docs/carrinho-abandonado.md. Conferir antes com --simular.
 Schedule::command('loja:carrinho-abandonado-sequencia')->everyTenMinutes()->withoutOverlapping(10);
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue

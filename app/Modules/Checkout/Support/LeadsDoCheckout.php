@@ -221,15 +221,11 @@ class LeadsDoCheckout
         return CpfValido::valido($digitos) ? $digitos : null;
     }
 
-    /** Só dígitos, com DDD (10 ou 11), aceitando o 55 na frente. */
+    /** Só dígitos, com DDD (10 ou 11), aceitando o 55 na frente; DDD inexistente ou número cortado = null (26/11/2026). */
     public static function telefone(?string $telefone): ?string
     {
-        $digitos = preg_replace('/\D/', '', (string) $telefone);
+        $digitos = CelularDoCheckout::digitos($telefone);
 
-        if (strlen($digitos) >= 12 && str_starts_with($digitos, '55')) {
-            $digitos = substr($digitos, 2);
-        }
-
-        return in_array(strlen($digitos), [10, 11], true) ? $digitos : null;
+        return $digitos !== '' && CelularDoCheckout::erro($digitos) === null ? $digitos : null;
     }
 }

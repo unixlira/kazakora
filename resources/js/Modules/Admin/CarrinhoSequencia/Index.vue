@@ -1,6 +1,6 @@
 <script setup>
-// Sequência de carrinho abandonado (pedido do Lira 21/11/2026): D+1, D+3, D+5,
-// D+7, D+20 e D+30, WhatsApp e e-mail, sem desconto. Só leitura: quem manda é
+// Sequência de carrinho abandonado (desde 26/11/2026): D+1 e D+3 WhatsApp, D+5
+// e-mail do Caderno KazaKora, D+7 último WhatsApp; depois acabou. Só leitura: quem manda é
 // o comando loja:carrinho-abandonado-sequencia.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
@@ -108,7 +108,7 @@ const columns = [
     <AdminLayout>
         <h1 class="mb-2 text-2xl font-bold">Sequência de carrinho abandonado</h1>
         <p class="mb-4 text-sm text-slate-500">
-            Disparos por WhatsApp e e-mail em D+1, D+3, D+5, D+7, D+20 e D+30, das 9h às 20h, sem desconto. Para quando o
+            4 contatos, um por dia de envio: D+1 WhatsApp (lembrete), D+3 WhatsApp (segundo lembrete), D+5 e-mail do Caderno KazaKora com a matéria do produto e D+7 último WhatsApp, das 9h às 20h, sem desconto e nunca 2 no mesmo dia. Sem celular, o WhatsApp vai por e-mail. Para quando o
             cliente compra, pede para parar ou sai das promoções. Só consulta: quem manda é o comando
             <code>loja:carrinho-abandonado-sequencia</code>.
             <Link href="/admin/carrinhos-abandonados" class="text-sky-700 hover:underline">Ver os carrinhos do checkout</Link>.

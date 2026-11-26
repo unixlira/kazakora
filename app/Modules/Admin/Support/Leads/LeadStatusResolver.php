@@ -60,6 +60,7 @@ class LeadStatusResolver
         Registro::PAROU_SEM_PROMOCOES => 'saiu das promoções',
         Registro::PAROU_SEM_CONTATO => 'sem celular nem e-mail',
         Registro::PAROU_FIM => 'sequência terminou',
+        Registro::PAROU_SEQUENCIA_NOVA => 'sequência nova 26/11',
     ];
 
     /** Pedido gerado e ainda esperando o pagamento (cancelado não conta). */

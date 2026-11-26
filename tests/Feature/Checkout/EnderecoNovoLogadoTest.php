@@ -51,7 +51,8 @@ class EnderecoNovoLogadoTest extends TestCase
             'shipping_method_id' => $props['shippingMethods'][0]['id'],
             'new_address' => ['zip' => '03187-040', 'street' => 'Rua Mogi Mirim', 'number' => '20', 'neighborhood' => 'Vila Bertioga', 'city' => 'São Paulo', 'state' => 'SP', 'recipient_name' => 'José Roberto Lira', 'phone' => ''],
         ])->assertOk();
-        $this->assertSame('11988887777', session('checkout_draft.new_address.phone'));
+        // Celular sai sempre formatado (CelularDoCheckout, 26/11/2026).
+        $this->assertSame('(11) 98888-7777', session('checkout_draft.new_address.phone'));
     }
 
     public function test_bairro_vazio_e_completado_pelo_cep(): void

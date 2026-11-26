@@ -12,8 +12,10 @@ use Throwable;
 
 /**
  * Link de cada disparo da sequência de carrinho abandonado (pedido do Lira
- * 21/11/2026): o post do blog ligado ao produto, quando existir; até lá, a
- * página do produto no site certo (kazakora.com ou ferrakora.com).
+ * 21/11/2026): a página do produto no site certo (kazakora.com ou
+ * ferrakora.com). Desde 26/11/2026 os lembretes vão sempre para o produto; a
+ * matéria do blog vai só no e-mail do Caderno (D+5, MateriaDoCarrinho), e o
+ * post do blog só entra aqui com $blog = true.
  *
  * O blog (módulo Editorial, tabelas editorial_posts e editorial_post_product)
  * ainda está em outro ramo. Por isso a consulta vai direto às tabelas e só
@@ -29,13 +31,13 @@ class LinkDoCarrinho
     /**
      * @return array{url: string, base: string, sufixo: string, tipo: string}
      */
-    public function resolver(string $site, ?Product $produto, int $numero, string $canal): array
+    public function resolver(string $site, ?Product $produto, int $numero, string $canal, bool $blog = false): array
     {
         $site = $site === SiteAtual::FERRAKORA ? SiteAtual::FERRAKORA : SiteAtual::KAZAKORA;
         $base = WhatsAppNumeros::site($site) ?: rtrim((string) config('app.url'), '/');
         $pai = $produto ? ($produto->parent_product_id ? (Product::withTrashed()->find($produto->parent_product_id) ?? $produto) : $produto) : null;
 
-        [$caminho, $tipo] = $this->caminho($site, $pai, $produto);
+        [$caminho, $tipo] = $this->caminho($site, $pai, $produto, $blog);
 
         $utm = http_build_query([
             'utm_source' => $canal === 'whatsapp' ? 'whatsapp' : 'email',
@@ -48,13 +50,13 @@ class LinkDoCarrinho
     }
 
     /** @return array{0: string, 1: string} caminho no site e tipo (blog|produto|loja) */
-    private function caminho(string $site, ?Product $pai, ?Product $produto): array
+    private function caminho(string $site, ?Product $pai, ?Product $produto, bool $blog = false): array
     {
         if (! $pai) {
             return ['/', 'loja'];
         }
 
-        if ($site === SiteAtual::KAZAKORA && ($slug = $this->postDoBlog(array_filter([$pai->id, $produto?->id])))) {
+        if ($blog && $site === SiteAtual::KAZAKORA && ($slug = $this->postDoBlog(array_filter([$pai->id, $produto?->id])))) {
             return ['/blog/'.$slug, 'blog'];
         }
 

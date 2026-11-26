@@ -162,4 +162,27 @@ class AuthenticatedCheckoutTest extends TestCase
         $this->assertNotNull($order);
         $this->assertSame('SP', $order->shipping_state);
     }
+
+    /** Pedido 4562 (26/11/2026): o 55 do país não vira DDD nem corta o número; DDD inexistente é recusado. */
+    public function test_celular_com_55_do_pais_e_gravado_sem_o_55_e_ddd_inexistente_recusa(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $product = Product::factory()->create(['price' => 100, 'stock' => 10, 'is_active' => true]);
+        $shippingMethod = ShippingMethod::factory()->create(['price' => 10, 'is_active' => true]);
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $endereco = fn (string $phone) => [
+            'shipping_method_id' => $shippingMethod->id,
+            'new_address' => [
+                'recipient_name' => $user->name, 'phone' => $phone, 'zip' => '01310-100', 'street' => 'Rua Nova',
+                'number' => '20', 'neighborhood' => 'Centro', 'city' => 'São Paulo', 'state' => 'SP',
+            ],
+        ];
+
+        $this->actingAs($user)->post('/finalizacao/entrega', $endereco('+55 11 99123-4567'))->assertRedirect(route('finalizacao.pagamento'));
+        $this->assertSame('(11) 99123-4567', session(\App\Modules\Checkout\Http\Controllers\CheckoutController::SESSION_KEY)['new_address']['phone']);
+
+        $this->actingAs($user)->post('/finalizacao/entrega', $endereco('(20) 99123-4567'))
+            ->assertRedirect(route('finalizacao.entrega'))
+            ->assertSessionHasErrors('new_address.phone');
+    }
 }

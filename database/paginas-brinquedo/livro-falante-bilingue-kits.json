@@ -30,12 +30,12 @@
     "titulo": "Diversão sem telas",
     "subtitulo": "Ouve, desenha e monta, tudo longe da tela",
     "texto": "No livro, toca na figura e ouve a palavra em português e inglês. Na lousa, desenha com luz. No quebra-cabeça, monta cenas com ímãs. Brincadeira de verdade, longe do celular e da TV, com mais descanso para os olhos e uma hora de dormir mais tranquila.",
-    "imagem": 4,
+    "imagem": "products/620/galeria/13-os-3-juntos.jpg",
     "capa": "products/620/video/kit-3-produtos-real-com-som-v3-poster.webp"
   },
   "porque": {
     "titulo": "Por que a criançada adora",
-    "imagem": 3,
+    "imagem": "products/620/galeria/03-livro-aprende-brincando-sem-texto.jpg",
     "chamadas": [
       "Fala 2 idiomas",
       "300+ palavras"
@@ -66,7 +66,7 @@
   "ensina": {
     "titulo": "Brincadeira que também ensina",
     "texto": "Enquanto aperta e escuta, a criança treina sem nem perceber:",
-    "imagem": 5,
+    "imagem": "products/620/galeria/04-livro-ouve-e-aprende.jpg",
     "chamadas": [
       "Português e Inglês",
       "Toque e ouça",
@@ -103,7 +103,7 @@
   "detalhes": {
     "titulo": "Livro pensado para mãos pequenas",
     "texto": "Figuras grandes, toque simples e alça para carregar: a criança usa sozinha, em qualquer canto da casa.",
-    "imagem": 0,
+    "imagem": "products/620/galeria/01-livro-capa.jpg",
     "cards": [
       {
         "titulo": "Fala 2 idiomas",
@@ -168,7 +168,7 @@
   "familia": {
     "titulo": "Queridinho de pais e filhos",
     "texto": "O livro que a criança pega sozinha para ouvir, repetir e mostrar para a família cada palavra nova.",
-    "imagem": 4,
+    "imagem": "products/620/galeria/05-lousa-em-familia.jpg",
     "citacao": "Menos tela, mais conversa: a família toda aprendendo inglês junto, no chão da sala."
   },
   "kits": {

@@ -29,6 +29,7 @@ class PaginasParaConferir extends Command
         $produtos = Product::query()
             ->where('is_active', true)
             ->where(fn ($q) => $q->where('so_ferrakora', false)->orWhereNull('so_ferrakora'))
+            ->where('fora_da_vitrine_kz', false)
             ->latest('id')
             ->get(['id', 'slug']);
 

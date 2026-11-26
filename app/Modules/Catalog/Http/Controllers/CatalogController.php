@@ -11,15 +11,16 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Catalog\Support\FaixaDoTopo;
-use App\Modules\Catalog\Support\FichaTecnica;
-use App\Modules\Catalog\Support\LayoutDaPagina;
-use App\Modules\Catalog\Support\PaginaBrinquedo;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Support\EscadaDeKits;
+use App\Modules\Catalog\Support\FaixaDoTopo;
+use App\Modules\Catalog\Support\FichaTecnica;
 use App\Modules\Catalog\Support\FotosDoComparativo;
+use App\Modules\Catalog\Support\LayoutDaPagina;
+use App\Modules\Catalog\Support\MarcaDaLoja;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
+use App\Modules\Catalog\Support\PaginaBrinquedo;
 use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -340,8 +341,17 @@ class CatalogController extends Controller
         return \App\Modules\Catalog\Support\MenuDaLoja::departamentos();
     }
 
-    public function show(Request $request, Product $product): Response
+    public function show(Request $request, Product $product): Response|RedirectResponse
     {
+        // Produto tirado da vitrine (fora_da_vitrine_kz, 26/11/2026): 301 para o que ficou no
+        // lugar, mantendo UTMs e fbclid dos anúncios.
+        if ($product->fora_da_vitrine_kz && $product->is_active && ! $product->so_ferrakora) {
+            $destino = $product->paginaNaKazaKora();
+            abort_unless($destino, 404);
+            $query = $request->getQueryString();
+
+            return redirect(route('produtos.ver', $destino->slug).($query ? '?'.$query : ''), 301);
+        }
         abort_unless($product->naKazaKora(), 404);
 
         $product->load([
@@ -498,6 +508,18 @@ class CatalogController extends Controller
             $product->setRelation('adContent', $conteudoCard);
         }
 
+        // Nome da loja no texto (pedido do Lira 26/11/2026): a descrição e o conteúdo são os mesmos
+        // da FerraKora, então aqui "FerraKora" vira "KazaKora". Só na tela; o banco não muda.
+        $product->setAttribute('description', MarcaDaLoja::paraKazaKora($product->description));
+        $product->setAttribute('seo_description', MarcaDaLoja::paraKazaKora($product->seo_description));
+        if ($product->adContent) {
+            $conteudoDaLoja = clone $product->adContent;
+            foreach (['destaques', 'chamada', 'blocos', 'comparativo', 'beneficios', 'duvidas', 'cta'] as $campo) {
+                $conteudoDaLoja->{$campo} = MarcaDaLoja::paraKazaKora($conteudoDaLoja->{$campo});
+            }
+            $product->setRelation('adContent', $conteudoDaLoja);
+        }
+
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             // preco_pix: valor no Pix com a conta do checkout (pedido 2026-10-23).
@@ -569,7 +591,7 @@ class CatalogController extends Controller
             'faixa' => FaixaDoTopo::paraProduto($product->adContent),
             // Escada de kits (pedido do Lira 26/11/2026, oferta do Compressor 4 em 1 também na KazaKora):
             // os cartões de todos os kits, cada um com a página dele. null sem escada.
-            'kits' => $version === 2 ? EscadaDeKits::paraKazaKora($product) : null,
+            'kits' => $version === 2 ? MarcaDaLoja::paraKazaKora(EscadaDeKits::paraKazaKora($product)) : null,
             // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
             // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
             'layout' => LayoutDaPagina::para($product),

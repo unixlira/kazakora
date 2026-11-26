@@ -227,7 +227,8 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      */
     private function matchByNameSimilarity(string $itemName, string $externalId): ?Product
     {
-        $scored = Product::query()->naKazaKora()->get(['id', 'name', 'sku', 'stock'])
+        // Sem o naKazaKora(): produto fora da vitrine da loja continua vendendo no marketplace (26/11/2026).
+        $scored = Product::query()->where('is_active', true)->where('so_ferrakora', false)->get(['id', 'name', 'sku', 'stock'])
             ->map(function (Product $candidate) use ($itemName) {
                 similar_text(mb_strtolower($itemName), mb_strtolower($candidate->name), $percent);
 

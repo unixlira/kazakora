@@ -486,7 +486,8 @@ class AmazonDriver extends AbstractMarketplaceDriver
             return null;
         }
 
-        $pontuados = Product::query()->naKazaKora()->get(['id', 'name', 'sku', 'color'])
+        // Sem o naKazaKora(): produto fora da vitrine da loja continua vendendo no marketplace (26/11/2026).
+        $pontuados = Product::query()->where('is_active', true)->where('so_ferrakora', false)->get(['id', 'name', 'sku', 'color'])
             ->map(function (Product $candidato) use ($nome) {
                 similar_text(mb_strtolower($nome), mb_strtolower($candidato->name), $percentual);
 

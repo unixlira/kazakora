@@ -171,7 +171,9 @@ class PrecoUnicoTodasTelasTest extends TestCase
 
         $this->novaRequisicao();
         $busca = $this->getJson('/busca/sugestoes?q='.urlencode($produto->name), $regiao)->assertOk();
-        $telas['busca'] = round((float) collect($busca->json('produtos'))->firstWhere('slug', $produto->slug)['preco'], 2);
+        $sugestao = collect($busca->json('produtos'))->firstWhere('slug', $produto->slug);
+        $telas['busca'] = round((float) $sugestao['preco_sem_cupom'], 2);
+        $telas['busca_grande'] = round((float) $sugestao['preco'], 2);
 
         $this->novaRequisicao();
         $pagina = $this->get("/produtos/{$produto->slug}", $regiao)->assertOk();
@@ -208,6 +210,7 @@ class PrecoUnicoTodasTelasTest extends TestCase
 
         $this->assertSame($telas['pagina'], $telas['vitrine'], 'Vitrine e página com o mesmo de/por/cupom/Pix.');
         $this->assertEqualsWithDelta($preco, $telas['busca'], 0.001, 'Busca com o preço da página.');
+        $this->assertEqualsWithDelta((float) ($telas['pagina']['cupom']['por'] ?? $preco), $telas['busca_grande'], 0.001, 'Busca com o número grande do card.');
         $this->assertEqualsWithDelta($preco, $telas['carrinho'], 0.001, 'Carrinho com o preço da página.');
         $this->assertEqualsWithDelta($preco, $telas['checkout'], 0.001, 'Checkout com o preço da página.');
         if (isset($telas['checkout_com_cep'])) {

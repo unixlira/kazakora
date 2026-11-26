@@ -477,6 +477,13 @@ class FreteEmbutido
      */
     public function semFreteEmbutido(Product $product): bool
     {
+        // Kits da escada do Compressor (pedido do Lira 26/11/2026): preço fixo pelo SKU,
+        // na KazaKora e nos outros sites (FerraKora), para o "de/por" do cartão ser o mesmo em todo CEP.
+        $skus = array_map('strval', (array) config('frete_embutido.skus_preco_fixo', []));
+        if ($skus !== [] && filled($product->sku) && in_array((string) $product->sku, $skus, true)) {
+            return true;
+        }
+
         $ids = array_map('intval', (array) config('frete_embutido.produtos_sem_frete', []));
         if ($ids === [] || $this->site() !== SiteAtual::KAZAKORA) {
             return false;

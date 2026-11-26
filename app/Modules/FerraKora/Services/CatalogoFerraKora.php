@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
+use App\Modules\Catalog\Support\EscadaDeKits;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
@@ -130,7 +131,14 @@ class CatalogoFerraKora extends CatalogoOutroSite
     /** @return Builder<Review> */
     private function avaliacoesDoGrupo(Product $pai): Builder
     {
-        return Review::query()->whereIn('product_id', Product::query()->where('id', $pai->id)->orWhere('parent_product_id', $pai->id)->select('id'));
+        // Kit montado com outros produtos (products.avaliacoes_de, 26/11/2026): junta as
+        // avaliações reais dos produtos que vêm nele, como a página do KazaKora faz.
+        $ids = array_merge([$pai->id], array_values(array_filter(array_map(
+            fn ($item) => (int) ($item['id'] ?? 0),
+            is_array($pai->avaliacoes_de) ? $pai->avaliacoes_de : [],
+        ))));
+
+        return Review::query()->whereIn('product_id', Product::query()->whereIn('id', $ids)->orWhereIn('parent_product_id', $ids)->select('id'));
     }
 
     /** Pai publicado no site pelo id da API ("kz-<id>"). null = não está no site. */
@@ -149,7 +157,8 @@ class CatalogoFerraKora extends CatalogoOutroSite
     /** Produto do site com o conteúdo da página. null = não está no site. */
     public function produtoComConteudo(string $idOuSlug): ?array
     {
-        $produto = $this->produto($idOuSlug);
+        $lista = $this->produtos();
+        $produto = $this->produtoNaLista($idOuSlug, $lista);
 
         if ($produto === null) {
             return null;
@@ -162,6 +171,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'conteudo' => $pai ? $this->conteudoDaPagina($pai) : null,
             // Card de Black Friday padrão (14/11/2026), para o produto sem oferta própria no cadastro.
             'oferta_padrao' => $pai ? OfertaBlackFriday::padrao($pai, outroSite: true) : null,
+            // Escada de kits (pedido do Lira 26/11/2026): os cartões de todos os kits, com o
+            // preço de cada um tirado da mesma lista (mesmo frete da região). null sem escada.
+            'kits' => $pai ? EscadaDeKits::paraSite($pai, $lista, self::PREFIXO_PRODUTO) : null,
         ];
     }
 

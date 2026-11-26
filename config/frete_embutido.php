@@ -90,4 +90,9 @@ return [
     // 620 = Livro Falante e seus kits (variações 621 e 622), pedido do Lira
     // 25/11/2026: preço fixo 167,99 / 229,99 / 301,99 para qualquer CEP.
     'produtos_sem_frete' => [620],
+
+    // Preço fixo pelo SKU em todos os sites (KazaKora e FerraKora), pedido do Lira
+    // 26/11/2026: kits B e C da escada do Compressor 4 em 1 com o "de/por" aprovado
+    // (629,00/297,90 e 1.299,00/730,00) em qualquer CEP. A loja paga o frete da caixa.
+    'skus_preco_fixo' => ['FK-KIT-COMPRESSOR-REPARO-CATRACA', 'FK-KIT-MACACO-ELET-5T'],
 ];

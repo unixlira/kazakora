@@ -41,14 +41,15 @@ const nome = (opcao) => textos.value.get(opcao.id)?.nome || opcao.variation || o
             <span class="oc-info">
                 <span class="oc-nome">{{ nome(opcao) }}</span>
                 <span class="oc-itens">{{ opcao.stock < 1 ? 'Esgotado' : (textos.get(opcao.id)?.itens || '') }}</span>
-                <span v-if="opcao.stock > 0 && textos.get(opcao.id)?.vantagens?.length" class="oc-vantagens">
-                    <span v-for="(vantagem, i) in textos.get(opcao.id).vantagens" :key="i">+ {{ vantagem }}</span>
-                </span>
             </span>
             <span class="oc-precos">
                 <s v-if="deDaOpcao(opcao)">{{ formatPrice(deDaOpcao(opcao)) }}</s>
                 <b>{{ formatPrice(porDaOpcao(opcao)) }}</b>
                 <small v-if="opcao.preco_cupom?.code">com cupom {{ opcao.preco_cupom.code }}</small>
+            </span>
+            <!-- Vantagens na largura toda do cartão, embaixo do nome e do preço (no celular a coluna do nome é estreita). -->
+            <span v-if="opcao.stock > 0 && textos.get(opcao.id)?.vantagens?.length" class="oc-vantagens">
+                <span v-for="(vantagem, i) in textos.get(opcao.id).vantagens" :key="i">+ {{ vantagem }}</span>
             </span>
             <span class="oc-pilulas">
                 <span v-if="acrescimo(opcao) > 0" class="oc-pilula azul">só + {{ formatPrice(acrescimo(opcao)) }}</span>

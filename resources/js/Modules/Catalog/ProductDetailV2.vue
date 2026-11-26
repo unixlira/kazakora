@@ -903,8 +903,15 @@ const contagem = computed(() => {
     // Segundos sempre à mostra (pedido do Lira 25/11/2026): o cliente vê o relógio andando.
     return { dias: Math.floor(minutos / 1440), horas: String(Math.floor((minutos % 1440) / 60)).padStart(2, '0'), min: String(minutos % 60).padStart(2, '0'), seg: String(segundos % 60).padStart(2, '0') };
 });
+// Botões das seções (pedido do Lira 25/11/2026, como na Plopp): na página de brinquedo a tela para
+// com a faixa da oferta no alto, os kits, o Comprar e os cartões de garantia logo abaixo, à vista.
 const irParaCompra = () => {
-    document.getElementById('comprar')?.scrollIntoView({ behavior: rolarSuave() ? 'smooth' : 'auto', block: 'start' });
+    const caixa = document.getElementById('comprar');
+    const alvo = (brinquedo.value && (caixa?.querySelector('.pb-bf') || caixa?.querySelector('.kb-lista, .kb-kit'))) || caixa;
+    if (!alvo) return;
+    const topo = document.querySelector('header')?.getBoundingClientRect().height ?? 0;
+    const y = alvo.getBoundingClientRect().top + window.scrollY - topo - 12;
+    window.scrollTo({ top: Math.max(0, y), behavior: rolarSuave() ? 'smooth' : 'auto' });
 };
 // Maior desconto real entre os kits (preço "de" x "por"), para o card de campanha da página de brinquedo.
 const maiorDescontoKits = computed(() => {
@@ -949,12 +956,12 @@ onMounted(async () => {
     document.fonts?.ready?.then(alinharGaleria);
 });
 onUnmounted(() => { window.removeEventListener('resize', alinharGaleria); observadorAltura?.disconnect(); });
-// Cartões "Monte o kit" no fim da página (pedido do Lira 25/11/2026): quem chegou até ali e
-// escolheu vai direto para o checkout com o kit escolhido; na caixa de compra só marca.
-const escolherKit = (kit, direto = false) => {
+// Cartões "Monte o kit" no fim da página: marca o kit e sobe para a oferta (faixa, kits,
+// Comprar e cartões de garantia), como na Plopp (pedido do Lira 25/11/2026).
+const escolherKit = (kit, rolar = false) => {
     escolherVariacao(kit);
     kzmAcao(`kit:${kit.id}`);
-    if (direto) nextTick(() => buyNow());
+    if (rolar) nextTick(() => irParaCompra());
 };
 
 </script>

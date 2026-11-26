@@ -103,7 +103,7 @@ class ManuelaProductFlowTest extends TestCase
 
         $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.IN1', 'Vi uma webcam de vocês no Instagram'))->assertOk();
 
-        $this->assertSame(['É a Webcam Full HD 1080p, José? Quer mais informações sobre ela?'], WhatsAppMessage::query()->where('direction', 'outbound')->pluck('body')->all());
+        $this->assertSame(['É a Webcam Full HD 1080p, José?'], WhatsAppMessage::query()->where('direction', 'outbound')->pluck('body')->all());
 
         [, $second] = $this->geminiRequests();
         // A volta da ferramenta leva a assinatura do Gemini de volta, intacta.
@@ -163,7 +163,7 @@ class ManuelaProductFlowTest extends TestCase
         $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.IN1', 'Vocês têm ring light?'))->assertOk();
 
         $sent = WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->get();
-        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY, 'Achei! É o Ring Light 26cm com tripé? Quer mais informações?'], $sent->pluck('body')->all());
+        $this->assertSame([ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY, 'Achei! É o Ring Light 26cm com tripé?'], $sent->pluck('body')->all());
         $this->assertTrue($sent[0]->payload['interim']);
 
         $response = $this->functionResponse($this->geminiRequests()[1]);

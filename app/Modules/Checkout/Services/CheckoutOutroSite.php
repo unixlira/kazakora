@@ -209,7 +209,9 @@ abstract class CheckoutOutroSite
         $subtotal = round($itens->sum('subtotal'), 2);
         $entrega = app(FreteEmbutido::class)->entregaDoCarrinho($itens);
         $full = $cep ? app(EntregaExpressa::class)->consultar($cep) : null;
-        $opcaoTurbo = $full ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo'];
+        // Preço único (26/11/2026): o item fica com o frete da região da navegação; o que o
+        // CEP de entrega pede a mais é cobrado na entrega, como na KazaKora.
+        $opcaoTurbo = FreteEmbutido::expressaPeloEmbutido($entrega, $full ? FreteEmbutido::turboNoFull($entrega['turbo']) : $entrega['turbo']);
         $opcoes = $this->opcoesDeEntrega($entrega, $full, $opcaoTurbo, $cep, $subtotal);
         $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
         $valorDoFrete = round((float) $escolhida['preco'], 2);
@@ -248,6 +250,8 @@ abstract class CheckoutOutroSite
     private function opcoesDeEntrega(array $entrega, ?array $full, ?array $turbo, ?string $cep, float $subtotal): array
     {
         $opcoes = [];
+        // Frete do CEP acima do que já está no preço dos itens (0 = grátis).
+        $diferenca = round((float) ($entrega['diferenca'] ?? 0), 2);
         if ($full) {
             $opcoes[] = ['id' => 'full', 'transportadora' => 'Full', 'servico' => 'Entrega expressa', 'preco' => 0.0, 'prazo' => null, 'mensagem' => $full['mensagem'], 'local' => $full['local']];
         }
@@ -256,8 +260,8 @@ abstract class CheckoutOutroSite
         // 'correios' fica pelo contrato com os sites.
         $melhorEnvio = FreteProvedor::melhorEnvio();
         $opcoes[] = $melhorEnvio
-            ? ['id' => 'correios', 'transportadora' => 'Entrega', 'servico' => 'grátis', 'preco' => 0.0, 'prazo' => $entrega['prazo']]
-            : ['id' => 'correios', 'transportadora' => 'Correios', 'servico' => mb_strtoupper($entrega['servico'] ?? 'pac'), 'preco' => 0.0, 'prazo' => $entrega['prazo']];
+            ? ['id' => 'correios', 'transportadora' => 'Entrega', 'servico' => $diferenca > 0 ? 'padrão' : 'grátis', 'preco' => $diferenca, 'prazo' => $entrega['prazo']]
+            : ['id' => 'correios', 'transportadora' => 'Correios', 'servico' => mb_strtoupper($entrega['servico'] ?? 'pac'), 'preco' => $diferenca, 'prazo' => $entrega['prazo']];
         if ($turbo) {
             $opcoes[] = ['id' => 'turbo', 'transportadora' => $melhorEnvio ? 'Entrega' : 'Correios', 'servico' => $melhorEnvio ? 'rápida' : 'SEDEX', 'preco' => round((float) $turbo['preco'], 2), 'prazo' => $turbo['prazo'], 'dias_a_menos' => $turbo['dias_a_menos']];
         }
@@ -268,7 +272,8 @@ abstract class CheckoutOutroSite
             return $opcoes;
         }
 
-        $custo = isset($entrega['custo']) ? (float) $entrega['custo'] : null;
+        // A transportadora cobra só o que passa do frete que o preço dos itens já paga.
+        $custo = isset($entrega['custo']) ? (float) ($entrega['embutido'] ?? $entrega['custo']) : null;
         if ($cep && $custo !== null && ! empty($entrega['peso_g'])) {
             $teto = (float) config('frete_embutido.turbo_max', 60);
             foreach (app(TransportadorasMelhorEnvio::class)->cotar($cep, (int) $entrega['peso_g'], $subtotal) as $cotacao) {

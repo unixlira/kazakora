@@ -66,6 +66,9 @@ class FreteEmbutido
     /** paraProdutoNoDestino(): frete do CEP atual, sem o preço fixo da navegação. */
     private bool $ignorarFixo = false;
 
+    /** Estado em que o cliente navegou no FerraKora/Beauty Kora, mandado pelo site (usarUfDaNavegacao). */
+    private ?string $ufNavegacaoInformada = null;
+
     /** @var array<string, ?array> tabela por CEP, nesta requisição */
     private array $tabelas = [];
 
@@ -81,6 +84,9 @@ class FreteEmbutido
 
     /** @var list<array>|null regras de frete que valem para o destino atual */
     private ?array $regras = null;
+
+    /** @var array<int, array{sku: ?string, cost_price: mixed}> sku e custo por produto, lidos do banco (dadoDoProduto) */
+    private array $dadosDoBanco = [];
 
     public function __construct(private readonly Request $request)
     {
@@ -99,6 +105,17 @@ class FreteEmbutido
     public function ligado(): bool
     {
         return $this->ligado;
+    }
+
+    /**
+     * Checkout do FerraKora e do Beauty Kora (preço único, 26/11/2026): o site
+     * devolve o estado em que o cliente viu os preços (uf_navegacao do resumo),
+     * porque o pedido chega pelo endereço do site, sem a região do IP.
+     */
+    public function usarUfDaNavegacao(?string $uf): void
+    {
+        $uf = strtoupper(trim((string) $uf));
+        $this->ufNavegacaoInformada = isset(CorreiosTabelaPorEstado::CAPITAIS[$uf]) ? $uf : null;
     }
 
     /** CEP do endereço de entrega do checkout: vale acima de cookie e IP. */
@@ -146,6 +163,10 @@ class FreteEmbutido
      */
     public function ufDaNavegacao(): ?string
     {
+        if ($this->ufNavegacaoInformada) {
+            return $this->ufNavegacaoInformada;
+        }
+
         $destino = $this->destino();
 
         return $destino['uf'] ?? CepUf::porCep($destino['cep'] ?? null);
@@ -210,7 +231,7 @@ class FreteEmbutido
         // região o frete no preço fica o da 1ª tela, já com teto e piso, nunca
         // recalculado pelo frete do CEP novo. O que faltar vira a linha "Frete"
         // do checkout (diferenca em entregaDoCarrinho()).
-        $visto = $this->request->session()->get('frete_embutido.visto.'.$product->id);
+        $visto = $this->request->hasSession() ? $this->request->session()->get('frete_embutido.visto.'.$product->id) : null;
         if ($visto !== null) {
             return [...$fixo, 'embutido' => (float) $visto];
         }
@@ -359,7 +380,7 @@ class FreteEmbutido
      */
     private function contaDaMargem(Product $product, array $frete): ?array
     {
-        $custo = (float) ($product->cost_price ?: 0);
+        $custo = (float) ($this->dadoDoProduto($product, 'cost_price') ?: 0);
         if ($custo <= 0 && $product->parent_product_id) {
             $pai = $product->parent_product_id;
             $this->custosDosPais[$pai] ??= Product::query()->whereKey($pai)->value('cost_price');
@@ -439,7 +460,7 @@ class FreteEmbutido
     private function fixoNaNavegacao(Product $product, array $frete): array
     {
         if (! $this->guardaPrecoFixo()) {
-            return $frete;
+            return $this->fixoDosOutrosSites($product, $frete);
         }
 
         $chave = 'frete_embutido.fixo.'.$product->id;
@@ -455,6 +476,44 @@ class FreteEmbutido
         }
 
         return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => (float) $fixo, 'fixo' => true];
+    }
+
+    /**
+     * Preço único no FerraKora e no Beauty Kora (incidente 26/11/2026): o card
+     * mostra o frete da região de quem navega (IP) e o checkout trocava pelo
+     * do CEP de entrega, então o mesmo produto subia de R$ 236,52 para
+     * R$ 244,15 (CE) ou R$ 247,00 (AM) só no checkout. Como na KazaKora, o
+     * item fica com o frete da região da navegação e o que o CEP pedir a
+     * mais vira a linha "Frete" (diferenca de entregaDoCarrinho()). Sem a
+     * região da navegação (nem IP nem uf_navegacao), fica o do CEP.
+     */
+    private function fixoDosOutrosSites(Product $product, array $frete): array
+    {
+        if (! $this->ligado || $this->ignorarFixo || ! $this->cepForcado || ! config('frete_embutido.fixo_na_navegacao', true)
+            || $this->site() === SiteAtual::KAZAKORA) {
+            return $frete;
+        }
+
+        $uf = $this->ufNavegacaoInformada ?? $this->ufPeloIp();
+        if (! $uf) {
+            return $frete;
+        }
+
+        [$cep, $destino, $regras] = [$this->cepForcado, $this->destino, $this->regras];
+        $this->cepForcado = null;
+        $this->destino = ['cep' => CorreiosTabelaPorEstado::CAPITAIS[$uf][3], 'uf' => $uf, 'origem' => 'ip'];
+        $this->regras = null;
+        try {
+            $navegacao = $this->freteDoProduto($product);
+        } finally {
+            [$this->cepForcado, $this->destino, $this->regras] = [$cep, $destino, $regras];
+        }
+
+        if (abs($navegacao['embutido'] - $frete['embutido']) < 0.005) {
+            return $frete;
+        }
+
+        return [...$frete, 'correios' => $frete['correios'] ?? $frete['embutido'], 'embutido' => (float) $navegacao['embutido'], 'fixo' => true];
     }
 
     private function guardaPrecoFixo(): bool
@@ -480,7 +539,8 @@ class FreteEmbutido
         // Kits da escada do Compressor (pedido do Lira 26/11/2026): preço fixo pelo SKU,
         // na KazaKora e nos outros sites (FerraKora), para o "de/por" do cartão ser o mesmo em todo CEP.
         $skus = array_map('strval', (array) config('frete_embutido.skus_preco_fixo', []));
-        if ($skus !== [] && filled($product->sku) && in_array((string) $product->sku, $skus, true)) {
+        $sku = $this->dadoDoProduto($product, 'sku');
+        if ($skus !== [] && filled($sku) && in_array((string) $sku, $skus, true)) {
             return true;
         }
 
@@ -491,6 +551,36 @@ class FreteEmbutido
 
         return in_array((int) $product->id, $ids, true)
             || ($product->parent_product_id && in_array((int) $product->parent_product_id, $ids, true));
+    }
+
+    /**
+     * Preço único em todas as telas (incidente 26/11/2026): o card da vitrine,
+     * a busca e as variações carregam o produto só com algumas colunas
+     * (Product::scopeForCard, sem sku e sem cost_price). Sem o sku o kit de
+     * preço fixo ganhava frete somado só no card (R$ 317,42 na listagem e
+     * R$ 297,90 na página) e sem o custo o teto/piso não entrava (R$ 744,01 x
+     * R$ 743,89). Campo que não veio na consulta é lido do banco: o preço não
+     * depende de quais colunas a tela pediu.
+     */
+    private function dadoDoProduto(Product $product, string $campo): mixed
+    {
+        if (array_key_exists($campo, $product->getAttributes()) || ! $product->id) {
+            return $product->getAttribute($campo);
+        }
+
+        // Uma consulta para o catálogo todo na 1ª falta (a vitrine tem dezenas de cards);
+        // produto criado depois disso na mesma requisição é lido sozinho.
+        $id = (int) $product->id;
+        if ($this->dadosDoBanco === []) {
+            $this->dadosDoBanco = DB::table('products')->get(['id', 'sku', 'cost_price'])
+                ->mapWithKeys(fn ($l) => [(int) $l->id => ['sku' => $l->sku, 'cost_price' => $l->cost_price]])->all();
+        }
+        if (! array_key_exists($id, $this->dadosDoBanco)) {
+            $linha = DB::table('products')->where('id', $id)->first(['sku', 'cost_price']);
+            $this->dadosDoBanco[$id] = ['sku' => $linha?->sku, 'cost_price' => $linha?->cost_price];
+        }
+
+        return $this->dadosDoBanco[$id][$campo] ?? null;
     }
 
     private function freteDoProduto(Product $product): array

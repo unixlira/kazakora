@@ -71,9 +71,12 @@ abstract class CheckoutOutroSiteController extends Controller
             'cupom' => ['nullable', 'string', 'max:60'],
             'sem_cupom_automatico' => ['nullable', 'boolean'],
             'email' => ['nullable', 'string', 'max:255'],
+            'uf_navegacao' => ['nullable', 'string', 'max:2'],
         ]);
 
-        // Região de quem navega (IP) antes de o resumo trocar pelo CEP da entrega.
+        // Região de quem navega (IP, ou a que o site já recebeu num resumo anterior)
+        // antes de o resumo trocar pelo CEP da entrega: o preço do item fica o dela.
+        app(FreteEmbutido::class)->usarUfDaNavegacao($dados['uf_navegacao'] ?? null);
         $ufNavegacao = rescue(fn () => app(FreteEmbutido::class)->ufDaNavegacao(), null, false);
 
         try {
@@ -83,7 +86,9 @@ abstract class CheckoutOutroSiteController extends Controller
             \App\Modules\Analytics\Support\PrecoVisto::completarCheckout($request, $this->checkout->site(), $resumo);
 
             // Aviso de entrega fora da região do cliente (pedido 2026-10-25).
-            return $this->semCache(response()->json([...$resumo, 'outra_regiao' => $ufNavegacao !== null && $ufEntrega !== null && $ufNavegacao !== $ufEntrega]));
+            // uf_navegacao (preço único, 26/11/2026): o site manda de volta no pedido, que chega
+            // pelo endereço dele sem a região do IP, para cobrar o mesmo preço do card.
+            return $this->semCache(response()->json([...$resumo, 'outra_regiao' => $ufNavegacao !== null && $ufEntrega !== null && $ufNavegacao !== $ufEntrega, 'uf_navegacao' => $ufNavegacao]));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }
@@ -129,6 +134,7 @@ abstract class CheckoutOutroSiteController extends Controller
             'meta.fbp' => ['nullable', 'string', 'max:600'],
             'meta.fbc' => ['nullable', 'string', 'max:600'],
             'meta.url' => ['nullable', 'string', 'max:500'],
+            'uf_navegacao' => ['nullable', 'string', 'max:2'],
         ], [
             'cliente.name.required' => 'Digite seu nome completo.',
             'cliente.name.min' => 'Digite seu nome completo (nome e sobrenome).',
@@ -149,6 +155,7 @@ abstract class CheckoutOutroSiteController extends Controller
         ]);
         $dados['endereco']['zip'] = preg_replace('/\D/', '', $dados['endereco']['zip']);
         $dados['endereco']['state'] = strtoupper($dados['endereco']['state']);
+        app(FreteEmbutido::class)->usarUfDaNavegacao($dados['uf_navegacao'] ?? null);
 
         try {
             ['order' => $order, 'mp' => $mp] = $this->checkout->criarPedido($dados, $this->localizacaoDoVisitante($request));

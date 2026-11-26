@@ -130,7 +130,14 @@ class StripePaymentService
      */
     public function constructWebhookEvent(string $payload, string $signature): \Stripe\Event
     {
-        return Webhook::constructEvent($payload, $signature, config('services.stripe.webhook_secret'));
+        $secret = (string) config('services.stripe.webhook_secret');
+
+        // Sem o segredo não há o que conferir: recusa (antes estourava 500).
+        if ($secret === '') {
+            throw new \UnexpectedValueException('STRIPE_WEBHOOK_SECRET não configurado.');
+        }
+
+        return Webhook::constructEvent($payload, $signature, $secret);
     }
 
     private function client(): StripeClient

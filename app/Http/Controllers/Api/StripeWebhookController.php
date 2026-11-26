@@ -23,14 +23,8 @@ class StripeWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
-        // Fail-closed (auditoria 2026-11-25): sem STRIPE_WEBHOOK_SECRET não dá
-        // para conferir nada, então recusa (antes estourava erro 500).
-        if (! filled(config('services.stripe.webhook_secret'))) {
-            Log::channel('stripe')->warning('stripe.webhook.no_secret_configured', ['ip' => $request->ip()]);
-
-            return response()->json(['error' => 'invalid_signature'], 401);
-        }
-
+        // Fail-closed (auditoria 2026-11-25): assinatura errada ou
+        // STRIPE_WEBHOOK_SECRET vazio (StripePaymentService) = 401.
         try {
             $event = $this->stripe->constructWebhookEvent(
                 $request->getContent(),

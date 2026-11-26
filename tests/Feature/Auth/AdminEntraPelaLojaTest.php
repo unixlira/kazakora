@@ -15,6 +15,15 @@ class AdminEntraPelaLojaTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // O código por e-mail do admin tem teste próprio (AdminDoisFatoresTest,
+        // que também cobre a ida da loja para o painel depois do código).
+        config(['auth.admin_2fa.ativo' => false]);
+    }
+
     public function test_admin_que_entra_pela_loja_vai_para_o_painel(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

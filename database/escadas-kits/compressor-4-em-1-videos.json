@@ -1,0 +1,8 @@
+{
+    "_sobre": "Vídeo de cada kit da escada do Compressor 4 em 1 (26/11/2026). Os arquivos foram enviados para o disco público (storage/app/public) antes; o vídeo antigo do 413 (products/413/video/compressor-4em1-uso-v2.mp4, com a faixa do cupom até 30/11) continua no disco para voltar. Rodar: php artisan kits:escada compressor-4-em-1-videos --aplicar",
+    "ajustar": [
+        {"sku": "344-BOMBAAR-4EM1", "video": {"arquivo": "products/413/video/kitA-compressor-4em1-web.mp4", "segundos": 26}},
+        {"sku": "FK-KIT-COMPRESSOR-REPARO-CATRACA", "video": {"arquivo": "products/623/video/kitB-compressor-remendos-catraca-web.mp4", "segundos": 32}},
+        {"sku": "FK-KIT-MACACO-ELET-5T", "video": {"arquivo": "products/508/video/kitC-macaco-eletrico-4em1-web.mp4", "segundos": 26}}
+    ]
+}

@@ -51,16 +51,19 @@ class FerraKoraCatalogoController extends Controller
     /**
      * Endereço antigo do produto (2026-11-18): o Nginx do ferrakora.com manda
      * para cá o /produto/<slug>/ que não tem página no build; slug que o
-     * produto já teve responde 301 para o endereço atual, o resto 404 (e o
-     * Nginx entrega o site, que mostra "não encontrado").
+     * produto já teve responde 301 para o endereço atual, com a query string
+     * do link original, o resto 404 (e o Nginx entrega o site).
      */
-    public function produtoAntigo(string $slug): Response
+    public function produtoAntigo(Request $request, string $slug): Response
     {
         $atual = $this->catalogo->slugAtualDoAntigo($slug);
+        // A query do anúncio (utm_*, fbclid) vai junto (26/11/2026): sem ela a venda perde a origem.
+        $uri = $request->getRequestUri();
+        $query = str_contains($uri, '?') ? Str::after($uri, '?') : '';
 
         return $atual === null
             ? response('', 404)
-            : response('', 301, ['Location' => '/produto/'.$atual.'/', 'Cache-Control' => 'public, max-age=600']);
+            : response('', 301, ['Location' => '/produto/'.$atual.'/'.($query !== '' ? '?'.$query : ''), 'Cache-Control' => 'public, max-age=600']);
     }
 
     /**

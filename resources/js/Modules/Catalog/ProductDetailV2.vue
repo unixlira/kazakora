@@ -1447,7 +1447,7 @@ const escolherKit = (kit, rolar = false) => {
                 </div>
 
                 <SecoesBrinquedo v-if="brinquedo" :product="product" :anuncio="anuncio" :pagina="paginaBrinquedo" :opcoes="opcoesKits" :escolhida-id="escolhida?.id ?? (variations.length ? null : product.id)"
-                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :faq-loja="FAQ_BRINQUEDO" :parcelas="PARCELAS"
+                    :description-sections="descriptionSections" :dimensoes="dimensoesEmbalagem" :livros-digitais="livrosDigitais" :livros-quadro="livrosDigitais.length ? livrosQuadroSrc : null" :faq-loja="FAQ_BRINQUEDO" :parcelas="PARCELAS"
                     @escolher="escolherKit" @comprar="irParaCompra" />
                 <!-- PERGUNTAS FREQUENTES (largura total), acima das avaliações (pedido do Lira 21/11/2026) -->
                 <section v-if="!brinquedo" class="card largura-total">

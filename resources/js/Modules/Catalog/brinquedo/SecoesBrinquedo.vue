@@ -20,6 +20,9 @@ import { semEmoji, tituloComMarcador } from './kits';
 import { somVideo } from './somVideo';
 
 const props = defineProps({
+    // Livros PDF de bônus (pedido do Lira 25/11/2026): imagem grande dos livros dentro da descrição.
+    livrosDigitais: { type: Array, default: () => [] },
+    livrosQuadro: { type: String, default: null },
     product: { type: Object, required: true },
     anuncio: { type: Object, default: null },
     pagina: { type: Object, default: null },
@@ -475,7 +478,7 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                         </button>
                         <div v-show="abertaFaq === j" class="pb-faq-body">{{ d[1] }}</div>
                     </div>
-                    <details v-if="descriptionSections.length || dimensoes" class="pb-faq-item pb-detalhes">
+                    <details v-if="descriptionSections.length || dimensoes || livrosDigitais.length" class="pb-faq-item pb-detalhes">
                         <summary class="pb-faq-toggle"><span>Descrição completa e ficha técnica</span><i class="pb-faq-seta" aria-hidden="true"><Icone nome="chevron-down" :tamanho="16" :traco="3" /></i></summary>
                         <div class="pb-faq-body">
                             <div v-for="(section, j) in descriptionSections" :key="j">
@@ -486,6 +489,12 @@ const corCubo = (cor) => ({ vermelho: 'laranja' }[cor] ?? cor);
                                 </template>
                             </div>
                             <p v-if="dimensoes"><strong>Dimensões da embalagem:</strong> {{ dimensoes }}</p>
+                            <div v-if="livrosDigitais.length" class="pb-bonus-pdf">
+                                <h3>Bônus: {{ livrosDigitais.length === 1 ? '1 livro digital' : `${livrosDigitais.length} livros digitais` }} em PDF</h3>
+                                <img v-if="livrosQuadro" :src="livrosQuadro" :alt="`Livros digitais de bônus: ${livrosDigitais.map((l) => l.titulo).join(', ')}`" width="1500" height="900" loading="lazy">
+                                <ul><li v-for="livro in livrosDigitais" :key="livro.id">{{ livro.titulo }}</li></ul>
+                                <p>Liberados depois da confirmação do pagamento.</p>
+                            </div>
                         </div>
                     </details>
                 </div>

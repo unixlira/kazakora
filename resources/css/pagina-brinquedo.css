@@ -356,6 +356,8 @@
 .pd2.pg-brinquedo .pb-faq-toggle::-webkit-details-marker { display: none; }
 .pd2.pg-brinquedo .pb-faq-seta { flex: 0 0 28px; height: 28px; border-radius: 9px; background: var(--amarelo); color: var(--ink); display: grid; place-items: center; transition: transform .25s; }
 .pd2.pg-brinquedo .pb-faq-item.aberto .pb-faq-seta, .pd2.pg-brinquedo .pb-detalhes[open] .pb-faq-seta { transform: rotate(180deg); }
+.pd2.pg-brinquedo .pb-bonus-pdf { margin-top: 18px; }
+.pd2.pg-brinquedo .pb-bonus-pdf img { display: block; width: 100%; max-width: 900px; height: auto; margin: 10px auto; border-radius: 14px; }
 .pd2.pg-brinquedo .pb-faq-body { padding: 0 20px 18px; font: 400 15.5px/1.6 var(--corpo); color: var(--muted); animation: pbpop .3s both; }
 .pd2.pg-brinquedo .pb-faq-body h3 { font-size: 16px; margin: 12px 0 4px; color: var(--ink); }
 .pd2.pg-brinquedo .pb-faq-body ul { margin: 0 0 8px; padding-left: 18px; }

@@ -23,15 +23,23 @@ class StripeWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
+        // Fail-closed (auditoria 2026-11-25): sem STRIPE_WEBHOOK_SECRET não dá
+        // para conferir nada, então recusa (antes estourava erro 500).
+        if (! filled(config('services.stripe.webhook_secret'))) {
+            Log::channel('stripe')->warning('stripe.webhook.no_secret_configured', ['ip' => $request->ip()]);
+
+            return response()->json(['error' => 'invalid_signature'], 401);
+        }
+
         try {
             $event = $this->stripe->constructWebhookEvent(
                 $request->getContent(),
                 $request->header('Stripe-Signature', ''),
             );
         } catch (SignatureVerificationException|UnexpectedValueException $exception) {
-            Log::channel('stripe')->warning('stripe.webhook.invalid_signature', ['message' => $exception->getMessage()]);
+            Log::channel('stripe')->warning('stripe.webhook.invalid_signature', ['message' => $exception->getMessage(), 'ip' => $request->ip()]);
 
-            return response()->json(['error' => 'invalid_signature'], 400);
+            return response()->json(['error' => 'invalid_signature'], 401);
         }
 
         Log::channel('stripe')->info('stripe.webhook.received', ['type' => $event->type, 'id' => $event->id]);

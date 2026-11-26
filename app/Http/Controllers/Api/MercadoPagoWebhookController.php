@@ -23,10 +23,18 @@ class MercadoPagoWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
+        // Fail-closed (auditoria 2026-11-25): com MERCADOPAGO_WEBHOOK_SECRET
+        // configurado, aviso sem x-signature ou com assinatura errada é
+        // recusado com 401 (antes 400). O Mercado Pago reenvia o que não
+        // recebeu 2xx, então um aviso legítimo não se perde.
         if (! $this->hasValidSignature($request)) {
-            Log::channel('mercadopago')->warning('mercadopago.webhook.invalid_signature');
+            Log::channel('mercadopago')->warning('mercadopago.webhook.invalid_signature', [
+                'tem_assinatura' => $request->headers->has('x-signature'),
+                'ip' => $request->ip(),
+                'data_id' => $request->query('data_id'),
+            ]);
 
-            return response()->json(['error' => 'invalid_signature'], 400);
+            return response()->json(['error' => 'invalid_signature'], 401);
         }
 
         $type = $request->input('type');

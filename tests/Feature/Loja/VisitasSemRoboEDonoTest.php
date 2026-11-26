@@ -129,7 +129,8 @@ class VisitasSemRoboEDonoTest extends TestCase
         $this->withCookie(Cookies::COOKIE_VISITANTE, 'navegador-do-dono');
         $this->abrir()->assertOk();
 
-        $this->assertSame(0, SiteVisit::query()->count());
+        $this->assertSame(0, SiteVisit::query()->where('path', '/politica-de-entrega')->count());
+        $this->assertSame(VisitaIgnorada::EQUIPE, $this->todas()->where('path', '/politica-de-entrega')->sole()->ignorada);
     }
 
     public function test_celular_na_mesma_rede_da_equipe_nao_conta_e_outra_rede_conta(): void
@@ -155,7 +156,7 @@ class VisitasSemRoboEDonoTest extends TestCase
 
         $this->abrir(self::NAVEGADOR, '177.68.21.79')->assertOk();
 
-        $this->assertSame(1, SiteVisit::query()->count());
+        $this->assertSame(1, SiteVisit::query()->where('path', '/politica-de-entrega')->count());
     }
 
     public function test_outro_site_robo_e_ip_ignorado(): void

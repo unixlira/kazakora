@@ -56,7 +56,7 @@ class EscadaDeKitsFerraKoraTest extends TestCase
         $this->assertTrue($kits['itens'][1]['destaque']);
         $this->assertSame('Recomendado', $kits['itens'][1]['selo']);
         $this->assertFalse($kits['itens'][2]['disponivel']);
-        $this->assertSame('kit-estrada', $kits['itens'][1]['slug']);
+        $this->assertSame('kit-estrada-segura', $kits['itens'][1]['slug']);
 
         // A página do kit B também mostra a escada, com ele marcado.
         $this->app->forgetScopedInstances();

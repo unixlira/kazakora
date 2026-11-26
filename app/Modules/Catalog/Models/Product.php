@@ -418,6 +418,51 @@ class Product extends Model
     }
 
     /**
+     * Para onde o link deste produto na kazakora.com responde 301 (26/11/2026): [página, id da
+     * opção já escolhida ou null]. Dois casos: produto fora da vitrine (fora_da_vitrine_kz) vai
+     * para vitrine_kz_redireciona_para; variação com vitrine_kz_redireciona_para = o próprio pai
+     * vai para a página do pai com ela escolhida (anúncio único com opções, Compressor 4 em 1).
+     * null = a página deste produto responde normalmente.
+     *
+     * @return array{0: self, 1: int|null}|null
+     */
+    public function redirecionamentoNaKazaKora(): ?array
+    {
+        if ($this->opcaoDoPai()) {
+            return [$this->parent, $this->id];
+        }
+        if (! $this->fora_da_vitrine_kz || ! ($destino = $this->paginaNaKazaKora()) || $destino->id === $this->id) {
+            return null;
+        }
+
+        return $destino->opcaoDoPai() ? [$destino->parent, $destino->id] : [$destino, null];
+    }
+
+    /** Variação que abre como opção na página do pai (vitrine_kz_redireciona_para = pai). */
+    private function opcaoDoPai(): bool
+    {
+        return $this->parent_product_id
+            && (int) $this->vitrine_kz_redireciona_para === (int) $this->parent_product_id
+            && $this->naKazaKora()
+            && $this->parent?->naKazaKora()
+            && $this->parent->slug;
+    }
+
+    /** Endereço do redirecionamento com a query de quem chegou (UTMs, fbclid) e a opção. */
+    public static function enderecoDoRedirecionamento(array $redirecionamento, ?string $query): string
+    {
+        [$pagina, $opcao] = $redirecionamento;
+        parse_str((string) $query, $parametros);
+        unset($parametros['opcao']);
+        if ($opcao) {
+            $parametros['opcao'] = $opcao;
+        }
+        $query = http_build_query($parametros);
+
+        return route('produtos.ver', $pagina->slug).($query !== '' ? '?'.$query : '');
+    }
+
+    /**
      * Página da kazakora.com que responde por este produto: ele mesmo, se está na vitrine, ou o
      * produto para onde ele foi redirecionado (fora_da_vitrine_kz, 26/11/2026). null = 404.
      */

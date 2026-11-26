@@ -345,12 +345,9 @@ class CatalogController extends Controller
     {
         // Produto tirado da vitrine (fora_da_vitrine_kz, 26/11/2026): 301 para o que ficou no
         // lugar, mantendo UTMs e fbclid dos anúncios.
-        if ($product->fora_da_vitrine_kz && $product->is_active && ! $product->so_ferrakora) {
-            $destino = $product->paginaNaKazaKora();
-            abort_unless($destino, 404);
-            $query = $request->getQueryString();
-
-            return redirect(route('produtos.ver', $destino->slug).($query ? '?'.$query : ''), 301);
+        // Variação que virou opção do anúncio do pai (26/11/2026): 301 para o pai com ela escolhida.
+        if ($redirecionamento = $product->redirecionamentoNaKazaKora()) {
+            return redirect(Product::enderecoDoRedirecionamento($redirecionamento, $request->getQueryString()), 301);
         }
         abort_unless($product->naKazaKora(), 404);
 
@@ -592,6 +589,8 @@ class CatalogController extends Controller
             // Escada de kits (pedido do Lira 26/11/2026, oferta do Compressor 4 em 1 também na KazaKora):
             // os cartões de todos os kits, cada um com a página dele. null sem escada.
             'kits' => $version === 2 ? MarcaDaLoja::paraKazaKora(EscadaDeKits::paraKazaKora($product)) : null,
+            // Opção já escolhida ao abrir (?opcao=<id>, links antigos das opções, 26/11/2026).
+            'opcaoInicial' => $variations->pluck('id')->push($product->id)->contains((int) $request->query('opcao')) ? (int) $request->query('opcao') : null,
             // Layout da página (pedido do Lira 24/11/2026): "brinquedo" liga os kits em
             // cartões, as seções coloridas e o "aeee"; "padrao" é a página de sempre.
             'layout' => LayoutDaPagina::para($product),

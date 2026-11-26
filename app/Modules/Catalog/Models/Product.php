@@ -54,6 +54,8 @@ class Product extends Model
         'stock',
         'is_active',
         'so_ferrakora',
+        'fora_da_vitrine_kz',
+        'vitrine_kz_redireciona_para',
         'is_featured',
         'is_new_release',
         'seo_title',
@@ -83,6 +85,7 @@ class Product extends Model
             'stock' => 'integer',
             'is_active' => 'boolean',
             'so_ferrakora' => 'boolean',
+            'fora_da_vitrine_kz' => 'boolean',
             'is_featured' => 'boolean',
             'is_new_release' => 'boolean',
             'video_duration_seconds' => 'integer',
@@ -405,12 +408,30 @@ class Product extends Model
      */
     public function scopeNaKazaKora(Builder $query): Builder
     {
-        return $query->where('is_active', true)->where('so_ferrakora', false);
+        // fora_da_vitrine_kz (26/11/2026): ativo para marketplace e pedidos, fora da loja.
+        return $query->where('is_active', true)->where('so_ferrakora', false)->where('fora_da_vitrine_kz', false);
     }
 
     public function naKazaKora(): bool
     {
-        return $this->is_active && ! $this->so_ferrakora;
+        return $this->is_active && ! $this->so_ferrakora && ! $this->fora_da_vitrine_kz;
+    }
+
+    /**
+     * Página da kazakora.com que responde por este produto: ele mesmo, se está na vitrine, ou o
+     * produto para onde ele foi redirecionado (fora_da_vitrine_kz, 26/11/2026). null = 404.
+     */
+    public function paginaNaKazaKora(): ?self
+    {
+        if ($this->naKazaKora()) {
+            return $this;
+        }
+        if (! $this->fora_da_vitrine_kz || ! $this->vitrine_kz_redireciona_para) {
+            return null;
+        }
+        $destino = self::query()->find($this->vitrine_kz_redireciona_para);
+
+        return $destino && $destino->naKazaKora() && $destino->slug ? $destino : null;
     }
 
     /**

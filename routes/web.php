@@ -119,6 +119,8 @@ Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
         $slug = (string) $request->route('product');
         $produto = \App\Modules\Catalog\Models\ProductSlugAntigo::query()->where('slug', $slug)->first()?->product
             ?? \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar($slug);
+        // Slug velho de produto tirado da vitrine vai direto para o produto que ficou no lugar.
+        $produto = $produto?->paginaNaKazaKora() ?? $produto;
         abort_unless($produto, 404);
 
         // Mantém UTMs e fbclid dos anúncios (25/11/2026): sem eles a venda perde a origem.

@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Http\Controllers;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\MarcaDaLoja;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -96,9 +97,10 @@ class GoogleMerchantFeedController
         $riscado = $riscado !== null ? round((float) $riscado, 2) : null;
         $emPromocao = $riscado !== null && $riscado > $preco;
 
-        $descricao = self::textoPuro((string) $produto->description)
+        // Feed da kazakora.com: texto compartilhado com a FerraKora fala KazaKora (26/11/2026).
+        $descricao = MarcaDaLoja::paraKazaKora(self::textoPuro((string) $produto->description)
             ?: self::textoPuro((string) $produto->seo_description)
-            ?: (string) $produto->name;
+            ?: (string) $produto->name);
 
         $gtin = self::gtinValido($produto->fiscalData?->gtin);
 

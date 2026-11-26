@@ -8,6 +8,7 @@ use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Catalog\Support\EscadaDeKits;
 use App\Modules\Catalog\Support\FotosDoComparativo;
+use App\Modules\Catalog\Support\MarcaDaLoja;
 use App\Modules\Catalog\Support\OfertaBlackFriday;
 use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -198,14 +199,18 @@ class CatalogoFerraKora extends CatalogoOutroSite
             });
         }
 
+        // Nome da loja no texto (pedido do Lira 26/11/2026): conteúdo compartilhado com a KazaKora
+        // fala FerraKora aqui.
+        $produto['description'] = MarcaDaLoja::paraFerraKora($produto['description'] ?? null);
+
         return [
             ...$produto,
-            'conteudo' => $conteudo,
+            'conteudo' => MarcaDaLoja::paraFerraKora($conteudo),
             // Card de Black Friday padrão (14/11/2026), para o produto sem oferta própria no cadastro.
             'oferta_padrao' => $pai ? OfertaBlackFriday::padrao($pai, outroSite: true) : null,
             // Escada de kits (pedido do Lira 26/11/2026): os cartões de todos os kits, com o
             // preço de cada um tirado da mesma lista (mesmo frete da região). null sem escada.
-            'kits' => $pai ? EscadaDeKits::paraSite($pai, $lista, self::PREFIXO_PRODUTO) : null,
+            'kits' => $pai ? MarcaDaLoja::paraFerraKora(EscadaDeKits::paraSite($pai, $lista, self::PREFIXO_PRODUTO)) : null,
         ];
     }
 

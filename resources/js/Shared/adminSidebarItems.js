@@ -209,6 +209,8 @@ export const sidebarSections = [
             { label: 'Clientes dos sites', href: '/admin/clientes-dos-sites', icon: 'fas fa-id-card', cor: 'azul', permission: 'pedidos.view' },
             // Newsletter (2026-11-24): inscritos do bloco antes do rodapé e o resumo do blog por e-mail.
             { label: 'Newsletter', href: '/admin/newsletter', icon: 'fas fa-envelope-open-text', cor: 'azul', permission: 'pedidos.view' },
+            // Leads de materiais (2026-11-26): quem baixou o Guia de Viagem grátis da FerraKora.
+            { label: 'Leads de materiais', href: '/admin/leads-materiais', icon: 'fas fa-file-arrow-down', cor: 'azul', permission: 'pedidos.view' },
             // Leads (2026-11-06): o que o cliente digita no checkout, campo a campo, em tempo real.
             // Desde 25/11/2026 é a tela única: também os carrinhos abandonados e a sequência de remarketing.
             { label: 'Leads', href: '/admin/leads', icon: 'fas fa-user-clock', cor: 'laranja', permission: 'pedidos.view' },

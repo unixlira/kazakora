@@ -49,7 +49,8 @@ Schedule::command('leads:limpar')->dailyAt('03:52')->withoutOverlapping(30);
 Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');
 // Travas de frete vencidas há mais de 30 dias (pedido 2026-10-24).
 // Inscrição da newsletter nunca confirmada sai depois de 30 dias (24/11/2026, LGPD: só o necessário).
-Schedule::command('model:prune', ['--model' => [\App\Modules\Checkout\Models\FreteTrava::class, \App\Modules\Newsletter\Models\NewsletterInscrito::class]])->dailyAt('03:58');
+// Lead de material gratuito sem interação há 12 meses (materiais.meses_guarda, 26/11/2026).
+Schedule::command('model:prune', ['--model' => [\App\Modules\Checkout\Models\FreteTrava::class, \App\Modules\Newsletter\Models\NewsletterInscrito::class, \App\Modules\Materiais\Models\LeadMaterial::class]])->dailyAt('03:58');
 Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(60);
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de

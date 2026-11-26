@@ -307,6 +307,16 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     Route::get('blog/{slug}', [FerraKoraBlogController::class, 'show'])
         ->where('slug', '[a-z0-9-]{1,255}')->middleware('throttle:120,1,fk-blog')->name('blog.materia');
 
+    // Material gratuito com captação de lead (26/11/2026): /guia-de-viagem do site.
+    Route::prefix('materiais')->name('materiais.')->controller(\App\Modules\Materiais\Http\Controllers\MaterialLeadController::class)->group(function () {
+        Route::get('local', 'local')->middleware('throttle:30,1,fk-materiais-local')->name('local');
+        Route::post('{material}/lead', 'cadastrar')->where('material', '[a-z0-9-]{1,40}')
+            ->middleware(['throttle:5,1,fk-materiais-lead', 'throttle:20,60,fk-materiais-lead-hora'])->name('lead');
+        Route::get('{material}/pdf/{lead}', 'pdf')->where('material', '[a-z0-9-]{1,40}')->whereNumber('lead')
+            ->middleware(['signed', 'throttle:30,1,fk-materiais-pdf'])->name('pdf');
+        Route::get('sair/{lead}', 'sair')->whereNumber('lead')->middleware(['signed', 'throttle:30,1,fk-materiais-sair'])->name('sair');
+    });
+
     // Pixel da Meta do FerraKora (2026-10-28): o site pergunta o ID ao abrir.
     Route::get('pixel-meta', [FerraKoraCheckoutController::class, 'pixelMeta'])->middleware('throttle:120,1,fk-pixel-meta')->name('pixel-meta');
 

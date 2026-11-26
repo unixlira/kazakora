@@ -756,6 +756,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('previa', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'previa'])->name('previa');
         Route::post('teste', [\App\Modules\Admin\Http\Controllers\NewsletterAdminController::class, 'teste'])->middleware('throttle:5,1')->name('teste');
     });
+    // Leads de materiais gratuitos (26/11/2026): quem baixou o Guia de Viagem da FerraKora, com origem e UTMs.
+    Route::get('leads-materiais', [\App\Modules\Admin\Http\Controllers\LeadsMateriaisController::class, 'index'])->middleware('permission:pedidos.view')->name('leads-materiais.listar');
+    Route::get('leads-materiais/exportar', [\App\Modules\Admin\Http\Controllers\LeadsMateriaisController::class, 'exportar'])->middleware(['permission:pedidos.view', 'throttle:10,1'])->name('leads-materiais.exportar');
     // Leads (pedido 2026-11-06): o que o cliente digita no checkout, campo a campo, atualizando sozinho. Só leitura.
     // Leads, tela única (plano do Lira 25/11/2026): Leads + Carrinhos abandonados + Sequência numa lista só.
     // A lista antiga (LeadsController::index) fica no código; o /fluxo antigo continua.

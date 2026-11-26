@@ -12,6 +12,7 @@ use App\Modules\WhatsApp\Services\ManuelaProductSearch;
 use App\Modules\WhatsApp\Services\ManuelaVisao;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
+use App\Modules\WhatsApp\Support\ContextoDoCliente;
 use App\Modules\WhatsApp\Support\ManuelaEncerramento;
 use App\Notifications\ManuelaAlertaAtendimentoNotification;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -124,6 +125,12 @@ class ReplyWithManuela
             return;
         }
 
+        // Comprovante do Pix (foto) ou "Feito"/"paguei" logo depois de um pedido:
+        // agradece e confirma o pedido, sem pergunta (caso real 26/11/2026, conversa 70).
+        if ($this->confirmouPagamento($conversation, $inbound, $outbox)) {
+            return;
+        }
+
         if ($inbound->type === 'audio' && $gemini->isConfigured()) {
             $this->transcribe($inbound, $gemini, $media);
         }
@@ -211,6 +218,58 @@ class ReplyWithManuela
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
 
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    /**
+     * Foto (comprovante) ou "feito"/"paguei" com pedido do cliente feito há
+     * poucas horas: resposta pronta confirmando o pedido. Uma vez por pedido
+     * (a segunda foto já vai para a Manuela, com o pedido no contexto), para
+     * não virar loop com resposta automática.
+     */
+    private function confirmouPagamento(WhatsAppConversation $conversation, WhatsAppMessage $inbound, WhatsAppOutbox $outbox): bool
+    {
+        $foto = $inbound->type === 'image';
+        if (! $foto && ! ($inbound->type === 'text' && ContextoDoCliente::avisoDePagamento((string) $inbound->body))) {
+            return false;
+        }
+
+        try {
+            $contexto = app(ContextoDoCliente::class)->montar($conversation);
+        } catch (Throwable $e) {
+            Log::warning('whatsapp.manuela_contexto_falhou', ['conversation_id' => $conversation->id, 'erro' => $e->getMessage()]);
+
+            return false;
+        }
+
+        $pedido = ContextoDoCliente::pedidoRecente($contexto);
+        if (! $pedido) {
+            return false;
+        }
+
+        $jaConfirmou = $conversation->messages()
+            ->where('direction', 'outbound')
+            ->where('created_at', '>=', now()->subDays(2))
+            ->get(['id', 'payload'])
+            ->contains(fn (WhatsAppMessage $m) => (int) ($m->payload['manuela_pedido_confirmado'] ?? 0) === (int) $pedido['id']);
+        if ($jaConfirmou) {
+            return false;
+        }
+
+        if (! $conversation->fresh()->ai_enabled) {
+            return true;
+        }
+
+        $nome = $pedido['nome'] ?? null;
+        $outbox->sendText($conversation->fresh(), ContextoDoCliente::respostaComprovante($pedido, $nome), 'manuela', null, [
+            'manuela' => ['intent' => 'comprovante_pedido', 'source' => 'contexto'],
+            'manuela_pedido_confirmado' => $pedido['id'],
+            'order_id' => $pedido['id'],
+        ]);
+        $conversation->update(['last_auto_reply_at' => now()]);
+
+        Log::info('whatsapp.manuela_confirmou_pagamento', ['conversation_id' => $conversation->id, 'order_id' => $pedido['id'], 'message_id' => $inbound->id]);
+
+        return true;
     }
 
     /** A nossa última mensagem antes da do cliente terminou em pergunta? */

@@ -133,4 +133,19 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    | Login em 2 fatores do admin (auditoria de segurança 2026-11-25).
+    | Depois da senha certa, quem tem acesso ao painel (User::STAFF_ROLES)
+    | recebe um código de 6 dígitos por e-mail. Cliente da loja não passa
+    | por isso. ADMIN_2FA=false desliga (só em emergência, ex.: e-mail fora).
+    | Ver App\Modules\Auth\Support\CodigoLoginAdmin.
+    */
+
+    'admin_2fa' => [
+        'ativo' => (bool) env('ADMIN_2FA', true),
+        'validade_minutos' => 10,
+        'tentativas' => 5,
+        'lembrar_dias' => 30,
+    ],
+
 ];

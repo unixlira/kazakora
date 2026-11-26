@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Auth\Http\Controllers\AuthenticatedSessionController;
+use App\Modules\Auth\Http\Controllers\CodigoLoginController;
 use App\Modules\Auth\Http\Controllers\NewPasswordController;
 use App\Modules\Auth\Http\Controllers\PasswordResetLinkController;
 use App\Modules\Auth\Http\Controllers\RegisteredUserController;
@@ -16,6 +17,16 @@ Route::middleware('guest')->group(function () {
         ->name('entrar');
 
     Route::post('entrar', [AuthenticatedSessionController::class, 'store']);
+
+    // Login em 2 fatores do admin (2026-11-25): código por e-mail depois da senha.
+    Route::get('entrar/codigo', [CodigoLoginController::class, 'create'])
+        ->name('entrar.codigo');
+    Route::post('entrar/codigo', [CodigoLoginController::class, 'store'])
+        ->middleware('throttle:10,1,admin-2fa-codigo')
+        ->name('entrar.codigo.conferir');
+    Route::post('entrar/codigo/reenviar', [CodigoLoginController::class, 'reenviar'])
+        ->middleware('throttle:3,10,admin-2fa-reenviar')
+        ->name('entrar.codigo.reenviar');
 
     Route::get('esqueci-senha', [PasswordResetLinkController::class, 'create'])
         ->name('senha.solicitar');

@@ -99,9 +99,8 @@ const FAQ = [
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
     ['O frete é grátis?', 'Sim. O frete é grátis para todo o Brasil, em todos os produtos. O pedido é enviado em até 1 dia útil após a aprovação do pagamento e entregue em até 7 dias úteis; onde a Entrega Rápida atende, chega mais rápido. Quem tem pressa pode escolher a Entrega Expressa, paga, na hora de calcular o frete.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
-    ['Quais são as formas de pagamento?', DESCONTO_PIX
-        ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`
-        : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`],
+    // Sem citar desconto no Pix (pedido do Lira 25/11/2026).
+    ['Quais são as formas de pagamento?', `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x ou boleto bancário.`],
 ];
 const FAQ_BRINQUEDO = faqSemFrete();
 

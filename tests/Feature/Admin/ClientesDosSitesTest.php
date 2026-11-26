@@ -88,7 +88,7 @@ class ClientesDosSitesTest extends TestCase
         User::factory()->create(['role' => User::ROLE_SUBSCRIBER, 'email' => 'equipe@kazakora.test']);
         $this->clienteKazaKora(['email' => 'apagado@cliente.test'])->delete();
 
-        $this->actingAs($this->admin)->get('/admin/clientes-dos-sites')
+        $this->actingAs($this->admin)->get('/admin/clientes-dos-sites?site=kazakora')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/ClientesDosSites/Index', false)

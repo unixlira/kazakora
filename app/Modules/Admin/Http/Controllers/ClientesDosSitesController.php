@@ -5,6 +5,8 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\ClientesDosSites;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Clientes\Support\LinhaDoTempoDoCliente;
+use App\Modules\Clientes\Support\ResumoDoCliente;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,14 +31,25 @@ class ClientesDosSitesController extends Controller
 
         $paginador = $clientes->consulta($site, $filtros)
             ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn ($linha) => $clientes->linha($linha));
+            ->withQueryString();
+
+        // Acompanhamento (último acesso, origem, pagamento, senha): só para admin (26/11/2026).
+        $admin = (bool) $request->user()?->isAdmin();
+        $resumos = $admin ? app(ResumoDoCliente::class)->paraLinhas($paginador->items()) : [];
+        $paginador->through(fn ($linha) => [
+            ...$clientes->linha($linha),
+            'acompanhamento' => $resumos["{$linha->site}:{$linha->id}"] ?? null,
+        ]);
 
         return Inertia::render('Admin/ClientesDosSites/Index', [
             'site' => $site,
-            'sites' => collect(ClientesDosSites::SITES)->map(fn ($nome, $id) => ['id' => $id, 'nome' => $nome])->values(),
+            'sites' => [
+                ['id' => ClientesDosSites::TODAS, 'nome' => 'KazaKora e FerraKora'],
+                ...collect(ClientesDosSites::SITES)->map(fn ($nome, $id) => ['id' => $id, 'nome' => $nome])->values(),
+            ],
             'clientes' => $paginador,
             'filters' => ['site' => $site, ...$filtros],
+            'podeVerHistorico' => $admin,
         ]);
     }
 
@@ -52,6 +65,42 @@ class ClientesDosSitesController extends Controller
         return Inertia::render('Admin/ClientesDosSites/Show', [
             ...$detalhe,
             'nomeDoSite' => ClientesDosSites::SITES[$site],
+            'podeVerHistorico' => (bool) request()->user()?->isAdmin(),
+        ]);
+    }
+
+    /**
+     * Linha do tempo completa da conta (pedido do Lira 26/11/2026). Só admin
+     * (rota com o middleware admin): mostra navegação, logins e mensagens.
+     * Cada abertura fica na Auditoria (quem viu o histórico de quem).
+     */
+    public function historico(Request $request, string $site, int $cliente, ClientesDosSites $clientes, LinhaDoTempoDoCliente $linha): Response|RedirectResponse
+    {
+        abort_unless(isset(ClientesDosSites::SITES[$site]), 404);
+
+        $resumo = $clientes->consulta($site, [])->where('u.id', $cliente)->first();
+        if (! $resumo) {
+            return redirect()->route('admin.clientes-dos-sites.listar')->with('error', 'Cliente não encontrado.');
+        }
+        $conta = \Illuminate\Support\Facades\DB::table($site === ClientesDosSites::KAZAKORA ? 'users' : 'ferrakora_clientes')->where('id', $cliente)->first();
+
+        AuditLog::query()->create([
+            'user_id' => $request->user()?->id,
+            'action' => 'view',
+            'entity' => 'HistoricoDoCliente',
+            'entity_id' => $cliente,
+            'old_values' => null,
+            'new_values' => ['site' => $site, 'ip' => $request->ip()],
+            'created_at' => now(),
+        ]);
+
+        return Inertia::render('Admin/ClientesDosSites/Historico', [
+            'site' => $site,
+            'nomeDoSite' => ClientesDosSites::SITES[$site],
+            'cliente' => $clientes->linha($resumo),
+            'acompanhamento' => app(ResumoDoCliente::class)->paraLinhas([$resumo])["{$site}:{$cliente}"] ?? null,
+            'categorias' => LinhaDoTempoDoCliente::CATEGORIAS,
+            ...$linha->montar($site, $conta),
         ]);
     }
 
@@ -76,11 +125,12 @@ class ClientesDosSitesController extends Controller
         return response()->streamDownload(function () use ($clientes, $site, $filtros) {
             $saida = fopen('php://output', 'w');
             fwrite($saida, "\xEF\xBB\xBF");
-            fputcsv($saida, ['Nome', 'E-mail', 'Telefone', 'CPF', 'Cadastro', 'Aceita promoções', 'Cidade', 'UF', 'Pedidos pagos', 'Total gasto', 'Último pedido'], ';');
+            fputcsv($saida, ['Loja', 'Nome', 'E-mail', 'Telefone', 'CPF', 'Cadastro', 'Aceita promoções', 'Cidade', 'UF', 'Pedidos pagos', 'Total gasto', 'Último pedido'], ';');
 
             foreach ($clientes->consulta($site, $filtros)->cursor() as $linha) {
                 $c = $clientes->linha($linha);
                 fputcsv($saida, [
+                    ClientesDosSites::SITES[$c['site']] ?? $c['site'],
                     $this->texto($c['nome']),
                     $this->texto($c['email']),
                     $this->telefone($c['telefone']),
@@ -99,7 +149,7 @@ class ClientesDosSitesController extends Controller
         }, $arquivo, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    /** @return array{busca: ?string, de: ?string, ate: ?string, pedido: ?string, ordem: string} */
+    /** @return array{busca: ?string, de: ?string, ate: ?string, pedido: ?string, foto: ?string, ordem: string} */
     private function filtros(Request $request): array
     {
         $pedido = $request->string('pedido')->toString();
@@ -110,6 +160,7 @@ class ClientesDosSitesController extends Controller
             'de' => $request->string('de')->toString() ?: null,
             'ate' => $request->string('ate')->toString() ?: null,
             'pedido' => in_array($pedido, ['com', 'sem'], true) ? $pedido : null,
+            'foto' => in_array($foto = $request->string('foto')->toString(), ['com', 'sem'], true) ? $foto : null,
             'ordem' => in_array($ordem, ClientesDosSites::ORDENS, true) ? $ordem : 'recentes',
         ];
     }

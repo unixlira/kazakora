@@ -779,6 +779,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('exportar', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'exportar'])->middleware('throttle:10,1')->name('exportar');
         Route::get('{site}/{cliente}', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'show'])
             ->whereIn('site', ['kazakora', 'ferrakora'])->whereNumber('cliente')->name('exibir');
+        // Linha do tempo completa (26/11/2026): navegação, logins e mensagens, só admin.
+        Route::get('{site}/{cliente}/historico', [\App\Modules\Admin\Http\Controllers\ClientesDosSitesController::class, 'historico'])
+            ->middleware('admin')->whereIn('site', ['kazakora', 'ferrakora'])->whereNumber('cliente')->name('historico');
     });
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');

@@ -43,17 +43,45 @@ class ClientesDosSites
     /** Teto de pedidos, leads e carrinhos no detalhe. */
     private const LIMITE_DETALHE = 100;
 
+    /** Filtro "as duas lojas" (pedido do Lira 26/11/2026: "quero filtro por empresa"). */
+    public const TODAS = 'todas';
+
     public static function siteValido(?string $site): string
     {
-        return isset(self::SITES[$site ?? '']) ? $site : self::KAZAKORA;
+        if ($site === self::TODAS || $site === null || $site === '') {
+            return self::TODAS;
+        }
+
+        return isset(self::SITES[$site]) ? $site : self::TODAS;
     }
 
     /**
-     * Lista filtrada (uma linha por conta).
+     * Lista filtrada (uma linha por conta). Com "todas", as contas das duas
+     * lojas numa lista só (coluna site diz de qual loja é).
      *
-     * @param  array{busca?: ?string, de?: ?string, ate?: ?string, pedido?: ?string, ordem?: ?string}  $filtros
+     * @param  array{busca?: ?string, de?: ?string, ate?: ?string, pedido?: ?string, foto?: ?string, ordem?: ?string}  $filtros
      */
     public function consulta(string $site, array $filtros): Builder
+    {
+        $base = $site === self::TODAS
+            ? $this->parte(self::KAZAKORA, $filtros)->unionAll($this->parte(self::FERRAKORA, $filtros))
+            : $this->parte($site, $filtros);
+
+        $query = DB::query()->fromSub($base, 'u')->select('u.*');
+
+        match ($filtros['ordem'] ?? 'recentes') {
+            'antigos' => $query->orderBy('u.created_at')->orderBy('u.id'),
+            'maior_gasto' => $query->orderByRaw('COALESCE(u.total_gasto, 0) DESC'),
+            'ultimo_pedido' => $query->orderByRaw('u.ultimo_pedido_em IS NULL')->orderByDesc('u.ultimo_pedido_em'),
+            'nome' => $query->orderBy('u.name'),
+            default => $query->orderByDesc('u.created_at'),
+        };
+
+        return $query->orderByDesc('u.id');
+    }
+
+    /** As contas de uma loja, já filtradas, sem ordem (entra no UNION). */
+    private function parte(string $site, array $filtros): Builder
     {
         [$tabela, $tabelaEndereco, $chaveEndereco] = $this->tabelas($site);
 
@@ -67,7 +95,8 @@ class ClientesDosSites
         $query = DB::table("{$tabela} as c")
             ->leftJoinSub($this->resumoDePedidos($site), 'p', 'p.cliente_id', '=', 'c.id')
             ->select([
-                'c.id', 'c.name', 'c.email', 'c.phone', 'c.cpf', 'c.created_at',
+                DB::raw("'{$site}' as site"),
+                'c.id', 'c.name', 'c.email', 'c.phone', 'c.cpf', 'c.created_at', 'c.avatar_path',
                 $site === self::KAZAKORA ? 'c.recebe_promocoes' : DB::raw('NULL as recebe_promocoes'),
                 'p.pedidos_pagos', 'p.total_gasto', 'p.ultimo_pedido_em',
             ])
@@ -104,15 +133,13 @@ class ClientesDosSites
             default => null,
         };
 
-        match ($filtros['ordem'] ?? 'recentes') {
-            'antigos' => $query->orderBy('c.created_at')->orderBy('c.id'),
-            'maior_gasto' => $query->orderByRaw('COALESCE(p.total_gasto, 0) DESC'),
-            'ultimo_pedido' => $query->orderByRaw('p.ultimo_pedido_em IS NULL')->orderByDesc('p.ultimo_pedido_em'),
-            'nome' => $query->orderBy('c.name'),
-            default => $query->orderByDesc('c.created_at'),
+        match ($filtros['foto'] ?? null) {
+            'com' => $query->whereNotNull('c.avatar_path')->where('c.avatar_path', '!=', ''),
+            'sem' => $query->where(fn ($q) => $q->whereNull('c.avatar_path')->orWhere('c.avatar_path', '')),
+            default => null,
         };
 
-        return $query->orderByDesc('c.id');
+        return $query;
     }
 
     /** Linha da lista e do CSV (sem senha, token nem nada além do cadastro). */
@@ -122,6 +149,8 @@ class ClientesDosSites
 
         return [
             'id' => (int) $c->id,
+            'site' => $c->site ?? null,
+            'tem_foto' => filled($c->avatar_path ?? null),
             'nome' => $c->name,
             'email' => $c->email,
             'telefone' => $telefone !== '' ? $telefone : null,
@@ -140,7 +169,7 @@ class ClientesDosSites
     /** Tudo do detalhe, ou null se a conta não é cliente do site. */
     public function detalhe(string $site, int $id): ?array
     {
-        $linha = $this->consulta($site, [])->where('c.id', $id)->first();
+        $linha = $this->consulta($site, [])->where('u.id', $id)->first();
         if (! $linha) {
             return null;
         }

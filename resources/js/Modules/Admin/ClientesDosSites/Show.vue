@@ -19,6 +19,7 @@ const props = defineProps({
     acesso: { type: Object, default: () => ({}) },
     leads: { type: Array, default: () => [] },
     carrinhos: { type: Array, default: () => [] },
+    podeVerHistorico: { type: Boolean, default: false },
 });
 
 const NOMES_SITE = { kazakora: 'KazaKora', ferrakora: 'FerraKora', beautykora: 'Beauty Kora' };
@@ -41,9 +42,15 @@ const itensTexto = (itens) => (itens ?? []).map((i) => `${i.quantidade}x ${i.nom
                 <h1 class="text-2xl font-bold">{{ cliente.nome ?? 'Sem nome' }}</h1>
                 <p class="text-sm text-slate-500">Conta do site {{ nomeDoSite }} · cadastro em {{ formatDateTime(cliente.cadastro_em) }}</p>
             </div>
-            <Link :href="`/admin/clientes-dos-sites?site=${site}`" class="text-sm text-primary hover:underline">
-                <i class="fas fa-arrow-left mr-1"></i> Voltar para Clientes dos sites
-            </Link>
+            <div class="flex flex-wrap items-center gap-3">
+                <Link v-if="podeVerHistorico" :href="`/admin/clientes-dos-sites/${site}/${cliente.id}/historico`"
+                    class="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700">
+                    <i class="fas fa-timeline"></i> Linha do tempo completa
+                </Link>
+                <Link :href="`/admin/clientes-dos-sites?site=${site}`" class="text-sm text-primary hover:underline">
+                    <i class="fas fa-arrow-left mr-1"></i> Voltar para Clientes dos sites
+                </Link>
+            </div>
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">

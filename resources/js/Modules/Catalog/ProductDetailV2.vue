@@ -25,6 +25,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import '../../../css/fontes-brinquedo.css';
 import '../../../css/pagina-brinquedo.css';
 import KitsEscada from './KitsEscada.vue';
+import OpcoesEmCartoes from './OpcoesEmCartoes.vue';
+import '../../../css/opcoes-cartoes.css';
 import KitsBrinquedo from './brinquedo/KitsBrinquedo.vue';
 import SecoesBrinquedo from './brinquedo/SecoesBrinquedo.vue';
 import SomComemoracao from './brinquedo/SomComemoracao.vue';
@@ -70,8 +72,13 @@ const props = defineProps({
     kits: { type: Object, default: null },
     // Opção já escolhida ao abrir (?opcao=<id>, links antigos das opções do anúncio, 26/11/2026).
     opcaoInicial: { type: Number, default: null },
+    // Opções do anúncio em cartões, no formato dos kits do Livro Falante (26/11/2026): CartoesDeOpcoes; null = seletor de sempre.
+    cartoesOpcoes: { type: Object, default: null },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
+// Cartões de opção (pedido do Lira 26/11/2026, Compressor 4 em 1): como o "Escolha seu kit" do livro, no
+// lugar do seletor de variação e do bloco de preço; o Pix e as parcelas da opção ficam embaixo dos cartões.
+const cartoes = computed(() => (!brinquedo.value && props.variations.length && props.cartoesOpcoes?.itens?.length >= 2 ? props.cartoesOpcoes : null));
 // Logo do cabeçalho nas páginas de brinquedo (pedido do Lira 24/11/2026): KoraKids by KazaKora.
 const LOGO_KORAKIDS = { href: '/?categoria=brinquedos-e-games#produtos', alt: 'KoraKids by KazaKora', png: '/images/marca/logo-korakids-arco.png?v=1', webp: '/images/marca/logo-korakids-arco.webp?v=1', largura: 335, altura: 144, classe: 'h-[52px] w-auto object-contain lg:h-[72px]' };
 // Na página de brinquedo um kit já abre marcado, como na referência (o recomendado).
@@ -1108,7 +1115,7 @@ const escolherKit = (kit, rolar = false) => {
                                 </div>
                             </div>
 
-                            <div v-if="!(brinquedo && variations.length)" class="preco">
+                            <div v-if="!(brinquedo && variations.length) && !cartoes" class="preco">
                                 <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
                                 <span v-if="precoDe" class="de"><template v-if="cupomBf">De </template>{{ formatPrice(precoDe) }}</span>
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
@@ -1148,6 +1155,20 @@ const escolherKit = (kit, rolar = false) => {
                                     <span v-else><i class="pb-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>Aceitamos</small><b>Pix</b></span>
                                     <button type="button" class="pb-pag-parcelas" :aria-expanded="parcelasAbertas" aria-controls="pb-parcelas" @click="parcelasAbertas = !parcelasAbertas"><i class="pb-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="pb-pag-seta" nome="chevron-down" :tamanho="16" /></button>
                                     <div v-if="parcelasAbertas" id="pb-parcelas" class="pb-parcelas">
+                                        <div v-for="linha in tabelaParcelas" :key="linha.parcelas"><span>{{ linha.parcelas }}x de {{ formatPrice(linha.valor) }}</span><span>{{ linha.juros ? `total ${formatPrice(linha.total)}` : 'sem juros' }}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Opções em cartões (pedido do Lira 26/11/2026): o mesmo formato do "Escolha seu kit" do livro. -->
+                            <div v-else-if="cartoes" ref="variacoesEl" class="oc-escolha" data-opcoes-cartoes>
+                                <span class="subtitulo">{{ cartoes.titulo }}</span>
+                                <OpcoesEmCartoes :opcoes="opcoesVariacao" :cartoes="cartoes" :escolhida-id="escolhida?.id ?? null" @escolher="escolherVariacao" />
+                                <div class="oc-pagamento">
+                                    <span v-if="precoPix !== null"><i class="oc-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>No Pix</small><b data-oc-pix>{{ formatPrice(precoPix) }}</b></span>
+                                    <span v-else><i class="oc-pag-icone pix" aria-hidden="true"><i class="fa-brands fa-pix"></i></i><small>Aceitamos</small><b>Pix</b></span>
+                                    <button type="button" class="oc-pag-parcelas" :aria-expanded="parcelasAbertas" aria-controls="oc-parcelas" @click="parcelasAbertas = !parcelasAbertas"><i class="oc-pag-icone cartao" aria-hidden="true"><Icone nome="credit-card" :tamanho="18" /></i><small>Parcele em até</small><b v-if="parcela">{{ parcela.parcelas }}x {{ formatPrice(parcela.valor) }}</b><b v-else>{{ PARCELAS }}x</b><Icone class="oc-pag-seta" nome="chevron-down" :tamanho="16" /></button>
+                                    <div v-if="parcelasAbertas" id="oc-parcelas" class="oc-parcelas">
                                         <div v-for="linha in tabelaParcelas" :key="linha.parcelas"><span>{{ linha.parcelas }}x de {{ formatPrice(linha.valor) }}</span><span>{{ linha.juros ? `total ${formatPrice(linha.total)}` : 'sem juros' }}</span></div>
                                     </div>
                                 </div>

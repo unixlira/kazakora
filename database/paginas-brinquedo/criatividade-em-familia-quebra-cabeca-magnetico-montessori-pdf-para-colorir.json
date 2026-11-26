@@ -1,0 +1,290 @@
+{
+  "titulo": "Quebra-Cabeça Magnético para Montar, Combinar e Criar Histórias",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Peças magnéticas",
+      "Grudam de verdade"
+    ],
+    [
+      "Cria histórias",
+      "Solta a imaginação"
+    ],
+    [
+      "Longe do celular",
+      "Brincadeira real"
+    ],
+    [
+      "Fácil de guardar",
+      "Tudo na caixinha"
+    ]
+  ],
+  "letreiro": [
+    "Monta e desmonta com peças de ímã",
+    "4 temas para criar e se divertir",
+    "Estimula a criatividade e o foco",
+    "Brincadeira prática que não faz sujeira",
+    "Momentos especiais com toda a família",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Menos tela, mais imaginação",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Trocar o brilho do celular pelo encaixe dos ímãs dá um descanso para os olhos. Com o quebra-cabeça, a criança cria mundos novos enquanto treina a paciência e a coordenação motora.",
+    "imagem": "products/215/ia-06-I6zhYNxWEsBTb5qV.jpg"
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": "products/215/ia-07-HcdfeF8XY8UTX28w.jpg",
+    "chamadas": [
+      "Peças magnéticas",
+      "Cria novas combinações"
+    ],
+    "cards": [
+      {
+        "titulo": "Criatividade",
+        "texto": "Combina peças e cria personagens diferentes a cada momento.",
+        "icone": "palette"
+      },
+      {
+        "titulo": "Coordenação",
+        "texto": "Encaixar os pequenos ímãs treina a precisão das mãos.",
+        "icone": "hand"
+      },
+      {
+        "titulo": "Foco e Atenção",
+        "texto": "Horas de diversão com concentração total no que está montando.",
+        "icone": "target"
+      },
+      {
+        "titulo": "Autonomia",
+        "texto": "A criança brinca e cria sozinha, sem precisar de vídeos.",
+        "icone": "smile"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Longe das telas, o cérebro trabalha de forma ativa. Cada peça montada é um pequeno desafio vencido que estimula o aprendizado.",
+    "imagem": "products/215/ia-09-uN38VNwI0iwWegcr.jpg",
+    "chamadas": [
+      "Coordenação motora",
+      "Imaginação",
+      "Concentração",
+      "Noção de espaço"
+    ],
+    "habilidades": [
+      {
+        "texto": "Criatividade",
+        "icone": "palette"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "lightbulb"
+      },
+      {
+        "texto": "Concentração",
+        "icone": "target"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "shapes"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para criar",
+    "texto": "Peças que grudam com facilidade em uma caixa que vira o próprio cenário da brincadeira e facilita a organização.",
+    "imagem": "products/215/ia-05-7HkS10m7uZBXdW7T.jpg",
+    "cards": [
+      {
+        "titulo": "Peças magnéticas",
+        "texto": "Grudam, soltam e trocam de lugar",
+        "icone": "magnet"
+      },
+      {
+        "titulo": "Cores vibrantes",
+        "texto": "Prendem a atenção da criança",
+        "icone": "eye"
+      },
+      {
+        "titulo": "Fácil de guardar",
+        "texto": "Tudo organizado na caixinha",
+        "icone": "box"
+      },
+      {
+        "titulo": "Sem telas",
+        "texto": "Diversão de verdade para o dia a dia",
+        "icone": "smartphone"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Brinquedo comum × Quebra-Cabeça Magnético",
+    "intro": "Brinquedos que limitam a criação perdem a graça rápido. No magnético, cada montagem é nova.",
+    "rotulos": [
+      "Comum",
+      "Magnético"
+    ],
+    "linhas": [
+      {
+        "texto": "Peças coloridas",
+        "comum": true
+      },
+      {
+        "texto": "Peças magnéticas combináveis",
+        "comum": false
+      },
+      {
+        "texto": "Múltiplos temas para explorar",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a criatividade sem telas",
+        "comum": false
+      },
+      {
+        "texto": "Fácil de guardar na própria caixa",
+        "comum": false
+      },
+      {
+        "texto": "Desenvolve a coordenação motora",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Tempo de qualidade em família",
+    "texto": "Sentar no chão e montar rostos engraçados ou organizar o trânsito cria memórias que nenhum vídeo de internet consegue substituir.",
+    "imagem": 4,
+    "citacao": "Brincar junto fortalece o laço e ensina a criança a ter paciência para criar."
+  },
+  "kits": {
+    "titulo": "Escolha o tema favorito",
+    "texto": "Cada tema é um novo mundo para a criança explorar longe das telas.",
+    "itens": [
+      {
+        "id": 215,
+        "nome": "Kit Tema Surpresa",
+        "itens": "1 Quebra-Cabeça, tema sortido",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Tema sortido",
+            "icone": "gift"
+          }
+        ]
+      },
+      {
+        "id": 216,
+        "nome": "Kit Azul Menino Moda",
+        "itens": "1 Quebra-Cabeça Azul Menino Moda",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Peças magnéticas",
+            "icone": "magnet"
+          },
+          {
+            "texto": "Cartões de modelo",
+            "icone": "layout-grid"
+          }
+        ]
+      },
+      {
+        "id": 217,
+        "nome": "Kit Vermelho Rostinhos",
+        "itens": "1 Quebra-Cabeça Monte Rostinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Peças magnéticas",
+            "icone": "magnet"
+          },
+          {
+            "texto": "Cartões de modelo",
+            "icone": "layout-grid"
+          }
+        ]
+      },
+      {
+        "id": 219,
+        "nome": "Kit Azul Trânsito",
+        "itens": "1 Quebra-Cabeça Azul Trânsito",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Peças magnéticas",
+            "icone": "magnet"
+          },
+          {
+            "texto": "Cartões de modelo",
+            "icone": "layout-grid"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o kit",
+      "texto": "Selecione o tema que a criança vai amar.",
+      "icone": "gift"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Abra a caixa",
+      "texto": "As peças já vêm prontas para brincar.",
+      "icone": "box"
+    },
+    {
+      "titulo": "Crie histórias",
+      "texto": "Longe do celular, a diversão começa.",
+      "icone": "sparkles"
+    }
+  ],
+  "garantia": [
+    "Criando histórias",
+    "Longe do celular",
+    "Focada no brinquedo",
+    "Brincando em família"
+  ],
+  "duvidas": [
+    [
+      "Para qual idade é indicado?",
+      "Recomendado para crianças a partir de 3 anos, sempre com a supervisão de um adulto por conter peças pequenas."
+    ],
+    [
+      "Como as peças funcionam?",
+      "As peças são magnéticas e grudam no cenário que vem na própria caixa do brinquedo, facilitando a montagem."
+    ],
+    [
+      "Quais são os temas?",
+      "São 4 temas: Trânsito e Menino Moda (azuis), Monte Rostinhos (vermelho) e Menina Moda. No Kit Tema Surpresa, o tema vai conforme a disponibilidade."
+    ],
+    [
+      "O que vem na embalagem?",
+      "Cada embalagem traz 1 Quebra-Cabeça Magnético com suas peças, dentro da própria caixinha."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Escolha o kit e proporcione horas de brincadeira de verdade, desenvolvendo a imaginação e o foco longe das telas."
+  },
+  "ctas": {
+    "historia": "Quero brincar longe da tela",
+    "comparativo": "Escolher o kit magnético"
+  }
+}

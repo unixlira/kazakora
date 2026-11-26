@@ -4,7 +4,11 @@ namespace Tests\Feature\Catalog;
 
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductAdContent;
+use App\Modules\Catalog\Support\LayoutDaPagina;
+use App\Modules\Catalog\Support\PaginaBrinquedo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -23,7 +27,7 @@ class PaginaBrinquedoTest extends TestCase
 
     public function test_brinquedo_sem_conteudo_continua_no_layout_padrao(): void
     {
-        // Na produção a página nova liga produto a produto, quando o conteúdo é gravado (25/11/2026).
+        // Sem conteúdo próprio nem do anúncio a página nova ficaria vazia: fica a padrão.
         $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id]);
 
         $this->get("/produtos/{$produto->slug}")
@@ -41,6 +45,70 @@ class PaginaBrinquedoTest extends TestCase
             ->assertInertia(fn ($page) => $page->component('Catalog/ProductDetailV2', false)
                 ->where('product.id', $produto->id)
                 ->where('layout', 'brinquedo'));
+    }
+
+    public function test_brinquedo_so_com_conteudo_do_anuncio_abre_com_layout_brinquedo(): void
+    {
+        // Pedido do Lira 25/11/2026: todo brinquedo ativo abre na página KoraKids; sem pagina_brinquedo,
+        // as seções usam o conteúdo do anúncio como reserva.
+        $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id]);
+        ProductAdContent::create([
+            'product_id' => $produto->id,
+            'fonte' => ProductAdContent::FONTE_GEMINI,
+            'destaques' => ['Funciona sem pilhas'],
+            'blocos' => [['titulo' => 'Diversão longe das telas', 'texto' => 'Brincadeira de verdade.', 'imagem' => 0]],
+        ]);
+
+        $this->get("/produtos/{$produto->slug}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('layout', 'brinquedo')
+                ->where('paginaBrinquedo', null)
+                ->where('product.ad_content.blocos.0.titulo', 'Diversão longe das telas'));
+    }
+
+    public function test_variacao_de_brinquedo_usa_o_anuncio_do_pai(): void
+    {
+        $categoria = $this->categoria('brinquedos-e-games');
+        $pai = Product::factory()->create(['is_active' => true, 'category_id' => $categoria->id]);
+        $variacao = Product::factory()->create(['is_active' => true, 'category_id' => $categoria->id, 'parent_product_id' => $pai->id]);
+        ProductAdContent::create([
+            'product_id' => $pai->id,
+            'fonte' => ProductAdContent::FONTE_GEMINI,
+            'blocos' => [['titulo' => 'Corrida na sala', 'texto' => 'Pista que monta em minutos.']],
+        ]);
+
+        $this->assertSame(LayoutDaPagina::BRINQUEDO, LayoutDaPagina::para($variacao->fresh()));
+    }
+
+    public function test_conteudo_aceita_foto_do_storage_fora_da_galeria(): void
+    {
+        $pagina = [
+            'porque' => ['titulo' => 'Por que adora', 'imagem' => 'products/192/ia-08-abc.jpg'],
+            'ensina' => ['titulo' => 'Ensina', 'imagem' => 2],
+            'detalhes' => ['titulo' => 'Detalhes', 'imagem' => '../../.env'],
+        ];
+
+        $this->assertSame(['foto com caminho inválido: ../../.env'], PaginaBrinquedo::problemas($pagina, [], 3));
+        $this->assertSame(['products/192/ia-08-abc.jpg', '../../.env'], PaginaBrinquedo::fotosDoStorage($pagina));
+    }
+
+    public function test_comando_recusa_foto_que_nao_esta_no_storage(): void
+    {
+        Storage::fake('public');
+        $produto = Product::factory()->create(['is_active' => true, 'category_id' => $this->categoria('brinquedos-e-games')->id]);
+        $arquivo = database_path("paginas-brinquedo/{$produto->slug}.json");
+        file_put_contents($arquivo, json_encode(['titulo' => 'Teste', 'porque' => ['titulo' => 'Por que', 'imagem' => "products/{$produto->id}/ia-01.jpg"]]));
+
+        try {
+            $this->artisan('brinquedo:pagina', ['--slug' => [$produto->slug]])->assertFailed();
+            $this->assertNull($produto->fresh()->pagina_brinquedo);
+
+            Storage::disk('public')->put("products/{$produto->id}/ia-01.jpg", 'x');
+            $this->artisan('brinquedo:pagina', ['--slug' => [$produto->slug]])->assertSuccessful();
+            $this->assertSame('Teste', $produto->fresh()->pagina_brinquedo['titulo']);
+        } finally {
+            @unlink($arquivo);
+        }
     }
 
     public function test_produto_comum_continua_no_layout_padrao(): void

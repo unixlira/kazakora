@@ -1,0 +1,246 @@
+{
+  "titulo": "Controle com Fio para Xbox 360 e PC, com Vibração e Fone",
+  "sem_telas": false,
+  "chips": [
+    [
+      "Conexão USB",
+      "plugar e jogar"
+    ],
+    [
+      "Cabo de 2,10m",
+      "mais liberdade"
+    ],
+    [
+      "Vibração",
+      "mais emoção"
+    ],
+    [
+      "Xbox e PC",
+      "diversão versátil"
+    ]
+  ],
+  "letreiro": [
+    "Conexão USB estável e rápida",
+    "Compatível com Xbox 360 e PC",
+    "Cabo longo com cerca de 2,10 metros",
+    "Botões precisos para total controle",
+    "Jogue sem se preocupar com pilhas",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "O clássico que une gerações",
+    "subtitulo": "Conecte e comece a diversão",
+    "texto": "Relembre os grandes jogos e crie novas memórias com seus filhos. Com o controle com fio, a diversão não para por falta de bateria: é só plugar no Xbox 360 ou no PC e aproveitar o tempo de qualidade juntos.",
+    "imagem": 5
+  },
+  "porque": {
+    "titulo": "Por que a família adora",
+    "imagem": 1,
+    "chamadas": [
+      "Sem pilhas",
+      "Resposta rápida"
+    ],
+    "cards": [
+      {
+        "titulo": "Sempre pronto",
+        "texto": "Sem pilhas ou baterias, a diversão nunca precisa de pausa.",
+        "icone": "plug"
+      },
+      {
+        "titulo": "Liberdade no sofá",
+        "texto": "O cabo de 2,10 metros permite jogar com conforto e distância.",
+        "icone": "move"
+      },
+      {
+        "titulo": "Sentir o jogo",
+        "texto": "A vibração ajustável traz mais realismo para cada partida.",
+        "icone": "activity"
+      },
+      {
+        "titulo": "Fácil de usar",
+        "texto": "Plugou no USB, jogou. No PC, alguns jogos pedem uma configuração.",
+        "icone": "usb"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Habilidades em cada partida",
+    "texto": "Jogar videogame junto também exercita habilidades enquanto a criançada se diverte:",
+    "imagem": 3,
+    "chamadas": [
+      "Precisão",
+      "Foco",
+      "Agilidade",
+      "Estratégia"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Raciocínio rápido",
+        "icone": "brain"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Noção espacial",
+        "icone": "compass"
+      },
+      {
+        "texto": "Resolução de problemas",
+        "icone": "puzzle"
+      },
+      {
+        "texto": "Paciência",
+        "icone": "hourglass"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Feito para o melhor desempenho",
+    "texto": "Design ergonômico que encaixa nas mãos e botões que respondem na hora certa para o jogo não parar.",
+    "imagem": 2,
+    "cards": [
+      {
+        "titulo": "Leve e confortável",
+        "texto": "Cerca de 210 g, confortável nas mãos.",
+        "icone": "smile"
+      },
+      {
+        "titulo": "Entrada para fone",
+        "texto": "Conexão P1 para áudio integrada ao controle.",
+        "icone": "headphones"
+      },
+      {
+        "titulo": "Cabo longo",
+        "texto": "Aproximadamente 2,10m de extensão para você.",
+        "icone": "ruler"
+      },
+      {
+        "titulo": "Multiplataforma",
+        "texto": "Funciona no Xbox 360, PC e Notebook.",
+        "icone": "monitor-smartphone"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Controle comum × Nosso Controle",
+    "intro": "Partidas com conexão USB e sem a frustração de pilhas descarregadas.",
+    "rotulos": [
+      "Comum",
+      "Com fio"
+    ],
+    "linhas": [
+      {
+        "texto": "Botões para jogar",
+        "comum": true
+      },
+      {
+        "texto": "Funciona sem pilhas ou baterias",
+        "comum": false
+      },
+      {
+        "texto": "Conexão USB direta, sem pareamento",
+        "comum": false
+      },
+      {
+        "texto": "Cabo longo de 2,10 metros",
+        "comum": false
+      },
+      {
+        "texto": "Compatível com Xbox 360 e PC",
+        "comum": false
+      },
+      {
+        "texto": "Entrada P1 para fone integrada",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Tempo de qualidade juntos",
+    "texto": "Nada como uma tarde de videogame para aproximar pais e filhos. Com o controle com fio, a única preocupação é quem vai ganhar a próxima rodada.",
+    "imagem": 4,
+    "citacao": "O videogame vira uma ponte entre gerações quando jogamos juntos com controle na mão."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "A diversão em dupla começa com o controle certo para o Xbox 360 ou o PC.",
+    "itens": [
+      {
+        "id": 114,
+        "nome": "Kit Player Um",
+        "itens": "1 Controle De360 Com Fio USB",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Controle USB",
+            "icone": "gamepad-2"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Escolha o seu",
+      "texto": "O controle ideal para seu Xbox ou PC.",
+      "icone": "mouse-pointer-click"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Plugar e jogar",
+      "texto": "Conecte no USB e sinta a vibração.",
+      "icone": "plug"
+    },
+    {
+      "titulo": "Diversão em família",
+      "texto": "Horas de jogo e alegria juntos.",
+      "icone": "users"
+    }
+  ],
+  "garantia": [
+    "Jogando muito",
+    "Sempre pronto",
+    "Vencendo fases",
+    "Se divertindo"
+  ],
+  "duvidas": [
+    [
+      "Precisa de pilhas?",
+      "Não, ele é alimentado diretamente pelo cabo USB."
+    ],
+    [
+      "Funciona no computador?",
+      "Sim, é compatível com PC e notebook via USB. Alguns jogos ou versões do Windows podem pedir driver ou configuração manual."
+    ],
+    [
+      "Qual o tamanho do cabo?",
+      "O cabo possui aproximadamente 2,10 metros de comprimento."
+    ],
+    [
+      "O que vem na caixa?",
+      "Contém 1 controle com fio USB da marca Yihan."
+    ],
+    [
+      "Tem entrada para fone?",
+      "Sim, possui entrada P1 integrada para fone de ouvido."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente para jogar junto",
+    "texto": "Conecte o controle, escolha o jogo e aproveite horas de diversão real com quem você ama."
+  },
+  "ctas": {
+    "historia": "Quero jogar junto",
+    "comparativo": "Quero diversão sem pilhas"
+  }
+}

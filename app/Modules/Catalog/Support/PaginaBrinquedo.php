@@ -26,12 +26,33 @@ use App\Modules\Catalog\Models\Product;
  *   garantia          [texto] x4
  *   duvidas           [[pergunta, resposta]]
  *   final             {titulo, texto}
- * "imagem" é o índice da foto do produto (0 = principal). Ícones: nomes de icones.js (Lucide).
+ * "imagem" é o índice da foto do produto (0 = principal) ou o caminho de uma foto no storage
+ * (products/<id>/arquivo.jpg) que ilustra a página sem estar na galeria. Ícones: nomes de icones.js (Lucide).
  */
 class PaginaBrinquedo
 {
     /** Palavras que não entram na página de produto (PDFs e brindes só no checkout; sem liquidação). */
     public const PROIBIDAS = ['grátis', 'gratis', 'brinde', 'pdf', 'frete', '% off', 'promoção', 'liquidação', 'desconto', 'fa-bolt'];
+
+    /** "imagem" em texto: caminho de uma foto no storage público (products/<id>/arquivo.jpg). */
+    public const CAMINHO_FOTO = '#^(?!.*\.\.)products/[A-Za-z0-9_./-]+\\.(jpe?g|png|webp)$#';
+
+    /**
+     * Fotos do storage que a página usa fora da galeria ("imagem" em texto e historia.capa).
+     *
+     * @return list<string>
+     */
+    public static function fotosDoStorage(array $pagina): array
+    {
+        $caminhos = [];
+        array_walk_recursive($pagina, function ($valor, $chave) use (&$caminhos) {
+            if (in_array($chave, ['imagem', 'capa'], true) && is_string($valor) && ! preg_match('#^(https?:)?//#', $valor)) {
+                $caminhos[] = ltrim($valor, '/');
+            }
+        });
+
+        return array_values(array_unique($caminhos));
+    }
 
     public static function paraPagina(Product $product): ?array
     {
@@ -61,7 +82,9 @@ class PaginaBrinquedo
             if ($chave === 'icone' && ! in_array($valor, $icones, true)) {
                 $problemas[] = "ícone inexistente: {$valor}";
             }
-            if ($chave === 'imagem' && $valor !== null && ($valor < 0 || $valor >= $fotos)) {
+            if ($chave === 'imagem' && is_string($valor) && ! preg_match(self::CAMINHO_FOTO, $valor)) {
+                $problemas[] = "foto com caminho inválido: {$valor}";
+            } elseif ($chave === 'imagem' && is_int($valor) && ($valor < 0 || $valor >= $fotos)) {
                 $problemas[] = "foto {$valor} fora da galeria ({$fotos} fotos)";
             }
         });

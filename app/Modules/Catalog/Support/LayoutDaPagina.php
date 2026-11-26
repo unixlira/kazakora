@@ -12,7 +12,7 @@ use App\Modules\Catalog\Models\Product;
  * - "padrao": a página de sempre (ProductDetailV2 sem nada a mais).
  *
  * O produto (ou o pai dele, para as variações) pode forçar um dos dois pela
- * coluna products.layout_pagina; vazio, vale a categoria.
+ * coluna products.layout_pagina; vazio, vale a categoria (com conteúdo próprio ou do anúncio).
  */
 class LayoutDaPagina
 {
@@ -30,11 +30,20 @@ class LayoutDaPagina
             return $escolhido;
         }
 
-        // Pela categoria só quando a página de brinquedo tem conteúdo (pagina_brinquedo): na produção
-        // (25/11/2026) os brinquedos ganham a página nova um a um, conforme o conteúdo é gravado.
+        // Pela categoria (pedido do Lira 25/11/2026: todo brinquedo ativo abre na página KoraKids). O
+        // conteúdo vem do pagina_brinquedo e, sem ele, do conteúdo do anúncio (product_ad_contents), que o
+        // SecoesBrinquedo usa como reserva. Sem nenhum dos dois, a página nova ficaria vazia: fica a padrão.
         $categoria = $product->category?->slug ?? $product->parent?->category?->slug;
-        $temConteudo = ! empty($product->pagina_brinquedo) || ! empty($product->parent?->pagina_brinquedo);
+        if (! in_array($categoria, self::CATEGORIAS_BRINQUEDO, true)) {
+            return self::PADRAO;
+        }
 
-        return $temConteudo && in_array($categoria, self::CATEGORIAS_BRINQUEDO, true) ? self::BRINQUEDO : self::PADRAO;
+        return self::temConteudo($product) || ($product->parent && self::temConteudo($product->parent)) ? self::BRINQUEDO : self::PADRAO;
+    }
+
+    /** Conteúdo para montar a página de brinquedo: o próprio (pagina_brinquedo) ou os blocos do anúncio. */
+    public static function temConteudo(Product $product): bool
+    {
+        return ! empty($product->pagina_brinquedo) || ! empty($product->adContent?->blocos);
     }
 }

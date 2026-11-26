@@ -1,0 +1,246 @@
+{
+  "titulo": "Caminhão T-Rex que Vira Pista, Lança Carrinhos e Vira Maleta",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Brinquedo 3 em 1",
+      "caminhão, pista e maleta"
+    ],
+    [
+      "Lança 2 carros",
+      "ejetores de velocidade"
+    ],
+    [
+      "Guarda 14 carros",
+      "maleta organizadora"
+    ],
+    [
+      "Zero telas",
+      "brincadeira de verdade"
+    ]
+  ],
+  "letreiro": [
+    "Caminhão que vira pista de corrida",
+    "Acompanha 2 carrinhos de metal",
+    "Guarda até 14 carrinhos na maleta",
+    "Ejetores duplos para lançar carros",
+    "Diversão pura longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "Aventura longe das telas",
+    "subtitulo": "Velocidade que desperta a imaginação",
+    "texto": "Transformar o caminhão em pista e lançar os carrinhos: é assim que a criança esquece o celular. Brincar de verdade ajuda no foco, e menos tela antes de dormir ajuda no sono.",
+    "imagem": 1
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 0,
+    "chamadas": [
+      "Vira pista de corrida",
+      "Maleta para 14 carros"
+    ],
+    "cards": [
+      {
+        "titulo": "Transformação",
+        "texto": "De caminhão cegonheiro para pista de corrida num instante.",
+        "icone": "repeat"
+      },
+      {
+        "titulo": "Velocidade",
+        "texto": "Dois ejetores para apostar corrida com os amigos.",
+        "icone": "flame"
+      },
+      {
+        "titulo": "Organização",
+        "texto": "A criança aprende a guardar tudo dentro do próprio T-Rex.",
+        "icone": "package"
+      },
+      {
+        "titulo": "Criatividade",
+        "texto": "Cria histórias de dinossauros e competições velozes.",
+        "icone": "palette"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto monta a pista e organiza os carrinhos, o desenvolvimento acontece naturalmente:",
+    "imagem": 2,
+    "chamadas": [
+      "3 em 1",
+      "2 ejetores",
+      "63 cm de pista",
+      "2 carros de metal"
+    ],
+    "habilidades": [
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Organização",
+        "icone": "boxes"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "wand-sparkles"
+      },
+      {
+        "texto": "Interação social",
+        "icone": "users-round"
+      },
+      {
+        "texto": "Foco e paciência",
+        "icone": "target"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe para a aventura",
+    "texto": "Um T-Rex azul que carrega a coleção e vira o palco das melhores corridas.",
+    "imagem": 3,
+    "cards": [
+      {
+        "titulo": "Pista de 63cm",
+        "texto": "Espaço para acelerar",
+        "icone": "ruler"
+      },
+      {
+        "titulo": "2 Ejetores",
+        "texto": "Lançamento simultâneo",
+        "icone": "rocket"
+      },
+      {
+        "titulo": "Maleta T-Rex",
+        "texto": "Tem alça para carregar",
+        "icone": "backpack"
+      },
+      {
+        "titulo": "Carros de metal",
+        "texto": "2 carrinhos inclusos",
+        "icone": "gem"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Caminhão comum × Caminhão T-Rex",
+    "intro": "Um caminhão parado ou uma pista que lança carros de verdade?",
+    "rotulos": [
+      "Comum",
+      "T-Rex"
+    ],
+    "linhas": [
+      {
+        "texto": "Rodinhas que giram",
+        "comum": true
+      },
+      {
+        "texto": "Transforma em pista de 63cm",
+        "comum": false
+      },
+      {
+        "texto": "Tem 2 ejetores de velocidade",
+        "comum": false
+      },
+      {
+        "texto": "Guarda 14 carros na maleta",
+        "comum": false
+      },
+      {
+        "texto": "Vem com 2 carrinhos de metal",
+        "comum": false
+      },
+      {
+        "texto": "Estimula a organização",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Momentos reais em família",
+    "texto": "Nada supera a torcida numa corrida de carrinhos no meio da sala. É o tempo de qualidade que fica na memória, sem nenhuma tela por perto.",
+    "imagem": 5,
+    "citacao": "O melhor sinal de diversão é o barulho dos carrinhos e a risada da criança longe do tablet."
+  },
+  "kits": {
+    "titulo": "Escolha o kit da aventura",
+    "texto": "Horas de brincadeira de verdade com o caminhão que organiza toda a coleção.",
+    "itens": [
+      {
+        "id": 118,
+        "nome": "Kit Diversão T-Rex",
+        "itens": "1 Caminhão T-Rex + 2 Carros Metal",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão 3 em 1",
+            "icone": "truck"
+          },
+          {
+            "texto": "2 Carros Metal",
+            "icone": "car"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Transformação",
+      "texto": "Abra o T-Rex e monte a pista de corrida.",
+      "icone": "repeat"
+    },
+    {
+      "titulo": "Brincar junto",
+      "texto": "Aposte corridas e crie memórias em família.",
+      "icone": "heart"
+    }
+  ],
+  "garantia": [
+    "Brincando de verdade",
+    "Longe dos celulares",
+    "Organizando os carros",
+    "Criando aventuras"
+  ],
+  "duvidas": [
+    [
+      "O que vem na embalagem?",
+      "01 Caminhão 3 em 1 e 02 Carrinhos de metal."
+    ],
+    [
+      "Quantos carrinhos ele guarda?",
+      "A maleta interna tem capacidade para organizar até 14 carrinhos."
+    ],
+    [
+      "Os carrinhos são de quê?",
+      "Os 2 carrinhos que acompanham o caminhão são de metal."
+    ],
+    [
+      "Quais as medidas montado?",
+      "Aberto como pista, tem cerca de 63 cm de comprimento, 30,5 cm de altura e 14,5 cm de largura."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Horas de brincadeira de verdade, corridas emocionantes e a coleção sempre organizada."
+  },
+  "ctas": {
+    "historia": "Quero o meu",
+    "comparativo": "Quero diversão de verdade"
+  }
+}

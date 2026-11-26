@@ -1,0 +1,257 @@
+{
+  "titulo": "Caminhão que Abre e Vira Pista com Rampa e Garagem, 6 Carrinhos",
+  "sem_telas": true,
+  "chips": [
+    [
+      "Vira pista",
+      "rampa dupla"
+    ],
+    [
+      "6 carrinhos",
+      "inclusos"
+    ],
+    [
+      "Maleta",
+      "leva para todo lado"
+    ],
+    [
+      "Zero telas",
+      "corrida em casa"
+    ]
+  ],
+  "letreiro": [
+    "Abre e vira pista com rampa dupla",
+    "Acompanha 6 carrinhos",
+    "Garagem para estacionar a frota",
+    "Vira maleta com alça para levar",
+    "Brincadeira longe do celular",
+    "Garantia de 30 dias"
+  ],
+  "historia": {
+    "titulo": "A corrida começa em segundos",
+    "subtitulo": "O presente que tira a criança do celular",
+    "texto": "Abre o caminhão, monta a pista e solta os carrinhos na rampa: corrida, garagem e história nova a cada volta. Menos tela também é mais descanso para os olhos e mais energia gasta brincando.",
+    "imagem": 3
+  },
+  "porque": {
+    "titulo": "Por que a criançada adora",
+    "imagem": 4,
+    "chamadas": [
+      "Vira pista",
+      "6 carrinhos inclusos"
+    ],
+    "cards": [
+      {
+        "titulo": "3 em 1",
+        "texto": "Caminhão, pista e estacionamento num brinquedo só.",
+        "icone": "truck"
+      },
+      {
+        "titulo": "Corrida de verdade",
+        "texto": "Rampa dupla para soltar os carrinhos e ver quem chega antes.",
+        "icone": "flag"
+      },
+      {
+        "titulo": "Organização",
+        "texto": "Depois da festa, os carrinhos voltam para dentro do caminhão.",
+        "icone": "square-parking"
+      },
+      {
+        "titulo": "Vai junto",
+        "texto": "Fecha, pega pela alça e leva para a casa da vovó.",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "ensina": {
+    "titulo": "Brincadeira que também ensina",
+    "texto": "Enquanto monta a pista e estaciona a frota, a criança treina sem nem perceber:",
+    "imagem": 6,
+    "chamadas": [
+      "Braço com garra",
+      "Rampa dupla",
+      "Garagem",
+      "6 carrinhos"
+    ],
+    "habilidades": [
+      {
+        "texto": "Noção de espaço",
+        "icone": "move-3d"
+      },
+      {
+        "texto": "Coordenação motora",
+        "icone": "hand"
+      },
+      {
+        "texto": "Imaginação",
+        "icone": "sparkles"
+      },
+      {
+        "texto": "Organização",
+        "icone": "boxes"
+      },
+      {
+        "texto": "Foco e atenção",
+        "icone": "target"
+      },
+      {
+        "texto": "Brincar junto",
+        "icone": "users"
+      }
+    ]
+  },
+  "detalhes": {
+    "titulo": "Cada detalhe feito para acelerar",
+    "texto": "Caminhão de rodas livres que abre em pista com rampa, garagem e braço com garra, e fecha em maleta com alça.",
+    "imagem": 5,
+    "cards": [
+      {
+        "titulo": "Rampa dupla",
+        "texto": "Corrida lado a lado",
+        "icone": "route"
+      },
+      {
+        "titulo": "6 carrinhos",
+        "texto": "Coloridos e prontos",
+        "icone": "car"
+      },
+      {
+        "titulo": "Garagem",
+        "texto": "Estaciona e organiza",
+        "icone": "square-parking"
+      },
+      {
+        "titulo": "Formato maleta",
+        "texto": "Alça para transportar",
+        "icone": "backpack"
+      }
+    ]
+  },
+  "comparativo": {
+    "titulo": "Caminhão comum × Caminhão 3 em 1",
+    "intro": "Os dois andam pela casa. Só um vira pista, garagem e maleta.",
+    "rotulos": [
+      "Comum",
+      "3 em 1"
+    ],
+    "linhas": [
+      {
+        "texto": "Rodas livres para andar",
+        "comum": true
+      },
+      {
+        "texto": "Abre e vira pista com rampa dupla",
+        "comum": false
+      },
+      {
+        "texto": "Acompanha 6 carrinhos",
+        "comum": false
+      },
+      {
+        "texto": "Garagem para estacionar",
+        "comum": false
+      },
+      {
+        "texto": "Braço com garra para brincar",
+        "comum": false
+      },
+      {
+        "texto": "Guarda os carrinhos dentro",
+        "comum": false
+      },
+      {
+        "texto": "Vira maleta com alça",
+        "comum": false
+      }
+    ]
+  },
+  "familia": {
+    "titulo": "Queridinho de pais e filhos",
+    "texto": "Cada um escolhe o seu carrinho e a corrida começa no chão da sala. No fim, tudo volta para dentro do caminhão.",
+    "imagem": 0,
+    "citacao": "Menos tela, mais corrida: a família inteira torcendo na reta final da pista da sala."
+  },
+  "kits": {
+    "titulo": "Escolha o seu kit",
+    "texto": "Caminhão, pista, garagem e carrinhos juntos para horas de corrida longe das telas.",
+    "itens": [
+      {
+        "id": 222,
+        "nome": "Kit Corrida Completa",
+        "itens": "1 Caminhão Maleta + 6 carrinhos",
+        "unidades": 1,
+        "partes": [
+          {
+            "texto": "Caminhão 3 em 1",
+            "icone": "truck"
+          },
+          {
+            "texto": "6 carrinhos",
+            "icone": "car"
+          }
+        ]
+      }
+    ]
+  },
+  "passos": [
+    {
+      "titulo": "Peça o seu",
+      "texto": "Clique em Comprar e finalize em poucos passos.",
+      "icone": "shopping-bag"
+    },
+    {
+      "titulo": "Enviamos com rastreio",
+      "texto": "Acompanhe cada passo em Meus Pedidos.",
+      "icone": "truck"
+    },
+    {
+      "titulo": "Abre e acelera",
+      "texto": "Chegou! Abriu, virou pista e a corrida começou.",
+      "icone": "flag"
+    },
+    {
+      "titulo": "Tudo guardado",
+      "texto": "Carrinhos de volta no caminhão, pronto para levar.",
+      "icone": "package"
+    }
+  ],
+  "garantia": [
+    "Acelerando na pista",
+    "Mais longe das telas",
+    "Organizando os carrinhos",
+    "Brincando em família"
+  ],
+  "duvidas": [
+    [
+      "O que vem na embalagem?",
+      "1 Caminhão Maleta Infantil e 6 carrinhos."
+    ],
+    [
+      "Como funciona o 3 em 1?",
+      "O caminhão tem rodas livres, abre em pista com garagem e fecha em maleta para guardar e levar os carrinhos."
+    ],
+    [
+      "Quais as medidas do caminhão?",
+      "Aproximadamente 29 cm de altura, 24 cm de comprimento e 19 cm de largura."
+    ],
+    [
+      "Dá para guardar os carrinhos dentro?",
+      "Sim, os carrinhos ficam nos compartimentos internos do caminhão depois da brincadeira."
+    ]
+  ],
+  "final": {
+    "titulo": "O presente que tira a criança do celular",
+    "texto": "Pista, garagem e 6 carrinhos num caminhão só: horas de corrida de verdade com a família."
+  },
+  "ctas": {
+    "historia": "Quero o meu caminhão",
+    "porque": "Quero o caminhão 3 em 1",
+    "ensina": "Quero o meu",
+    "detalhes": "Quero a pista com rampa",
+    "comparativo": "Quero trocar a tela pela pista",
+    "familia": "Quero brincar em família",
+    "passos": "Quero o meu",
+    "garantia": "Quero o meu caminhão",
+    "final": "Quero presentear agora"
+  }
+}

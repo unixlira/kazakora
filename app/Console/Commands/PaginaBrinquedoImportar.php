@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\PaginaBrinquedo;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Grava o conteúdo da página de brinquedo (products.pagina_brinquedo) a partir dos
@@ -67,6 +68,11 @@ class PaginaBrinquedoImportar extends Command
                 continue;
             }
             $problemas = PaginaBrinquedo::problemas($pagina, $icones, (int) $product->images_count);
+            foreach (PaginaBrinquedo::fotosDoStorage($pagina) as $caminho) {
+                if (! Storage::disk('public')->exists($caminho)) {
+                    $problemas[] = "foto não encontrada no storage: {$caminho}";
+                }
+            }
             if ($problemas) {
                 $this->error("{$slug}: ".implode('; ', $problemas));
                 $falhas++;

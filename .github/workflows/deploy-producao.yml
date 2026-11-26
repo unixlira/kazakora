@@ -57,7 +57,7 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           python3 scripts/ci/fatia-testes.py ${{ matrix.fatia }} 4
-          php artisan test --compact --configuration=phpunit.fatia.xml
+          php artisan test --compact
 
   deploy:
     needs: testes

@@ -67,4 +67,4 @@ jobs:
             exit ${falhou:-0}
           fi
           python3 scripts/ci/fatia-testes.py ${{ matrix.fatia }} 4
-          php artisan test --compact --configuration=phpunit.fatia.xml
+          php artisan test --compact

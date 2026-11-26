@@ -306,4 +306,16 @@ class FunilInfoprodutosTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->get('/admin/publicidade/infoprodutos')->assertRedirect();
     }
+
+    public function test_comportamento_abre_na_kazakora_por_padrao(): void
+    {
+        $this->cenario();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        // O cenário só tem visitas de infoproduto; mesmo assim a tela abre na KazaKora (pedido do Lira 2026-11-26).
+        $this->actingAs($admin)->get('/admin/publicidade/comportamento')
+            ->assertOk()->assertInertia(fn ($page) => $page->where('loja', 'kazakora'));
+        $this->actingAs($admin)->get('/admin/publicidade/comportamento?loja=infoprodutos')
+            ->assertOk()->assertInertia(fn ($page) => $page->where('loja', 'infoprodutos'));
+    }
 }

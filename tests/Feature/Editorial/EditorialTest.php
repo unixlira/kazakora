@@ -58,11 +58,14 @@ class EditorialTest extends TestCase
             ->has('posts', 9)->where('posts.0.interaction.canInteract', false)
             ->where('hasMore', true)->where('filters.categoria', 'casa')
             ->where('nextPageUrl', '/blog?categoria=casa&tipo=recipe&page=2')
-            ->where('pagination.current', 1)->where('pagination.last', 2)
+            ->where('pagination.current', 1)->where('pagination.last', 3)
             ->where('pagination.links.0.url', '/blog?categoria=casa&tipo=recipe')->where('pagination.links.0.current', true)
             ->where('pagination.links.1.url', '/blog?categoria=casa&tipo=recipe&page=2'));
-        $this->get('/blog?categoria=casa&tipo=recipe&page=2')->assertInertia(fn ($p) => $p->has('posts', 9)->where('hasMore', false)->where('pagination.current', 2));
-        $this->get('/blog?categoria=casa&tipo=recipe&page=99')->assertInertia(fn ($p) => $p->has('posts', 9)->where('pagination.current', 2));
+        // Da 2ª página em diante são 6 (pedido do Lira 27/11/2026): 18 = 9 + 6 + 3.
+        $this->get('/blog?categoria=casa&tipo=recipe&page=2')->assertInertia(fn ($p) => $p->has('posts', 6)->where('hasMore', true)->where('pagination.current', 2)
+            ->where('posts.0.slug', 'receita-8'));
+        $this->get('/blog?categoria=casa&tipo=recipe&page=3')->assertInertia(fn ($p) => $p->has('posts', 3)->where('hasMore', false)->where('pagination.current', 3));
+        $this->get('/blog?categoria=casa&tipo=recipe&page=99')->assertInertia(fn ($p) => $p->has('posts', 3)->where('pagination.current', 3));
         $this->get('/blog?categoria=inexistente')->assertInertia(fn ($p) => $p->has('posts', 0));
         $this->get('/blog?categoria=&tipo=')->assertOk();
     }

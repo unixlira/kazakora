@@ -360,6 +360,7 @@ class Order extends Model
         'subtotal',
         'shipping_cost',
         'coupon_code',
+        'entrega_em_maos',
         'discount_amount',
         'pix_discount_amount',
         'desconto_plataforma_amount',
@@ -375,9 +376,14 @@ class Order extends Model
     // (a confirmação e "Minhas Compras" mandam o pedido inteiro ao navegador).
     protected $hidden = ['meta_rastreio'];
 
+    /** Transportadora gravada no pedido do cupom de entrega em mãos. */
+    public const ENTREGA_EM_MAOS = 'Entrega em mãos';
+
     protected function casts(): array
     {
         return [
+            // Venda entregue pelo Lira em mãos (cupom de entrega em mãos, 27/11/2026): sem frete e sem etiqueta.
+            'entrega_em_maos' => 'boolean',
             'amostra_em' => 'datetime',
             // Endereço original da compra, gravado na 1ª alteração (EnderecoDoPedido).
             'endereco_digitado' => 'array',

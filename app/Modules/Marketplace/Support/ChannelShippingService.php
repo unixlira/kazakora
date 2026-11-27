@@ -35,6 +35,21 @@ class ChannelShippingService
             ['status' => ChannelShipment::STATUS_PENDING],
         );
 
+        // Cupom de entrega em mãos (pedido do Lira em 27/11/2026): o Lira leva
+        // o pedido pessoalmente. Nenhuma etiqueta (Correios, Melhor Envio, J3)
+        // é gerada nem paga, e não há etiqueta para buscar depois.
+        if ($order->entrega_em_maos) {
+            $shipment->update([
+                'shipping_method' => Order::ENTREGA_EM_MAOS,
+                'status' => ChannelShipment::STATUS_CONFIRMED,
+                'confirmed_at' => now(),
+                'error_message' => null,
+            ]);
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Entrega em mãos: sem etiqueta');
+
+            return $shipment;
+        }
+
         try {
             $result = $this->manager->driver($order->origin)->confirmShipping($order);
         } catch (Throwable $exception) {

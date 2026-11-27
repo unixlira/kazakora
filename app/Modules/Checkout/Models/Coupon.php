@@ -45,6 +45,7 @@ class Coupon extends Model
         'is_active',
         'so_kazakora',
         'produtos',
+        'entrega_em_maos',
     ];
 
     protected function casts(): array
@@ -62,6 +63,8 @@ class Coupon extends Model
             // Cupom só de alguns produtos (BLACKFRIDAY30 do massageador, 2026-11-11): ids de
             // produto (o pai vale para as variações). Vazio = vale para o carrinho todo.
             'produtos' => 'array',
+            // Entrega em mãos (27/11/2026): o pedido não cobra frete nem gera etiqueta.
+            'entrega_em_maos' => 'boolean',
         ];
     }
 
@@ -263,8 +266,15 @@ class Coupon extends Model
     /** "10% de desconto" / "R$ 20,00 de desconto". */
     public function descricaoDesconto(): string
     {
-        return $this->discount_type === self::TYPE_PERCENTAGE
+        $desconto = $this->discount_type === self::TYPE_PERCENTAGE
             ? rtrim(rtrim(number_format((float) $this->discount_value, 2, ',', '.'), '0'), ',').'% de desconto'
             : 'R$ '.number_format((float) $this->discount_value, 2, ',', '.').' de desconto';
+
+        // Entrega em mãos (27/11/2026): pode vir sem desconto nenhum.
+        if ($this->entrega_em_maos) {
+            return (float) $this->discount_value > 0 ? $desconto.' + entrega em mãos' : 'Entrega em mãos, sem frete';
+        }
+
+        return $desconto;
     }
 }

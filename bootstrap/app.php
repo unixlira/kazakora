@@ -102,6 +102,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
             'api.partner.active' => EnsureApiPartnerIsActive::class,
+            // Um contador por rota (27/11/2026): o padrão do Laravel somava todas as
+            // rotas do mesmo IP e o "Finalizar" do checkout voltava 429. Ver LimitePorRota.
+            'throttle' => \App\Http\Middleware\LimitePorRota::class,
         ]);
 
         // log.api precisa rodar POR FORA do auth pra registrar os 401/403

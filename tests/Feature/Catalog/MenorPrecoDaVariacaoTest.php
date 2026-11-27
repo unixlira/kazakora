@@ -36,6 +36,10 @@ class MenorPrecoDaVariacaoTest extends TestCase
         $this->assertEquals($barata->fresh()->final_price, $vitrine['final_price']);
         $this->assertEquals(280.0, $vitrine['price']);
         $this->assertTrue($vitrine['a_partir_de']);
+        // O card abre a página na variação do preço mostrado (?opcao=), 27/11/2026.
+        $this->assertSame($barata->id, $vitrine['id']);
+        $this->get('/produtos/'.$pai->fresh()->slug.'?opcao='.$barata->id)->assertOk()
+            ->assertInertia(fn ($page) => $page->where('opcaoInicial', $barata->id));
         $this->assertArrayNotHasKey('variacoes_ativas', $cards[$pai->id]);
         // Preço do próprio produto (carrinho) continua o dele.
         $this->assertEquals($pai->fresh()->final_price, $cards[$pai->id]['final_price']);

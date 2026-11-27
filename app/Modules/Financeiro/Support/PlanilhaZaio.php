@@ -119,7 +119,12 @@ class PlanilhaZaio
             return null;
         }
 
-        return round((float) str_replace(',', '.', str_replace('.', '', $t)), 2);
+        $valor = round((float) str_replace(',', '.', str_replace('.', '', $t)), 2);
+
+        // Célula quebrada na planilha (27/11/2026: o ID do anúncio do Nível
+        // Laser no TikTok foi parar no custo e a margem virou R$ 1,7 quintilhão):
+        // fica vazia em vez de travar a cópia das outras linhas.
+        return abs($valor) > 1_000_000 ? null : $valor;
     }
 
     /** "12,81%" => 12.81; "0,14" (fração) => 14.0. */
@@ -131,7 +136,9 @@ class PlanilhaZaio
         }
         $n = (float) str_replace(',', '.', preg_replace('/[^\d,.\-]/', '', $t));
 
-        return round(str_contains($t, '%') ? $n : $n * 100, 2);
+        $pct = round(str_contains($t, '%') ? $n : $n * 100, 2);
+
+        return abs($pct) > 9999 ? null : $pct;
     }
 
     /**

@@ -67,7 +67,7 @@ class Product extends Model
         'brinde_fisico',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine', 'preco_cupom'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine', 'preco_cupom', 'layout_card'];
 
     /** Só serve para calcular o preco_vitrine; não vai no JSON. */
     protected $hidden = ['variacoesAtivas', 'avaliacoes_de', 'pagina_brinquedo', 'escada_kits', 'cartoes_opcoes'];
@@ -197,6 +197,33 @@ class Product extends Model
     public function getPrecosCupomAttribute(): ?array
     {
         return $this->id ? \App\Modules\Checkout\Support\BlackFriday::porQuantidade($this) : null;
+    }
+
+    /**
+     * Layout da página do produto, para o card mostrar o preço do mesmo jeito (27/11/2026):
+     * na página de brinquedo o preço grande é o sem cupom ("de 239,00 por 97,99") e o card
+     * mostrava o com cupom (93,09). Só "brinquedo" ou null; fora da categoria de brinquedos
+     * não consulta nada a mais.
+     */
+    public function getLayoutCardAttribute(): ?string
+    {
+        if (! $this->id) {
+            return null;
+        }
+        // Sem layout escolhido e fora da categoria de brinquedos: padrão, sem consultar o conteúdo.
+        // Ids das categorias de brinquedo guardados na memória da requisição (store "array"): nada de
+        // uma consulta por produto nas listas grandes.
+        $brinquedo = \Illuminate\Support\Facades\Cache::store('array')->rememberForever('catalogo:categorias-brinquedo', fn () => Category::whereIn('slug', \App\Modules\Catalog\Support\LayoutDaPagina::CATEGORIAS_BRINQUEDO)->pluck('id')->all());
+        if (! $this->layout_pagina && ! in_array($this->category_id, $brinquedo)
+            && ($this->parent_product_id === null || (! $this->parent?->layout_pagina && ! in_array($this->parent?->category_id, $brinquedo)))) {
+            return null;
+        }
+
+        // O card (forCard) não carrega o pagina_brinquedo, que é grande: busca o produto inteiro só
+        // aqui, para os poucos da categoria de brinquedos.
+        $produto = array_key_exists('pagina_brinquedo', $this->attributes) ? $this : (static::query()->find($this->id) ?? $this);
+
+        return \App\Modules\Catalog\Support\LayoutDaPagina::para($produto) === \App\Modules\Catalog\Support\LayoutDaPagina::BRINQUEDO ? 'brinquedo' : null;
     }
 
     /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
@@ -538,6 +565,8 @@ class Product extends Model
                 'created_at',
                 // Kit que junta avaliações de outros produtos (26/11/2026): ver avaliacoesDeOutrosNoCard().
                 'avaliacoes_de',
+                // Card de brinquedo mostra o preço como a página (27/11/2026): ver getLayoutCardAttribute().
+                'layout_pagina',
             ])
             // Anúncio com variação mostra o menor preço (pedido 2026-10-16).
             ->comPrecoDaVariacao()

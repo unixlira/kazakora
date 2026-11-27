@@ -289,10 +289,16 @@ const preco = computed(() => (props.escolher ? props.product : (props.product.pr
 const cupomBf = computed(() => preco.value.preco_cupom ?? null);
 const bfNoAr = computed(() => !!inertia.props.blackfriday);
 // principal 'venda' (Compressor 4 em 1, 26/11/2026): grande = preço de venda, riscado = "de" do cadastro.
-const cupomSecundario = computed(() => cupomBf.value?.principal === 'venda');
+// Página de brinquedo (27/11/2026): lá o preço grande é o sem cupom ("de 239,00 por 97,99") e o
+// cupom vem depois; o card segue a página para o cliente não ver um preço no card e outro ao abrir.
+const comoPaginaBrinquedo = computed(() => !props.escolher && props.product.layout_card === 'brinquedo');
+const cupomSecundario = computed(() => cupomBf.value?.principal === 'venda' || (!!cupomBf.value && comoPaginaBrinquedo.value));
 const precoVenda = computed(() => Number(cupomBf.value && !cupomSecundario.value ? cupomBf.value.por : preco.value.final_price));
 const precoAntes = computed(() => {
-    if (cupomSecundario.value) return cupomBf.value.antes ? Number(cupomBf.value.antes) : null;
+    if (cupomSecundario.value) {
+        if (cupomBf.value.antes) return Number(cupomBf.value.antes);
+        return comoPaginaBrinquedo.value && preco.value.has_discount ? Number(preco.value.preco_de ?? preco.value.price) : null;
+    }
     if (cupomBf.value) return Number(cupomBf.value.de);
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
     if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);

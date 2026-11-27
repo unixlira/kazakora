@@ -165,11 +165,18 @@ class BlackFriday
         $pct = DescontoPix::percentualDosItens($itens);
         $pix = $pct > 0 ? round($por - DescontoPix::descontoSobreCupom($subtotal - $plataforma, $desconto, $pct), 2) : null;
 
+        // Preço grande = o de venda (config loja.blackfriday_preco_principal_produtos): riscado o
+        // "de" do cadastro, o com cupom vira linha de baixo. Senão (padrão): grande = com cupom.
+        $principalVenda = in_array((int) ($produto->parent_product_id ?: $produto->id), array_map('intval', (array) config('loja.blackfriday_preco_principal_produtos', [])), true);
+        $antes = $principalVenda && $produto->preco_de ? round((float) $produto->preco_de * $quantidade, 2) : null;
+
         return [
             'code' => $cupom->code,
             'rotulo' => self::rotulo($cupom),
             'ate' => self::ateTexto(),
             'quantidade' => $quantidade,
+            'principal' => $principalVenda ? 'venda' : 'cupom',
+            'antes' => $antes,
             'de' => $subtotal,
             'cupom' => $desconto,
             'plataforma' => $plataforma,

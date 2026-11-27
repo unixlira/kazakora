@@ -105,6 +105,13 @@ return [
     */
     'blackfriday_ate' => env('LOJA_BLACKFRIDAY_ATE', '2026-11-30 23:59:59'),
 
+    /*
+    | Produtos em que o preço grande da Black Friday é o de venda, não o com cupom
+    | (pedido do Lira 26/11/2026, Compressor 4 em 1): "de R$ 435,52" riscado e
+    | "por R$ 297,00" grande; o com cupom e o Pix ficam nas linhas de baixo.
+    */
+    'blackfriday_preco_principal_produtos' => [413],
+
     'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
     'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
 

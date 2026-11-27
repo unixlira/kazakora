@@ -26,11 +26,16 @@ class FinancialDashboardController extends Controller
     public function index(Request $request, PrevisaoDeCaixa $previsao, FlexDeliveryService $flexDelivery): Response
     {
         // Marketplaces x E-commerces (Lira, 17/11/2026: "separa tudo, nunca
-        // somar os dois"): a tela é de um grupo só (?grupo=marketplaces|ecommerces).
-        $grupo = (string) $request->query('grupo', 'marketplaces');
-        $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'marketplaces';
-        $canaisGrupo = GruposDeCanais::canais($grupo);
-        $ehMarketplace = $grupo === 'marketplaces';
+        // somar os dois") nas abas próprias; e "Tudo" (27/11/2026, Lira: "na
+        // tela dashboard-financeiro deve ter tudo"), que é o padrão desta tela:
+        // a KazaKora inteira, os mesmos números do KoraSync.
+        $grupo = (string) $request->query('grupo', 'todos');
+        $grupo = $grupo === 'todos' || array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'todos';
+        $canaisGrupo = $grupo === 'todos'
+            ? array_values(array_unique([...GruposDeCanais::canais('marketplaces'), ...GruposDeCanais::canais('ecommerces')]))
+            : GruposDeCanais::canais($grupo);
+        // Carteiras, extrato e Flex são dos marketplaces: aparecem em Marketplaces e em Tudo.
+        $ehMarketplace = $grupo !== 'ecommerces';
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
 
@@ -354,23 +359,11 @@ class FinancialDashboardController extends Controller
         // Carteiras e repasses: mesmo serviço do Fluxo de Caixa (2026-10-19).
         $walletBalances = $previsao->walletBalances();
 
-        // Quadro Zaio (27/11/2026): comissão da agência a pagar, mês atual e
-        // mês anterior fechado. Só no grupo Marketplaces.
-        $zaio = null;
-        if ($ehMarketplace) {
-            $inicioAnterior = $startOfMonth->copy()->subMonthNoOverflow();
-            $zaio = [
-                'pct' => ContributionMargin::comissaoZaioPct(),
-                'desde' => ContributionMargin::zaioDesde()->toDateString(),
-                'mesAtual' => ['rotulo' => $startOfMonth->translatedFormat('F/Y'), 'parcial' => true] + ContributionMargin::resumoZaio($startOfMonth, $amanha),
-                'mesAnterior' => ['rotulo' => $inicioAnterior->translatedFormat('F/Y'), 'parcial' => false] + ContributionMargin::resumoZaio($inicioAnterior, $startOfMonth),
-            ];
-        }
-
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'grupo' => $grupo,
-            'zaio' => $zaio,
-            'grupoNome' => GruposDeCanais::NOMES[GruposDeCanais::SLUGS[$grupo]],
+            // Planilha da Zaio x resultado real (27/11/2026): só onde há marketplaces.
+            'zaio' => $ehMarketplace ? $this->planilhaZaio($margem, $startOfMonth, $amanha) : null,
+            'grupoNome' => $grupo === 'todos' ? 'Tudo' : GruposDeCanais::NOMES[GruposDeCanais::SLUGS[$grupo]],
             'summary' => [
                 'incomeMonth' => $incomeMonth,
                 'expenseMonth' => $expenseMonth,
@@ -443,8 +436,6 @@ class FinancialDashboardController extends Controller
                 'correiosCostMonth' => $correiosCostMonth,
                 'netProfitMonth' => $netProfitMonth,
                 'marginBeforeTaxMonth' => $contaMes['margem'],
-                'zaioCommissionMonth' => (float) ($contaMes['comissao_zaio'] ?? 0),
-                'zaioCommissionRate' => ContributionMargin::comissaoZaioPct(),
                 'taxMonth' => $taxMonth,
                 'taxRate' => ContributionMargin::aliquotaSimples(),
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em
@@ -703,7 +694,6 @@ class FinancialDashboardController extends Controller
             // Conta oficial por canal (ver porCanal): substitui a soma local acima.
             $oficial = $porCanal[$channel] ?? null;
             $tax = 0.0;
-            $comissaoZaio = 0.0;
             if ($oficial) {
                 $revenue = $oficial['receita'];
                 $ordersCount = $oficial['pedidos'];
@@ -711,11 +701,10 @@ class FinancialDashboardController extends Controller
                 $adSpend = $oficial['ads'];
                 $platformCosts = round($oficial['taxas'] + $oficial['frete'] + ($oficial['insumos'] ?? 0) - $oficial['bonificacoes'], 2);
                 $tax = $oficial['imposto'];
-                $comissaoZaio = (float) ($oficial['comissao_zaio'] ?? 0);
             }
 
             $grossProfit = round($revenue - $productCost, 2);
-            $netProfit = round($grossProfit - $adSpend - $platformCosts - $comissaoZaio - $tax, 2);
+            $netProfit = round($grossProfit - $adSpend - $platformCosts - $tax, 2);
             $margin = $revenue > 0 ? round(($netProfit / $revenue) * 100, 2) : 0.0;
 
             $isEmpty = $ordersCount === 0
@@ -735,7 +724,6 @@ class FinancialDashboardController extends Controller
                 'platformCosts' => $platformCosts,
                 'productCost' => $productCost,
                 'tax' => $tax,
-                'zaioCommission' => $comissaoZaio,
                 'grossProfit' => $grossProfit,
                 'netProfit' => $netProfit,
                 'netMargin' => $margin,
@@ -953,7 +941,7 @@ class FinancialDashboardController extends Controller
             ->where('date', '>=', $startOfMonth)
             ->groupBy('channel')
             ->get()
-            ->filter(fn ($row) => $grupoDoAds((string) $row->channel) === $grupo)
+            ->filter(fn ($row) => $grupo === 'todos' || $grupoDoAds((string) $row->channel) === $grupo)
             ->map(fn ($row) => [
                 'channel' => $row->channel,
                 'impressions' => (int) $row->impressions,
@@ -1018,5 +1006,91 @@ class FinancialDashboardController extends Controller
         }
 
         return $series;
+    }
+
+    /**
+     * Métricas da planilha da Zaio no painel (pedido do Lira em 27/11/2026).
+     * A Zaio calcula a margem de cada anúncio com tarifa, taxa fixa, imposto,
+     * ADS/afiliados e comissão embutidos no preço. Ao lado, o resultado REAL
+     * do mês do mesmo produto, na mesma base: receita − custo − taxa real −
+     * frete − insumos (ContributionMargin::porItem) − imposto do Simples −
+     * parte do ADS real do canal proporcional à receita do produto.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function planilhaZaio(ContributionMargin $margem, Carbon $desde, Carbon $ate): ?array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('zaio_anuncios') || ! DB::table('zaio_anuncios')->exists()) {
+            return null;
+        }
+
+        $nomes = ['shopee' => 'Shopee', 'mercado_livre' => 'Mercado Livre', 'tiktok_shop' => 'TikTok Shop'];
+        $canais = array_keys($nomes);
+        $porCanal = $margem->porCanal($desde, $ate);
+        $aliquota = ContributionMargin::aliquotaSimples() / 100;
+
+        $real = [];
+        foreach ($margem->porItem($desde, $ate, $canais)['linhas'] as $linha) {
+            if (! $linha['product_id']) {
+                continue;
+            }
+            $chave = $linha['canal'].'|'.$linha['product_id'];
+            $real[$chave] ??= ['unidades' => 0, 'receita' => 0.0, 'margem_itens' => 0.0];
+            $real[$chave]['unidades'] += $linha['quantidade'];
+            $real[$chave]['receita'] += $linha['receita'];
+            $real[$chave]['margem_itens'] += $linha['margem'];
+        }
+
+        $planilha = DB::table('zaio_anuncios')->whereIn('canal', $canais)->get();
+        $linhas = [];
+        foreach ($planilha->groupBy(fn ($z) => $z->canal.'|'.($z->product_id ?? 'x'.$z->id)) as $chave => $grupoZaio) {
+            $z = $grupoZaio->first();
+            $r = $z->product_id ? ($real[$chave] ?? null) : null;
+            if (! $r || $r['unidades'] <= 0) {
+                continue;
+            }
+            $receitaCanal = (float) ($porCanal[$z->canal]['receita'] ?? 0);
+            $ads = $receitaCanal > 0 ? (float) ($porCanal[$z->canal]['ads'] ?? 0) * $r['receita'] / $receitaCanal : 0.0;
+            $lucro = $r['margem_itens'] - $r['receita'] * $aliquota - $ads;
+            $linhas[] = [
+                'canal' => $z->canal,
+                'canalNome' => $nomes[$z->canal],
+                'nome' => $z->nome,
+                'anuncio' => $z->anuncio_id,
+                'precoZaio' => (float) $z->preco,
+                'precoSugerido' => $z->preco_sugerido !== null ? (float) $z->preco_sugerido : null,
+                'margemZaio' => $z->margem !== null ? (float) $z->margem : null,
+                'margemZaioPct' => $z->margem_pct !== null ? (float) $z->margem_pct : null,
+                'unidades' => $r['unidades'],
+                'precoMedioReal' => round($r['receita'] / $r['unidades'], 2),
+                'lucroRealUn' => round($lucro / $r['unidades'], 2),
+                'lucroRealPct' => $r['receita'] > 0 ? round($lucro / $r['receita'] * 100, 1) : null,
+                'lucroReal' => round($lucro, 2),
+            ];
+        }
+        usort($linhas, fn ($a, $b) => $b['unidades'] <=> $a['unidades']);
+
+        $resumo = [];
+        foreach ($canais as $canal) {
+            $doCanal = $planilha->where('canal', $canal);
+            $comMargem = $doCanal->whereNotNull('margem_pct');
+            $resumo[] = [
+                'canal' => $canal,
+                'canalNome' => $nomes[$canal],
+                'anuncios' => $doCanal->count(),
+                'margemMediaPct' => $comMargem->count() ? round((float) $comMargem->avg('margem_pct'), 1) : null,
+                'abaixo10' => $comMargem->filter(fn ($z) => (float) $z->margem_pct < 10)->count(),
+                'negativos' => $comMargem->filter(fn ($z) => (float) $z->margem_pct < 0)->count(),
+                'imposto' => $doCanal->whereNotNull('imposto_pct')->avg('imposto_pct'),
+                'ads' => $doCanal->whereNotNull('ads_pct')->avg('ads_pct'),
+                'comissao' => $doCanal->whereNotNull('comissao_pct')->avg('comissao_pct'),
+            ];
+        }
+
+        return [
+            'atualizadoEm' => optional($planilha->max('updated_at'), fn ($d) => Carbon::parse($d)->format('d/m H:i')),
+            'resumo' => $resumo,
+            'linhas' => array_slice($linhas, 0, 40),
+        ];
     }
 }

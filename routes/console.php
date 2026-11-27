@@ -447,6 +447,8 @@ Schedule::command('comportamento:prints --todas --limite=1000 --dias=3')->dailyA
 // Lira por e-mail e no sino quando falta, uma vez até resolver. O e-mail do
 // pedido de teste tinha saído com menos livros do que a página prometia.
 Schedule::command('livros:conferir')->dailyAt('07:40')->withoutOverlapping(30);
+// Planilha da Zaio no painel financeiro (27/11/2026).
+Schedule::command('zaio:planilha')->dailyAt('06:50')->withoutOverlapping(30);
 
 // Resumo do blog por e-mail para a newsletter (pedido do Lira 24/11/2026).
 // DESLIGADO por padrão: liga com NEWSLETTER_BLOG_AGENDADO=true no .env

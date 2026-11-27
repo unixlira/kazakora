@@ -21,7 +21,6 @@ const partes = computed(() => {
         { rotulo: 'Produtos', valor: c.custo_produtos, cor: '#3c4044', corEscuro: '#8a8f95' },
         { rotulo: 'Taxas', valor: c.taxas, cor: '#6b5f63', corEscuro: '#a99fa2' },
         { rotulo: 'ADS', valor: c.ads, cor: '#9a8f92', corEscuro: '#c9c1c3' },
-        { rotulo: 'Comissão Zaio', valor: c.comissao_zaio ?? 0, cor: '#a59a9d', corEscuro: '#b5acaf' },
         { rotulo: 'Imposto', valor: c.imposto, cor: '#b3aaad', corEscuro: '#7a6f73' },
         { rotulo: 'Frete', valor: c.frete - c.bonificacoes, cor: '#d6cfd1', corEscuro: '#5b5458' },
         // Insumos (embalagem): pedido do Lira em 12/11/2026.

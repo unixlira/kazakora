@@ -69,7 +69,6 @@
             ['Frete pago pela loja (Correios/Melhor Envio/Flex)', $dia['frete'], true],
             ['Insumos (embalagem)', $dia['insumos_embalagem'] ?? 0, true],
             ['Insumos (escritório e galpão)', $dia['insumos_lancados'] ?? 0, true],
-            ['Comissão Zaio ('.rtrim(rtrim(number_format($resultado['comissao_zaio_pct'] ?? 2, 2, ',', '.'), '0'), ',').'% da receita de Shopee, ML e TikTok)', $dia['comissao_zaio'] ?? 0, true],
             ['Imposto (Simples '.$aliquota.'% sobre o valor das notas)', $dia['impostos'], true],
         ] as [$rotulo, $valor, $desconta])
             <tr>
@@ -202,6 +201,6 @@
 
     <p style="margin: 18px 0 0; font-size: 11px; color: #9ca3af;">
         Dia fechado: enviado de manhã, depois do gasto de anúncio do dia chegar. Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − insumos (embalagem) − anúncios,
-        menos a comissão da Zaio (Shopee, ML e TikTok) e o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
+        menos o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
     </p>
 @endsection

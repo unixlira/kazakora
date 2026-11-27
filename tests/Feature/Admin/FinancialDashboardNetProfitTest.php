@@ -33,8 +33,6 @@ class FinancialDashboardNetProfitTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Regras da Zaio (10% e comissão) têm teste próprio: RegrasZaioTest.
-        config(['loja.zaio.desde' => '2099-01-01']);
         // Cada teste daqui olha uma parte da conta; o imposto do Simples tem
         // teste próprio (test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue
         // e ContributionMarginImpostoTest).
@@ -340,7 +338,7 @@ class FinancialDashboardNetProfitTest extends TestCase
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 7]);
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'meta_ads', 'spend' => 3]);
 
-        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro?grupo=marketplaces')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('grupo', 'marketplaces')

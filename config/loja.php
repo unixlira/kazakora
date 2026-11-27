@@ -139,19 +139,13 @@ return [
     ],
 
     /*
-    | Regras da planilha da Zaio (agência que gere Shopee, Mercado Livre e
-    | TikTok Shop; pedido do Lira em 27/11/2026: "usar tudo da Zaio"). Aba
-    | Base da planilha: comissão Zaio de 2% da venda nesses três canais, que
-    | entra como custo e é o valor a pagar à agência. O imposto é o Simples
-    | (4,5%) em todos os canais (Lira, 27/11/2026: "nosso imposto é 4,5%").
-    | Custo do produto continua o do cadastro; tarifas, ADS e devoluções
-    | continuam as reais (APIs e demonstrativo do TikTok). Amazon e sites
-    | próprios ficam fora. Só pedidos a partir de 'desde'.
+    | Planilha da Zaio (agência de Shopee, ML e TikTok; 27/11/2026): Google
+    | Sheets compartilhada por link. O comando zaio:planilha copia as abas
+    | para o painel financeiro (referência da agência, não entra no lucro).
     */
     'zaio' => [
-        'canais' => ['shopee', 'mercado_livre', 'tiktok_shop'],
-        'comissao' => (float) env('LOJA_ZAIO_COMISSAO', 2.0),
-        'desde' => env('LOJA_ZAIO_DESDE', '2026-11-01'),
+        // Só no .env: com o ID qualquer um abre a planilha.
+        'planilha_id' => env('LOJA_ZAIO_PLANILHA_ID', ''),
     ],
 
     /*

@@ -132,12 +132,12 @@ const escalaAds = computed(() => Math.max((props.resumo?.adsLimite ?? 6) * 2, ad
 const aliquota = computed(() => (props.resumo?.aliquota ?? 4.5).toLocaleString('pt-BR'));
 
 const AJUDA = {
-    lucro: 'Receita menos custo dos produtos, taxas dos canais, frete pago pela loja, ADS, comissão da Zaio (2% em Shopee, ML e TikTok) e imposto, mais o bônus do Flex.',
+    lucro: 'Receita menos custo dos produtos, taxas dos canais, frete pago pela loja, ADS e imposto do Simples, mais o bônus do Flex.',
     vendas: 'O que os clientes pagaram, com frete.',
     nota: 'Soma das notas fiscais de venda. É a base do DAS.',
     receita: 'Valor dos produtos depois dos descontos da loja, sem o frete que o comprador paga ao canal (na Amazon, com frete). É a base do lucro e a primeira barra de "Para onde foi o dinheiro".',
     ads: 'Gasto real com anúncio no período. Recarga de carteira não entra.',
-    imposto: 'Simples Nacional (4,5%) sobre as notas de venda. Estimativa: o valor oficial é a guia do contador.',
+    imposto: '4,5% das notas de venda. Estimativa: o valor oficial é a guia do contador.',
 };
 
 const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filtroBase('vendas'), sem_custo: 1 }).toString()}`);

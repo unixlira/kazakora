@@ -203,7 +203,6 @@ class PlataformasEcommercesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('summary.ordersCount', 1)
-                ->where('summary.revenue', $oficial[Order::ORIGIN_SHOPEE]['receita'])
-                ->where('summary.revenue', 100));
+                ->where('summary.revenue', fn ($v) => abs((float) $v - $oficial[Order::ORIGIN_SHOPEE]['receita']) < 0.001 && abs((float) $v - 100) < 0.001));
     }
 }

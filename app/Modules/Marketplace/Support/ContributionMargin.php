@@ -649,6 +649,23 @@ class ContributionMargin
                 ->sum('payout_amount');
             $somar(Order::ORIGIN_TIKTOK_SHOP, -$reembolso);
 
+            // Pacote extraviado (auditoria do Lira em 27/11/2026): o "Reembolso de logística" é a
+            // indenização do TikTok por um pedido que ficou cancelado e nunca entrou na venda, então o
+            // custo do produto que saiu do estoque e se perdeu não estava em lugar nenhum. A indenização
+            // entrava inteira como lucro, sem o custo do kit perdido. O custo do produto
+            // perdido sai junto, na mesma data da indenização.
+            $perdido = (float) DB::table('marketplace_settlement_details as d')
+                ->join('orders', fn ($j) => $j->on('orders.external_order_id', '=', 'd.related_order_id')->where('orders.origin', Order::ORIGIN_TIKTOK_SHOP))
+                ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+                ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+                ->where('d.channel', Order::ORIGIN_TIKTOK_SHOP)
+                ->where('d.transaction_type', 'Reembolso de logística')
+                ->where('d.settlement_date', '>=', $desde->toDateString())
+                ->where('d.settlement_date', '<', $ate->toDateString())
+                ->whereNotIn('orders.id', fn ($q) => $efetiva($q->from('orders')->select('orders.id')))
+                ->sum(DB::raw(self::custoSql()));
+            $somar(Order::ORIGIN_TIKTOK_SHOP, $perdido);
+
             $foraDaVenda = (float) DB::table('marketplace_settlement_details as d')
                 ->join('orders', fn ($j) => $j->on('orders.external_order_id', '=', 'd.external_order_id')->where('orders.origin', Order::ORIGIN_TIKTOK_SHOP))
                 ->where('d.channel', Order::ORIGIN_TIKTOK_SHOP)

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Support\GruposDeCanais;
+use App\Modules\Marketplace\Support\ContributionMargin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -24,10 +25,17 @@ class ReportController extends Controller
         $grupo = array_key_exists($grupo, GruposDeCanais::SLUGS) ? $grupo : 'marketplaces';
         $canais = GruposDeCanais::canais($grupo);
 
+        // Auditoria do financeiro (Lira, 27/11/2026): esta tela somava todo pedido não cancelado
+        // (aguardando pagamento, nota técnica de devolução, estornado, nota avulsa repetida) e
+        // mostrava bem mais receita que as outras telas. Agora é a mesma venda das outras telas: Order::vendaEfetiva(), pedido pago/enviado/entregue e a
+        // receita de ContributionMargin::receitaSql() (TikTok pelas vendas líquidas, site sem os
+        // descontos da loja, Amazon com o frete do comprador).
         $orders = Order::query()
-            ->whereNot('status', Order::STATUS_CANCELLED)
+            ->vendaEfetiva()
+            ->whereIn('status', ContributionMargin::REVENUE_STATUSES)
             ->whereBetween('created_at', [$from, $to])
             ->doCanal($canais);
+        $receita = ContributionMargin::receitaSql();
 
         // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
         // varrendo todo painel de métricas atrás do mesmo tipo de bug já
@@ -39,16 +47,14 @@ class ReportController extends Controller
         // pedido com frete, mesma inconsistência visível do dashboard
         // admin (ver DashboardController::revenueByChannel()).
         $salesByDay = (clone $orders)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as revenue')
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM('.$receita.') as revenue')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
         $topProducts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->whereNot('orders.status', Order::STATUS_CANCELLED)
-            ->whereBetween('orders.created_at', [$from, $to])
-            ->where(fn ($q) => Order::filtrarCanal($q, $canais))
+            ->whereIn('order_items.order_id', (clone $orders)->select('orders.id'))
             ->selectRaw('order_items.product_name, SUM(order_items.quantity) as quantity_sold, SUM(order_items.subtotal) as revenue')
             ->groupBy('order_items.product_name')
             ->orderByDesc('quantity_sold')
@@ -64,7 +70,7 @@ class ReportController extends Controller
                 // subtotal, não total — 'total' inclui frete (não é receita
                 // do vendedor), ver comentário em
                 // FinancialDashboardController::index().
-                'revenue' => (float) (clone $orders)->sum('subtotal'),
+                'revenue' => round((float) (clone $orders)->sum(\Illuminate\Support\Facades\DB::raw($receita)), 2),
             ],
         ]);
     }

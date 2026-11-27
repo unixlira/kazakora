@@ -63,4 +63,30 @@ class CobrancasSemPedidoTest extends TestCase
         $this->assertSame(-40.0, $porCanal['tiktok_shop']['taxas']);
         $this->assertSame(48.0, $cm->porItem($de, $ate)['canal']['cobrancas']);
     }
+
+    public function test_indenizacao_de_pacote_perdido_desconta_o_custo_do_produto(): void
+    {
+        // Auditoria de 27/11/2026: o TikTok indeniza um kit extraviado de um pedido que
+        // ficou cancelado. O custo do kit nunca entrava, e a indenização inteira virava lucro.
+        $pedido = Order::create([
+            'status' => Order::STATUS_CANCELLED, 'origin' => Order::ORIGIN_TIKTOK_SHOP, 'external_order_id' => 'p-perdido',
+            'shipping_name' => 'Cliente', 'shipping_phone' => '85999999999', 'shipping_zip' => '60025-000',
+            'shipping_street' => 'Rua X', 'shipping_number' => '1', 'shipping_neighborhood' => 'Centro',
+            'shipping_city' => 'Fortaleza', 'shipping_state' => 'CE',
+            'subtotal' => 715.90, 'shipping_cost' => 0, 'total' => 715.90,
+        ]);
+        $pedido->forceFill(['created_at' => '2026-09-25 10:00:00'])->save();
+        $pedido->items()->create(['product_id' => null, 'product_name' => 'Kit', 'product_price' => 715.90, 'quantity' => 1, 'subtotal' => 715.90, 'manual_cost_price' => 330]);
+        DB::table('marketplace_settlement_details')->insert([
+            'channel' => 'tiktok_shop', 'statement_id' => 's9', 'status' => 'Pagos', 'transaction_type' => 'Reembolso de logística',
+            'external_order_id' => 'r9', 'related_order_id' => 'p-perdido', 'external_sku_id' => '', 'settlement_date' => '2026-10-12',
+            'payout_amount' => 499.90, 'source_file' => 'a.xlsx',
+        ]);
+        [$de, $ate] = $this->intervalo();
+        $cm = app(ContributionMargin::class);
+
+        $this->assertSame(['tiktok_shop' => -169.9], ContributionMargin::cobrancasSemPedido($de, $ate));
+        $this->assertSame(169.9, $cm->periodo($de, $ate)['lucro']);
+        $this->assertSame(-169.9, $cm->porCanal($de, $ate)['tiktok_shop']['taxas']);
+    }
 }

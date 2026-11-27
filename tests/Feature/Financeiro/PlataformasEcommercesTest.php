@@ -189,4 +189,21 @@ class PlataformasEcommercesTest extends TestCase
         $somaMes = array_sum(array_map(fn ($g) => $g['total']['lucro'], $r['grupos']['mes']));
         $this->assertEqualsWithDelta($r['mes']['lucro'], $somaMes, 0.02);
     }
+
+    public function test_relatorios_somam_a_mesma_venda_da_conta_oficial(): void
+    {
+        // Auditoria de 27/11/2026: a tela Relatórios somava pedido aguardando pagamento e nota técnica
+        // de devolução e mostrava mais receita que as outras telas.
+        $this->pedido(['origin' => Order::ORIGIN_SHOPEE], 100);
+        $this->pedido(['origin' => Order::ORIGIN_SHOPEE, 'status' => Order::STATUS_PENDING], 900);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $oficial = app(\App\Modules\Marketplace\Support\ContributionMargin::class)->porCanal(Carbon::parse('2026-11-16'), Carbon::parse('2026-11-17'));
+
+        $this->actingAs($admin)->get('/admin/relatorios?from=2026-11-16&to=2026-11-16&grupo=marketplaces')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.ordersCount', 1)
+                ->where('summary.revenue', $oficial[Order::ORIGIN_SHOPEE]['receita'])
+                ->where('summary.revenue', 100));
+    }
 }

@@ -429,6 +429,9 @@ class FinancialDashboardController extends Controller
                 'correiosCostMonth' => $correiosCostMonth,
                 'netProfitMonth' => $netProfitMonth,
                 'marginBeforeTaxMonth' => $contaMes['margem'],
+                'zaioCommissionMonth' => (float) ($contaMes['comissao_zaio'] ?? 0),
+                'zaioCommissionRate' => ContributionMargin::comissaoZaioPct(),
+                'zaioTaxRate' => ContributionMargin::impostoZaio(),
                 'taxMonth' => $taxMonth,
                 'taxRate' => ContributionMargin::aliquotaSimples(),
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em
@@ -687,6 +690,7 @@ class FinancialDashboardController extends Controller
             // Conta oficial por canal (ver porCanal): substitui a soma local acima.
             $oficial = $porCanal[$channel] ?? null;
             $tax = 0.0;
+            $comissaoZaio = 0.0;
             if ($oficial) {
                 $revenue = $oficial['receita'];
                 $ordersCount = $oficial['pedidos'];
@@ -694,10 +698,11 @@ class FinancialDashboardController extends Controller
                 $adSpend = $oficial['ads'];
                 $platformCosts = round($oficial['taxas'] + $oficial['frete'] + ($oficial['insumos'] ?? 0) - $oficial['bonificacoes'], 2);
                 $tax = $oficial['imposto'];
+                $comissaoZaio = (float) ($oficial['comissao_zaio'] ?? 0);
             }
 
             $grossProfit = round($revenue - $productCost, 2);
-            $netProfit = round($grossProfit - $adSpend - $platformCosts - $tax, 2);
+            $netProfit = round($grossProfit - $adSpend - $platformCosts - $comissaoZaio - $tax, 2);
             $margin = $revenue > 0 ? round(($netProfit / $revenue) * 100, 2) : 0.0;
 
             $isEmpty = $ordersCount === 0
@@ -717,6 +722,7 @@ class FinancialDashboardController extends Controller
                 'platformCosts' => $platformCosts,
                 'productCost' => $productCost,
                 'tax' => $tax,
+                'zaioCommission' => $comissaoZaio,
                 'grossProfit' => $grossProfit,
                 'netProfit' => $netProfit,
                 'netMargin' => $margin,

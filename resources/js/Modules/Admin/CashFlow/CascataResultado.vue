@@ -30,6 +30,8 @@ const passos = computed(() => {
     menos('Embalagem', c.insumos_embalagem ?? 0);
     menos('Insumos', c.insumos_lancados ?? 0);
     menos('ADS', c.ads);
+    // Comissão da Zaio (2% em Shopee/ML/TikTok), pedido do Lira em 27/11/2026.
+    menos('Comissão Zaio', c.comissao_zaio ?? 0);
     mais('Bônus Flex', c.bonificacoes);
     total('Margem', c.margem);
     menos('Imposto', c.imposto);

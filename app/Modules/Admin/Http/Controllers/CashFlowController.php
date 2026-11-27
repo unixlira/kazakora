@@ -365,6 +365,7 @@ class CashFlowController extends Controller
             'insumos_lancados' => (float) ($conta['insumos_lancados'] ?? 0),
             'ads' => (float) $conta['ads'],
             'bonificacoes' => (float) $conta['bonificacoes'],
+            'comissao_zaio' => (float) ($conta['comissao_zaio'] ?? 0),
             'margem' => (float) $conta['margem'],
             'imposto' => (float) $conta['imposto'],
             'lucro' => (float) $conta['lucro'],

@@ -27,8 +27,10 @@ use Illuminate\Support\Facades\Schema;
  *   − insumos (embalagem por pedido que a loja embala, fora o Full do ML,
  *     e os materiais de escritório/galpão lançados na tela Insumos)
  *   − ADS (Shopee/ML Ads e o GMV Max do TikTok, cobrado no extrato)
+ *   − comissão Zaio (2% da receita em Shopee/ML/TikTok, planilha da Zaio)
  *   = margem
- *   − imposto (Simples Nacional sobre o valor da nota)
+ *   − imposto (Simples sobre o valor da nota; 10% em Shopee/ML/TikTok,
+ *     regra da planilha da Zaio desde loja.zaio.desde)
  *   = lucro (lucro líquido: é o número que o painel e o Financeiro mostram)
  *
  * Antes cada tela fazia a sua conta: o painel inicial subtraía o frete que
@@ -349,7 +351,9 @@ class ContributionMargin
             ->where('date', '<', $ate->toDateString())
             ->sum('spend') + array_sum(self::adsDoExtrato($desde, $ate)), 2);
 
-        $margem = round($receita - $custo - $taxas - $frete - $insumos - $ads + $bonificacoes, 2);
+        $comissaoZaio = round(array_sum(self::comissaoZaio($desde, $ate)), 2);
+
+        $margem = round($receita - $custo - $taxas - $frete - $insumos - $ads - $comissaoZaio + $bonificacoes, 2);
         $imposto = round(array_sum(self::imposto($desde, $ate)), 2);
 
         return [
@@ -362,6 +366,7 @@ class ContributionMargin
             'insumos_lancados' => $lancados,
             'ads' => $ads,
             'bonificacoes' => $bonificacoes,
+            'comissao_zaio' => $comissaoZaio,
             'margem' => $margem,
             'imposto' => $imposto,
             'lucro' => round($margem - $imposto, 2),
@@ -414,6 +419,7 @@ class ContributionMargin
             $ads[$canal] = (float) ($ads[$canal] ?? 0) + $valor;
         }
         $imposto = self::imposto($desde, $ate);
+        $comissaoZaio = self::comissaoZaio($desde, $ate);
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $bonus = self::bonificacoes($desde, $ate);
 
@@ -423,7 +429,7 @@ class ContributionMargin
             $canais->push(Order::ORIGIN_MERCADO_LIVRE);
         }
 
-        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $cobrancas, $correios, $embalagem, $lancados, $ads, $imposto, $flex, $bonus) {
+        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $cobrancas, $correios, $embalagem, $lancados, $ads, $imposto, $comissaoZaio, $flex, $bonus) {
             $ml = $canal === Order::ORIGIN_MERCADO_LIVRE;
             $linha = [
                 'pedidos' => (int) ($receita->get($canal)?->pedidos ?? 0),
@@ -436,8 +442,9 @@ class ContributionMargin
                 'insumos_lancados' => round((float) ($lancados[$canal] ?? 0), 2),
                 'ads' => round((float) ($ads[$canal] ?? 0), 2),
                 'bonificacoes' => $ml ? $bonus : 0.0,
+                'comissao_zaio' => round((float) ($comissaoZaio[$canal] ?? 0), 2),
             ];
-            $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['insumos'] - $linha['ads'] + $linha['bonificacoes'], 2);
+            $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['insumos'] - $linha['ads'] - $linha['comissao_zaio'] + $linha['bonificacoes'], 2);
             $linha['imposto'] = round((float) ($imposto[$canal] ?? 0), 2);
             $linha['lucro'] = round($linha['margem'] - $linha['imposto'], 2);
 
@@ -478,6 +485,8 @@ class ContributionMargin
         $full = 'EXISTS (SELECT 1 FROM channel_shipments cm_full WHERE cm_full.order_id = orders.id AND cm_full.shipping_method = ?)';
 
         $insumosPorPedido = self::insumosPorPedido();
+        $taxaZaio = fn (string $canalPedido, string $pedidoEm) => in_array($canalPedido, self::canaisZaio(), true)
+            && Carbon::parse($pedidoEm)->gte(self::zaioDesde()) ? self::comissaoZaioPct() / 100 : 0.0;
 
         $linhas = DB::table('orders')
             ->leftJoin('order_items', 'order_items.order_id', '=', 'orders.id')
@@ -506,11 +515,11 @@ class ContributionMargin
             ->orderBy('orders.id')->orderBy('order_items.id')
             ->get()
             ->groupBy('order_id')
-            ->flatMap(function ($itens) use ($insumosPorPedido) {
+            ->flatMap(function ($itens) use ($insumosPorPedido, $taxaZaio) {
                 $somaSubtotal = (float) $itens->sum('subtotal');
                 $somaQuantidade = (float) $itens->sum('quantidade');
 
-                return $itens->map(function ($item) use ($itens, $somaSubtotal, $somaQuantidade, $insumosPorPedido) {
+                return $itens->map(function ($item) use ($itens, $somaSubtotal, $somaQuantidade, $insumosPorPedido, $taxaZaio) {
                     $peso = match (true) {
                         $somaSubtotal > 0 => (float) $item->subtotal / $somaSubtotal,
                         $somaQuantidade > 0 => (float) $item->quantidade / $somaQuantidade,
@@ -521,6 +530,7 @@ class ContributionMargin
                     $frete = (float) $item->frete_pedido * $peso;
                     $insumos = (int) $item->embalado * $insumosPorPedido * $peso;
                     $custo = (float) $item->custo;
+                    $comissaoZaio = round((float) $item->receita_pedido * $taxaZaio((string) $item->canal_pedido, (string) $item->pedido_em), 2) * $peso;
 
                     return [
                         'order_id' => (int) $item->order_id,
@@ -540,7 +550,8 @@ class ContributionMargin
                         'taxas' => $taxas,
                         'frete' => $frete,
                         'insumos' => $insumos,
-                        'margem' => $receita - $custo - $taxas - $frete - $insumos,
+                        'comissao_zaio' => $comissaoZaio,
+                        'margem' => $receita - $custo - $taxas - $frete - $insumos - $comissaoZaio,
                     ];
                 });
             })
@@ -732,14 +743,97 @@ class ContributionMargin
     {
         $inicio = Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay();
         $desde = $desde->copy()->max($inicio);
-        if ($desde->gte($ate) || self::aliquotaSimples() <= 0) {
+        if ($desde->gte($ate)) {
             return [];
         }
 
-        return array_map(
-            fn (float $base) => round($base * self::aliquotaSimples() / 100, 2),
-            self::basePorCanal($desde, $ate),
-        );
+        // Até o corte da Zaio todo canal paga o Simples; depois dele, Shopee,
+        // ML e TikTok pagam o imposto da planilha da Zaio (10%).
+        $corte = self::zaioDesde();
+        $total = [];
+        $somar = function (Carbon $de, Carbon $ate, bool $depoisDoCorte) use (&$total) {
+            if ($de->gte($ate)) {
+                return;
+            }
+            foreach (self::basePorCanal($de, $ate) as $canal => $base) {
+                $aliquota = $depoisDoCorte && in_array($canal, self::canaisZaio(), true)
+                    ? self::impostoZaio()
+                    : self::aliquotaSimples();
+                $total[$canal] = ($total[$canal] ?? 0.0) + round($base * $aliquota / 100, 2);
+            }
+        };
+        $somar($desde, $ate->copy()->min($corte), false);
+        $somar($desde->copy()->max($corte), $ate, true);
+
+        return array_filter(array_map(fn (float $v) => round($v, 2), $total), fn (float $v) => $v != 0.0);
+    }
+
+    /** Canais com as regras da planilha da Zaio (config loja.zaio). */
+    public static function canaisZaio(): array
+    {
+        return (array) config('loja.zaio.canais', []);
+    }
+
+    /** A partir de quando as regras da Zaio valem (data do pedido). */
+    public static function zaioDesde(): Carbon
+    {
+        return Carbon::parse((string) config('loja.zaio.desde', '2026-11-01'))->startOfDay();
+    }
+
+    /** Imposto da planilha da Zaio (%), no lugar do Simples nos canais dela. */
+    public static function impostoZaio(): float
+    {
+        return (float) config('loja.zaio.imposto', 10.0);
+    }
+
+    /** Comissão da Zaio (% da receita). */
+    public static function comissaoZaioPct(): float
+    {
+        return (float) config('loja.zaio.comissao', 2.0);
+    }
+
+    /**
+     * Alíquota de imposto de um pedido (%): a da Zaio nos canais dela a partir
+     * do corte, o Simples nos demais, zero antes de entrar no Simples.
+     */
+    public static function aliquotaDoPedido(string $canal, Carbon $criadoEm): float
+    {
+        if ($criadoEm->lt(Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay())) {
+            return 0.0;
+        }
+
+        return $criadoEm->gte(self::zaioDesde()) && in_array($canal, self::canaisZaio(), true)
+            ? self::impostoZaio()
+            : self::aliquotaSimples();
+    }
+
+    /**
+     * Comissão da Zaio por canal: % da receita (receitaSql) das vendas
+     * efetivas de Shopee, ML e TikTok a partir do corte. Pedido a pedido,
+     * arredondado como em porItem() e LucroPorPedido.
+     *
+     * @return array<string, float>
+     */
+    public static function comissaoZaio(Carbon $desde, Carbon $ate): array
+    {
+        $desde = $desde->copy()->max(self::zaioDesde());
+        $pct = self::comissaoZaioPct();
+        if ($desde->gte($ate) || $pct <= 0 || self::canaisZaio() === []) {
+            return [];
+        }
+
+        return DB::table('orders')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->tap(fn ($q) => Order::filtrarCanal($q, self::canaisZaio()))
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(ROUND(('.self::receitaSql().') * ? / 100.0, 2)), 0) as total', [$pct])
+            ->groupBy('canal')
+            ->pluck('total', 'canal')
+            ->map(fn ($v) => round((float) $v, 2))
+            ->filter(fn (float $v) => $v != 0.0)
+            ->all();
     }
 
     /**
@@ -797,7 +891,7 @@ class ContributionMargin
     {
         return ['pedidos' => 0, 'receita' => 0.0, 'custo_produtos' => 0.0, 'taxas' => 0.0, 'frete' => 0.0,
             'insumos' => 0.0, 'insumos_embalagem' => 0.0, 'insumos_lancados' => 0.0, 'ads' => 0.0,
-            'bonificacoes' => 0.0, 'margem' => 0.0, 'imposto' => 0.0, 'lucro' => 0.0];
+            'bonificacoes' => 0.0, 'comissao_zaio' => 0.0, 'margem' => 0.0, 'imposto' => 0.0, 'lucro' => 0.0];
     }
 
     /**

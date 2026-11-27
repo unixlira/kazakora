@@ -48,7 +48,7 @@
                                 <tr><td style="padding: 14px 16px;">
                                     <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5563;">Impostos do mês a pagar</div>
                                     <div style="font-size: 20px; font-weight: 800; color: #c2410c;">{{ $brl($mes['impostos']) }}</div>
-                                    <div style="font-size: 11px; color: #6b7280;">DAS · Simples Nacional {{ $aliquota }}%<br>vence em {{ $resultado['vencimento_das']->format('d/m/Y') }}</div>
+                                    <div style="font-size: 11px; color: #6b7280;">Imposto: {{ rtrim(rtrim(number_format($resultado['aliquota_zaio'] ?? 10, 2, ',', '.'), '0'), ',') }}% Shopee/ML/TikTok · Simples {{ $aliquota }}% demais<br>vence em {{ $resultado['vencimento_das']->format('d/m/Y') }}</div>
                                 </td></tr>
                             </table>
                         </td>
@@ -69,7 +69,8 @@
             ['Frete pago pela loja (Correios/Melhor Envio/Flex)', $dia['frete'], true],
             ['Insumos (embalagem)', $dia['insumos_embalagem'] ?? 0, true],
             ['Insumos (escritório e galpão)', $dia['insumos_lancados'] ?? 0, true],
-            ['Imposto (Simples '.$aliquota.'% sobre o valor das notas)', $dia['impostos'], true],
+            ['Comissão Zaio ('.rtrim(rtrim(number_format($resultado['comissao_zaio_pct'] ?? 2, 2, ',', '.'), '0'), ',').'% da receita de Shopee, ML e TikTok)', $dia['comissao_zaio'] ?? 0, true],
+            ['Imposto ('.rtrim(rtrim(number_format($resultado['aliquota_zaio'] ?? 10, 2, ',', '.'), '0'), ',').'% em Shopee, ML e TikTok · Simples '.$aliquota.'% nos demais, sobre as notas)', $dia['impostos'], true],
         ] as [$rotulo, $valor, $desconta])
             <tr>
                 <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4;">{{ $rotulo }}</td>
@@ -201,6 +202,6 @@
 
     <p style="margin: 18px 0 0; font-size: 11px; color: #9ca3af;">
         Dia fechado: enviado de manhã, depois do gasto de anúncio do dia chegar. Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − insumos (embalagem) − anúncios,
-        menos o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
+        menos a comissão da Zaio e o imposto estimado (regras da planilha da Zaio em Shopee, ML e TikTok; Simples Nacional de {{ $aliquota }}% nos demais canais). O valor oficial do imposto é o do DAS.
     </p>
 @endsection

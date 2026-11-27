@@ -24,7 +24,8 @@ lucro líquido = receita
 | Taxas dos canais | `order_channel_fees` (por pedido) | `source`: `api` (real, ML/Shopee), `report`/`tiktok_income_settlement` (extrato real), **`estimate`** (TikTok antes do extrato — provisão), `manual`. |
 | Frete pago pela loja | Correios (`correios_pre_postagens.postage_price`) + Flex (entregas × custo por entrega) | `orders.shipping_cost` **não é custo** — é o frete do comprador (fica só informativo). |
 | Anúncios | `channel_ad_spends.spend` (consumo **diário** por canal) | Ver armadilhas abaixo. |
-| Imposto | receita × `LOJA_SIMPLES_ALIQUOTA` (4,5%) desde `LOJA_SIMPLES_DESDE` | Estimativa do DAS; o oficial é a guia. Vence dia 20 do mês seguinte. Empresa no **Simples Nacional** desde 01/09/2026 (antes MEI). |
+| Imposto | receita × `LOJA_SIMPLES_ALIQUOTA` (4,5%) desde `LOJA_SIMPLES_DESDE` | Estimativa do DAS; o oficial é a guia. Vence dia 20 do mês seguinte. Empresa no **Simples Nacional** desde 01/09/2026 (antes MEI). Em Shopee, ML e TikTok, desde `LOJA_ZAIO_DESDE`, a alíquota é a da planilha da Zaio: `LOJA_ZAIO_IMPOSTO` (10%). |
+| Comissão Zaio | 2% da receita (`LOJA_ZAIO_COMISSAO`) em Shopee, Mercado Livre e TikTok, pedidos desde `LOJA_ZAIO_DESDE` (01/11/2026) | Regra da planilha da agência Zaio (pedido do Lira em 27/11/2026). Entra na margem, antes do imposto. Amazon e sites ficam fora. |
 
 ## Armadilhas dos anúncios (ADS)
 

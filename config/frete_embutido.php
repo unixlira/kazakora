@@ -94,5 +94,7 @@ return [
     // Preço fixo pelo SKU em todos os sites (KazaKora e FerraKora), pedido do Lira
     // 26/11/2026: kits B e C da escada do Compressor 4 em 1 com o "de/por" aprovado
     // (629,00/297,90 e 1.299,00/730,00) em qualquer CEP. A loja paga o frete da caixa.
-    'skus_preco_fixo' => ['FK-KIT-COMPRESSOR-REPARO-CATRACA', 'FK-KIT-MACACO-ELET-5T'],
+    // 344-BOMBAAR-4EM1 = o próprio Compressor 4 em 1 (413), pedido do Lira 26/11/2026 ao
+    // desfazer as 3 opções: "de R$ 435,52 por R$ 297,00" fixo em qualquer CEP, nas duas lojas.
+    'skus_preco_fixo' => ['FK-KIT-COMPRESSOR-REPARO-CATRACA', 'FK-KIT-MACACO-ELET-5T', '344-BOMBAAR-4EM1'],
 ];

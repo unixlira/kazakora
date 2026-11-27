@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use Illuminate\Support\Facades\DB;
+use App\Modules\Financeiro\Support\GruposDeCanais;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
@@ -294,22 +295,29 @@ class DashboardAgentController extends Controller
         // 'subtotal' é o valor real dos produtos, o mesmo que aparece no
         // Seller Center do canal — ver comentário completo em
         // FinancialDashboardController::index().
-        $revenueToday = (float) Order::query()->vendaEfetiva()
+        // 27/11/2026 (Lira: "os valores do admin e do KoraSync não batem"):
+        // faturamento e lucro do KoraSync são só dos MARKETPLACES, os mesmos
+        // números da tela Financeiro (grupo Marketplaces). Regra de 17/11:
+        // nunca somar marketplaces com os sites próprios; os sites seguem
+        // nos cards de canal (channels()).
+        $marketplaces = GruposDeCanais::canais('marketplaces');
+
+        $revenueToday = (float) Order::query()->vendaEfetiva()->doCanal($marketplaces)
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueYesterday = (float) Order::query()->vendaEfetiva()
+        $revenueYesterday = (float) Order::query()->vendaEfetiva()->doCanal($marketplaces)
             ->whereBetween('created_at', [$yesterday, $today])
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonth = (float) Order::query()->vendaEfetiva()
+        $revenueMonth = (float) Order::query()->vendaEfetiva()->doCanal($marketplaces)
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonthPrev = (float) Order::query()->vendaEfetiva()
+        $revenueMonthPrev = (float) Order::query()->vendaEfetiva()->doCanal($marketplaces)
             ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
@@ -394,7 +402,7 @@ class DashboardAgentController extends Controller
         // plataforma − frete pago pela loja − ADS − imposto do Simples
         // (imposto incluído em 2026-10-18). Até 25/09 isto era receita −
         // taxa só, sem custo de produto nenhum.
-        $margemHoje = app(ContributionMargin::class)->periodo($today, $today->copy()->addDay());
+        $margemHoje = app(ContributionMargin::class)->conta($today, $today->copy()->addDay(), $marketplaces);
         $netProfitToday = $margemHoje['lucro'];
 
         // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
@@ -428,6 +436,7 @@ class DashboardAgentController extends Controller
             ->count();
 
         return response()->json([
+            'grupo' => 'Marketplaces',
             'revenue_today' => $revenueToday,
             'sales_today' => $salesToday,
             // Mesma base de $salesToday acima (tudo menos cancelado), pra

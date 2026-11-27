@@ -58,6 +58,7 @@ class ResultadoDiario
                 'insumos_embalagem' => $somar('insumos_embalagem'),
                 'insumos_lancados' => $somar('insumos_lancados'),
                 'bonificacoes' => $somar('bonificacoes'),
+                'comissao_zaio' => $somar('comissao_zaio'),
                 'impostos' => $somar('impostos'),
                 'lucro' => $somar('lucro'),
                 'pedidos' => (int) array_sum(array_column($dias, 'pedidos')),
@@ -70,6 +71,7 @@ class ResultadoDiario
                 'mes' => GruposDeCanais::agrupar($this->margem->porCanal($data->copy()->startOfMonth(), $data->copy()->addDay())),
             ],
             'aliquota' => $this->aliquota(),
+            'comissao_zaio_pct' => ContributionMargin::comissaoZaioPct(),
             // DAS vence no dia 20 do mês seguinte (Simples Nacional).
             'vencimento_das' => $data->copy()->startOfMonth()->addMonth()->day(20),
         ];
@@ -115,6 +117,7 @@ class ResultadoDiario
             'insumos_lancados' => $conta['insumos_lancados'],
             'anuncios' => $conta['ads'],
             'bonificacoes' => $conta['bonificacoes'],
+            'comissao_zaio' => $conta['comissao_zaio'],
             'impostos' => $conta['imposto'],
             'lucro' => $conta['lucro'],
         ];

@@ -42,7 +42,7 @@ const opcoes = computed(() => ({
 const plugins = computed(() => [valorNasBarras((v) => formatPrice(v), () => chrome.value.text)]);
 
 const total = computed(() => props.canais.reduce((s, c) => {
-    ['pedidos', 'receita', 'custo_produtos', 'taxas', 'frete', 'insumos', 'ads', 'imposto', 'lucro', 'bonificacoes'].forEach((k) => { s[k] = (s[k] ?? 0) + (c[k] ?? 0); });
+    ['pedidos', 'receita', 'custo_produtos', 'taxas', 'frete', 'insumos', 'ads', 'comissao_zaio', 'imposto', 'lucro', 'bonificacoes'].forEach((k) => { s[k] = (s[k] ?? 0) + (c[k] ?? 0); });
     return s;
 }, {}));
 const pctReceita = (c) => (c.receita > 0 ? formatPercent((c.lucro / c.receita) * 100) : '—');
@@ -70,6 +70,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                         <th scope="col" class="hidden px-2 py-1.5 text-right font-semibold sm:table-cell">Frete</th>
                         <th scope="col" class="hidden px-2 py-1.5 text-right font-semibold sm:table-cell" title="Insumos (embalagem)">Insumos</th>
                         <th scope="col" class="px-2 py-1.5 text-right font-semibold">ADS</th>
+                        <th scope="col" class="hidden px-2 py-1.5 text-right font-semibold sm:table-cell" title="Comissão da Zaio: 2% da receita em Shopee, Mercado Livre e TikTok">Zaio</th>
                         <th scope="col" class="hidden px-2 py-1.5 text-right font-semibold sm:table-cell">Imposto</th>
                         <th scope="col" class="px-2 py-1.5 text-right font-semibold">Lucro</th>
                         <th scope="col" class="px-2 py-1.5 text-right font-semibold">% da receita</th>
@@ -81,7 +82,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                             <span class="inline-flex items-center gap-1.5"><i class="inline-block h-2.5 w-2.5 rounded-sm" :style="{ background: channelColor(c.canal) }" aria-hidden="true"></i>{{ c.nome }}</span>
                         </th>
                         <template v-if="c.receita === 0 && c.pedidos === 0 && c.ads === 0">
-                            <td colspan="10" class="px-2 py-1.5 text-left text-[var(--texto-suave)]">sem vendas</td>
+                            <td colspan="11" class="px-2 py-1.5 text-left text-[var(--texto-suave)]">sem vendas</td>
                         </template>
                         <template v-else>
                             <td class="px-2 py-1.5 text-right">{{ c.pedidos }}</td>
@@ -94,6 +95,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                             <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(c.frete - c.bonificacoes) }}</td>
                             <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(c.insumos ?? 0) }}</td>
                             <td class="px-2 py-1.5 text-right">{{ formatPrice(c.ads) }}</td>
+                            <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(c.comissao_zaio ?? 0) }}</td>
                             <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(c.imposto) }}</td>
                             <td class="px-2 py-1.5 text-right font-semibold" :class="c.lucro < 0 ? 'text-error' : ''">{{ formatPrice(c.lucro) }}</td>
                             <td class="px-2 py-1.5 text-right">{{ pctReceita(c) }}</td>
@@ -110,6 +112,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                         <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice((total.frete ?? 0) - (total.bonificacoes ?? 0)) }}</td>
                         <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(total.insumos ?? 0) }}</td>
                         <td class="px-2 py-1.5 text-right">{{ formatPrice(total.ads) }}</td>
+                        <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(total.comissao_zaio ?? 0) }}</td>
                         <td class="hidden px-2 py-1.5 text-right sm:table-cell">{{ formatPrice(total.imposto) }}</td>
                         <td class="px-2 py-1.5 text-right" :class="total.lucro < 0 ? 'text-error' : ''">{{ formatPrice(total.lucro) }}</td>
                         <td class="px-2 py-1.5 text-right">{{ pctReceita(total) }}</td>
@@ -117,7 +120,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                 </tfoot>
             </table>
         </div>
-        <p class="mt-2 text-[11px] text-[var(--texto-suave)]">Frete = frete pago pela loja menos o bônus do Flex. Insumos = embalagem por pedido embalado pela loja (Full do ML fica de fora) + lançamentos da tela Insumos, rateados pelos pedidos.</p>
+        <p class="mt-2 text-[11px] text-[var(--texto-suave)]">Frete = frete pago pela loja menos o bônus do Flex. Insumos = embalagem por pedido embalado pela loja (Full do ML fica de fora) + lançamentos da tela Insumos, rateados pelos pedidos. Zaio = comissão da agência (2% da receita) em Shopee, Mercado Livre e TikTok. Imposto = Simples (4,5%) sobre as notas, em todos os canais.</p>
     </section>
 </template>
 

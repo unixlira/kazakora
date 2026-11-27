@@ -139,6 +139,22 @@ return [
     ],
 
     /*
+    | Regras da planilha da Zaio (agência que gere Shopee, Mercado Livre e
+    | TikTok Shop; pedido do Lira em 27/11/2026: "usar tudo da Zaio"). Aba
+    | Base da planilha: comissão Zaio de 2% da venda nesses três canais, que
+    | entra como custo e é o valor a pagar à agência. O imposto é o Simples
+    | (4,5%) em todos os canais (Lira, 27/11/2026: "nosso imposto é 4,5%").
+    | Custo do produto continua o do cadastro; tarifas, ADS e devoluções
+    | continuam as reais (APIs e demonstrativo do TikTok). Amazon e sites
+    | próprios ficam fora. Só pedidos a partir de 'desde'.
+    */
+    'zaio' => [
+        'canais' => ['shopee', 'mercado_livre', 'tiktok_shop'],
+        'comissao' => (float) env('LOJA_ZAIO_COMISSAO', 2.0),
+        'desde' => env('LOJA_ZAIO_DESDE', '2026-11-01'),
+    ],
+
+    /*
     | Insumos de embalagem (caixa/envelope, fita, etiqueta) por pedido, em R$
     | (pedido do Lira em 12/11/2026, regra oficial do dono: R$ 2,00). Sai da
     | margem de toda venda efetiva que a loja embala (ContributionMargin,

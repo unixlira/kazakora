@@ -254,7 +254,7 @@ const linhasDoMes = (mes) => mes.canais.filter((c) => c.pedidos > 0 || c.receita
                     </table>
                 </div>
                 <p class="border-t border-[var(--surface-border)] px-4 py-3 text-xs text-[var(--texto-suave)]">
-                    Lucro líquido = receita − custo dos produtos − taxas do canal − frete pago pela loja − insumos − ADS − imposto (Simples).
+                    Lucro líquido = receita − custo dos produtos − taxas do canal − frete pago pela loja − insumos − ADS − comissão da Zaio (2% em Shopee, ML e TikTok) − imposto do Simples (4,5% sobre a nota).
                     Mesma conta de Resultado e margem e do e-mail diário; somando os grupos dá o total da loja ({{ formatPrice(resultado.total.lucro) }} no período).
                 </p>
             </section>

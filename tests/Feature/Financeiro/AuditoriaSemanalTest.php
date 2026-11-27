@@ -30,6 +30,8 @@ class AuditoriaSemanalTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Regras da Zaio (10% e comissão) têm teste próprio: RegrasZaioTest.
+        config(['loja.zaio.desde' => '2099-01-01']);
         config(['loja.simples.aliquota' => 4, 'loja.insumos_por_pedido' => 2, 'loja.email_relatorios' => 'lira@example.com']);
         // Segunda-feira 16/11/2026, 14h: a semana fechada é 09/11 a 15/11.
         Carbon::setTestNow('2026-11-16 14:00:00');

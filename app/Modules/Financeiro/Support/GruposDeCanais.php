@@ -70,7 +70,7 @@ final class GruposDeCanais
     public const SEM_ADS_INTEGRADO = [Order::ORIGIN_AMAZON, Order::ORIGIN_SHEIN, Order::SITE_BEAUTYKORA];
 
     /** Campos de porCanal() que são somados no grupo. */
-    private const CAMPOS = ['pedidos', 'receita', 'custo_produtos', 'taxas', 'frete', 'insumos', 'ads', 'bonificacoes', 'margem', 'imposto', 'lucro'];
+    private const CAMPOS = ['pedidos', 'receita', 'custo_produtos', 'taxas', 'frete', 'insumos', 'ads', 'bonificacoes', 'comissao_zaio', 'margem', 'imposto', 'lucro'];
 
     /** Canais de um grupo pela chave ('plataformas') ou pelo slug ('marketplaces'). */
     public static function canais(string $grupo): array

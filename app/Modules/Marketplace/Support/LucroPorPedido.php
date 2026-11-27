@@ -28,7 +28,8 @@ use Illuminate\Support\Str;
  *               (etiquetaMelhorEnvioPaga) − TURBO que o cliente pagou
  *   − taxa      order_channel_fees do pedido; sem linha, ESTIMATIVA pelo meio
  *               de pagamento (Pix 0,99%, cartão 4,98%, boleto R$ 3,49 fixo)
- *   − imposto   aliquotaSimples() × nota de venda (sem nota, a receita),
+ *   − imposto   aliquotaDoPedido() × nota de venda (sem nota, a receita),
+ *   − comissão Zaio  2% da receita em Shopee/ML/TikTok (planilha da Zaio),
  *               só a partir de LOJA_SIMPLES_DESDE
  *   − insumos   insumosPorPedido() + a parte do pedido nos lançamentos da
  *               tela Insumos do período (insumosLancados ÷ pedidos embalados)
@@ -151,8 +152,6 @@ class LucroPorPedido
         $anuncioPorPedido = $this->anuncioPorPedido($pedidos->filter(fn ($p) => $efetivas->has($p->id)));
         $insumosLancados = $this->insumosLancadosPorPedido($pedidos->filter(fn ($p) => $efetivas->has($p->id)), $desde, $ate);
 
-        $simplesDesde = Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay();
-        $aliquota = ContributionMargin::aliquotaSimples();
 
         $linhas = [];
         foreach ($ids as $id) {
@@ -197,8 +196,13 @@ class LucroPorPedido
             $taxaEstimada = ! $taxas->has($id);
             $taxa = $taxaEstimada ? self::taxaEstimada($meios[$id] ?? null, (float) $p->total) : (float) $taxas[$id];
 
-            $imposto = $criadoEm->gte($simplesDesde) && $aliquota > 0
+            $aliquota = ContributionMargin::aliquotaDoPedido($criadoEm);
+            $imposto = $aliquota > 0
                 ? round(($p->nota !== null ? (float) $p->nota : $receita) * $aliquota / 100, 2)
+                : 0.0;
+            // Comissão da Zaio (planilha da agência): % da receita em Shopee, ML e TikTok.
+            $comissaoZaio = in_array((string) $p->canal, ContributionMargin::canaisZaio(), true) && $criadoEm->gte(ContributionMargin::zaioDesde())
+                ? round($receita * ContributionMargin::comissaoZaioPct() / 100, 2)
                 : 0.0;
             $insumos = ContributionMargin::insumosPorPedido() + ($insumosLancados[$id] ?? 0.0);
             $anuncio = $anuncioPorPedido[$id] ?? 0.0;
@@ -210,13 +214,14 @@ class LucroPorPedido
                 'taxa' => round($taxa, 2),
                 'taxa_estimada' => $taxaEstimada,
                 'imposto' => $imposto,
+                'comissao_zaio' => $comissaoZaio,
                 'insumos' => round($insumos, 2),
                 'anuncio' => round($anuncio, 2),
                 'anuncio_pedidos_no_dia' => $anuncioPorPedido['__pedidos'][$id] ?? 0,
             ];
             $linha['conta'] = $conta;
             $linha['lucro'] = round($conta['receita'] - $conta['produto'] - $conta['frete'] - $conta['taxa']
-                - $conta['imposto'] - $conta['insumos'] - $conta['anuncio'], 2);
+                - $conta['imposto'] - $conta['comissao_zaio'] - $conta['insumos'] - $conta['anuncio'], 2);
             $linhas[] = $linha;
         }
 

@@ -366,7 +366,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         <div v-if="settlementRows.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="border-b border-[var(--surface-border)] px-4 py-4">
                 <h3 class="text-base font-semibold">Conciliação por relatório financeiro importado</h3>
-                <p class="text-xs text-slate-400">Valores liquidados pela plataforma: descontos, frete líquido, taxas, ajustes, custo conciliado e lucro conhecido.</p>
+                <p class="text-xs text-slate-400">Valores liquidados pela plataforma: descontos, frete líquido, taxas e ajustes do extrato. Não é o lucro: o lucro líquido é o do topo da tela (desconta também anúncios, frete da loja, insumos e imposto).</p>
             </div>
             <div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
                 <div v-for="row in settlementRows" :key="row.channel" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4">
@@ -393,8 +393,8 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
                         <div class="flex justify-between gap-3 border-t border-[var(--surface-border)] pt-2"><span class="text-slate-500 dark:text-slate-400">Vendas conciliadas com pedido</span><strong>{{ formatPrice(row.matchedProductNetSales) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Valor liquidado conciliado</span><strong>{{ formatPrice(row.matchedPayoutAmount) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo de produto conciliado</span><strong class="text-error">{{ formatPrice(row.productCostMatched) }}</strong></div>
-                        <div class="flex justify-between gap-3"><span class="font-medium">Lucro bruto conhecido</span><strong>{{ formatPrice(row.grossProfitKnown) }}</strong></div>
-                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Lucro líquido conhecido</span><strong :class="row.netProfitKnown >= 0 ? 'text-lucro' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="font-medium">Vendas líquidas − custo dos produtos</span><strong>{{ formatPrice(row.grossProfitKnown) }}</strong></div>
+                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Repasse do extrato − custo dos produtos</span><strong :class="row.netProfitKnown >= 0 ? 'text-lucro' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
                     </div>
 
                     <p v-if="row.missingOrders > 0 || row.costMissingItems > 0" class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">
@@ -408,7 +408,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
                 </div>
             </div>
             <div class="border-t border-[var(--surface-border)] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                Total importado: {{ settlementTotals.lineItems ?? 0 }} linhas · {{ settlementTotals.uniqueOrders ?? 0 }} pedidos · recebido {{ formatPrice(settlementTotals.paidPayoutAmount ?? 0) }} · a receber {{ formatPrice(settlementTotals.pendingPayoutAmount ?? 0) }} · total liquidável {{ formatPrice(settlementTotals.payoutAmount ?? 0) }} · desconto plataforma {{ formatPrice((settlementTotals.platformProductDiscounts ?? 0) + (settlementTotals.platformCouponDiscounts ?? 0)) }} · lucro líquido conhecido {{ formatPrice(settlementTotals.netProfitKnown ?? 0) }}.
+                Total importado: {{ settlementTotals.lineItems ?? 0 }} linhas · {{ settlementTotals.uniqueOrders ?? 0 }} pedidos · recebido {{ formatPrice(settlementTotals.paidPayoutAmount ?? 0) }} · a receber {{ formatPrice(settlementTotals.pendingPayoutAmount ?? 0) }} · total liquidável {{ formatPrice(settlementTotals.payoutAmount ?? 0) }} · desconto plataforma {{ formatPrice((settlementTotals.platformProductDiscounts ?? 0) + (settlementTotals.platformCouponDiscounts ?? 0)) }} · repasse − custo dos produtos {{ formatPrice(settlementTotals.netProfitKnown ?? 0) }} (sem anúncios, frete da loja, insumos e imposto; não é o lucro).
             </div>
         </div>
         <p v-else class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-400">

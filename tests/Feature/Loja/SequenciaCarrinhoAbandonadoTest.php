@@ -408,12 +408,15 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         Http::assertSent(function ($request) {
             $template = $request['template'] ?? [];
 
+            // D+1 com a foto do produto (27/11/2026): modelo da Manuela, botão em /produtos/{{1}}.
             return ($request['to'] ?? null) === '5511999990000'
-                && $template['name'] === 'carrinho_lembrete_kazakora'
-                && $template['components'][0]['parameters'][0]['text'] === 'Maria'
-                && $template['components'][0]['parameters'][1]['text'] === 'Organizador de Gaveta'
-                && $template['components'][1]['sub_type'] === 'url'
-                && $template['components'][1]['parameters'][0]['text'] === 'produtos/organizador?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d1';
+                && $template['name'] === 'recuperacao_carrinho_kazakora'
+                && $template['components'][0]['type'] === 'header'
+                && $template['components'][0]['parameters'][0]['type'] === 'image'
+                && $template['components'][1]['parameters'][0]['text'] === 'Maria'
+                && $template['components'][1]['parameters'][1]['text'] === 'Organizador de Gaveta'
+                && $template['components'][2]['sub_type'] === 'url'
+                && $template['components'][2]['parameters'][0]['text'] === 'organizador?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d1';
         });
         // Um canal por disparo: o lembrete sai só no WhatsApp.
         $this->assertSame(['whatsapp'], array_column(Registro::sole()->historico, 'canal'));
@@ -425,6 +428,20 @@ class SequenciaCarrinhoAbandonadoTest extends TestCase
         Http::assertSent(fn ($request) => ($request['template']['name'] ?? null) === 'carrinho_novidade_kazakora'
             && $request['template']['components'][0]['type'] === 'header'
             && count($request['template']['components'][1]['parameters']) === 3);
+    }
+
+    public function test_sem_modelo_com_imagem_o_lembrete_sai_no_modelo_de_texto(): void
+    {
+        Mail::fake();
+        $this->ligarWhatsApp();
+        config(['services.whatsapp.templates.carrinho_lembrete_imagem' => null]);
+        $produto = $this->produto(['name' => 'Organizador de Gaveta', 'slug' => 'organizador']);
+        $this->lead([], 60 * 24 * 3, $produto);
+
+        $this->artisan('loja:carrinho-abandonado-sequencia');
+
+        Http::assertSent(fn ($request) => ($request['template']['name'] ?? null) === 'carrinho_lembrete_kazakora'
+            && $request['template']['components'][1]['parameters'][0]['text'] === 'produtos/organizador?utm_source=whatsapp&utm_medium=carrinho_abandonado&utm_campaign=d1');
     }
 
     public function test_so_telefone_e_sem_template_espera_sem_gastar_o_disparo(): void

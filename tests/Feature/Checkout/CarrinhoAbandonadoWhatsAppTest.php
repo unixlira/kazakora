@@ -35,6 +35,8 @@ class CarrinhoAbandonadoWhatsAppTest extends TestCase
             'services.whatsapp.access_token' => 'token-teste',
             'services.whatsapp.phone_number_id' => '123456',
             'services.whatsapp.templates.carrinho_lembrete' => 'carrinho_lembrete_kazakora',
+            // Este teste olha o envio manual; o D+1 com foto tem teste na SequenciaCarrinhoAbandonadoTest.
+            'services.whatsapp.templates.carrinho_lembrete_imagem' => null,
             'services.whatsapp.templates.carrinho_novidade' => 'carrinho_novidade_kazakora',
         ]);
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.teste']]])]);

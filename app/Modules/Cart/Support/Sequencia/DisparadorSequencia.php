@@ -323,6 +323,30 @@ class DisparadorSequencia
             : URL::signedRoute('carrinho.sequencia.parar', ['registro' => $registro->id]);
     }
 
+    /**
+     * Modelo com a foto do produto para o D+1 (27/11/2026, Lira: "manda o
+     * template bonito com imagem, tá chegando só texto"). O botão dele é fixo
+     * em /produtos/{{1}}, então só vale quando o link do carrinho é a página
+     * do produto; senão o D+1 segue no modelo de texto.
+     *
+     * @return array{loja: string, nome: string, idioma: string, sufixo: string}|null
+     */
+    public function lembreteComImagem(Registro $registro, array $link): ?array
+    {
+        $template = $this->templateWhatsApp($registro, 1);
+        $nome = $template ? WhatsAppNumeros::template($template['loja'], 'carrinho_lembrete_imagem') : null;
+        if (! $nome || ! str_starts_with((string) $link['sufixo'], 'produtos/')) {
+            return null;
+        }
+
+        return [
+            'loja' => $template['loja'],
+            'nome' => $nome,
+            'idioma' => (string) WhatsAppNumeros::template($template['loja'], 'carrinho_lembrete_imagem_idioma', 'pt_BR'),
+            'sufixo' => substr((string) $link['sufixo'], strlen('produtos/')),
+        ];
+    }
+
     private function mandarWhatsApp(Registro $registro, int $numero, string $nomeProduto, ?string $texto, ?string $imagem, array $link): void
     {
         $template = $this->templateWhatsApp($registro, $numero);
@@ -330,18 +354,25 @@ class DisparadorSequencia
         $nome = $registro->primeiroNome();
         // Variável de template da Meta não aceita quebra de linha nem tab.
         $produto = (string) preg_replace('/\s+/u', ' ', $nomeProduto);
+        $sufixo = (string) $link['sufixo'];
+
+        $comImagem = $numero === 1 ? $this->lembreteComImagem($registro, $link) : null;
+        if ($comImagem) {
+            $template = $comImagem;
+            $sufixo = $comImagem['sufixo'];
+        }
 
         $corpo = $numero === 1 ? [$nome, $produto] : [$nome, $produto, (string) $texto];
-        $cabecalho = $numero === 1 ? null : $imagem;
-        $resposta = $numero === 1
+        $cabecalho = $numero === 1 && ! $comImagem ? null : $imagem;
+        $resposta = $cabecalho === null
             ? $cliente->sendTemplate($registro->telefone, $template['nome'], $template['idioma'],
                 bodyParams: $corpo,
-                urlButtonParams: [0 => $link['sufixo']])
+                urlButtonParams: [0 => $sufixo])
             : $cliente->sendTemplate($registro->telefone, $template['nome'], $template['idioma'],
                 headerMediaType: 'image',
                 bodyParams: $corpo,
-                urlButtonParams: [0 => $link['sufixo']],
-                headerMediaLink: $imagem);
+                urlButtonParams: [0 => $sufixo],
+                headerMediaLink: $cabecalho);
 
         // Aparece no histórico da conversa no painel do WhatsApp (falha aqui não desfaz o envio).
         try {
@@ -362,7 +393,7 @@ class DisparadorSequencia
                 'status' => 'sent',
                 'sent_by' => 'system',
                 // Nome, idioma, variáveis, imagem e sufixo do botão: a tela de Conversas redesenha o balão do modelo.
-                'payload' => WhatsAppModelos::payloadDoEnvio($template['nome'], $template['idioma'], $corpo, $cabecalho, [0 => (string) $link['sufixo']])
+                'payload' => WhatsAppModelos::payloadDoEnvio($template['nome'], $template['idioma'], $corpo, $cabecalho, [0 => $sufixo])
                     + ['carrinho_sequencia_id' => $registro->id, 'disparo' => $numero],
                 'sent_at' => now(),
             ]);

@@ -219,7 +219,11 @@ class Product extends Model
             return null;
         }
 
-        return \App\Modules\Catalog\Support\LayoutDaPagina::para($this) === \App\Modules\Catalog\Support\LayoutDaPagina::BRINQUEDO ? 'brinquedo' : null;
+        // O card (forCard) não carrega o pagina_brinquedo, que é grande: busca o produto inteiro só
+        // aqui, para os poucos da categoria de brinquedos.
+        $produto = array_key_exists('pagina_brinquedo', $this->attributes) ? $this : (static::query()->find($this->id) ?? $this);
+
+        return \App\Modules\Catalog\Support\LayoutDaPagina::para($produto) === \App\Modules\Catalog\Support\LayoutDaPagina::BRINQUEDO ? 'brinquedo' : null;
     }
 
     /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
@@ -561,6 +565,8 @@ class Product extends Model
                 'created_at',
                 // Kit que junta avaliações de outros produtos (26/11/2026): ver avaliacoesDeOutrosNoCard().
                 'avaliacoes_de',
+                // Card de brinquedo mostra o preço como a página (27/11/2026): ver getLayoutCardAttribute().
+                'layout_pagina',
             ])
             // Anúncio com variação mostra o menor preço (pedido 2026-10-16).
             ->comPrecoDaVariacao()

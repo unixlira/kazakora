@@ -533,6 +533,8 @@ class Product extends Model
                 // página pela tabela por localidade: preços diferentes (2026-10-25).
                 'categoria_frete',
                 'created_at',
+                // Kit que junta avaliações de outros produtos (26/11/2026): ver avaliacoesDeOutrosNoCard().
+                'avaliacoes_de',
             ])
             // Anúncio com variação mostra o menor preço (pedido 2026-10-16).
             ->comPrecoDaVariacao()
@@ -549,7 +551,41 @@ class Product extends Model
             ->addSelect([
                 'reviews_avg_rating' => self::avaliacoesDoGrupo('avg(reviews.rating)'),
                 'reviews_count' => self::avaliacoesDoGrupo('count(*)'),
-            ]);
+            ])
+            ->afterQuery(fn ($produtos) => self::avaliacoesDeOutrosNoCard($produtos));
+    }
+
+    /**
+     * Card de kit com avaliacoes_de (pedido do Lira 26/11/2026, "produto sem avaliação no card"):
+     * a página do kit já junta as avaliações reais dos produtos que vêm nele
+     * (CatalogController::avaliacoesDeOutros), mas o card contava só o grupo do próprio kit e
+     * mostrava "(0)". Aqui a nota e a quantidade do card passam a usar o mesmo conjunto da
+     * página: o grupo do kit mais cada produto listado e as variações dele, sem repetir.
+     * Só roda para os poucos cards que têm avaliacoes_de; nada é copiado nem inventado.
+     */
+    private static function avaliacoesDeOutrosNoCard($produtos)
+    {
+        foreach ($produtos as $produto) {
+            if (! $produto instanceof self || ! array_key_exists('avaliacoes_de', $produto->getAttributes())) {
+                continue;
+            }
+            $lista = $produto->avaliacoes_de;
+            $outros = is_array($lista) ? array_values(array_filter(array_map(fn ($item) => (int) ($item['id'] ?? 0), $lista))) : [];
+            if (! $outros) {
+                continue;
+            }
+            // Mesmo conjunto de CatalogController::idsDasAvaliacoes(): o grupo do kit e, com as
+            // apagadas, cada produto listado e as variações dele.
+            $ids = self::query()->where('id', $produto->id)->orWhere('parent_product_id', $produto->id)->pluck('id')
+                ->merge(self::withTrashed()->whereIn('id', $outros)->orWhereIn('parent_product_id', $outros)->pluck('id'))
+                ->unique()->values();
+            $resumo = Review::query()->whereIn('product_id', $ids)->toBase()
+                ->selectRaw('count(*) as total, avg(rating) as media')->first();
+            $produto->setAttribute('reviews_count', (int) ($resumo->total ?? 0));
+            $produto->setAttribute('reviews_avg_rating', ($resumo->total ?? 0) ? (float) $resumo->media : null);
+        }
+
+        return $produtos;
     }
 
     /**

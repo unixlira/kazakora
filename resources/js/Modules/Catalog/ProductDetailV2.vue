@@ -1077,8 +1077,9 @@ const escolherKit = (kit, rolar = false) => {
                             </ul>
 
                             <!-- Linha de estrelas abaixo do título e dos checks, como na Mavo (tarefa 2656, print
-                                 das 21h22). Sem avaliação: estrelas vazias e "(0 Avaliações)", nunca nota inventada. -->
-                            <component :is="showReviews ? 'a' : 'span'" :href="showReviews ? '#avaliacoes' : undefined" class="nota" :class="{ 'sem-aval': reviewsCount === 0 }">
+                                 das 21h22). Sem avaliação real a linha não aparece (pedido do Lira 26/11/2026: nada de
+                                 estrelas vazias nem "(0 Avaliações)"), e nunca nota inventada. -->
+                            <component v-if="reviewsCount > 0" :is="showReviews ? 'a' : 'span'" :href="showReviews ? '#avaliacoes' : undefined" class="nota" :class="{ 'sem-aval': reviewsCount === 0 }">
                                 <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
                                 <span v-if="reviewsCount > 0" class="media">{{ ratingAvg.toFixed(1) }}</span>
                                 <span class="qtd-aval-topo">({{ reviewsCount }} {{ reviewsCount === 1 ? 'Avaliação' : 'Avaliações' }})</span>
@@ -1574,7 +1575,8 @@ const escolherKit = (kit, rolar = false) => {
                             Carregar mais avaliações <span>({{ avaliacoesRestantes }} restantes)</span>
                         </button>
                     </div>
-                    <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
+                    <!-- Só quando não há nenhuma: antes aparecia também depois de carregar a última avaliação. -->
+                    <p v-else-if="!reviews.length" class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
                 </section>
 
                 <!-- Foto da avaliação ampliada -->

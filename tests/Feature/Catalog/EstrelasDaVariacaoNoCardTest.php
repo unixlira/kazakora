@@ -61,4 +61,25 @@ class EstrelasDaVariacaoNoCardTest extends TestCase
         $this->assertEqualsWithDelta(5.0, (float) $card['reviews_avg_rating'], 0.001);
         $this->assertSame(1, (int) $card['reviews_count']);
     }
+
+    /** Kit com avaliacoes_de (26/11/2026): o card conta as mesmas avaliações reais que a página do kit junta. */
+    public function test_card_do_kit_conta_as_avaliacoes_dos_produtos_que_vem_nele(): void
+    {
+        $livro = Product::factory()->create(['is_active' => true, 'stock' => 5]);
+        $livroAzul = Product::factory()->create(['is_active' => true, 'parent_product_id' => $livro->id, 'stock' => 5]);
+        $quebra = Product::factory()->create(['is_active' => true, 'stock' => 5]);
+        $kit = Product::factory()->create(['is_active' => true, 'stock' => 5,
+            'avaliacoes_de' => [['id' => $livro->id, 'rotulo' => 'Livro'], ['id' => $quebra->id, 'rotulo' => 'Quebra-cabeça']]]);
+
+        $this->avaliar($livro, 5);
+        $this->avaliar($livroAzul, 4);
+        $this->avaliar($quebra, 3);
+
+        $cards = $this->cards();
+        $this->assertSame(3, (int) $cards[$kit->id]['reviews_count']);
+        $this->assertEqualsWithDelta(4.0, (float) $cards[$kit->id]['reviews_avg_rating'], 0.001);
+        // O produto avulso continua só com as dele.
+        $this->assertSame(2, (int) $cards[$livro->id]['reviews_count']);
+        $this->assertArrayNotHasKey('avaliacoes_de', $cards[$kit->id]);
+    }
 }

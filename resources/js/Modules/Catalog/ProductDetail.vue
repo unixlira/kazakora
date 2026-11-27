@@ -300,7 +300,7 @@ const submitReview = () => {
                             <span class="font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Produto KazaKora</span>
                         </div>
                         <h1 class="mt-3 font-display text-3xl font-semibold leading-tight text-store-fg md:text-5xl">{{ product.name }}</h1>
-                        <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-store-fg-muted">
+                        <div v-if="reviewsCount > 0" class="mt-4 flex flex-wrap items-center gap-3 text-sm text-store-fg-muted">
                             <div class="flex items-center gap-1">
                                 <i v-for="star in 5" :key="star" class="text-sm"
                                     :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>

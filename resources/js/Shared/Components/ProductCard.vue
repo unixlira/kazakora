@@ -283,8 +283,11 @@ const preco = computed(() => (props.escolher ? props.product : (props.product.pr
 // sem o cupom; grande = com o cupom; embaixo, no Pix. Null fora da BF: o card de sempre.
 const cupomBf = computed(() => preco.value.preco_cupom ?? null);
 const bfNoAr = computed(() => !!inertia.props.blackfriday);
-const precoVenda = computed(() => Number(cupomBf.value ? cupomBf.value.por : preco.value.final_price));
+// principal 'venda' (Compressor 4 em 1, 26/11/2026): grande = preço de venda, riscado = "de" do cadastro.
+const cupomSecundario = computed(() => cupomBf.value?.principal === 'venda');
+const precoVenda = computed(() => Number(cupomBf.value && !cupomSecundario.value ? cupomBf.value.por : preco.value.final_price));
 const precoAntes = computed(() => {
+    if (cupomSecundario.value) return cupomBf.value.antes ? Number(cupomBf.value.antes) : null;
     if (cupomBf.value) return Number(cupomBf.value.de);
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
     if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);
@@ -300,7 +303,7 @@ const precoPartes = computed(() => {
 // Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
 const inertia = usePage();
 const tabelaParcelas = computed(() => inertia.props.parcelamento);
-const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.value));
+const parcela = computed(() => parcelaMaxima(cupomBf.value ? Number(cupomBf.value.por) : precoVenda.value, tabelaParcelas.value));
 </script>
 
 <template>
@@ -394,7 +397,7 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
                     <s v-if="precoAntes" class="min-w-0 truncate whitespace-nowrap pb-px text-[11px] text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
                 </div>
                 <p v-if="cupomBf" class="mt-0.5 truncate whitespace-nowrap text-[11px] text-store-fg-muted" data-card-cupom>
-                    com cupom <b>{{ cupomBf.code }}</b><template v-if="cupomBf.pix !== null"> · <span class="font-semibold text-store-verde-texto">No Pix: {{ formatPrice(cupomBf.pix) }}</span></template>
+                    com cupom <b>{{ cupomBf.code }}</b><template v-if="cupomSecundario">: <b>{{ formatPrice(cupomBf.por) }}</b></template><template v-if="cupomBf.pix !== null"> · <span class="font-semibold text-store-verde-texto">No Pix: {{ formatPrice(cupomBf.pix) }}</span></template>
                 </p>
                 <p v-if="parcela || !tabelaParcelas?.length" class="mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] text-store-fg-muted">
                     <i class="far fa-credit-card" aria-hidden="true"></i>
@@ -437,7 +440,7 @@ const parcela = computed(() => parcelaMaxima(precoVenda.value, tabelaParcelas.va
                      (produto sem cupom, como Oferta do Dia, fica com elas vazias: cards do mesmo tamanho). -->
                 <template v-if="bfNoAr">
                     <p class="flex h-4 items-center truncate whitespace-nowrap text-[11px] text-store-fg-muted md:text-xs" data-card-cupom>
-                        <template v-if="cupomBf">com cupom <b class="ml-1">{{ cupomBf.code }}</b></template>
+                        <template v-if="cupomBf">com cupom <b class="ml-1">{{ cupomBf.code }}</b><template v-if="cupomSecundario">:<b class="ml-1">{{ formatPrice(cupomBf.por) }}</b></template></template>
                     </p>
                     <p class="flex h-4 items-center truncate whitespace-nowrap text-[11px] font-semibold text-store-verde-texto md:text-xs" data-card-pix>
                         <template v-if="cupomBf && cupomBf.pix !== null">No Pix: {{ formatPrice(cupomBf.pix) }}</template>

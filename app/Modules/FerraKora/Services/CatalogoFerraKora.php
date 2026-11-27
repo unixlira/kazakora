@@ -65,6 +65,9 @@ class CatalogoFerraKora extends CatalogoOutroSite
         return ['cupom' => [
             'code' => $cupom['code'],
             'rotulo' => $cupom['rotulo'],
+            // Preço grande = o de venda, riscado o "antes" (Compressor 4 em 1, 26/11/2026).
+            'principal' => $cupom['principal'],
+            'antes' => $cupom['antes'] === null ? null : (int) round($cupom['antes'] * 100),
             'de' => (int) round($cupom['de'] * 100),
             'por' => (int) round($cupom['por'] * 100),
             'pix' => $cupom['pix'] === null ? null : (int) round($cupom['pix'] * 100),

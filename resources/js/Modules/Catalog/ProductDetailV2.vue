@@ -377,15 +377,19 @@ const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quant
 // cada quantidade até o maior kit, com o desconto do kit. Null fora da BF: tudo como antes.
 const cupomBf = computed(() => precoBase.value.preco_cupom ?? null);
 const cupomBfQtd = computed(() => precoBase.value.precos_cupom?.[quantity.value] ?? null);
-const precoPor = computed(() => Number(cupomBf.value ? cupomBf.value.por : precoBase.value.final_price));
+// principal 'venda' (Compressor 4 em 1, 26/11/2026): grande = preço de venda, riscado = "de" do
+// cadastro, e o com cupom vai para a linha de baixo.
+const cupomSecundario = computed(() => cupomBf.value?.principal === 'venda');
+const precoPor = computed(() => Number(cupomBf.value && !cupomSecundario.value ? cupomBf.value.por : precoBase.value.final_price));
 const precoDe = computed(() => {
+    if (cupomSecundario.value) return cupomBf.value.antes ? Number(cupomBf.value.antes) : null;
     if (cupomBf.value) return Number(cupomBf.value.de);
     if ((precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago) && precoBase.value.preco_sem_oferta) return Number(precoBase.value.preco_sem_oferta);
     return precoBase.value.has_discount ? Number(precoBase.value.preco_de ?? precoBase.value.price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((1 - precoPor.value / precoDe.value) * 100)) : 0));
 // Parcela real, com os juros do Mercado Pago (pedido do Lira 2026-11-02).
-const parcela = computed(() => parcelaMaxima(precoPor.value, page.props.parcelamento));
+const parcela = computed(() => parcelaMaxima(cupomBf.value ? Number(cupomBf.value.por) : precoPor.value, page.props.parcelamento));
 
 // Preço no Pix (pedido 2026-10-23): pagando o pedido todo no Pix. O de 1
 // unidade vem pronto do backend (preco_pix, DescontoPix::precoPix); kits e
@@ -1118,13 +1122,15 @@ const escolherKit = (kit, rolar = false) => {
                             <div v-if="!(brinquedo && variations.length) && !cartoes" class="preco">
                                 <!-- Riscado em cima do preço atual (pedido 2026-10-23). -->
                                 <span v-if="precoDe" class="de"><template v-if="cupomBf">De </template>{{ formatPrice(precoDe) }}</span>
+                                <span v-if="cupomSecundario" class="a-partir">Por</span>
                                 <span v-if="aPartirDe" class="a-partir">A partir de</span>
                                 <div class="linha-por">
                                     <span class="por">{{ formatPrice(precoPor) }}</span>
                                     <!-- Selo de desconto ao lado do preço, com seta para baixo (pedido 2026-10-26; antes ficava na foto com "-"). -->
                                     <span v-if="percentualTotal > 0" class="selo-desconto" :aria-label="`${percentualTotal}% de desconto`"><i class="fas fa-arrow-down" aria-hidden="true"></i>{{ percentualTotal }}%</span>
                                 </div>
-                                <div v-if="cupomBf" class="linha-cupom-bf" data-preco-cupom>com cupom <b>{{ cupomBf.code }}</b></div>
+                                <div v-if="cupomSecundario" class="linha-cupom-bf" data-preco-cupom>com cupom <b>{{ cupomBf.code }}</b>: <b>{{ formatPrice(cupomBf.por) }}</b></div>
+                                <div v-else-if="cupomBf" class="linha-cupom-bf" data-preco-cupom>com cupom <b>{{ cupomBf.code }}</b></div>
                                 <div v-if="parcela" class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ parcela.parcelas }}x de <strong>{{ formatPrice(parcela.valor) }}</strong></div>
                                 <div v-else-if="!page.props.parcelamento?.length" class="parc"><i class="far fa-credit-card" aria-hidden="true"></i> em até {{ PARCELAS }}x</div>
                                 <!-- Quando o card de cima já fala do Pix, a linha não repete (sem informação repetida na mesma tela). -->

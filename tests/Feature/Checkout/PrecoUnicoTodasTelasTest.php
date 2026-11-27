@@ -211,7 +211,8 @@ class PrecoUnicoTodasTelasTest extends TestCase
 
         $this->assertSame($telas['pagina'], $telas['vitrine'], 'Vitrine e página com o mesmo de/por/cupom/Pix.');
         $this->assertEqualsWithDelta($preco, $telas['busca'], 0.001, 'Busca com o preço da página.');
-        $this->assertEqualsWithDelta((float) ($telas['pagina']['cupom']['por'] ?? $preco), $telas['busca_grande'], 0.001, 'Busca com o número grande do card.');
+        $grande = ($telas['pagina']['cupom']['principal'] ?? 'cupom') === 'venda' ? $preco : (float) ($telas['pagina']['cupom']['por'] ?? $preco);
+        $this->assertEqualsWithDelta($grande, $telas['busca_grande'], 0.001, 'Busca com o número grande do card.');
         $this->assertEqualsWithDelta($preco, $telas['carrinho'], 0.001, 'Carrinho com o preço da página.');
         $this->assertEqualsWithDelta($preco, $telas['checkout'], 0.001, 'Checkout com o preço da página.');
         if (isset($telas['checkout_com_cep'])) {
@@ -325,11 +326,40 @@ class PrecoUnicoTodasTelasTest extends TestCase
         }
     }
 
+    public function test_compressor_mostra_de_435_52_por_297_e_o_cupom_na_linha_de_baixo_nas_duas_lojas(): void
+    {
+        // Pedido do Lira 26/11/2026: "de R$ 435,52" riscado, "por R$ 297,00" grande; cupom e Pix embaixo.
+        Coupon::query()->where('code', 'BLACKFRIDAY')->update(['so_kazakora' => false]);
+        $produto = $this->criar(['sku' => '344-BOMBAAR-4EM1', 'price' => 435.52, 'discount_amount' => 138.52, 'cost_price' => 115.00, 'checkout_discount_percentage' => 2]);
+        config(['loja.blackfriday_preco_principal_produtos' => [$produto->id]]);
+
+        foreach ([self::SP, self::CE] as $regiao) {
+            $this->flushSession();
+            $this->novaRequisicao();
+            $kz = $this->get("/produtos/{$produto->slug}", $regiao)->assertOk()->viewData('page')['props']['product'];
+            $this->assertEqualsWithDelta(297.00, (float) $kz['final_price'], 0.001);
+            $this->assertSame('venda', $kz['preco_cupom']['principal']);
+            $this->assertEqualsWithDelta(435.52, (float) $kz['preco_cupom']['antes'], 0.001);
+            $this->assertEqualsWithDelta(282.15, (float) $kz['preco_cupom']['por'], 0.001);
+
+            $this->novaRequisicao();
+            $busca = $this->getJson('/busca/sugestoes?q='.urlencode($produto->name), $regiao)->assertOk();
+            $this->assertEqualsWithDelta(297.00, (float) collect($busca->json('produtos'))->firstWhere('slug', $produto->slug)['preco'], 0.001);
+
+            $this->novaRequisicao();
+            $fk = $this->getJson('/api/ferrakora/produtos/kz-'.$produto->id, $regiao)->assertOk()->json('product.variants.0.prices.0');
+            $this->assertSame(29700, $fk['sale_amount']);
+            $this->assertSame(['venda', 43552, 28215], [$fk['cupom']['principal'], $fk['cupom']['antes'], $fk['cupom']['por']]);
+        }
+    }
+
     public function test_compressor_4_em_1_tem_preco_fixo_pelo_sku_no_config(): void
     {
         $config = require base_path('config/frete_embutido.php');
+        $loja = require base_path('config/loja.php');
 
         $this->assertContains('344-BOMBAAR-4EM1', $config['skus_preco_fixo'], 'O 413 é "de R$ 435,52 por R$ 297,00" em qualquer CEP.');
+        $this->assertContains(413, $loja['blackfriday_preco_principal_produtos'], 'No 413 o preço grande é o de venda.');
     }
 
     public function test_ferrakora_cobra_na_linha_de_frete_o_que_o_cep_pede_a_mais(): void

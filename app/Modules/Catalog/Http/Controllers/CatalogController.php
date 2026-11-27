@@ -201,7 +201,8 @@ class CatalogController extends Controller
                 'slug' => $produto->slug,
                 'imagem' => $produto->images->first()?->thumb_url ?? $produto->images->first()?->url,
                 // Preço único (26/11/2026): o número grande do card, com o cupom da Black Friday quando ela está no ar.
-                'preco' => ($maisBarata = $produto->variacaoMaisBarata())->preco_cupom['por'] ?? $maisBarata->final_price,
+                // Produto com o preço de venda como principal (loja.blackfriday_preco_principal_produtos): o de venda.
+                'preco' => (($cupom = ($maisBarata = $produto->variacaoMaisBarata())->preco_cupom) && $cupom['principal'] !== 'venda' ? $cupom['por'] : null) ?? $maisBarata->final_price,
                 'preco_sem_cupom' => $maisBarata->final_price,
             ]);
 

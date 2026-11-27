@@ -51,6 +51,13 @@ CSV;
         $this->assertSame(6.95, $ml[0]['taxa_fixa']);
     }
 
+    public function test_celula_quebrada_fica_vazia_sem_travar(): void
+    {
+        $this->assertNull(PlanilhaZaio::reais('-R$ 1.737.850.064.376.390.000,00'));
+        $this->assertSame(-12.5, PlanilhaZaio::reais('-R$ 12,50'));
+        $this->assertSame(1403.45, PlanilhaZaio::reais('R$ 1.403,45'));
+    }
+
     public function test_sincroniza_liga_o_produto_e_o_painel_mostra_zaio_e_real_sem_mudar_o_lucro(): void
     {
         Carbon::setTestNow('2026-11-27 15:00:00');

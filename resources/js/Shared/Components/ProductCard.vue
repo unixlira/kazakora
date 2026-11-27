@@ -373,13 +373,15 @@ const parcela = computed(() => parcelaMaxima(cupomBf.value ? Number(cupomBf.valu
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Estrelas da média, a nota em negrito e a quantidade de avaliações, em
-                 todo card (pedidos 2026-10-20 e 2026-10-22). Sem avaliação: estrelas
-                 vazias e "(0)", na mesma altura. -->
+                 todo card (pedidos 2026-10-20 e 2026-10-22). Sem avaliação real (pedido do
+                 Lira 26/11/2026): nada de estrelas vazias nem "(0)"; a linha fica vazia na
+                 mesma altura, para os cards continuarem alinhados. -->
             <!-- No celular, fonte um ponto menor: no card de 149 px, "★★★★★ 4,8 (735)" cabe certo.
                  Card mais estreito (tela de 320 px): a nota sai e ficam estrelas e quantidade. -->
             <div class="@container">
-                <div class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
-                    :aria-label="totalAvaliacoes ? `Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}` : 'Sem avaliações'">
+                <div v-if="totalAvaliacoes === 0" class="h-4" aria-hidden="true"></div>
+                <div v-else class="flex h-4 items-center gap-px whitespace-nowrap text-[10px] text-amber-400 md:text-[11px]" role="img"
+                    :aria-label="`Nota ${notaTexto} de 5, ${totalAvaliacoes} ${totalAvaliacoes === 1 ? 'avaliação' : 'avaliações'}`">
                     <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
                     <span v-if="nota > 0" class="ml-1 hidden text-[11px] font-bold text-store-fg @[7rem]:inline md:text-xs" aria-hidden="true">{{ notaTexto }}</span>
                     <span class="ml-0.5 text-[11px] text-store-fg-muted md:ml-1 md:text-xs" aria-hidden="true">({{ totalAvaliacoes.toLocaleString('pt-BR') }})</span>

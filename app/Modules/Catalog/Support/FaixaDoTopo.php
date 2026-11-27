@@ -141,10 +141,12 @@ class FaixaDoTopo
 
     private static function limpar(string $texto): string
     {
-        $sem = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2190}-\x{21FF}\x{FE0F}\x{200D}\x{20E3}]/u', '', $texto) ?? $texto;
+        $sem = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{FE0F}\x{200D}\x{20E3}]/u', '', $texto) ?? $texto;
         $sem = preg_replace('/\s+/u', ' ', $sem) ?? $sem;
 
-        return trim($sem, " \t\n\r\0\x0B.!;:,-–—|");
+        // Sem trim() com "–" e "—" na lista: o trim corta byte a byte e arrancava o 1º byte de
+        // emoji como o ⏱ (E2 8F B1), o texto virava UTF-8 inválido e a página dava 500 (27/11/2026).
+        return preg_replace('/^[\s.!;:,\-–—|]+|[\s.!;:,\-–—|]+$/u', '', $sem) ?? trim($sem);
     }
 
     /** Para comparar sem acento, caixa e pontuação. */

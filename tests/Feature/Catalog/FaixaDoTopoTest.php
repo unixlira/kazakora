@@ -143,4 +143,17 @@ class FaixaDoTopoTest extends TestCase
                 ->whereNot('blackfriday', null)
                 ->where('faixa.0.texto', 'Frete grátis'));
     }
+
+    public function test_emoji_cortado_no_texto_nao_derruba_a_pagina(): void
+    {
+        // 27/11/2026: "⏱️ Total Praticidade" virava UTF-8 inválido (o trim cortava meio emoji) e a página dava 500.
+        $conteudo = new ProductAdContent;
+        $conteudo->setRawAttributes(['destaques' => '[]', 'beneficios' => '[["\\u23f1\\ufe0f Total Praticidade","Uso fácil."],["— Ajuste firme –","Fica no lugar."]]']);
+
+        $frases = array_column(FaixaDoTopo::paraProduto($conteudo), 'texto');
+
+        $this->assertContains('Total Praticidade', $frases);
+        $this->assertContains('Ajuste firme', $frases);
+        $this->assertNotFalse(json_encode($frases));
+    }
 }

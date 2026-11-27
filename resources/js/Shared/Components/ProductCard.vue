@@ -136,7 +136,12 @@ const secondImageVisible = computed(() => isHovering.value && secondImageLoaded.
 
 // Navegação rápida (pedido 2026-10-10): ao passar o mouse ou encostar o dedo
 // no card, a página do produto já é buscada; o clique abre na hora.
-const prefetchProduct = () => props.escolher || router.prefetch(`/produtos/${props.product.slug}`, { method: 'get' }, { cacheFor: '1m' });
+// Link da página: com variação, abre na mesma variação do preço do card (27/11/2026).
+const urlProduto = computed(() => {
+    const v = props.escolher ? null : props.product.preco_vitrine;
+    return v?.id && v.id !== props.product.id ? `/produtos/${props.product.slug}?opcao=${v.id}` : `/produtos/${props.product.slug}`;
+});
+const prefetchProduct = () => props.escolher || router.prefetch(urlProduto.value, { method: 'get' }, { cacheFor: '1m' });
 
 const onPointerEnter = () => {
     isHovering.value = true;
@@ -146,7 +151,7 @@ const onPointerEnter = () => {
     }
 };
 
-const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
+const goToProduct = () => router.visit(urlProduto.value);
 
 // Card inteiro clicável (pedido 2026-10-23): clicar em qualquer parte abre o
 // produto. Botões e links de dentro (carrinho, Avaliar, Detalhes) fazem a
@@ -159,7 +164,7 @@ const clicarCard = (evento) => {
     if (evento.target.closest('a, button, input, textarea, select')) return;
     if (window.getSelection?.().toString()) return;
     if (evento.ctrlKey || evento.metaKey) {
-        window.open(`/produtos/${props.product.slug}`, '_blank', 'noopener');
+        window.open(urlProduto.value, '_blank', 'noopener');
         return;
     }
     goToProduct();
@@ -471,7 +476,7 @@ const parcela = computed(() => parcelaMaxima(cupomBf.value ? Number(cupomBf.valu
                         @click.stop="emit('escolher')">
                         {{ selecionado ? 'Escolhido' : 'Escolher' }}
                     </button>
-                    <Link v-else :href="`/produtos/${product.slug}`"
+                    <Link v-else :href="urlProduto"
                         class="-my-[2px] hidden h-6 shrink-0 items-center botao-detalhes rounded-md bg-[#ff9500] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ffa726] md:inline-flex">
                         Detalhes
                     </Link>

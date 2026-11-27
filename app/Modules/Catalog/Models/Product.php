@@ -353,6 +353,9 @@ class Product extends Model
         $precos = collect([$this])->concat($this->variacoesAtivas)->map(fn (Product $opcao) => $opcao->final_price);
 
         return [
+            // Variação do preço mostrado: o card abre a página nela (?opcao=), para o cliente
+            // ver o mesmo preço do card (27/11/2026: árvore R$ 369 no card abria em R$ 622).
+            'id' => $maisBarata->id,
             'final_price' => $maisBarata->final_price,
             'price' => (float) $maisBarata->price,
             'has_discount' => $maisBarata->has_discount,

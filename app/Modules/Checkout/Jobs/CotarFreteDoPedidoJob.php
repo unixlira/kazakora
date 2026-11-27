@@ -40,7 +40,8 @@ class CotarFreteDoPedidoJob implements ShouldQueue
     {
         $order = Order::query()->with('items')->find($this->orderId);
 
-        if ($order) {
+        // Entrega em mãos (27/11/2026): sem frete, sem etiqueta.
+        if ($order && ! $order->entrega_em_maos) {
             $melhorEnvio->escolherNoPedido($order);
         }
     }

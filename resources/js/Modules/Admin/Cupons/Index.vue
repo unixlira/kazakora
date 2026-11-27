@@ -25,6 +25,7 @@ const vazio = () => ({
     min_order_value: '',
     max_uses: '',
     one_per_customer: false,
+    entrega_em_maos: false,
     starts_at: '',
     expires_at: '',
     is_active: true,
@@ -48,6 +49,7 @@ const editar = (cupom) => {
         min_order_value: cupom.min_order_value ?? '',
         max_uses: cupom.max_uses ?? '',
         one_per_customer: cupom.one_per_customer,
+        entrega_em_maos: cupom.entrega_em_maos ?? false,
         starts_at: cupom.starts_at ?? '',
         expires_at: cupom.expires_at ?? '',
         is_active: cupom.is_active,
@@ -190,6 +192,9 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
                 <label class="mb-2 flex items-center gap-2 text-sm">
                     <input v-model="form.one_per_customer" type="checkbox" class="h-4 w-4"> Cada cliente usa só 1 vez
                 </label>
+                <label class="mb-2 flex items-center gap-2 text-sm">
+                    <input v-model="form.entrega_em_maos" type="checkbox" class="h-4 w-4"> Entrega em mãos: sem frete e sem etiqueta (pode ter desconto 0)
+                </label>
                 <label class="mb-5 flex items-center gap-2 text-sm">
                     <input v-model="form.is_active" type="checkbox" class="h-4 w-4"> Cupom ativo
                 </label>
@@ -235,6 +240,7 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
                                         {{ cupom.expires_at ? `até ${formatDate(cupom.expires_at)}` : '' }}
                                     </div>
                                     <div v-if="cupom.one_per_customer">1 por cliente</div>
+                                    <div v-if="cupom.entrega_em_maos">Entrega em mãos (sem etiqueta)</div>
                                     <div v-if="!cupom.min_order_value && !cupom.starts_at && !cupom.expires_at && !cupom.one_per_customer">Sem restrições</div>
                                 </td>
                                 <td class="py-3 pr-4">{{ cupom.usos }}<span v-if="cupom.max_uses" class="text-slate-400"> / {{ cupom.max_uses }}</span></td>

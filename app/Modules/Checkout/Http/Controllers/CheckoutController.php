@@ -805,6 +805,13 @@ class CheckoutController extends Controller
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0;
+        // Cupom de entrega em mãos (27/11/2026): o Lira entrega pessoalmente,
+        // então não há frete a cobrar nem etiqueta a gerar.
+        $emMaos = (bool) $coupon?->entrega_em_maos;
+        if ($emMaos) {
+            $shipping['cost'] = 0.0;
+            $shipping['carrier_name'] = Order::ENTREGA_EM_MAOS;
+        }
         // Frete embutido com vários itens numa caixa só (2026-10-12).
         $descontoPlataforma = app(FreteEmbutido::class)->ligado()
             ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma']
@@ -836,7 +843,7 @@ class CheckoutController extends Controller
         $sessaoDoLead = $request->session()->getId();
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago, $emMaos) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
@@ -888,6 +895,7 @@ class CheckoutController extends Controller
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
+                    'entrega_em_maos' => $emMaos,
                     // discount_amount é o desconto TOTAL do pedido (vDesc da
                     // NF-e, financeiro, devolução) — cupom + Pix + plataforma;
                     // Pix e plataforma ficam também à parte.
@@ -901,7 +909,10 @@ class CheckoutController extends Controller
                 $this->garantirLivrosDigitais($order);
                 // Transportadora do Melhor Envio fica escolhida no pedido e a
                 // etiqueta sai com ela (pedido do Lira em 2026-11-03).
-                CotarFreteDoPedidoJob::dispatch($order->id)->afterCommit();
+                // Entrega em mãos não tem frete para cotar.
+                if (! $emMaos) {
+                    CotarFreteDoPedidoJob::dispatch($order->id)->afterCommit();
+                }
 
                 $primaryMethod = $methods[0];
                 $isSplit = count($methods) > 1;

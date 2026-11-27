@@ -139,6 +139,16 @@ return [
     ],
 
     /*
+    | Planilha da Zaio (agência de Shopee, ML e TikTok; 27/11/2026): Google
+    | Sheets compartilhada por link. O comando zaio:planilha copia as abas
+    | para o painel financeiro (referência da agência, não entra no lucro).
+    */
+    'zaio' => [
+        // Só no .env: com o ID qualquer um abre a planilha.
+        'planilha_id' => env('LOJA_ZAIO_PLANILHA_ID', ''),
+    ],
+
+    /*
     | Insumos de embalagem (caixa/envelope, fita, etiqueta) por pedido, em R$
     | (pedido do Lira em 12/11/2026, regra oficial do dono: R$ 2,00). Sai da
     | margem de toda venda efetiva que a loja embala (ContributionMargin,

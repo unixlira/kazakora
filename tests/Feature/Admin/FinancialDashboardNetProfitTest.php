@@ -338,7 +338,7 @@ class FinancialDashboardNetProfitTest extends TestCase
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 7]);
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'meta_ads', 'spend' => 3]);
 
-        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro?grupo=marketplaces')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('grupo', 'marketplaces')

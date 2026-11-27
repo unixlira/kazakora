@@ -7,8 +7,8 @@ import { computed } from 'vue';
 
 const props = defineProps({
     // Marketplaces x E-commerces (Lira, 17/11/2026): a tela é de um grupo só.
-    grupo: { type: String, default: 'marketplaces' },
-    grupoNome: { type: String, default: 'Marketplaces' },
+    grupo: { type: String, default: 'todos' },
+    grupoNome: { type: String, default: 'Tudo' },
     summary: { type: Object, required: true },
     netProfit: { type: Object, required: true },
     walletBalances: { type: Object, default: () => ({}) },
@@ -18,9 +18,13 @@ const props = defineProps({
     cashFlowSeries: { type: Array, default: () => [] },
     settlementSummary: { type: Object, default: () => ({ available: false, month: { channels: [], totals: {} }, allTime: { channels: [], totals: {} } }) },
     marketplaceMetrics: { type: Object, default: () => ({ month: [] }) },
+    // Planilha da Zaio x resultado real (27/11/2026).
+    zaio: { type: Object, default: null },
 });
+const pctBr = (v) => (v === null || v === undefined ? '—' : `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
 
-const mkt = computed(() => props.grupo === 'marketplaces');
+// Carteiras, extrato e Flex aparecem em Marketplaces e em Tudo.
+const mkt = computed(() => props.grupo !== 'ecommerces');
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatShortDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
@@ -116,10 +120,10 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
                 <h1 class="text-2xl font-bold">Resultado e margem · {{ grupoNome }}</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Só {{ mkt ? 'Mercado Livre, Shopee, TikTok Shop, Amazon e Shein' : 'KazaKora, FerraKora e Beauty Kora' }}. Os dois grupos nunca somam.</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ grupo === 'todos' ? 'A KazaKora inteira: marketplaces + sites próprios (os mesmos números do KoraSync).' : grupo === 'marketplaces' ? 'Só Mercado Livre, Shopee, TikTok Shop, Amazon e Shein.' : 'Só KazaKora, FerraKora e Beauty Kora.' }}</p>
             </div>
             <nav class="flex gap-2" aria-label="Grupo">
-                <Link v-for="g in [{ k: 'marketplaces', n: 'Marketplaces' }, { k: 'ecommerces', n: 'E-commerces' }]" :key="g.k"
+                <Link v-for="g in [{ k: 'todos', n: 'Tudo' }, { k: 'marketplaces', n: 'Marketplaces' }, { k: 'ecommerces', n: 'E-commerces' }]" :key="g.k"
                     :href="`/admin/dashboard-financeiro?grupo=${g.k}`"
                     class="rounded-full px-4 py-1.5 text-sm font-semibold"
                     :class="grupo === g.k ? 'bg-primary text-white' : 'bg-[var(--surface-muted)] text-slate-500 hover:text-[var(--surface-foreground)]'"
@@ -157,7 +161,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
             Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }}, taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> e o imposto do Simples ({{ formatPercent(summary.taxRate ?? 0) }} sobre a nota) {{ formatPrice(summary.taxMonth ?? 0) }} para chegar no lucro líquido.
         </div>
 
-        <h2 class="mb-3 text-xl font-bold">Lucro líquido por {{ mkt ? 'Marketplace' : 'site' }} · Mês Atual</h2>
+        <h2 class="mb-3 text-xl font-bold">Lucro líquido por {{ grupo === 'todos' ? 'canal' : mkt ? 'Marketplace' : 'site' }} · Mês Atual</h2>
         <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
             Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma, custo dos itens vendidos e imposto do Simples.
         </p>
@@ -289,6 +293,57 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
              "Faturamento Líquido do Mês" e "Lucro Líquido do Mês": aqui
              fica claro que um é passo intermediário do outro, não duas
              coisas soltas parecidas. -->
+        <section v-if="zaio" class="mt-8" aria-labelledby="titulo-zaio">
+            <h2 id="titulo-zaio" class="mb-1 text-xl font-bold">Planilha da Zaio x resultado real</h2>
+            <p class="mb-3 text-xs text-[var(--texto-suave)]">
+                A Zaio calcula a margem de cada anúncio com tarifa, taxa fixa, imposto, ADS/afiliados e a comissão dela já embutidos no preço.
+                Ao lado, o que cada produto deixou de verdade neste mês: receita − custo − taxa real do canal − frete − insumos − imposto do Simples − a parte do ADS real do canal.
+                <span v-if="zaio.atualizadoEm">Planilha copiada em {{ zaio.atualizadoEm }}.</span>
+            </p>
+            <div class="mb-4 grid gap-3 md:grid-cols-3">
+                <div v-for="r in zaio.resumo" :key="r.canal" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wide text-[var(--texto-suave)]">{{ r.canalNome }} · {{ r.anuncios }} anúncios na planilha</p>
+                    <p class="mt-1 text-2xl font-black tabular-nums">{{ pctBr(r.margemMediaPct) }}</p>
+                    <p class="text-xs text-[var(--texto-suave)]">margem média prevista pela Zaio</p>
+                    <p class="mt-2 text-xs">{{ r.abaixo10 }} anúncios abaixo de 10%<span v-if="r.negativos"> · <strong class="text-error">{{ r.negativos }} no prejuízo</strong></span></p>
+                    <p class="text-[11px] text-[var(--texto-suave)]">Na conta da Zaio: imposto {{ pctBr(r.imposto) }}, ADS/afiliados {{ pctBr(r.ads) }}, comissão {{ pctBr(r.comissao) }}.</p>
+                </div>
+            </div>
+            <div v-if="zaio.linhas.length" class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+                <table class="w-full min-w-[900px] text-sm tabular-nums">
+                    <caption class="sr-only">Produtos vendidos no mês: conta da Zaio e resultado real</caption>
+                    <thead>
+                        <tr class="border-b border-[var(--surface-border)] text-[11px] text-[var(--texto-suave)]">
+                            <th scope="col" class="px-3 py-2 text-left font-semibold">Produto</th>
+                            <th scope="col" class="px-2 py-2 text-left font-semibold">Canal</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Preço (Zaio)</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Margem Zaio</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Preço sugerido Zaio</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Vendidos no mês</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Preço médio real</th>
+                            <th scope="col" class="px-2 py-2 text-right font-semibold">Lucro real/un.</th>
+                            <th scope="col" class="px-3 py-2 text-right font-semibold">Lucro real no mês</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="l in zaio.linhas" :key="l.canal + l.anuncio + l.nome" class="border-b border-[var(--surface-muted)]">
+                            <th scope="row" class="max-w-[280px] truncate px-3 py-1.5 text-left font-medium" :title="l.nome">{{ l.nome }}</th>
+                            <td class="px-2 py-1.5">{{ l.canalNome }}</td>
+                            <td class="px-2 py-1.5 text-right">{{ formatPrice(l.precoZaio) }}</td>
+                            <td class="px-2 py-1.5 text-right">{{ l.margemZaio === null ? '—' : formatPrice(l.margemZaio) }} <span class="text-[11px] text-[var(--texto-suave)]">{{ pctBr(l.margemZaioPct) }}</span></td>
+                            <td class="px-2 py-1.5 text-right">{{ l.precoSugerido === null ? '—' : formatPrice(l.precoSugerido) }}</td>
+                            <td class="px-2 py-1.5 text-right">{{ l.unidades }}</td>
+                            <td class="px-2 py-1.5 text-right">{{ formatPrice(l.precoMedioReal) }}</td>
+                            <td class="px-2 py-1.5 text-right font-semibold" :class="l.lucroRealUn < 0 ? 'text-error' : 'text-lucro'">{{ formatPrice(l.lucroRealUn) }} <span class="text-[11px] font-normal text-[var(--texto-suave)]">{{ pctBr(l.lucroRealPct) }}</span></td>
+                            <td class="px-3 py-1.5 text-right font-semibold" :class="l.lucroReal < 0 ? 'text-error' : ''">{{ formatPrice(l.lucroReal) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p v-else class="text-sm text-[var(--texto-suave)]">Nenhum produto da planilha vendeu neste mês ainda.</p>
+            <p class="mt-2 text-[11px] text-[var(--texto-suave)]">"Preço sugerido Zaio" é o preço que a planilha calcula para chegar na margem desejada. Produtos do TikTok só aparecem quando o anúncio está ligado a um produto da loja.</p>
+        </section>
+
         <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro Líquido do Mês é calculado</h2>
 
         <div class="mb-3 max-w-xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">

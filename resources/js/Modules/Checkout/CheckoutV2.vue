@@ -583,10 +583,11 @@ const SELOS_VERIFICADOS = [
 // segura e os checks de frete grátis e devolução ficam comentados no template, sem apagar:
 //   'Frete grátis para todo o Brasil',
 //   'Devolução grátis em até 7 dias após o recebimento',
+// 26/11/2026 (pedido do Lira): a nota sai depois que o cliente confirma o endereço no WhatsApp
+// (SendOrderApprovedWhatsAppJob segura a NF-e até o "Tudo certo" ou 30 min). Os livros digitais
+// já aparecem como linha própria "de presente / GRÁTIS" no resumo do pedido.
 const CHECKS_LOJA = computed(() => [
-    props.livrosBrinde
-        ? 'Nota fiscal e livros digitais no seu e-mail assim que o pagamento é confirmado'
-        : 'Nota fiscal no seu e-mail assim que o pagamento é confirmado',
+    'Nota fiscal enviada para o seu e-mail assim que você confirmar o endereço na mensagem de WhatsApp que vamos te enviar',
 ]);
 
 // ---------- Finalizar ----------

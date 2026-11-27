@@ -29,8 +29,7 @@ use Illuminate\Support\Facades\Schema;
  *   − ADS (Shopee/ML Ads e o GMV Max do TikTok, cobrado no extrato)
  *   − comissão Zaio (2% da receita em Shopee/ML/TikTok, planilha da Zaio)
  *   = margem
- *   − imposto (Simples sobre o valor da nota; 10% em Shopee/ML/TikTok,
- *     regra da planilha da Zaio desde loja.zaio.desde)
+ *   − imposto (Simples Nacional sobre o valor da nota, todos os canais)
  *   = lucro (lucro líquido: é o número que o painel e o Financeiro mostram)
  *
  * Antes cada tela fazia a sua conta: o painel inicial subtraía o frete que
@@ -747,25 +746,14 @@ class ContributionMargin
             return [];
         }
 
-        // Até o corte da Zaio todo canal paga o Simples; depois dele, Shopee,
-        // ML e TikTok pagam o imposto da planilha da Zaio (10%).
-        $corte = self::zaioDesde();
-        $total = [];
-        $somar = function (Carbon $de, Carbon $ate, bool $depoisDoCorte) use (&$total) {
-            if ($de->gte($ate)) {
-                return;
-            }
-            foreach (self::basePorCanal($de, $ate) as $canal => $base) {
-                $aliquota = $depoisDoCorte && in_array($canal, self::canaisZaio(), true)
-                    ? self::impostoZaio()
-                    : self::aliquotaSimples();
-                $total[$canal] = ($total[$canal] ?? 0.0) + round($base * $aliquota / 100, 2);
-            }
-        };
-        $somar($desde, $ate->copy()->min($corte), false);
-        $somar($desde->copy()->max($corte), $ate, true);
+        if (self::aliquotaSimples() <= 0) {
+            return [];
+        }
 
-        return array_filter(array_map(fn (float $v) => round($v, 2), $total), fn (float $v) => $v != 0.0);
+        return array_map(
+            fn (float $base) => round($base * self::aliquotaSimples() / 100, 2),
+            self::basePorCanal($desde, $ate),
+        );
     }
 
     /** Canais com as regras da planilha da Zaio (config loja.zaio). */
@@ -780,12 +768,6 @@ class ContributionMargin
         return Carbon::parse((string) config('loja.zaio.desde', '2026-11-01'))->startOfDay();
     }
 
-    /** Imposto da planilha da Zaio (%), no lugar do Simples nos canais dela. */
-    public static function impostoZaio(): float
-    {
-        return (float) config('loja.zaio.imposto', 10.0);
-    }
-
     /** Comissão da Zaio (% da receita). */
     public static function comissaoZaioPct(): float
     {
@@ -793,18 +775,54 @@ class ContributionMargin
     }
 
     /**
-     * Alíquota de imposto de um pedido (%): a da Zaio nos canais dela a partir
-     * do corte, o Simples nos demais, zero antes de entrar no Simples.
+     * Alíquota de imposto de um pedido (%): o Simples (4,5%, todos os canais),
+     * zero antes de a empresa entrar no Simples.
      */
-    public static function aliquotaDoPedido(string $canal, Carbon $criadoEm): float
+    public static function aliquotaDoPedido(Carbon $criadoEm): float
     {
-        if ($criadoEm->lt(Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay())) {
-            return 0.0;
+        return $criadoEm->lt(Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay())
+            ? 0.0
+            : self::aliquotaSimples();
+    }
+
+    /**
+     * Quadro "Zaio" do Financeiro (pedido do Lira em 27/11/2026: "coloca
+     * dados para a Zaio e o valor que precisa pagar eles"): por canal da
+     * Zaio, a receita (base) e a comissão, a mesma de comissaoZaio().
+     *
+     * @return array{pct: float, canais: array<string, array{receita: float, comissao: float, pedidos: int}>, receita: float, comissao: float, pedidos: int}
+     */
+    public static function resumoZaio(Carbon $desde, Carbon $ate): array
+    {
+        $desde = $desde->copy()->max(self::zaioDesde());
+        $pct = self::comissaoZaioPct();
+        $canais = [];
+        foreach (self::canaisZaio() as $canal) {
+            $canais[$canal] = ['receita' => 0.0, 'comissao' => 0.0, 'pedidos' => 0];
+        }
+        if ($desde->lt($ate) && $canais !== []) {
+            DB::table('orders')
+                ->whereIn('orders.status', self::REVENUE_STATUSES)
+                ->where('orders.created_at', '>=', $desde)
+                ->where('orders.created_at', '<', $ate)
+                ->tap(fn ($q) => Order::filtrarCanal($q, self::canaisZaio()))
+                ->tap(fn ($q) => self::semDevolucao($q))
+                ->selectRaw(Order::canalSql().' as canal, COUNT(*) as pedidos, COALESCE(SUM('.self::receitaSql().'), 0) as receita,'
+                    .' COALESCE(SUM(ROUND(('.self::receitaSql().') * ? / 100.0, 2)), 0) as comissao', [$pct])
+                ->groupBy('canal')
+                ->get()
+                ->each(function ($l) use (&$canais) {
+                    $canais[(string) $l->canal] = ['receita' => round((float) $l->receita, 2), 'comissao' => round((float) $l->comissao, 2), 'pedidos' => (int) $l->pedidos];
+                });
         }
 
-        return $criadoEm->gte(self::zaioDesde()) && in_array($canal, self::canaisZaio(), true)
-            ? self::impostoZaio()
-            : self::aliquotaSimples();
+        return [
+            'pct' => $pct,
+            'canais' => $canais,
+            'receita' => round(array_sum(array_column($canais, 'receita')), 2),
+            'comissao' => round(array_sum(array_column($canais, 'comissao')), 2),
+            'pedidos' => (int) array_sum(array_column($canais, 'pedidos')),
+        ];
     }
 
     /**

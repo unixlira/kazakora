@@ -416,8 +416,7 @@ class AuditoriaSemanal
             foreach ($pedidos as $p) {
                 $base = $p->nota !== null ? (float) $p->nota : (float) $p->total;
                 $baseImposto += $base;
-                // 10% em Shopee/ML/TikTok (planilha da Zaio), Simples no resto.
-                $imposto += round($base * ContributionMargin::aliquotaDoPedido($canal, Carbon::parse($p->created_at)) / 100, 2);
+                $imposto += round($base * ContributionMargin::aliquotaDoPedido(Carbon::parse($p->created_at)) / 100, 2);
             }
             $semNota += $pedidos->whereNull('nota')->count();
 

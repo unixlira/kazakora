@@ -196,7 +196,7 @@ class LucroPorPedido
             $taxaEstimada = ! $taxas->has($id);
             $taxa = $taxaEstimada ? self::taxaEstimada($meios[$id] ?? null, (float) $p->total) : (float) $taxas[$id];
 
-            $aliquota = ContributionMargin::aliquotaDoPedido((string) $p->canal, $criadoEm);
+            $aliquota = ContributionMargin::aliquotaDoPedido($criadoEm);
             $imposto = $aliquota > 0
                 ? round(($p->nota !== null ? (float) $p->nota : $receita) * $aliquota / 100, 2)
                 : 0.0;

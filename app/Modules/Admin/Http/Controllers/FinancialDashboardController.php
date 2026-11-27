@@ -354,8 +354,22 @@ class FinancialDashboardController extends Controller
         // Carteiras e repasses: mesmo serviço do Fluxo de Caixa (2026-10-19).
         $walletBalances = $previsao->walletBalances();
 
+        // Quadro Zaio (27/11/2026): comissão da agência a pagar, mês atual e
+        // mês anterior fechado. Só no grupo Marketplaces.
+        $zaio = null;
+        if ($ehMarketplace) {
+            $inicioAnterior = $startOfMonth->copy()->subMonthNoOverflow();
+            $zaio = [
+                'pct' => ContributionMargin::comissaoZaioPct(),
+                'desde' => ContributionMargin::zaioDesde()->toDateString(),
+                'mesAtual' => ['rotulo' => $startOfMonth->translatedFormat('F/Y'), 'parcial' => true] + ContributionMargin::resumoZaio($startOfMonth, $amanha),
+                'mesAnterior' => ['rotulo' => $inicioAnterior->translatedFormat('F/Y'), 'parcial' => false] + ContributionMargin::resumoZaio($inicioAnterior, $startOfMonth),
+            ];
+        }
+
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'grupo' => $grupo,
+            'zaio' => $zaio,
             'grupoNome' => GruposDeCanais::NOMES[GruposDeCanais::SLUGS[$grupo]],
             'summary' => [
                 'incomeMonth' => $incomeMonth,
@@ -431,7 +445,6 @@ class FinancialDashboardController extends Controller
                 'marginBeforeTaxMonth' => $contaMes['margem'],
                 'zaioCommissionMonth' => (float) ($contaMes['comissao_zaio'] ?? 0),
                 'zaioCommissionRate' => ContributionMargin::comissaoZaioPct(),
-                'zaioTaxRate' => ContributionMargin::impostoZaio(),
                 'taxMonth' => $taxMonth,
                 'taxRate' => ContributionMargin::aliquotaSimples(),
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em

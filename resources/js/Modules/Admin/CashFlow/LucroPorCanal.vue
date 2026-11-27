@@ -120,7 +120,7 @@ const descricao = computed(() => comVenda.value.map((c) => `${c.nome} ${formatPr
                 </tfoot>
             </table>
         </div>
-        <p class="mt-2 text-[11px] text-[var(--texto-suave)]">Frete = frete pago pela loja menos o bônus do Flex. Insumos = embalagem por pedido embalado pela loja (Full do ML fica de fora) + lançamentos da tela Insumos, rateados pelos pedidos. Zaio = comissão da agência (2% da receita) em Shopee, Mercado Livre e TikTok; nesses três canais o imposto é 10% (planilha da Zaio), nos demais o Simples.</p>
+        <p class="mt-2 text-[11px] text-[var(--texto-suave)]">Frete = frete pago pela loja menos o bônus do Flex. Insumos = embalagem por pedido embalado pela loja (Full do ML fica de fora) + lançamentos da tela Insumos, rateados pelos pedidos. Zaio = comissão da agência (2% da receita) em Shopee, Mercado Livre e TikTok. Imposto = Simples (4,5%) sobre as notas, em todos os canais.</p>
     </section>
 </template>
 

@@ -137,7 +137,7 @@ const AJUDA = {
     nota: 'Soma das notas fiscais de venda. É a base do DAS.',
     receita: 'Valor dos produtos depois dos descontos da loja, sem o frete que o comprador paga ao canal (na Amazon, com frete). É a base do lucro e a primeira barra de "Para onde foi o dinheiro".',
     ads: 'Gasto real com anúncio no período. Recarga de carteira não entra.',
-    imposto: '10% das notas em Shopee, Mercado Livre e TikTok (planilha da Zaio) e o Simples nos demais canais. Estimativa: o valor oficial é a guia do contador.',
+    imposto: 'Simples Nacional (4,5%) sobre as notas de venda. Estimativa: o valor oficial é a guia do contador.',
 };
 
 const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filtroBase('vendas'), sem_custo: 1 }).toString()}`);

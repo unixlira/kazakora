@@ -18,7 +18,12 @@ const props = defineProps({
     cashFlowSeries: { type: Array, default: () => [] },
     settlementSummary: { type: Object, default: () => ({ available: false, month: { channels: [], totals: {} }, allTime: { channels: [], totals: {} } }) },
     marketplaceMetrics: { type: Object, default: () => ({ month: [] }) },
+    // Quadro Zaio (27/11/2026): comissão da agência a pagar.
+    zaio: { type: Object, default: null },
 });
+
+const ZAIO_CANAIS = { shopee: 'Shopee', mercado_livre: 'Mercado Livre', tiktok_shop: 'TikTok Shop' };
+const zaioMeses = computed(() => (props.zaio ? [props.zaio.mesAnterior, props.zaio.mesAtual] : []));
 
 const mkt = computed(() => props.grupo === 'marketplaces');
 
@@ -154,7 +159,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
-            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }}, taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> <template v-if="netProfit.zaioCommissionMonth">, a comissão da Zaio {{ formatPrice(netProfit.zaioCommissionMonth) }}</template> e o imposto sobre a nota (10% em Shopee, ML e TikTok, pela planilha da Zaio; Simples {{ formatPercent(summary.taxRate ?? 0) }} nos demais) {{ formatPrice(summary.taxMonth ?? 0) }} para chegar no lucro líquido.
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }}, taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> <template v-if="netProfit.zaioCommissionMonth">, a comissão da Zaio {{ formatPrice(netProfit.zaioCommissionMonth) }}</template> e o imposto do Simples ({{ formatPercent(summary.taxRate ?? 0) }} sobre a nota) {{ formatPrice(summary.taxMonth ?? 0) }} para chegar no lucro líquido.
         </div>
 
         <h2 class="mb-3 text-xl font-bold">Lucro líquido por {{ mkt ? 'Marketplace' : 'site' }} · Mês Atual</h2>
@@ -290,6 +295,48 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
              "Faturamento Líquido do Mês" e "Lucro Líquido do Mês": aqui
              fica claro que um é passo intermediário do outro, não duas
              coisas soltas parecidas. -->
+        <section v-if="zaio" class="mt-8" aria-labelledby="titulo-zaio">
+            <h2 id="titulo-zaio" class="mb-1 text-xl font-bold">Zaio · comissão a pagar</h2>
+            <p class="mb-3 text-xs text-[var(--texto-suave)]">
+                {{ formatPercent(zaio.pct) }} da receita (produtos − descontos) das vendas efetivas de Shopee, Mercado Livre e TikTok, regra da planilha da Zaio. Já sai do lucro líquido de cada canal.
+            </p>
+            <div class="grid gap-4 md:grid-cols-2">
+                <div v-for="mes in zaioMeses" :key="mes.rotulo" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                    <p class="text-xs uppercase tracking-wide text-[var(--texto-suave)]">{{ mes.rotulo }}{{ mes.parcial ? ' · até hoje' : ' · fechado' }}</p>
+                    <p class="mt-1 text-2xl font-black tabular-nums">{{ formatPrice(mes.comissao) }}</p>
+                    <p class="text-xs text-[var(--texto-suave)]">{{ mes.parcial ? 'acumulado no mês, ainda vai crescer' : 'valor a pagar à Zaio por este mês' }}</p>
+                    <table class="mt-3 w-full text-sm tabular-nums">
+                        <caption class="sr-only">Comissão da Zaio por canal em {{ mes.rotulo }}</caption>
+                        <thead>
+                            <tr class="text-[11px] text-[var(--texto-suave)]">
+                                <th scope="col" class="py-1 text-left font-semibold">Canal</th>
+                                <th scope="col" class="py-1 text-right font-semibold">Pedidos</th>
+                                <th scope="col" class="py-1 text-right font-semibold">Receita</th>
+                                <th scope="col" class="py-1 text-right font-semibold">Comissão</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(c, canal) in mes.canais" :key="canal" class="border-t border-[var(--surface-muted)]">
+                                <th scope="row" class="py-1 text-left font-medium">{{ ZAIO_CANAIS[canal] ?? canal }}</th>
+                                <td class="py-1 text-right">{{ c.pedidos }}</td>
+                                <td class="py-1 text-right">{{ formatPrice(c.receita) }}</td>
+                                <td class="py-1 text-right font-semibold">{{ formatPrice(c.comissao) }}</td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr class="border-t border-[var(--surface-border)] font-bold">
+                                <th scope="row" class="py-1 text-left">Total</th>
+                                <td class="py-1 text-right">{{ mes.pedidos }}</td>
+                                <td class="py-1 text-right">{{ formatPrice(mes.receita) }}</td>
+                                <td class="py-1 text-right">{{ formatPrice(mes.comissao) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <p v-if="mes.receita === 0 && !mes.parcial" class="mt-2 text-xs text-[var(--texto-suave)]">A regra vale para pedidos desde {{ zaio.desde.split('-').reverse().join('/') }}.</p>
+                </div>
+            </div>
+        </section>
+
         <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro Líquido do Mês é calculado</h2>
 
         <div class="mb-3 max-w-xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
@@ -336,7 +383,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
                 <span class="font-semibold">{{ formatPrice(netProfit.marginBeforeTaxMonth ?? 0) }}</span>
             </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Imposto sobre a nota ({{ formatPercent(netProfit.zaioTaxRate ?? 10) }} em Shopee, ML e TikTok · Simples {{ formatPercent(netProfit.taxRate ?? 0) }} nos demais)</span>
+                <span class="text-slate-500 dark:text-slate-400">(–) Imposto do Simples ({{ formatPercent(netProfit.taxRate ?? 0) }} sobre a nota)</span>
                 <span class="font-semibold text-error">{{ formatPrice(netProfit.taxMonth ?? 0) }}</span>
             </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">

@@ -71,7 +71,6 @@ class ResultadoDiario
                 'mes' => GruposDeCanais::agrupar($this->margem->porCanal($data->copy()->startOfMonth(), $data->copy()->addDay())),
             ],
             'aliquota' => $this->aliquota(),
-            'aliquota_zaio' => ContributionMargin::impostoZaio(),
             'comissao_zaio_pct' => ContributionMargin::comissaoZaioPct(),
             // DAS vence no dia 20 do mês seguinte (Simples Nacional).
             'vencimento_das' => $data->copy()->startOfMonth()->addMonth()->day(20),

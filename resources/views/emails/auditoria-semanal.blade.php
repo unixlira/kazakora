@@ -33,7 +33,7 @@
                     <td style="font-size: 16px; font-weight: 700; text-align: right; color: #be185d;">{{ $brl($total['ads']) }}</td>
                 </tr>
                 <tr>
-                    <td style="font-size: 14px; color: #c2410c; padding: 4px 0;">Separar para imposto (10% Shopee/ML/TikTok, Simples {{ $aliquota }}% demais)</td>
+                    <td style="font-size: 14px; color: #c2410c; padding: 4px 0;">Separar para imposto (Simples {{ $aliquota }}%)</td>
                     <td style="font-size: 16px; font-weight: 700; text-align: right; color: #c2410c;">{{ $brl($total['imposto']) }}</td>
                 </tr>
                 <tr>
@@ -99,7 +99,7 @@
     <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #6b7280;">
         <strong>Como é a conta.</strong> "Caiu" é o repasse líquido de cada canal na semana, já sem a comissão dele: extrato pago do TikTok e da Amazon,
         liberações do Mercado Pago (Mercado Livre) e a carteira da Shopee, menos os saques. Fornecedor é o custo cadastrado dos produtos dos pedidos pagos
-        nesse repasse; imposto é 10% do valor da nota em Shopee, ML e TikTok (planilha da Zaio) e {{ $aliquota }}% (Simples) nos demais; insumos é o valor por pedido embalado (o Full do Mercado Livre não embala aqui).
+        nesse repasse; imposto é {{ $aliquota }}% do valor da nota de cada um; insumos é o valor por pedido embalado (o Full do Mercado Livre não embala aqui).
         Lucro = caiu − imposto − fornecedor − insumos − frete que a loja pagou. Anúncio pago no cartão (Meta, Mercado Livre Ads) não sai daqui: ele não é
         descontado do repasse.
         @if (collect($auditoria['canais'])->sum('sem_custo') > 0)

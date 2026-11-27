@@ -15,10 +15,10 @@ use Tests\TestCase;
 
 /**
  * Regras da planilha da Zaio (pedido do Lira em 27/11/2026): em Shopee,
- * Mercado Livre e TikTok o imposto é 10% e a comissão da Zaio (2% da
- * receita) sai como custo, a partir de loja.zaio.desde. Amazon e sites
- * seguem no Simples, sem comissão. Todas as telas e o KoraSync com o mesmo
- * número.
+ * Mercado Livre e TikTok a comissão da Zaio (2% da receita) sai como custo,
+ * a partir de loja.zaio.desde. O imposto é o Simples em todos os canais
+ * ("nosso imposto é 4,5%"). Amazon e sites sem comissão. Todas as telas e
+ * o KoraSync com o mesmo número.
  */
 class RegrasZaioTest extends TestCase
 {
@@ -30,7 +30,7 @@ class RegrasZaioTest extends TestCase
         config([
             'loja.simples.aliquota' => 4.0, 'loja.simples.desde' => '2026-09-01',
             'loja.zaio.canais' => ['shopee', 'mercado_livre', 'tiktok_shop'],
-            'loja.zaio.imposto' => 10.0, 'loja.zaio.comissao' => 2.0, 'loja.zaio.desde' => '2026-11-01',
+            'loja.zaio.comissao' => 2.0, 'loja.zaio.desde' => '2026-11-01',
             'loja.insumos_por_pedido' => 0.0,
         ]);
         Carbon::setTestNow('2026-11-27 15:00:00');
@@ -54,7 +54,7 @@ class RegrasZaioTest extends TestCase
         return $pedido;
     }
 
-    public function test_shopee_ml_e_tiktok_pagam_10_por_cento_e_comissao_zaio(): void
+    public function test_shopee_ml_e_tiktok_pagam_comissao_zaio_e_imposto_do_simples(): void
     {
         $this->pedido('shopee', 200, 80);
         $this->pedido('mercado_livre', 100, 40);
@@ -64,34 +64,34 @@ class RegrasZaioTest extends TestCase
         $margem = app(ContributionMargin::class);
         $canal = $margem->porCanal(Carbon::parse('2026-11-01'), Carbon::parse('2026-11-28'));
 
-        $this->assertEqualsWithDelta(20.0, $canal['shopee']['imposto'], 0.001);
+        $this->assertEqualsWithDelta(8.0, $canal['shopee']['imposto'], 0.001);
         $this->assertEqualsWithDelta(4.0, $canal['shopee']['comissao_zaio'], 0.001);
-        // 200 − 80 − 4 de comissão = 116 de margem; − 20 de imposto = 96.
+        // 200 − 80 − 4 de comissão = 116 de margem; − 8 de imposto (4%) = 108.
         $this->assertEqualsWithDelta(116.0, $canal['shopee']['margem'], 0.001);
-        $this->assertEqualsWithDelta(96.0, $canal['shopee']['lucro'], 0.001);
-        $this->assertEqualsWithDelta(10.0, $canal['mercado_livre']['imposto'], 0.001);
+        $this->assertEqualsWithDelta(108.0, $canal['shopee']['lucro'], 0.001);
+        $this->assertEqualsWithDelta(4.0, $canal['mercado_livre']['imposto'], 0.001);
         $this->assertEqualsWithDelta(2.0, $canal['mercado_livre']['comissao_zaio'], 0.001);
-        $this->assertEqualsWithDelta(5.0, $canal['tiktok_shop']['imposto'], 0.001);
+        $this->assertEqualsWithDelta(2.0, $canal['tiktok_shop']['imposto'], 0.001);
         $this->assertEqualsWithDelta(1.0, $canal['tiktok_shop']['comissao_zaio'], 0.001);
-        // Amazon é caso à parte: Simples de 4% e sem comissão.
+        // Amazon é caso à parte: sem comissão.
         $this->assertEqualsWithDelta(4.0, $canal['amazon']['imposto'], 0.001);
         $this->assertEqualsWithDelta(0.0, $canal['amazon']['comissao_zaio'], 0.001);
 
         $total = $margem->periodo(Carbon::parse('2026-11-01'), Carbon::parse('2026-11-28'));
         $this->assertEqualsWithDelta(7.0, $total['comissao_zaio'], 0.001);
-        $this->assertEqualsWithDelta(39.0, $total['imposto'], 0.001);
+        $this->assertEqualsWithDelta(18.0, $total['imposto'], 0.001);
         $this->assertEqualsWithDelta($total['lucro'], array_sum(array_column($canal, 'lucro')), 0.001, 'soma dos canais = total');
     }
 
-    public function test_antes_do_corte_vale_o_simples_sem_comissao(): void
+    public function test_antes_do_corte_nao_tem_comissao(): void
     {
         $this->pedido('shopee', 100, 40, '2026-10-20 10:00:00');
         $this->pedido('shopee', 100, 40);
 
         $canal = app(ContributionMargin::class)->porCanal(Carbon::parse('2026-10-01'), Carbon::parse('2026-11-28'));
 
-        // Outubro: 4% e sem comissão; novembro: 10% + 2%.
-        $this->assertEqualsWithDelta(14.0, $canal['shopee']['imposto'], 0.001);
+        // Outubro sem comissão; novembro com 2%. Imposto 4% nos dois.
+        $this->assertEqualsWithDelta(8.0, $canal['shopee']['imposto'], 0.001);
         $this->assertEqualsWithDelta(2.0, $canal['shopee']['comissao_zaio'], 0.001);
     }
 
@@ -115,7 +115,7 @@ class RegrasZaioTest extends TestCase
 
         $linhas = app(LucroPorPedido::class)->ultimos($desde, $ate, ['shopee']);
         $this->assertEqualsWithDelta(4.0, $linhas[0]['conta']['comissao_zaio'], 0.001);
-        $this->assertEqualsWithDelta(20.0, $linhas[0]['conta']['imposto'], 0.001);
+        $this->assertEqualsWithDelta(8.0, $linhas[0]['conta']['imposto'], 0.001);
         // Sem taxa registrada o pedido usa a taxa estimada; fora ela, a conta é a mesma.
         $this->assertEqualsWithDelta($canal['lucro'], $linhas[0]['lucro'] + $linhas[0]['conta']['taxa'], 0.001);
 
@@ -138,14 +138,20 @@ class RegrasZaioTest extends TestCase
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk()->assertInertia(fn ($page) => $page
             ->where('summary.grossRevenueMonth', fn ($v) => abs($v - $mkt['receita']) < 0.001)
             ->where('summary.profitMonth', fn ($v) => abs($v - $mkt['lucro']) < 0.001)
-            ->where('netProfit.zaioCommissionMonth', fn ($v) => abs($v - $mkt['comissao_zaio']) < 0.001));
+            ->where('netProfit.zaioCommissionMonth', fn ($v) => abs($v - $mkt['comissao_zaio']) < 0.001)
+            // Quadro Zaio: o valor a pagar por canal.
+            ->where('zaio.mesAtual.comissao', fn ($v) => abs($v - 4.6) < 0.001)
+            ->where('zaio.mesAtual.canais.shopee.comissao', fn ($v) => abs($v - 3.0) < 0.001)
+            ->where('zaio.mesAtual.canais.mercado_livre.receita', fn ($v) => abs($v - 80.0) < 0.001)
+            ->where('zaio.mesAtual.canais.tiktok_shop.pedidos', 0)
+            ->where('zaio.mesAnterior.comissao', fn ($v) => abs($v) < 0.001));
 
         $metricas = $this->actingAs($admin)->getJson('/admin/korasync-api/metrics')->assertOk()->json();
         $this->assertEqualsWithDelta($mkt['receita'], $metricas['revenue_month'], 0.001);
         $this->assertEqualsWithDelta($hoje['lucro'], $metricas['net_profit_today'], 0.001);
 
-        // 230 − 80 − 4,60 de comissão − 23 de imposto = 122,40.
-        $this->assertEqualsWithDelta(122.4, $mkt['lucro'], 0.001);
+        // 230 − 80 − 4,60 de comissão − 9,20 de imposto = 136,20.
+        $this->assertEqualsWithDelta(136.2, $mkt['lucro'], 0.001);
         $email = app(ResultadoDiario::class)->calcular(Carbon::today());
         $this->assertEqualsWithDelta(4.6, $email['grupos']['mes']['plataformas']['total']['comissao_zaio'], 0.001);
         $this->assertEqualsWithDelta($mkt['lucro'], $email['grupos']['mes']['plataformas']['total']['lucro'], 0.001);

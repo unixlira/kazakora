@@ -45,6 +45,19 @@ class LeadMaterialTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * Zera o limite antes de enviar: a rota aceita 5 cadastros por minuto
+     * (throttle:5,1), e este teste manda vários seguidos só para conferir a
+     * validação. Desde 27/11/2026 cada rota tem o próprio contador
+     * (LimitePorRota) e o limite passou a valer de verdade.
+     */
+    private function enviarSemLimite(array $dados = [])
+    {
+        \Illuminate\Support\Facades\Cache::flush();
+
+        return $this->enviar($dados);
+    }
+
     private function enviar(array $dados = [], string $origem = 'https://ferrakora.com')
     {
         return $this->withHeader('Origin', $origem)->postJson(self::URL, array_merge([
@@ -102,15 +115,15 @@ class LeadMaterialTest extends TestCase
 
     public function test_dados_errados_voltam_422_com_o_campo(): void
     {
-        $this->enviar(['email' => 'fulano@gmial.com'])->assertStatus(422)->assertJsonValidationErrors('email');
-        $this->enviar(['email' => 'fulano@mailinator.com'])->assertStatus(422)->assertJsonValidationErrors('email');
-        $this->enviar(['email' => 'fulano.com'])->assertStatus(422)->assertJsonValidationErrors('email');
-        $this->enviar(['telefone' => '(20) 99876-5432'])->assertStatus(422)->assertJsonValidationErrors('telefone');
-        $this->enviar(['telefone' => '(11) 3876-5432'])->assertStatus(422)->assertJsonValidationErrors('telefone');
-        $this->enviar(['telefone' => '(11) 99999-9999'])->assertStatus(422)->assertJsonValidationErrors('telefone');
-        $this->enviar(['telefone' => '9987'])->assertStatus(422)->assertJsonValidationErrors('telefone');
-        $this->enviar(['nome' => ''])->assertStatus(422)->assertJsonValidationErrors('nome');
-        $this->enviar(['aceite' => false])->assertStatus(422)->assertJsonValidationErrors('aceite');
+        $this->enviarSemLimite(['email' => 'fulano@gmial.com'])->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->enviarSemLimite(['email' => 'fulano@mailinator.com'])->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->enviarSemLimite(['email' => 'fulano.com'])->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->enviarSemLimite(['telefone' => '(20) 99876-5432'])->assertStatus(422)->assertJsonValidationErrors('telefone');
+        $this->enviarSemLimite(['telefone' => '(11) 3876-5432'])->assertStatus(422)->assertJsonValidationErrors('telefone');
+        $this->enviarSemLimite(['telefone' => '(11) 99999-9999'])->assertStatus(422)->assertJsonValidationErrors('telefone');
+        $this->enviarSemLimite(['telefone' => '9987'])->assertStatus(422)->assertJsonValidationErrors('telefone');
+        $this->enviarSemLimite(['nome' => ''])->assertStatus(422)->assertJsonValidationErrors('nome');
+        $this->enviarSemLimite(['aceite' => false])->assertStatus(422)->assertJsonValidationErrors('aceite');
         $this->assertSame(0, LeadMaterial::query()->count());
     }
 

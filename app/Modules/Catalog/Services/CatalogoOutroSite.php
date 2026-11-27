@@ -224,8 +224,33 @@ abstract class CatalogoOutroSite
         $pai = Product::query()->whereKey($antigo)->value('parent_product_id');
         $doPai = $pai ? $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$pai) : null;
         $opcao = self::PREFIXO_VARIACAO.$antigo;
+        if ($doPai && collect($doPai['variants'] ?? [])->contains('id', $opcao)) {
+            return [...$doPai, 'opcao_inicial' => $opcao];
+        }
 
-        return $doPai && collect($doPai['variants'] ?? [])->contains('id', $opcao) ? [...$doPai, 'opcao_inicial' => $opcao] : null;
+        // Produto que saiu do site com destino (26/11/2026, kits do Compressor desfeitos): o link
+        // antigo abre o produto que ficou no lugar (vitrine_kz_redireciona_para), sem opção.
+        $destino = $this->destinoDoQueSaiu($antigo);
+
+        return $destino === null ? null : $produtos->firstWhere('id', self::PREFIXO_PRODUTO.$destino);
+    }
+
+    /** Produto para onde vai o link de um produto que saiu da vitrine (fora_da_vitrine_kz). */
+    private function destinoDoQueSaiu(int $id): ?int
+    {
+        $produto = Product::query()->whereKey($id)->first(['id', 'fora_da_vitrine_kz', 'vitrine_kz_redireciona_para']);
+        $destino = $produto?->fora_da_vitrine_kz ? (int) $produto->vitrine_kz_redireciona_para : 0;
+
+        return $destino > 0 && $destino !== $id ? $destino : null;
+    }
+
+    private function registroPublicado(int $productId): ?Model
+    {
+        return $this->modelo()::query()
+            ->where('product_id', $productId)
+            ->where('ativo', true)
+            ->whereHas('product', fn ($query) => $query->where('is_active', true))
+            ->first();
     }
 
     /**
@@ -236,11 +261,11 @@ abstract class CatalogoOutroSite
     public function slugAtualDoAntigo(string $slug): ?string
     {
         $id = $this->idPeloSlugAntigo($slug);
-        $registro = $id === null ? null : $this->modelo()::query()
-            ->where('product_id', $id)
-            ->where('ativo', true)
-            ->whereHas('product', fn ($query) => $query->where('is_active', true))
-            ->first();
+        $registro = $id === null ? null : $this->registroPublicado($id);
+        // Saiu do site com destino (kits do Compressor, 26/11/2026): 301 para o produto do lugar.
+        if ($registro === null && $id !== null && ($destino = $this->destinoDoQueSaiu($id))) {
+            $registro = $this->registroPublicado($destino);
+        }
         $atual = $registro === null ? null : $this->slugPublicado($registro);
 
         return $atual !== null && $atual !== '' && $atual !== $slug ? $atual : null;

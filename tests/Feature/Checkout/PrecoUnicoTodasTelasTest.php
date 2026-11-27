@@ -57,7 +57,7 @@ class PrecoUnicoTodasTelasTest extends TestCase
             'frete_embutido.fixo_na_navegacao' => true,
             'frete_embutido.teto_embutido' => 30,
             'frete_embutido.transportadoras_melhor_envio' => [],
-            'frete_embutido.skus_preco_fixo' => ['FK-KIT-COMPRESSOR-REPARO-CATRACA', 'FK-KIT-MACACO-ELET-5T'],
+            'frete_embutido.skus_preco_fixo' => ['FK-KIT-COMPRESSOR-REPARO-CATRACA', 'FK-KIT-MACACO-ELET-5T', '344-BOMBAAR-4EM1'],
             'entrega_expressa.motoboy.valor_sp' => 0.0,
             'loja.cupom_faixa' => 'BLACKFRIDAY',
             'loja.blackfriday_ate' => '2026-11-30 23:59:59',
@@ -119,7 +119,8 @@ class PrecoUnicoTodasTelasTest extends TestCase
         return [
             'kit estrada segura (623, sku fixo)' => [['sku' => 'FK-KIT-COMPRESSOR-REPARO-CATRACA', 'price' => 629.00, 'discount_amount' => 331.10, 'cost_price' => 180.00, 'checkout_discount_percentage' => 2], 297.90],
             'kit macaco elétrico (508, sku fixo)' => [['sku' => 'FK-KIT-MACACO-ELET-5T', 'price' => 1299.00, 'discount_amount' => 569.00, 'cost_price' => 400.00, 'checkout_discount_percentage' => 2], 730.00],
-            'compressor 4 em 1 (413, frete da região)' => [['sku' => '344-BOMBAAR-4EM1', 'price' => 435.52, 'discount_amount' => 199.00, 'cost_price' => 90.00, 'checkout_discount_percentage' => 2], null],
+            // Opções desfeitas (Lira 26/11/2026): "de R$ 435,52 por R$ 297,00" fixo em qualquer CEP.
+            'compressor 4 em 1 (413, sku fixo)' => [['sku' => '344-BOMBAAR-4EM1', 'price' => 435.52, 'discount_amount' => 138.52, 'cost_price' => 115.00, 'checkout_discount_percentage' => 2], 297.00],
             'macaco elétrico (194, com custo e teto)' => [['sku' => 'MACACO-194', 'price' => 911.34, 'discount_amount' => 197.45, 'cost_price' => 350.00, 'checkout_discount_percentage' => 2], null],
             'travesseiro (sem custo)' => [['sku' => 'TRAV-1', 'price' => 206.98, 'cost_price' => null, 'checkout_discount_percentage' => 2], null],
             'trena barata (piso de margem)' => [['sku' => 'TRENA-1', 'price' => 49.90, 'cost_price' => 25.00, 'checkout_discount_percentage' => 2], null],
@@ -322,6 +323,13 @@ class PrecoUnicoTodasTelasTest extends TestCase
             $semIp = $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => [['variante' => 'kzv-'.$produto->id, 'quantidade' => 1]], 'cep' => self::CEP_CE, 'uf_navegacao' => $uf])->assertOk();
             $this->assertSame(self::vendaFk($pagina), $semIp->json('itens.0.preco_unitario'), "Sem IP, com uf_navegacao={$uf}.");
         }
+    }
+
+    public function test_compressor_4_em_1_tem_preco_fixo_pelo_sku_no_config(): void
+    {
+        $config = require base_path('config/frete_embutido.php');
+
+        $this->assertContains('344-BOMBAAR-4EM1', $config['skus_preco_fixo'], 'O 413 é "de R$ 435,52 por R$ 297,00" em qualquer CEP.');
     }
 
     public function test_ferrakora_cobra_na_linha_de_frete_o_que_o_cep_pede_a_mais(): void

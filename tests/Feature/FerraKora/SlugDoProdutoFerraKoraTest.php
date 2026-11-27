@@ -104,6 +104,31 @@ class SlugDoProdutoFerraKoraTest extends TestCase
         $this->get('/api/ferrakora/produto-antigo/bomba-de-ar-portatil-compressor-4-em-1')->assertNotFound();
     }
 
+    public function test_kit_que_saiu_do_site_com_destino_leva_ao_produto_do_lugar(): void
+    {
+        // Kits do Compressor 4 em 1 desfeitos (26/11/2026): o kit sai do FerraKora e da vitrine da
+        // KazaKora com destino no compressor; o link antigo do kit abre o compressor.
+        $compressor = $this->produtoNoSite(['slug' => 'bomba-de-ar-portatil-compressor-4-em-1']);
+        $kit = Product::factory()->create(['sku' => 'FK-KIT', 'slug' => 'kit-macaco-kz', 'name' => 'Kit Macaco Elétrico', 'is_active' => true, 'stock' => 5]);
+        FerraKoraProduto::query()->create(['product_id' => $kit->id, 'ordem' => 2, 'ativo' => false]);
+        OutroSiteSlugAntigo::query()->create(['site' => 'ferrakora', 'slug' => 'kit-macaco-eletrico', 'product_id' => $kit->id]);
+
+        // Sem destino: some do site (404), como qualquer produto desligado.
+        $this->getJson('/api/ferrakora/produtos/kit-macaco-eletrico')->assertNotFound();
+        $this->get('/api/ferrakora/produto-antigo/kit-macaco-eletrico')->assertNotFound();
+
+        $kit->forceFill(['fora_da_vitrine_kz' => true, 'vitrine_kz_redireciona_para' => $compressor->id])->save();
+
+        $this->getJson('/api/ferrakora/produtos/kit-macaco-eletrico')
+            ->assertOk()
+            ->assertJsonPath('product.id', 'kz-'.$compressor->id)
+            ->assertJsonPath('product.slug', 'bomba-de-ar-portatil-compressor-4-em-1')
+            ->assertJsonMissingPath('product.opcao_inicial');
+        $this->get('/api/ferrakora/produto-antigo/kit-macaco-eletrico?utm_source=meta&opcao=9')
+            ->assertStatus(301)
+            ->assertHeader('Location', '/produto/bomba-de-ar-portatil-compressor-4-em-1/?utm_source=meta&opcao=9');
+    }
+
     public function test_beauty_kora_usa_o_mesmo_slug_fixo_e_historico_por_site(): void
     {
         $pai = $this->produtoNoSite();

@@ -594,6 +594,39 @@ const CHECKS_LOJA = computed(() => [
 const erros = ref({});
 const processando = ref(false);
 const erroGeral = ref(null);
+
+// Repetição automática (pedido do Lira em 27/11/2026, depois da cliente
+// Bernardete: o "Finalizar" voltou 429 e a venda se perdeu). Falha de rede ou
+// do servidor não pode virar venda perdida: a tela tenta de novo sozinha até
+// 6 vezes, com aviso amigável, sempre com a mesma chave de tentativa (o
+// servidor nunca cobra duas vezes a mesma). Só 422 (dado errado), recusa do
+// cartão e sessão expirada (419) aparecem direto para o cliente.
+const ESPERAS_DA_REPETICAO = [2000, 4000, 6000, 10000, 15000, 20000];
+const reenvio = ref(null);
+const esperar = (ms) => new Promise((resolver) => { setTimeout(resolver, ms); });
+const novaTentativa = () => (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+const avisarFalhaDePagamento = (etapaQueFalhou, status, tentativas) => {
+    try {
+        fetch('/finalizacao/pagamento-falhou', {
+            method: 'POST',
+            credentials: 'same-origin',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: JSON.stringify({ status, tentativas, metodo: metodo.value, etapa: etapaQueFalhou }),
+        }).catch(() => {});
+    } catch {
+        // Aviso é bônus: nunca atrapalha o cliente.
+    }
+};
+const desistirDaRepeticao = (etapaQueFalhou, status, tentativas) => {
+    reenvio.value = null;
+    processando.value = false;
+    erroGeral.value = status === 419
+        ? 'Sua sessão expirou. Atualize a página (seus dados continuam salvos) e toque em "Finalizar pedido" de novo.'
+        : `Não conseguimos falar com o banco agora e o seu pedido não foi cobrado. Toque em "Finalizar pedido" para tentar de novo${metodo.value === 'pix' ? '' : ' ou pague no Pix'}.`;
+    medicao.erro('pagamento', `sem_resposta_${status}`);
+    if (status !== 419) avisarFalhaDePagamento(etapaQueFalhou, status, tentativas);
+};
 // Depois de uma tentativa nesta tela, valem só os erros dela (nada de erro
 // antigo guardado na sessão aparecendo de novo — BUG REAL 2026-10-10).
 const tentouAqui = ref(false);
@@ -822,28 +855,41 @@ const irParaEntrega = () => {
 
 // Grava dados + entrega no servidor (JSON). Erro 422 reabre a etapa do campo.
 const salvarEntrega = async () => {
-    try {
-        const resposta = await fetch('/finalizacao/entrega', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
-            body: JSON.stringify(payloadEntrega()),
-        });
+    // Rede ou servidor falhando: tenta de novo sozinho (mesma regra do pagamento).
+    for (let n = 0; ; n++) {
+        let status = 0;
+        try {
+            const resposta = await fetch('/finalizacao/entrega', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                body: JSON.stringify(payloadEntrega()),
+            });
 
-        if (resposta.status === 422) {
-            const corpo = await resposta.json();
-            erros.value = corpo.errors ?? {};
-            erroGeral.value = corpo.message ?? 'Confira os campos destacados.';
-            etapa.value = etapaDosErros(erros.value) ?? etapa.value;
-            irParaErro();
-            return false;
+            if (resposta.status === 422) {
+                const corpo = await resposta.json();
+                reenvio.value = null;
+                erros.value = corpo.errors ?? {};
+                erroGeral.value = corpo.message ?? 'Confira os campos destacados.';
+                etapa.value = etapaDosErros(erros.value) ?? etapa.value;
+                irParaErro();
+                return false;
+            }
+
+            if (resposta.ok) {
+                return true;
+            }
+            status = resposta.status;
+        } catch {
+            status = 0;
         }
 
-        if (!resposta.ok) throw new Error();
-        return true;
-    } catch {
-        erroGeral.value = 'Não foi possível salvar seus dados agora. Confira sua conexão e tente de novo.';
-        return false;
+        if (status === 419 || n >= ESPERAS_DA_REPETICAO.length) {
+            desistirDaRepeticao('entrega', status, n);
+            return false;
+        }
+        reenvio.value = { n: n + 1, total: ESPERAS_DA_REPETICAO.length };
+        await esperar(ESPERAS_DA_REPETICAO[n]);
     }
 };
 
@@ -970,11 +1016,31 @@ const finalizar = async () => {
         });
     }
 
+    enviarPagamento({ ...pagamento, tentativa: novaTentativa() }, 0);
+};
+
+// Manda o pagamento; falha de rede/servidor repete sozinha com a MESMA tentativa.
+const enviarPagamento = (pagamento, n) => {
+    let repetir = null;
+    const agendar = (status) => {
+        repetir = status;
+        if (status === 419 || n >= ESPERAS_DA_REPETICAO.length) {
+            desistirDaRepeticao('pagamento', status, n);
+            return;
+        }
+        reenvio.value = { n: n + 1, total: ESPERAS_DA_REPETICAO.length };
+        setTimeout(() => enviarPagamento(pagamento, n + 1), ESPERAS_DA_REPETICAO[n]);
+    };
+
     router.post('/finalizacao/pagamento', pagamento, {
         preserveScroll: true,
         preserveState: true,
-        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ?? e.cpf ?? e.mp_card_installments ?? e.mp_card_token ?? e.mp_payment_method_id ?? 'Não foi possível concluir. Confira os dados.'; },
-        onFinish: () => { processando.value = false; },
+        onSuccess: () => { reenvio.value = null; },
+        onError: (e) => { reenvio.value = null; erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ?? e.cpf ?? e.mp_card_installments ?? e.mp_card_token ?? e.mp_payment_method_id ?? 'Não foi possível concluir. Confira os dados.'; },
+        // Nunca a caixa de erro do servidor (em inglês) por cima do checkout.
+        onHttpException: (resposta) => { agendar(resposta?.status ?? 0); return false; },
+        onNetworkError: () => { agendar(0); return false; },
+        onFinish: () => { if (repetir === null) processando.value = false; },
     });
 };
 
@@ -1271,8 +1337,15 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
             <!-- A linha do aviso de erro só entra na grade com erro, senão sobra o espaço dela no topo. -->
             <!-- Com as duas etapas fechadas (no Pagamento), Identificação e Entrega esticam até a mesma altura. -->
             <main class="order-2 min-w-0 lg:order-1 lg:grid lg:grid-cols-2 lg:gap-6"
-                :class="[erroGeral || serverErrors.payment || serverErrors.cart ? areasComErro : areasSemErro, etapa === 3 ? 'lg:items-stretch' : 'lg:items-start']">
-                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 lg:mb-0 lg:[grid-area:erro]">
+                :class="[reenvio || erroGeral || serverErrors.payment || serverErrors.cart ? areasComErro : areasSemErro, etapa === 3 ? 'lg:items-stretch' : 'lg:items-start']">
+                <div v-if="reenvio" role="status" aria-live="polite" class="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 lg:mb-0 lg:[grid-area:erro]">
+                    <i class="fa-solid fa-spinner mt-0.5 animate-spin"></i>
+                    <div>
+                        <strong>O sistema do banco está instável neste momento.</strong>
+                        Estamos tentando de novo automaticamente (tentativa {{ reenvio.n }} de {{ reenvio.total }}). Não feche esta página: seu pedido não será cobrado duas vezes.
+                    </div>
+                </div>
+                <div v-else-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 lg:mb-0 lg:[grid-area:erro]">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
@@ -1582,7 +1655,7 @@ const areasComErro = "lg:[grid-template-areas:'erro_erro'_'ident_entrega'_'pag_p
                             <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
                                 :class="[botaoVerde, 'mt-5 text-xl']" @click="finalizar">
                                 <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
-                                {{ processando ? 'Processando...' : 'Finalizar pedido' }}
+                                {{ reenvio ? `Tentando de novo (${reenvio.n} de ${reenvio.total})...` : processando ? 'Processando...' : 'Finalizar pedido' }}
                             </button>
                             <!-- Selo do Mercado Pago (pedido do Lira 2026-11-23): o cartão é processado pelo Brick deles.
                                  Símbolo oficial (mlstatic, o mesmo das páginas do Mercado Pago), com folga em volta (área

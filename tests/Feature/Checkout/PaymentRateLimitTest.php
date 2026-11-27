@@ -46,7 +46,8 @@ class PaymentRateLimitTest extends TestCase
             ],
         ]);
 
-        for ($i = 0; $i < 10; $i++) {
+        // 30 por minuto desde 27/11/2026: a tela repete sozinha até 6 vezes por clique.
+        for ($i = 0; $i < 30; $i++) {
             $this->actingAs($user)->post('/finalizacao/pagamento', [
                 'payment_method' => 'card',
                 'terms_accepted' => true,

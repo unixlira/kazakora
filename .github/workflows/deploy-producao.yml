@@ -11,13 +11,71 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: deploy-producao
-  cancel-in-progress: false
+# Mais rápido (pedido do Lira em 27/11/2026: "deploy não pode demorar tanto"):
+# - a aprovação do ambiente producao fica num passo próprio que abre logo no
+#   começo; dá para aprovar enquanto os testes rodam;
+# - testes e compilação rodam ao mesmo tempo; o envio usa o que foi compilado;
+# - push novo cancela a preparação (testes, compilação, aprovação parada) do
+#   push anterior, que nunca chegou ao servidor; o envio em andamento NUNCA é
+#   interrompido (grupo próprio, sem cancelar).
+# A segurança não muda: só publica com a aprovação E todos os testes passando.
 
 jobs:
+  aprovacao:
+    runs-on: ubuntu-latest
+    environment: producao
+    concurrency:
+      group: deploy-producao-aprovacao
+      cancel-in-progress: true
+    steps:
+      - run: echo "Aprovado para produção."
+
+  compilar:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-producao-compilar
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      - name: Cache do Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Dependências PHP (produção)
+        run: composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Front
+        run: npm ci && npm run build
+
+      - name: Pacote da versão
+        run: tar --exclude='./.git' --exclude='./node_modules' --exclude='./tests' -czf /tmp/versao.tgz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: versao
+          path: /tmp/versao.tgz
+          retention-days: 3
+          compression-level: 0
+
   testes:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-producao-testes-${{ matrix.fatia }}
+      cancel-in-progress: true
     # Em paralelo (pedido do Lira 25/11/2026): os testes são repartidos em 4
     # máquinas ao mesmo tempo (scripts/ci/fatia-testes.py), ~4x mais rápido.
     strategy:
@@ -60,27 +118,20 @@ jobs:
           php artisan test --compact
 
   deploy:
-    needs: testes
+    needs: [aprovacao, compilar, testes]
     runs-on: ubuntu-latest
-    environment: producao
+    # Um envio por vez e nunca interrompido no meio.
+    concurrency:
+      group: deploy-producao
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/download-artifact@v4
         with:
-          php-version: '8.3'
-          tools: composer:v2
+          name: versao
+          path: /tmp
 
-      - name: Dependências PHP (produção)
-        run: composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction --prefer-dist --no-progress
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Front
-        run: npm ci && npm run build
+      - name: Abrir a versão compilada
+        run: tar -xzf /tmp/versao.tgz -C . && rm /tmp/versao.tgz
 
       - uses: webfactory/ssh-agent@v0.9.0
         with:

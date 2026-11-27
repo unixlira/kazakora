@@ -475,6 +475,8 @@ return [
                     // Carrinho abandonado (2026-11-21), ver o bloco da KazaKora abaixo.
                     'carrinho_lembrete' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE'),
                     'carrinho_lembrete_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
+                    'carrinho_lembrete_imagem' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE_IMAGEM'),
+                    'carrinho_lembrete_imagem_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_LEMBRETE_IMAGEM_IDIOMA', 'pt_BR'),
                     'carrinho_novidade' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE'),
                     'carrinho_novidade_idioma' => env('WHATSAPP_FERRAKORA_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
                     // Pedido de avaliação pós-entrega (2026-11-23), ver o bloco da KazaKora abaixo.
@@ -530,6 +532,10 @@ return [
             // {{3}} texto da notícia, botão URL dinâmico.
             'carrinho_lembrete' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE'),
             'carrinho_lembrete_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE_IDIOMA', 'pt_BR'),
+            // D+1 com a foto do produto (27/11/2026, Lira: "tá chegando só texto"): modelo
+            // aprovado com imagem no topo e botão https://kazakora.com/produtos/{{1}}.
+            'carrinho_lembrete_imagem' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE_IMAGEM', 'recuperacao_carrinho_kazakora'),
+            'carrinho_lembrete_imagem_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_LEMBRETE_IMAGEM_IDIOMA', 'pt_BR'),
             'carrinho_novidade' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE'),
             'carrinho_novidade_idioma' => env('WHATSAPP_TEMPLATE_CARRINHO_NOVIDADE_IDIOMA', 'pt_BR'),
             // Pedido de avaliação 5 dias depois da entrega (loja:pedir-avaliacao,

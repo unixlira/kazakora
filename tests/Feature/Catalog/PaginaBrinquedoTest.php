@@ -190,4 +190,21 @@ class PaginaBrinquedoTest extends TestCase
                 ->where('reviews.0.produto_rotulo', 'Livro Falante')
                 ->missing('product.avaliacoes_de'));
     }
+
+    public function test_card_sabe_que_a_pagina_e_de_brinquedo(): void
+    {
+        // 27/11/2026: o card do livro mostrava o preço com cupom (93,09) e a página de brinquedo o sem
+        // cupom (97,99). O card recebe layout_card para mostrar o preço do mesmo jeito da página.
+        $brinquedos = $this->categoria('brinquedos-e-games');
+        $livro = Product::factory()->create(['is_active' => true, 'stock' => 5, 'category_id' => $brinquedos->id,
+            'pagina_brinquedo' => ['titulo' => 'Diversão longe das telas']]);
+        $semConteudo = Product::factory()->create(['is_active' => true, 'stock' => 5, 'category_id' => $brinquedos->id]);
+        $trena = Product::factory()->create(['is_active' => true, 'stock' => 5, 'category_id' => $this->categoria('ferramentas')->id]);
+
+        $cards = collect($this->get('/?todos=1')->viewData('page')['props']['products']['data'])->keyBy('id');
+
+        $this->assertSame('brinquedo', $cards[$livro->id]['layout_card']);
+        $this->assertNull($cards[$semConteudo->id]['layout_card']);
+        $this->assertNull($cards[$trena->id]['layout_card']);
+    }
 }

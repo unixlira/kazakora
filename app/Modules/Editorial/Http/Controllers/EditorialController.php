@@ -20,6 +20,9 @@ class EditorialController extends Controller
     /** Matérias por página no feed do blog (Lira, 23/11/2026). */
     private const POR_PAGINA = 9;
 
+    /** Da 2ª página do blog em diante (pedido do Lira 27/11/2026). */
+    private const POR_PAGINA_SEGUINTES = 6;
+
     /** Matérias do blog da KazaKora; as do FerraKora saem pela API do site (FerraKoraBlogController). */
     private function publicadas()
     {
@@ -96,11 +99,14 @@ class EditorialController extends Controller
             }
         }
         $total = (clone $query)->count();
-        $lastPage = max(1, (int) ceil($total / self::POR_PAGINA));
+        // Pedido do Lira (27/11/2026): a 1ª página com 9 e, da 2ª em diante, 6 por página.
+        $lastPage = $total <= self::POR_PAGINA ? 1 : 1 + (int) ceil(($total - self::POR_PAGINA) / self::POR_PAGINA_SEGUINTES);
         $page = min((int) ($filters['page'] ?? 1), $lastPage);
-        $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset(($page - 1) * self::POR_PAGINA)->limit(self::POR_PAGINA + 1)->get();
-        $hasMore = $items->count() > self::POR_PAGINA;
-        $posts = $items->take(self::POR_PAGINA)->map(function ($p) use ($r) {
+        $porPagina = $page === 1 ? self::POR_PAGINA : self::POR_PAGINA_SEGUINTES;
+        $offset = $page === 1 ? 0 : self::POR_PAGINA + ($page - 2) * self::POR_PAGINA_SEGUINTES;
+        $items = $query->orderByDesc('published_at')->orderByDesc('id')->offset($offset)->limit($porPagina + 1)->get();
+        $hasMore = $items->count() > $porPagina;
+        $posts = $items->take($porPagina)->map(function ($p) use ($r) {
             $post = $this->dto($p);
             $post['interaction'] = ['canInteract' => (bool) $r->user(), 'liked' => $r->user() ? DB::table('editorial_likes')->where('post_id', $p->id)->where('user_id', $r->user()->id)->exists() : false, 'likesCount' => $post['likes_count'], 'loginUrl' => route('entrar')];
             return $post;

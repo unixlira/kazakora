@@ -301,7 +301,9 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/cupom', [CheckoutController::class, 'applyCouponJson'])->middleware('throttle:20,1')->name('cupom.aplicar');
     Route::delete('/cupom', [CheckoutController::class, 'removeCouponJson'])->name('cupom.remover');
-    Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');
+    // 30/min (27/11/2026): a tela repete sozinha até 6 vezes por clique quando a rede falha.
+    Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:30,1')->name('pagamento.iniciar');
+    Route::post('/pagamento-falhou', [CheckoutController::class, 'pagamentoFalhou'])->middleware('throttle:10,1')->name('pagamento.falhou');
     Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->middleware('throttle:10,1')->name('pagamento.proxima-parte');
     Route::get('/{order}/status', [CheckoutController::class, 'status'])->name('status');
     // Sem middleware auth: o convidado não fica logado (2026-10-24); confirmation() confere o dono.

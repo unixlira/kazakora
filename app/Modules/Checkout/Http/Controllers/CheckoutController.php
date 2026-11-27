@@ -55,6 +55,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -684,7 +685,113 @@ class CheckoutController extends Controller
      * eles não têm fase de "autorizado sem capturar" no Stripe, então só são
      * criados depois que a parte com cartão já autorizou com segurança.
      */
+    /**
+     * "Finalizar" com repetição segura (pedido do Lira em 27/11/2026, depois
+     * da cliente Bernardete: "perder venda é inaceitável"). A tela repete
+     * sozinha até 6 vezes quando a rede ou o servidor falham, sempre com a
+     * mesma chave de tentativa. Aqui a chave garante que a repetição nunca
+     * cobra duas vezes: se a tentativa já criou o pedido, devolve a mesma
+     * tela (mesmo QR do Pix, mesmo cartão aprovado); se ainda está rodando,
+     * responde 409 e a tela espera e tenta de novo.
+     */
     public function storePayment(Request $request): RedirectResponse|Response
+    {
+        $chave = self::chaveDaTentativa($request);
+        if (! $chave) {
+            return $this->processarPagamento($request);
+        }
+
+        if ($feito = Cache::get($chave)) {
+            return $this->respostaDaTentativa($request, $feito);
+        }
+
+        $trava = Cache::lock($chave.':trava', 120);
+        if (! $trava->get()) {
+            abort(409, 'Pagamento desta tentativa ainda em andamento.');
+        }
+
+        try {
+            // Outra requisição da mesma tentativa pode ter terminado enquanto esta esperava.
+            if ($feito = Cache::get($chave)) {
+                return $this->respostaDaTentativa($request, $feito);
+            }
+
+            return $this->processarPagamento($request);
+        } finally {
+            $trava->release();
+        }
+    }
+
+    private static function chaveDaTentativa(Request $request): ?string
+    {
+        // Só a chave aleatória da tela (UUID): a sessão do convidado é renovada
+        // quando o pedido nasce, então não pode entrar na chave.
+        $tentativa = preg_replace('/[^A-Za-z0-9-]/', '', (string) $request->input('tentativa', ''));
+
+        return strlen($tentativa) < 16 ? null : 'checkout:tentativa:'.sha1(mb_substr($tentativa, 0, 64));
+    }
+
+    /** Guarda o que a tentativa criou, para a repetição devolver a mesma tela. */
+    private function guardarTentativa(Request $request, Order $order, array $methods, mixed $paymentResult): void
+    {
+        if ($chave = self::chaveDaTentativa($request)) {
+            Cache::put($chave, [
+                'order_id' => $order->id,
+                'metodo' => $methods[0],
+                'segundo' => $methods[1] ?? null,
+                'mp' => is_array($paymentResult) ? $paymentResult : null,
+            ], now()->addMinutes(30));
+        }
+    }
+
+    private function respostaDaTentativa(Request $request, array $feito): RedirectResponse|Response
+    {
+        $order = Order::query()->find($feito['order_id']);
+        if (! $order) {
+            return redirect()->route('finalizacao.entrega');
+        }
+        $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        Log::info('checkout.tentativa_repetida', ['order_id' => $order->id, 'metodo' => $feito['metodo']]);
+
+        if (is_array($feito['mp'])) {
+            return match ($feito['metodo']) {
+                Payment::METHOD_PIX => $this->renderConfirmingMercadoPagoPix($draft, $order, $feito['mp']),
+                Payment::METHOD_BOLETO => $this->renderBoletoGerado($draft, $order, $feito['mp']),
+                default => $this->renderConfirmingMercadoPagoCard($draft, $order, $feito['segundo']),
+            };
+        }
+
+        return redirect()->route('finalizacao.confirmacao', $order);
+    }
+
+    /**
+     * A tela desistiu depois das 6 tentativas (ou o banco não respondeu):
+     * avisa o Lira no WhatsApp e no sino do admin, com o que deu errado.
+     */
+    public function pagamentoFalhou(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $dados = $request->validate([
+            'status' => ['nullable', 'integer', 'between:0,599'],
+            'tentativas' => ['nullable', 'integer', 'between:0,20'],
+            'metodo' => ['nullable', 'string', 'max:20'],
+            'etapa' => ['nullable', 'string', 'max:30'],
+        ]);
+        $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        $cliente = $request->user()?->name ?? ($draft['guest']['name'] ?? 'visitante');
+        $telefone = $request->user()?->phone ?? ($draft['guest']['phone'] ?? '');
+        $total = round((float) $this->cart->items()->sum('subtotal'), 2);
+        $motivo = sprintf('%s (%s) não conseguiu finalizar: %s respondeu %s depois de %d tentativas automáticas, %s, carrinho R$ %s.',
+            $cliente, $telefone ?: 'sem telefone', $dados['etapa'] ?? 'pagamento', ($dados['status'] ?? 0) ?: 'sem conexão',
+            (int) ($dados['tentativas'] ?? 0), $dados['metodo'] ?? '?', number_format($total, 2, ',', '.'));
+
+        Log::error('checkout.pagamento_bloqueado', $dados + ['cliente' => $cliente, 'telefone' => $telefone, 'total' => $total]);
+        rescue(fn () => app(\App\Modules\Financeiro\Support\AlertaColetaFinanceira::class)
+            ->avisar('CHECKOUT, venda travada', $motivo, 'checkout:'.sha1($request->session()->getId()), 10), report: false);
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function processarPagamento(Request $request): RedirectResponse|Response
     {
         $draft = $request->session()->get(self::SESSION_KEY);
 
@@ -1072,6 +1179,7 @@ class CheckoutController extends Controller
 
         CheckoutEvento::pedidoCriado($request, $visitanteMedicao, $order->user_id);
         app(LeadsDoCheckout::class)->converter($order, $sessaoDoLead);
+        $this->guardarTentativa($request, $order, $methods, $paymentResult);
 
         if ($useMercadoPago) {
             if ($methods[0] === Payment::METHOD_BOLETO) {

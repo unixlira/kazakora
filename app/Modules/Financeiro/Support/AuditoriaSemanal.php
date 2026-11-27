@@ -395,7 +395,6 @@ class AuditoriaSemanal
         $semNota = 0;
         $embalados = 0;
         $frete = 0.0;
-        $imposto = 0.0;
 
         foreach (array_chunk($ids, 500) as $lote) {
             $itens = DB::table('order_items')
@@ -411,13 +410,9 @@ class AuditoriaSemanal
             $nota = "(SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.operation_type = 'saida' AND i.cancelada_em IS NULL"
                 ." AND (i.status = 'authorized' OR (i.status = 'pending' AND i.chave_acesso IS NOT NULL AND i.autorizada_em IS NOT NULL)) LIMIT 1)";
             $pedidos = DB::table('orders')->whereIn('orders.id', $lote)
-                ->selectRaw("orders.id, orders.created_at, {$nota} as nota, orders.total")
+                ->selectRaw("orders.id, {$nota} as nota, orders.total")
                 ->get();
-            foreach ($pedidos as $p) {
-                $base = $p->nota !== null ? (float) $p->nota : (float) $p->total;
-                $baseImposto += $base;
-                $imposto += round($base * ContributionMargin::aliquotaDoPedido(Carbon::parse($p->created_at)) / 100, 2);
-            }
+            $baseImposto += (float) $pedidos->sum(fn ($p) => $p->nota !== null ? (float) $p->nota : (float) $p->total);
             $semNota += $pedidos->whereNull('nota')->count();
 
             $embalados += DB::table('orders')->whereIn('orders.id', $lote)->tap(fn ($q) => ContributionMargin::semFull($q))->count();
@@ -426,7 +421,7 @@ class AuditoriaSemanal
             $frete += (float) DB::table('melhor_envio_envios')->whereIn('order_id', $lote)->tap(fn ($q) => ContributionMargin::etiquetaMelhorEnvioPaga($q))->sum('preco');
         }
 
-        $imposto = round($imposto, 2);
+        $imposto = round($baseImposto * ContributionMargin::aliquotaSimples() / 100, 2);
         $insumos = round($embalados * ContributionMargin::insumosPorPedido(), 2);
         $fornecedor = round($fornecedor, 2);
         $frete = round($frete, 2);

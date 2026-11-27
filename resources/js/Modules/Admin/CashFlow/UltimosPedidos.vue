@@ -35,7 +35,6 @@ const linhasDaConta = (p) => {
         ['Frete', -c.frete, false],
         [c.taxa_estimada ? 'Taxa (estimada)' : 'Taxa', -c.taxa, false],
         ['Imposto', -c.imposto, false],
-        ...(c.comissao_zaio ? [['Comissão Zaio', -c.comissao_zaio, false]] : []),
         ['Insumos', -c.insumos, false],
         [`Anúncio (rateado${c.anuncio_pedidos_no_dia > 1 ? ` ÷ ${c.anuncio_pedidos_no_dia}` : ''})`, -c.anuncio, false],
         ['= Lucro', p.lucro, true],

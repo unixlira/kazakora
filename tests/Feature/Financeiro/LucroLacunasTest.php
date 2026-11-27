@@ -32,8 +32,6 @@ class LucroLacunasTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Regras da Zaio (10% e comissão) têm teste próprio: RegrasZaioTest.
-        config(['loja.zaio.desde' => '2099-01-01']);
         Carbon::setTestNow(Carbon::parse('2026-11-12 15:00:00', 'America/Sao_Paulo'));
         config(['loja.insumos_por_pedido' => 2.0]);
     }

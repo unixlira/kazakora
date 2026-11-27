@@ -105,12 +105,11 @@ class DashboardAgentControllerTest extends TestCase
             'source' => OrderChannelFee::SOURCE_API,
             'computed_at' => now(),
         ]);
-        // Faturamento e lucro do KoraSync são só dos marketplaces (27/11/2026).
-        $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'subtotal' => 50, 'total' => 50, 'origin' => Order::ORIGIN_SHOPEE]);
+        $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'subtotal' => 50, 'total' => 50]);
         $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'subtotal' => 30, 'total' => 30]);
         $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'subtotal' => 999, 'total' => 999]);
 
-        $refundedOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 80, 'total' => 80, 'origin' => Order::ORIGIN_SHOPEE]);
+        $refundedOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 80, 'total' => 80]);
         Payment::create([
             'order_id' => $refundedOrder->id,
             'provider' => Payment::PROVIDER_MERCADOPAGO,
@@ -122,7 +121,7 @@ class DashboardAgentControllerTest extends TestCase
         CartSnapshot::create(['session_id' => 'sess-1', 'items_count' => 3, 'total' => 200]);
         CartSnapshot::create(['session_id' => 'sess-2', 'items_count' => 2, 'total' => 90]);
 
-        config(['loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-01-01', 'loja.zaio.desde' => '2099-01-01']);
+        config(['loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-01-01']);
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/metrics');
 
         $response->assertOk();

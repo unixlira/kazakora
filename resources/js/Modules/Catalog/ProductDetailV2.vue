@@ -74,6 +74,8 @@ const props = defineProps({
     opcaoInicial: { type: Number, default: null },
     // Opções do anúncio em cartões, no formato dos kits do Livro Falante (26/11/2026): CartoesDeOpcoes; null = seletor de sempre.
     cartoesOpcoes: { type: Object, default: null },
+    // "Compre 1, o 2º sai por R$ X" (LeveDois, 27/11/2026): { code, precos: { id da opção: X } } ou null.
+    leveDois: { type: Object, default: null },
 });
 const brinquedo = computed(() => props.layout === 'brinquedo');
 // Cartões de opção (pedido do Lira 26/11/2026, Compressor 4 em 1): como o "Escolha seu kit" do livro, no
@@ -376,6 +378,11 @@ const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quant
 // (BlackFriday::precos, a mesma conta do checkout). preco_cupom = 1 unidade; precos_cupom =
 // cada quantidade até o maior kit, com o desconto do kit. Null fora da BF: tudo como antes.
 const cupomBf = computed(() => precoBase.value.preco_cupom ?? null);
+// Preço da 2ª unidade da opção escolhida com o cupom do dia (null = fora da promoção).
+const leveDoisPreco = computed(() => {
+    const valor = props.leveDois?.precos?.[precoBase.value.id];
+    return valor != null && !emOferta.value ? Number(valor) : null;
+});
 const cupomBfQtd = computed(() => precoBase.value.precos_cupom?.[quantity.value] ?? null);
 // principal 'venda' (Compressor 4 em 1, 26/11/2026): grande = preço de venda, riscado = "de" do
 // cadastro, e o com cupom vai para a linha de baixo.
@@ -1143,6 +1150,11 @@ const escolherKit = (kit, rolar = false) => {
                                 </div>
                             </div>
 
+                            <div v-if="leveDoisPreco !== null" class="leve-dois" data-leve-dois>
+                                <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                                <span>Compre 1, o 2º sai por <b>{{ formatPrice(leveDoisPreco) }}</b> com o cupom <b class="leve-dois-cupom">{{ leveDois.code }}</b></span>
+                            </div>
+
                             <div v-if="modelos.length > 1" class="variacoes modelos">
                                 <span class="subtitulo">Modelo: <span class="valor-escolhido">{{ modelos.find((modelo) => modelo.atual)?.rotulo }}</span></span>
                                 <div class="opcoes">
@@ -1779,6 +1791,11 @@ const escolherKit = (kit, rolar = false) => {
 .pd2 .de { color: #8a8a8a; font-size: 16px; font-weight: 400; text-decoration: line-through; }
 .pd2 .selo-off { display: inline-block; background: #c2410c; color: #fff; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; line-height: 1.4; }
 .pd2 .linha-cupom-bf { font-size: 14px; color: var(--ink); margin-top: -4px; }
+.pd2 .leve-dois { display: flex; align-items: flex-start; gap: 8px; margin: -4px 0 15px; padding: 10px 12px; border: 1px dashed #F2691C; border-radius: 10px; background: #FFF4EC; color: #18212e; font-size: 14px; line-height: 1.4; }
+.pd2 .leve-dois i { color: #F2691C; margin-top: 2px; }
+.pd2 .leve-dois b { color: #C2410C; }
+.pd2 .leve-dois .leve-dois-cupom { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .02em; }
+.dark .pd2 .leve-dois { background: transparent; color: var(--text); }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pd2 .linha-pix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #00851c; }
 .pd2 .linha-pix i { font-size: 18px; width: 18px; color: #00851c; }

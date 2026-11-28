@@ -525,6 +525,9 @@ class CatalogController extends Controller
             // precos_cupom: Black Friday automática (2026-11-24), preço com o cupom por quantidade (kits).
             'product' => $product->makeHidden('cost_price')->append(['preco_pix', 'precos_cupom']),
             'variations' => $variations,
+            // "Compre 1, o 2º sai por R$ X com o cupom do dia" (LeveDois, 27/11/2026):
+            // {code, precos: {id da opção: X}} ou null. Falha aqui nunca derruba a página.
+            'leveDois' => rescue(fn () => \App\Modules\Checkout\Support\LeveDois::paraPagina($product, $variations), null),
             'galeria' => $galeria,
             'modelos' => $this->modelosLigados($product),
             'reviews' => $reviews,

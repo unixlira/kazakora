@@ -37,6 +37,8 @@ const props = defineProps({
     productsDiscount: { type: Number, default: 0 },
     couponCode: { type: String, default: null },
     discountAmount: { type: Number, default: 0 },
+    // Cupom da 2ª unidade (LeveDois, 27/11/2026): o Pix vale sobre o que sobra depois do cupom.
+    couponPixDepois: { type: Boolean, default: false },
     pixDiscountPercentage: { type: Number, default: 0 },
     addresses: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
@@ -247,7 +249,10 @@ const atualizarFrete = async (zip) => {
         if (!expressa.value) expressaEscolhida.value = false;
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
-        if (cupomAplicado.value) descontoCupom.value = Number(data.discount_amount) || 0;
+        if (cupomAplicado.value) {
+            descontoCupom.value = Number(data.discount_amount) || 0;
+            pixDepoisDoCupom.value = !!data.pix_depois_do_cupom;
+        }
         if (rolarAteFrete) {
             rolarAteFrete = false;
             mostrarOpcoesFrete();
@@ -281,7 +286,7 @@ const alterarQuantidade = async (item, delta) => {
         });
         if (!resposta.ok) throw new Error();
         await new Promise((resolve) => router.reload({
-            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
+            only: ['items', 'subtotal', 'productsDiscount', 'couponCode', 'discountAmount', 'couponPixDepois', 'pixDiscountPercentage', 'avaliacaoItens', 'livrosBrinde'],
             preserveScroll: true,
             preserveState: true,
             onFinish: resolve,
@@ -304,6 +309,7 @@ const valorFrete = computed(() => (expressaEscolhida.value && expressa.value
 // entra no total na hora, sem recarregar a tela.
 const cupomAplicado = ref(props.couponCode);
 const descontoCupom = ref(Number(props.discountAmount) || 0);
+const pixDepoisDoCupom = ref(!!props.couponPixDepois);
 const cupomDescricao = ref(null);
 const cupom = ref('');
 const cupomCarregando = ref(false);
@@ -313,9 +319,10 @@ const cupomErroDetalhe = ref(null);
 const CUPOM_INVALIDO = 'Cupom inválido ou vencido';
 
 // Se o servidor tirar o cupom (expirou entre aplicar e pagar), a tela acompanha.
-watch(() => [props.couponCode, props.discountAmount], ([codigo, valor]) => {
+watch(() => [props.couponCode, props.discountAmount, props.couponPixDepois], ([codigo, valor, pixDepois]) => {
     cupomAplicado.value = codigo;
     descontoCupom.value = Number(valor) || 0;
+    pixDepoisDoCupom.value = !!pixDepois;
 });
 watch(() => page.props.errors?.code, (mensagem) => {
     if (mensagem) cupomErro.value = mensagem;
@@ -375,6 +382,7 @@ const aplicarCupom = async () => {
         }
         cupomAplicado.value = data.code;
         descontoCupom.value = Number(data.discount_amount) || 0;
+        pixDepoisDoCupom.value = !!data.pix_depois_do_cupom;
         cupomDescricao.value = data.descricao;
         cupom.value = '';
         medirCupom('cupom_aplicado');
@@ -405,6 +413,7 @@ const removerCupom = async () => {
         if (!response.ok) throw new Error();
         cupomAplicado.value = null;
         descontoCupom.value = 0;
+        pixDepoisDoCupom.value = false;
         cupomDescricao.value = null;
     } catch {
         cupomErro.value = 'Não foi possível tirar o cupom agora. Tente de novo.';
@@ -448,8 +457,12 @@ onUnmounted(() => consultaComputador?.removeEventListener('change', acompanharTe
 const metodo = ref('pix');
 // Pix desde 2026-10-24: o % sobre os produtos ANTES do cupom (3% do BEMVINDO
 // + 2% do Pix = 5%), sem passar do que sobrou depois do cupom. Mesma conta do
-// DescontoPix::descontoSobreCupom.
+// DescontoPix::descontoSobreCupom. Cupom da 2ª unidade: o % vale sobre o que sobra depois do cupom.
 const descontoPixCalculado = computed(() => {
+    if (pixDepoisDoCupom.value) {
+        const sobra = round2(Math.max(0, subtotalAtual.value - descontoPlataforma.value - descontoCupom.value));
+        return Math.min(round2(sobra * props.pixDiscountPercentage / 100), sobra);
+    }
     const base = Math.max(0, subtotalAtual.value - descontoPlataforma.value);
     return Math.min(round2(base * props.pixDiscountPercentage / 100), round2(Math.max(0, base - descontoCupom.value)));
 });

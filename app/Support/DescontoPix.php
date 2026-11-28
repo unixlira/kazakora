@@ -66,9 +66,19 @@ class DescontoPix
      * Desconto do Pix desde 2026-10-24: o % sobre os produtos ANTES do cupom
      * (3% do BEMVINDO + 2% do Pix = 5%), sem passar do que sobrou depois do
      * cupom. $base = produtos menos o desconto da caixa única.
+     *
+     * $depoisDoCupom (cupom da 2ª unidade, LeveDois, 27/11/2026): o % vale
+     * sobre o que sobra depois do cupom, porque o preço da 2ª unidade já é o
+     * mínimo que deixa o lucro da promoção.
      */
-    public static function descontoSobreCupom(float $base, float $descontoCupom, float $percentual): float
+    public static function descontoSobreCupom(float $base, float $descontoCupom, float $percentual, bool $depoisDoCupom = false): float
     {
+        if ($depoisDoCupom) {
+            $sobra = round(max(0.0, $base - $descontoCupom), 2);
+
+            return min(self::desconto($sobra, $percentual), $sobra);
+        }
+
         return min(self::desconto(max(0.0, $base), $percentual), round(max(0.0, $base - $descontoCupom), 2));
     }
 

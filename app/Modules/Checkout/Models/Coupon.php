@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Models;
 use App\Models\User;
 use App\Modules\Checkout\Support\BlackFriday;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\LeveDois;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +47,7 @@ class Coupon extends Model
         'so_kazakora',
         'produtos',
         'entrega_em_maos',
+        'segunda_unidade',
     ];
 
     protected function casts(): array
@@ -65,6 +67,9 @@ class Coupon extends Model
             'produtos' => 'array',
             // Entrega em mãos (27/11/2026): o pedido não cobra frete nem gera etiqueta.
             'entrega_em_maos' => 'boolean',
+            // "Compre 1, o 2º sai por R$ X" (27/11/2026, LeveDois): o desconto é o
+            // preço da 2ª unidade de cada par, não um % do carrinho.
+            'segunda_unidade' => 'boolean',
         ];
     }
 
@@ -74,10 +79,12 @@ class Coupon extends Model
         static::saved(function () {
             Cache::forget(FreteEmbutido::CACHE_CUPONS);
             BlackFriday::esquecer();
+            LeveDois::esquecer();
         });
         static::deleted(function () {
             Cache::forget(FreteEmbutido::CACHE_CUPONS);
             BlackFriday::esquecer();
+            LeveDois::esquecer();
         });
     }
 
@@ -254,6 +261,30 @@ class Coupon extends Model
             ->sum('subtotal'), 2);
     }
 
+    /**
+     * Desconto do cupom num carrinho (itens: product, quantity, subtotal).
+     * Cupom da 2ª unidade (LeveDois): o preço da promoção em cada par; os
+     * outros: o % ou o valor sobre a base do cupom (baseDosItens).
+     */
+    public function descontoDosItens(iterable $itens): float
+    {
+        if ($this->segunda_unidade) {
+            return LeveDois::conta($itens)['total'];
+        }
+
+        return $this->discountFor(self::baseDosItens($itens, $this));
+    }
+
+    /**
+     * Pix sobre o que sobra depois do cupom (DescontoPix::descontoSobreCupom):
+     * no cupom da 2ª unidade o preço dela já é o mínimo com lucro, o Pix não
+     * pode ser calculado sobre o preço cheio.
+     */
+    public function pixDepoisDoCupom(): bool
+    {
+        return (bool) $this->segunda_unidade;
+    }
+
     public function discountFor(float $subtotal): float
     {
         if ($this->discount_type === self::TYPE_PERCENTAGE) {
@@ -269,6 +300,10 @@ class Coupon extends Model
         $desconto = $this->discount_type === self::TYPE_PERCENTAGE
             ? rtrim(rtrim(number_format((float) $this->discount_value, 2, ',', '.'), '0'), ',').'% de desconto'
             : 'R$ '.number_format((float) $this->discount_value, 2, ',', '.').' de desconto';
+
+        if ($this->segunda_unidade) {
+            return 'Compre 1, o 2º sai mais barato';
+        }
 
         // Entrega em mãos (27/11/2026): pode vir sem desconto nenhum.
         if ($this->entrega_em_maos) {

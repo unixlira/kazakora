@@ -4,20 +4,27 @@
 @section('preheader', 'Pague R$ '.number_format($valor, 2, ',', '.').' com o Pix e seu pedido '.$order->numero.' segue para separação.')
 
 @section('content')
-    @include('emails.partials.titulo', ['icone' => '⚡', 'texto' => 'Seu Pix está pronto!'])
+    @php
+        // Mesmo layout do pedido confirmado (28/11/2026): celular primeiro, alinhado à esquerda.
+        $marca = $marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order);
+        $cor = $marca['cor'];
+        $rotulo = 'font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;';
+    @endphp
 
-    <p style="margin: 0 0 18px; text-align: center; color: #374151;">
-        Falta só pagar para o pedido <strong style="color: {{ ($marcaEmail ?? [])['cor'] ?? '#F27A2A' }};">{{ $order->numero }}</strong> seguir para separação. Abra o app do seu banco
+    @include('emails.partials.status-pedido', ['numero' => $order->numero, 'titulo' => 'Seu Pix está pronto!', 'cor' => $cor, 'passo' => 0])
+
+    <p style="margin: 0 0 22px; font-size: 15px; line-height: 23px; color: #374151;">
+        Falta só pagar para o pedido <strong style="color: {{ $cor }};">{{ $order->numero }}</strong> seguir para separação. Abra o app do seu banco
         e escaneie o QR Code ou use o Pix copia e cola.
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 18px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 20px; background-color: #f8f9fb; border: 1px solid #eceef1; border-radius: 12px;">
         <tr>
-            <td style="padding: 18px; text-align: center;">
-                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #166534;">Valor a pagar</div>
-                <div style="font-size: 32px; font-weight: 800; color: #0a8a23;">R$ {{ number_format($valor, 2, ',', '.') }}</div>
+            <td align="center" style="padding: 20px 18px; text-align: center; font-family: Arial, Helvetica, sans-serif;">
+                <div style="{{ $rotulo }}">Valor a pagar</div>
+                <div style="margin-top: 4px; font-size: 32px; line-height: 38px; font-weight: 800; color: #0a8a23;">R$ {{ number_format($valor, 2, ',', '.') }}</div>
                 @if ($validade)
-                    <div style="font-size: 12px; color: #4b5563;">Pague até {{ $validade->format('d/m/Y \à\s H:i') }}</div>
+                    <div style="margin-top: 2px; font-size: 13px; line-height: 18px; color: #4b5563;">Pague até {{ $validade->format('d/m/Y \à\s H:i') }}</div>
                 @endif
 
                 @if ($qrPng && isset($message))
@@ -28,13 +35,19 @@
         </tr>
     </table>
 
-    <p style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #111827;">Pix copia e cola</p>
-    <div style="padding: 12px 14px; border: 1px dashed #9ca3af; border-radius: 10px; background-color: #f9fafb; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5; color: #111827; word-break: break-all;">{{ $copiaECola }}</div>
-    <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Copie o código acima e cole na opção "Pix copia e cola" do seu banco.</p>
+    <div style="{{ $rotulo }} margin: 0 0 8px;">Pix copia e cola</div>
+    <div style="padding: 12px 14px; border: 1px dashed #c4c9d0; border-radius: 10px; background-color: #f8f9fb; font-family: 'Courier New', monospace; font-size: 12px; line-height: 18px; color: #14202e; word-break: break-all;">{{ $copiaECola }}</div>
+    <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: #6b7280;">Copie o código acima e cole na opção "Pix copia e cola" do seu banco.</p>
 
-    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])
+    @include('emails.partials.botao', ['url' => $marca['pedido'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930', 'largo' => true])
 
-    <p style="margin: 0; text-align: center; font-size: 12px; color: #9ca3af;">
+    @if ($order->items->isNotEmpty())
+        <div style="{{ $rotulo }} margin: 4px 0 2px;">Resumo do pedido</div>
+        @include('emails.partials.itens-do-pedido', ['order' => $order])
+        @include('emails.partials.resumo-valores', ['order' => $order])
+    @endif
+
+    <p style="margin: 24px 0 0; font-size: 12px; line-height: 18px; color: #9ca3af;">
         Assim que o pagamento cair, você recebe a confirmação por aqui. Se já pagou, pode ignorar este e-mail.
     </p>
 @endsection

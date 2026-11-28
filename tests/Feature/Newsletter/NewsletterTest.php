@@ -22,6 +22,9 @@ class NewsletterTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Relógio ao meio-dia de São Paulo: entre 0h e 1h a matéria "de 1 hora atrás"
+        // caía no dia anterior e o teste falhava (deploy de 28/11 00:07 barrado).
+        $this->travelTo(\Carbon\CarbonImmutable::parse('today 12:00', config('app.timezone')));
         $this->withoutVite();
         Mail::fake();
     }

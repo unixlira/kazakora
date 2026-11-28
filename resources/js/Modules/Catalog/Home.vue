@@ -5,7 +5,7 @@ import CarregandoProdutos from '@/Shared/Components/CarregandoProdutos.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import FiltrosCatalogo from '@/Shared/Components/FiltrosCatalogo.vue';
 import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
-import RelogioOfertas from '@/Shared/Components/RelogioOfertas.vue';
+import TituloRelampago from '@/Shared/Components/TituloRelampago.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import SecaoProdutos from '@/Shared/Components/SecaoProdutos.vue';
 import { DESCONTOS, PRECOS } from '@/Shared/filtrosCatalogo';
@@ -151,7 +151,7 @@ watch(() => props.products, (novos) => {
 
 const temMais = computed(() => !!props.products && props.products.current_page < props.products.last_page);
 
-// Relógio das Ofertas do dia: Shared/Components/RelogioOfertas.vue.
+// Título e cronômetro da Oferta Relâmpago: Shared/Components/TituloRelampago.vue.
 
 const carregarMais = () => {
     if (carregandoMais.value || !temMais.value) return;
@@ -222,20 +222,20 @@ onBeforeUnmount(() => observador?.disconnect());
         <template v-if="vitrine">
             <!-- Âncora da faixa promocional do topo. -->
             <span id="ofertas" class="block scroll-mt-28"></span>
-            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" slider
-                subtitulo="Oferta Relâmpago: preço baixo por tempo limitado."
+            <!-- Oferta Relâmpago com o título e o cronômetro que a FerraKora tinha (pedido do Lira
+                 em 27/11/2026): OFERTAS + despertador + RELÂMPAGO, "TERMINA EM" e caixas pretas,
+                 no laranja da KazaKora. Celular: tudo no centro, cronômetro abaixo do título. -->
+            <SecaoProdutos titulo="Ofertas Relâmpago" :produtos="vitrine.ofertas" slider centro
+                subtitulo="Preço baixo por tempo limitado. Quando acabar, acabou."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
+                <template #titulo>
+                    <TituloRelampago centro />
+                </template>
                 <template #acao>
-                    <!-- Celular: largura toda, texto no centro e relógio pulsando (pedido 2026-10-10). -->
-                    <div class="flex w-full flex-col gap-1.5 md:w-auto md:items-end">
-                        <span class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E02424] px-3 py-2 text-sm font-bold text-white md:inline-flex md:w-auto md:py-1.5">
-                            <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <RelogioOfertas />
-                        </span>
-                        <!-- Página com todas as ofertas e filtros (pedido 2026-10-15). -->
-                        <Link href="/ofertas" class="text-sm font-semibold text-store-accent hover:underline">
-                            Ver todas as ofertas <i class="fas fa-arrow-right ml-1 text-xs"></i>
-                        </Link>
-                    </div>
+                    <!-- Página com todas as ofertas e filtros (pedido 2026-10-15). -->
+                    <Link href="/ofertas" class="text-sm font-semibold text-store-accent hover:underline">
+                        Ver todas as ofertas <i class="fas fa-arrow-right ml-1 text-xs"></i>
+                    </Link>
                 </template>
             </SecaoProdutos>
 

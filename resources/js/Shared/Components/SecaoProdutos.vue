@@ -20,6 +20,9 @@ const props = defineProps({
     // Celular: lista de cards deitados, foto ao lado do texto (Utilidades para
     // casa, pedido 2026-10-24). Tablet e computador continuam na grade.
     lista: { type: Boolean, default: false },
+    // Celular: título, texto e ação no centro (Oferta Relâmpago no estilo da
+    // FerraKora, pedido do Lira em 27/11/2026).
+    centro: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -51,9 +54,10 @@ const irPara = (indice) => {
 
 <template>
     <section v-if="produtos.length" class="mx-auto max-w-[1320px] px-4 py-10 md:px-6">
-        <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div class="mb-6 flex flex-wrap items-end justify-between gap-3" :class="{ 'max-md:flex-col max-md:items-center max-md:text-center': centro }">
             <div>
-                <h2 class="text-2xl font-bold md:text-3xl">{{ titulo }}</h2>
+                <!-- Slot #titulo: título próprio (TituloRelampago); sem ele, o texto de sempre. -->
+                <slot name="titulo"><h2 class="text-2xl font-bold md:text-3xl">{{ titulo }}</h2></slot>
                 <p v-if="subtitulo" class="mt-1 text-sm text-store-fg-muted">{{ subtitulo }}</p>
             </div>
             <slot name="acao">

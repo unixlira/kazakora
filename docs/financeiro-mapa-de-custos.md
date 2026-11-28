@@ -162,3 +162,18 @@ Soma dos pedidos × painel: igual, exceto (1) taxa estimada, que o painel só co
 quando a linha existe; (2) anúncio de dia sem pedido pago, que não cai em pedido;
 (3) `cobrancasSemPedido` (etiqueta de pedido cancelado); (4) centavos de
 arredondamento do imposto.
+
+## Oferta Relâmpago com 22% de lucro líquido (27/11/2026)
+
+Botão "Preço com 22% de lucro" em Marketing › Ofertas Relâmpago. Conta em
+`App\Modules\Catalog\Support\LucroDaRelampago`, com as peças da `ContributionMargin`:
+
+```
+venda  = preço do anúncio na oferta + frete embutido (ofertas.frete_estimado, R$ 25)
+lucro  = venda × (1 − imposto − taxa do pagamento no pior caso entre cartão e Pix)
+         − custo − frete pago (R$ 25) − insumos (insumosPorPedido)
+margem = lucro ÷ venda  ≥ 22%
+```
+
+Desconto arredondado para baixo no centésimo de % (o preço nunca fica abaixo do da conta).
+Sem custo cadastrado ou sem espaço para desconto, o botão avisa e não aplica.

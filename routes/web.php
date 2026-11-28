@@ -476,6 +476,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('ofertas-relampago', [OfertaRelampagoController::class, 'index'])->middleware('permission:cadastros.view')->name('ofertas-relampago.listar');
     Route::get('ofertas-relampago/produtos', [OfertaRelampagoController::class, 'produtos'])->middleware('permission:cadastros.view')->name('ofertas-relampago.produtos');
     Route::get('ofertas-relampago/previa', [OfertaRelampagoController::class, 'previa'])->middleware('permission:cadastros.view')->name('ofertas-relampago.previa');
+    // Botão "Preço com 22% de lucro" (pedido do Lira 27/11/2026).
+    Route::get('ofertas-relampago/lucro-22', [OfertaRelampagoController::class, 'lucro22'])->middleware('permission:cadastros.view')->name('ofertas-relampago.lucro22');
     Route::post('ofertas-relampago', [OfertaRelampagoController::class, 'store'])->middleware('permission:cadastros.create')->name('ofertas-relampago.armazenar');
     Route::put('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'update'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.atualizar');
     Route::patch('ofertas-relampago/{oferta}/ativo', [OfertaRelampagoController::class, 'alternar'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.alternar');

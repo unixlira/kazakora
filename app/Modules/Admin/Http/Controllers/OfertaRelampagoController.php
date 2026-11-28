@@ -7,6 +7,7 @@ use App\Modules\BeautyKora\Models\BeautyKoraProduto;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\CalculadoraOferta;
+use App\Modules\Catalog\Support\LucroDaRelampago;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Builder;
@@ -94,6 +95,27 @@ class OfertaRelampagoController extends Controller
         $produto = Product::query()->with('images')->findOrFail($dados['product_id']);
 
         return response()->json(['produto' => $this->produto($produto, (float) $dados['desconto_pct'])]);
+    }
+
+    /**
+     * Botão "Preço com 22% de lucro" (pedido do Lira em 27/11/2026): o
+     * desconto que deixa 22% de lucro líquido sobre a venda (LucroDaRelampago).
+     */
+    public function lucro22(Request $request): JsonResponse
+    {
+        $dados = $request->validate(['product_id' => ['required', 'integer']]);
+        $produto = Product::query()->findOrFail($dados['product_id']);
+        $conta = LucroDaRelampago::precoParaMargem($produto);
+
+        if ($conta === null) {
+            $motivo = LucroDaRelampago::custo($produto) <= 0
+                ? 'Produto sem custo cadastrado: não dá para calcular o lucro.'
+                : 'Com 22% de lucro não sobra desconto: o preço atual já dá '.number_format(LucroDaRelampago::conta($produto, $produto->precoSemOferta())['margem'] ?? 0, 2, ',', '.').'% de lucro líquido.';
+
+            return response()->json(['message' => $motivo, 'errors' => ['desconto_pct' => [$motivo]]], 422);
+        }
+
+        return response()->json($conta);
     }
 
     public function store(Request $request): RedirectResponse
@@ -191,6 +213,8 @@ class OfertaRelampagoController extends Controller
         $atual = $produto->precoSemOferta();
         $naOferta = $desconto !== null ? max(0, round($atual * (1 - $desconto / 100), 2)) : null;
         $temCusto = (float) $produto->cost_price > 0;
+        // Lucro líquido em % da venda (imposto, taxa, frete e insumos), a conta dos 22%.
+        $margem = $naOferta !== null ? LucroDaRelampago::conta($produto, $naOferta) : null;
 
         return [
             'id' => $produto->id,
@@ -201,6 +225,8 @@ class OfertaRelampagoController extends Controller
             'preco_oferta' => $naOferta,
             'lucro_atual' => $temCusto ? CalculadoraOferta::lucroPiorCaso($produto, $atual) : null,
             'lucro_oferta' => $temCusto && $naOferta !== null ? CalculadoraOferta::lucroPiorCaso($produto, $naOferta) : null,
+            'lucro_liquido_oferta' => $margem['lucro'] ?? null,
+            'margem_oferta' => $margem['margem'] ?? null,
         ];
     }
 }

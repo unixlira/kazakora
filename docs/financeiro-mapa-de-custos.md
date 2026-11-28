@@ -177,3 +177,24 @@ margem = lucro ÷ venda  ≥ 22%
 
 Desconto arredondado para baixo no centésimo de % (o preço nunca fica abaixo do da conta).
 Sem custo cadastrado ou sem espaço para desconto, o botão avisa e não aplica.
+
+## "Compre 1, o 2º sai por R$ X" (27/11/2026)
+
+Cupom do dia `LEVE2` + DDMM (ex. `LEVE22811`), criado por `php artisan loja:cupom-leve2`
+(meia-noite de São Paulo e de hora em hora, sem reativar o que foi desligado à mão),
+só na KazaKora. Conta em `App\Modules\Checkout\Support\LeveDois`, config `config/leve_dois.php`.
+
+```
+X = (custo + frete incremental + R$ 20) ÷ fatia do pior caso
+fatia = min(1 − cartão 4,98%, (1 − Pix do produto) × (1 − taxa Pix 0,99%)) − imposto (aliquotaSimples)
+frete incremental = ofertas.frete_estimado (R$ 25) × kg tarifável começado (mín. 1 kg)
+X arredondado para cima em ,90 ou ,99; fora se X >= preço de cadastro (sem frete) ou sem custo
+```
+
+- Insumos e anúncio não entram (mesma caixa, mesmo clique).
+- No checkout cada par (2ª, 4ª…) sai por X; não acumula com Oferta do Dia/Relâmpago nem com
+  desconto de kit. A caixa única desses itens sai do cupom (o X já paga o frete da 2ª), então o
+  par custa exatamente "1 unidade + X". O Pix desses pedidos vale sobre o que sobra depois do cupom.
+- Registro: `orders.coupon_code` e, por item, `order_items.leve2_unidades`, `leve2_preco_normal`,
+  `leve2_preco`, `leve2_desconto` (soma = desconto do cupom no pedido).
+- JSON público para os posts: `GET /api/promocao-do-dia`.

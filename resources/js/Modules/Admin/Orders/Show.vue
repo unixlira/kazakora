@@ -438,6 +438,11 @@ const cancelInvoice = () => {
                                             Anúncio no canal: <span class="font-mono">{{ item.anuncio_no_canal ?? '—' }}</span>
                                             <span v-if="item.variacao_no_canal"> · variação <span class="font-mono">{{ item.variacao_no_canal }}</span></span>
                                         </div>
+                                        <!-- "Compre 1, o 2º sai por R$ X" (LeveDois, 27/11/2026). -->
+                                        <div v-if="item.leve2" class="mt-1 text-xs text-success" data-leve2-item>
+                                            2ª unidade com cupom {{ d.valores?.cupom }}: {{ item.leve2.unidades }} un. a {{ formatPrice(item.leve2.preco) }}
+                                            (normal {{ formatPrice(item.leve2.preco_normal) }}) · desconto {{ formatPrice(item.leve2.desconto) }}
+                                        </div>
                                     </td>
                                     <td class="py-2 pr-3 font-mono text-xs">{{ item.sku ?? '—' }}</td>
                                     <td class="py-2 pr-3 text-right tabular-nums">{{ item.quantidade }}</td>

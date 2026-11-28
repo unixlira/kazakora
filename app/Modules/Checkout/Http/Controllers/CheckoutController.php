@@ -16,6 +16,7 @@ use App\Modules\Catalog\Support\PromocoesDoProduto;
 use App\Modules\Checkout\Jobs\CotarFreteDoPedidoJob;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
+use App\Modules\Checkout\Support\LeveDois;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
@@ -177,7 +178,8 @@ class CheckoutController extends Controller
         return response()->json([
             'items' => $cartItems,
             'subtotal' => $subtotal,
-            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0,
+            'discount_amount' => $coupon ? $coupon->descontoDosItens($cartItems) : 0,
+            'pix_depois_do_cupom' => (bool) $coupon?->pixDepoisDoCupom(),
             'entrega_expressa' => $expressa,
             'prazo' => $expressa ? null : $entrega['prazo'],
             // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
@@ -617,6 +619,10 @@ class CheckoutController extends Controller
         if ($subtotal > 0 && $this->subtotalParaCupom($cartItems, $coupon) <= 0) {
             return ['erro' => 'Este cupom não vale para os produtos do seu carrinho.'];
         }
+        // Cupom da 2ª unidade (LeveDois, 27/11/2026): precisa de 2 unidades do mesmo produto da promoção.
+        if ($coupon->segunda_unidade && $coupon->descontoDosItens($cartItems) <= 0) {
+            return ['erro' => 'O cupom '.$coupon->code.' vale na compra de 2 unidades do mesmo produto (fora da Oferta do Dia e da Relâmpago). Aumente a quantidade e aplique de novo.'];
+        }
 
         // Cupom único: o digitado fica no lugar do que estava (não acumula).
         $draft['coupon_code'] = $coupon->code;
@@ -627,8 +633,9 @@ class CheckoutController extends Controller
             'code' => $coupon->code,
             'discount_type' => $coupon->discount_type,
             'discount_value' => (float) $coupon->discount_value,
-            'discount_amount' => $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)),
+            'discount_amount' => $coupon->descontoDosItens($cartItems),
             'descricao' => $coupon->descricaoDesconto(),
+            'pix_depois_do_cupom' => $coupon->pixDepoisDoCupom(),
         ];
     }
 
@@ -911,7 +918,18 @@ class CheckoutController extends Controller
             return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
-        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0;
+        // Cupom da 2ª unidade (LeveDois, 27/11/2026): o registro por item vai no pedido.
+        // Sem par elegível (a quantidade baixou depois de aplicar), o pedido sai sem o cupom.
+        $leveDois = [];
+        if ($coupon?->segunda_unidade) {
+            ['total' => $discount, 'itens' => $leveDois] = LeveDois::conta($cartItems);
+            if ($discount <= 0) {
+                $coupon = null;
+                $discount = 0;
+            }
+        } else {
+            $discount = $coupon ? $coupon->descontoDosItens($cartItems) : 0;
+        }
         // Cupom de entrega em mãos (27/11/2026): o Lira entrega pessoalmente,
         // então não há frete a cobrar nem etiqueta a gerar.
         $emMaos = (bool) $coupon?->entrega_em_maos;
@@ -934,7 +952,7 @@ class CheckoutController extends Controller
         // Desde 2026-10-24 sobre o valor ANTES do cupom: 3% do BEMVINDO + 2%
         // do Pix = 5% (nunca passa do que sobrou depois do cupom).
         $pixDiscount = $methods === [Payment::METHOD_PIX]
-            ? DescontoPix::descontoSobreCupom($subtotal - $descontoPlataforma, $discount, DescontoPix::percentualDosItens($cartItems))
+            ? DescontoPix::descontoSobreCupom($subtotal - $descontoPlataforma, $discount, DescontoPix::percentualDosItens($cartItems), (bool) $coupon?->pixDepoisDoCupom())
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
@@ -950,7 +968,7 @@ class CheckoutController extends Controller
         $sessaoDoLead = $request->session()->getId();
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago, $emMaos) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago, $emMaos, $leveDois) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
@@ -1012,7 +1030,7 @@ class CheckoutController extends Controller
                     'total' => $total,
                 ]);
 
-                $this->createOrderItems($order, $cartItems, $lockedProducts);
+                $this->createOrderItems($order, $cartItems, $lockedProducts, $coupon ? $leveDois : []);
                 $this->garantirLivrosDigitais($order);
                 // Transportadora do Melhor Envio fica escolhida no pedido e a
                 // etiqueta sai com ela (pedido do Lira em 2026-11-03).
@@ -1899,7 +1917,7 @@ class CheckoutController extends Controller
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-        $descontoCupom = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0;
+        $descontoCupom = $coupon ? $coupon->descontoDosItens($cartItems) : 0;
         $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
         $discount = round($descontoCupom + $plataforma, 2);
 
@@ -1915,7 +1933,7 @@ class CheckoutController extends Controller
             // Pagando 100% no Pix (pedido 2026-10-09).
             'pixDiscountPercentage' => $pixPercentual = DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
-            'pixDiscountAmount' => DescontoPix::descontoSobreCupom($subtotal - $plataforma, $descontoCupom, $pixPercentual),
+            'pixDiscountAmount' => DescontoPix::descontoSobreCupom($subtotal - $plataforma, $descontoCupom, $pixPercentual, (bool) $coupon?->pixDepoisDoCupom()),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
                 ? \App\Services\MercadoPago\CredenciaisCheckout::publicKey()
@@ -1974,7 +1992,10 @@ class CheckoutController extends Controller
         return $products;
     }
 
-    private function createOrderItems(Order $order, $cartItems, $products): void
+    /**
+     * @param  array<int, array{unidades: int, preco_normal: float, preco: float, desconto: float}>  $leveDois  LeveDois::conta()['itens'], por id do produto
+     */
+    private function createOrderItems(Order $order, $cartItems, $products, array $leveDois = []): void
     {
         $freteDoPedido = 0.0;
 
@@ -2000,6 +2021,12 @@ class CheckoutController extends Controller
                 'quantity' => $quantity,
                 'subtotal' => round($unitPrice * $quantity, 2),
                 'frete_embutido' => $frete,
+                // "Compre 1, o 2º sai por R$ X" (27/11/2026): unidades pelo preço da 2ª,
+                // preço normal da unidade, preço da promoção e desconto do cupom neste item.
+                'leve2_unidades' => $leveDois[$product->id]['unidades'] ?? null,
+                'leve2_preco_normal' => $leveDois[$product->id]['preco_normal'] ?? null,
+                'leve2_preco' => $leveDois[$product->id]['preco'] ?? null,
+                'leve2_desconto' => $leveDois[$product->id]['desconto'] ?? null,
             ]);
 
             $this->stock->adjust(
@@ -2274,7 +2301,9 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
-            'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems, $coupon)) : 0,
+            'discountAmount' => $coupon ? $coupon->descontoDosItens($cartItems) : 0,
+            // Cupom da 2ª unidade (LeveDois): o Pix vale sobre o que sobra depois do cupom.
+            'couponPixDepois' => (bool) $coupon?->pixDepoisDoCupom(),
             'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             // Livros de brinde como linha GRÁTIS no resumo do pedido (2026-10-21).

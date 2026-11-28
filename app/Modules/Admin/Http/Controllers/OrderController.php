@@ -849,6 +849,13 @@ class OrderController extends Controller
                 'preco' => (float) $item->product_price,
                 'subtotal' => (float) $item->subtotal,
                 'tipo' => $item->item_type,
+                // "Compre 1, o 2º sai por R$ X" (LeveDois, 27/11/2026): registro da 2ª unidade.
+                'leve2' => $item->leve2_unidades ? [
+                    'unidades' => (int) $item->leve2_unidades,
+                    'preco_normal' => (float) $item->leve2_preco_normal,
+                    'preco' => (float) $item->leve2_preco,
+                    'desconto' => (float) $item->leve2_desconto,
+                ] : null,
             ])->values(),
             'valores' => [
                 'subtotal' => (float) $order->subtotal,

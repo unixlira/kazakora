@@ -39,6 +39,12 @@ use Illuminate\Support\Facades\Route;
 // (ver bootstrap/app.php), a assinatura é verificada dentro do controller.
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('api.stripe.webhook');
 
+// "Compre 1, o 2º sai por R$ X" (pedido do Lira 27/11/2026): cupom do dia e preço
+// da 2ª unidade de cada produto, para a máquina de redes sociais. Só leitura, público.
+Route::get('/promocao-do-dia', \App\Http\Controllers\Api\PromocaoDoDiaController::class)
+    ->middleware('throttle:60,1')
+    ->name('api.promocao-do-dia');
+
 // Idem, pro Mercado Pago — assinatura HMAC verificada dentro do controller.
 Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('api.mercadopago.webhook');
 

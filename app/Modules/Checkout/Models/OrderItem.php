@@ -26,6 +26,12 @@ class OrderItem extends Model
         'subtotal',
         // Frete somado ao preço da unidade (FreteEmbutido), 2026-10-22.
         'frete_embutido',
+        // "Compre 1, o 2º sai por R$ X" (LeveDois, 27/11/2026): unidades pelo preço
+        // da 2ª, preço normal da unidade, preço da promoção e desconto do cupom.
+        'leve2_unidades',
+        'leve2_preco_normal',
+        'leve2_preco',
+        'leve2_desconto',
         // Custo manual da linha, só usado quando product_id é nulo (sem
         // produto local pra editar cost_price) — ver migration
         // add_manual_cost_price_to_order_items_table e
@@ -56,6 +62,10 @@ class OrderItem extends Model
             'quantity' => 'integer',
             'subtotal' => 'decimal:2',
             'frete_embutido' => 'decimal:2',
+            'leve2_unidades' => 'integer',
+            'leve2_preco_normal' => 'decimal:2',
+            'leve2_preco' => 'decimal:2',
+            'leve2_desconto' => 'decimal:2',
             'manual_cost_price' => 'decimal:2',
             'origem_mercadoria' => 'integer',
             'pis_aliquota' => 'decimal:2',

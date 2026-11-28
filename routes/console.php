@@ -12,6 +12,10 @@ Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 // Melhor Envio (2026-11-09, #3978): renova o token antes de vencer mesmo sem uso; falha vai ao sino.
 Schedule::command('melhorenvio:renovar-token')->dailyAt('06:10')->withoutOverlapping(10);
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+// "Compre 1, o 2º sai por R$ X" (pedido do Lira 27/11/2026, LeveDois): cupom do dia
+// LEVE2+DDMM criado à meia-noite de São Paulo; de hora em hora confere (se a virada
+// falhar, a hora seguinte cria). Não reativa o de hoje desligado no admin.
+Schedule::command('loja:cupom-leve2')->hourlyAt(0)->timezone('America/Sao_Paulo')->withoutOverlapping(10);
 // Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.
 Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->withoutOverlapping(25);
 // Ofertas do dia da loja: a escolha automática das 00:05 (loja:ofertas-do-dia)

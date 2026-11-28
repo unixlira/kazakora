@@ -25,14 +25,16 @@
         .sem-link a, a[x-apple-data-detectors], u + #corpo .sem-link a { color: #ffffff !important; text-decoration: none !important; font: inherit !important; pointer-events: none; }
 
         @media screen and (max-width: 600px) {
-            .email-container { width: 100% !important; }
-            .email-padding { padding-left: 20px !important; padding-right: 20px !important; }
+            .email-container { width: 100% !important; border-radius: 0 !important; box-shadow: none !important; }
+            /* 28/11/2026: no celular o e-mail ocupa a tela toda (sem a moldura cinza que roubava 32 px). */
+            .email-fundo { padding: 0 !important; }
+            .email-padding { padding: 26px 20px 30px !important; }
             .selos-par, .quebra-celular { display: block !important; }
             .whats-icone { width: 30px !important; height: 30px !important; }
             .so-computador { display: none !important; }
             .so-celular { display: inline !important; }
             .selo-ponto { display: none !important; }
-            .coluna-celular { display: block !important; width: 100% !important; box-sizing: border-box; }
+            .coluna-celular { display: block !important; width: 100% !important; box-sizing: border-box; padding-left: 0 !important; padding-right: 0 !important; }
         }
     </style>
 </head>
@@ -42,7 +44,7 @@
     @endif
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f2f5f4;">
         <tr>
-            <td align="center" style="padding: 32px 16px;">
+            <td class="email-fundo" align="center" style="padding: 32px 16px;">
                 <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);">
                     <tr>
                         <td style="background-color: {{ $marcaEmail['fundo_topo'] }}; padding: 26px 32px 22px; text-align: center; border-bottom: 4px solid {{ $marcaEmail['cor'] ?? '#f27a2a' }};">

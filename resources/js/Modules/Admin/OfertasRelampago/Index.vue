@@ -74,6 +74,30 @@ watch(() => [form.product_id, form.desconto_pct], () => {
     }, 250);
 });
 
+// Botão "Preço com 22% de lucro" (pedido do Lira em 27/11/2026): o servidor
+// calcula o desconto que deixa 22% de lucro líquido (LucroDaRelampago) e aplica.
+const calculando22 = ref(false);
+const erro22 = ref(null);
+const aplicar22 = async () => {
+    if (!form.product_id || calculando22.value) return;
+    calculando22.value = true;
+    erro22.value = null;
+    try {
+        const r = await fetch(`/admin/ofertas-relampago/lucro-22?product_id=${form.product_id}`, { headers: { Accept: 'application/json' } });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            erro22.value = dados.message ?? 'Não foi possível calcular agora.';
+            return;
+        }
+        form.desconto_pct = dados.desconto_pct;
+    } catch {
+        erro22.value = 'Sem conexão. Tente de novo.';
+    } finally {
+        calculando22.value = false;
+    }
+};
+watch(() => form.product_id, () => { erro22.value = null; });
+
 // Atalhos de horário.
 const inicioAgora = () => { form.inicio_em = paraInput(new Date()); };
 const fimMais = (horas) => {
@@ -200,6 +224,13 @@ const atalho = 'rounded-md border border-[var(--surface-border)] px-2 py-0.5 tex
                 <div class="mb-4">
                     <label for="or-desconto" class="mb-1 block text-sm font-medium">Desconto (%) *</label>
                     <input id="or-desconto" v-model="form.desconto_pct" type="number" step="0.01" min="1" max="90" :class="campo">
+                    <button type="button" data-lucro-22 :disabled="!form.product_id || calculando22"
+                        class="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-[#F2691C] px-2.5 py-1 text-xs font-semibold text-[#C2410C] hover:bg-orange-50 disabled:opacity-50 dark:hover:bg-orange-900/20"
+                        @click="aplicar22">
+                        <i class="fas" :class="calculando22 ? 'fa-spinner animate-spin' : 'fa-calculator'" aria-hidden="true"></i>
+                        Preço com 22% de lucro
+                    </button>
+                    <p v-if="erro22" class="mt-1 text-xs text-red-600" role="alert">{{ erro22 }}</p>
                     <InputError :message="form.errors.desconto_pct" />
                 </div>
 
@@ -229,6 +260,10 @@ const atalho = 'rounded-md border border-[var(--surface-border)] px-2 py-0.5 tex
                         <span class="text-slate-500">Lucro estimado por unidade</span>
                         <span v-if="previa.lucro_oferta === null" class="text-slate-400">sem custo cadastrado</span>
                         <span v-else :class="previa.lucro_oferta < 0 ? 'font-semibold text-red-600' : 'text-emerald-600'">{{ preco(previa.lucro_oferta) }}</span>
+                    </div>
+                    <div v-if="previa.margem_oferta !== null && previa.margem_oferta !== undefined" class="mt-1 flex justify-between" data-margem-oferta>
+                        <span class="text-slate-500">Lucro líquido (imposto, taxa, frete e insumos)</span>
+                        <span :class="previa.margem_oferta < 22 ? 'font-semibold text-amber-600' : 'font-semibold text-emerald-600'">{{ preco(previa.lucro_liquido_oferta) }} · {{ pct(previa.margem_oferta) }}</span>
                     </div>
                     <p v-if="previa.lucro_oferta !== null && previa.lucro_oferta < 0" class="mt-2 rounded-md bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>Com esse desconto o produto dá prejuízo (pior caso entre cartão e Pix, com o frete).
